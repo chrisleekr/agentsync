@@ -67,8 +67,15 @@ You **MUST** consider the user input before proceeding (if not empty).
 5. **Generate PR description**: Using the `.github/pull_request_template.md` as the output structure, fill each section:
 
    ### PR Title
-   - Format: `feat: <concise description derived from spec.md feature name>`
-   - Use conventional commit prefix (feat/fix/refactor/chore) based on the nature of changes
+   - Format: `<type>: <concise description derived from spec.md feature name>`
+   - Determine `<type>` from the actual diff — do NOT default to `feat`:
+     - `feat` — new user-facing capability
+     - `fix` — bug fix
+     - `refactor` — code restructuring with no behaviour change
+     - `chore` — tooling, config, dependencies, CI
+     - `docs` — documentation only
+     - `test` — tests only
+   - If the diff mixes types, use the dominant type
 
    ### Summary
    - What this PR does (1-2 sentences from spec.md)
