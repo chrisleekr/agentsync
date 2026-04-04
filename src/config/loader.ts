@@ -6,7 +6,10 @@ import { type AgentSyncConfig, AgentSyncConfigSchema } from "./schema";
 export async function loadConfig(configPath: string): Promise<AgentSyncConfig> {
   const raw = await readFile(configPath, "utf8");
   const parsed = parse(raw) as unknown;
-  return AgentSyncConfigSchema.parse(parsed);
+  // @iarna/toml attaches Symbol(type) and Symbol(declared) to every parsed table.
+  // Zod v4 z.record() uses Reflect.ownKeys() which includes Symbol keys, causing
+  // ZodError 'invalid_key'. structuredClone() strips Symbol-keyed properties.
+  return AgentSyncConfigSchema.parse(structuredClone(parsed));
 }
 
 export async function writeConfig(configPath: string, config: AgentSyncConfig): Promise<void> {

@@ -1,10 +1,10 @@
-import { mkdir, readFile, readdir } from "node:fs/promises";
+import { mkdir, readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { log } from "@clack/prompts";
 import * as TOML from "@iarna/toml";
 import { AgentPaths } from "../config/paths";
 import { type RedactionResult, redactSecretLiterals, shouldNeverSync } from "../core/sanitizer";
-import { type SnapshotArtifact, atomicWrite, collect, readIfExists } from "./_utils";
+import { atomicWrite, collect, readIfExists, type SnapshotArtifact } from "./_utils";
 
 export interface CodexSnapshotResult {
   artifacts: SnapshotArtifact[];
@@ -57,16 +57,19 @@ export async function snapshotCodex(): Promise<CodexSnapshotResult> {
   }
 
   try {
-    const entries = await readdir(AgentPaths.codex.rulesDir, {
-      withFileTypes: true,
-    });
-    for (const entry of entries) {
-      if (!entry.isFile() || !entry.name.endsWith(".md")) continue;
-      const sourcePath = join(AgentPaths.codex.rulesDir, entry.name);
+    const names = await readdir(AgentPaths.codex.rulesDir);
+    for (const name of names) {
+      if (!name.endsWith(".md")) continue;
+      const sourcePath = join(AgentPaths.codex.rulesDir, name);
       if (shouldNeverSync(sourcePath)) continue;
-      const content = await readFile(sourcePath, "utf8");
+      let content: string;
+      try {
+        content = await readFile(sourcePath, "utf8");
+      } catch {
+        continue; // skip directories or unreadable entries
+      }
       artifacts.push({
-        vaultPath: `codex/rules/${entry.name}.age`,
+        vaultPath: `codex/rules/${name}.age`,
         sourcePath,
         plaintext: content,
         warnings: [],
@@ -119,10 +122,13 @@ import { decryptString } from "../core/encryptor";
 
 async function readAgeFiles(dir: string): Promise<{ name: string; fullPath: string }[]> {
   try {
-    const entries = await readdir(dir, { withFileTypes: true });
-    return entries
-      .filter((e) => e.isFile() && e.name.endsWith(".age"))
-      .map((e) => ({ name: e.name, fullPath: join(dir, e.name) }));
+    const names = await readdir(dir);
+    return names
+      .filter((name) => name.endsWith(".age"))
+      .map((name) => ({
+        name,
+        fullPath: join(dir, name),
+      }));
   } catch {
     return [];
   }

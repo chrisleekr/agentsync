@@ -1,9 +1,9 @@
-import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { log } from "@clack/prompts";
 import { AgentPaths } from "../config/paths";
 import { sanitizeClaudeHooks, sanitizeClaudeMcp, shouldNeverSync } from "../core/sanitizer";
-import { type SnapshotArtifact, atomicWrite, collect, readIfExists } from "./_utils";
+import { atomicWrite, collect, readIfExists, type SnapshotArtifact } from "./_utils";
 
 export interface ClaudeSnapshotResult {
   artifacts: SnapshotArtifact[];
@@ -41,18 +41,19 @@ export async function snapshotClaude(): Promise<ClaudeSnapshotResult> {
   }
 
   try {
-    const entries = await readdir(AgentPaths.claude.commandsDir, { withFileTypes: true });
-    for (const entry of entries) {
-      if (!entry.isFile() || !entry.name.endsWith(".md")) {
-        continue;
+    const names = await readdir(AgentPaths.claude.commandsDir);
+    for (const name of names) {
+      if (!name.endsWith(".md")) continue;
+      const sourcePath = join(AgentPaths.claude.commandsDir, name);
+      if (shouldNeverSync(sourcePath)) continue;
+      let content: string;
+      try {
+        content = await readFile(sourcePath, "utf8");
+      } catch {
+        continue; // skip directories or unreadable entries
       }
-      const sourcePath = join(AgentPaths.claude.commandsDir, entry.name);
-      if (shouldNeverSync(sourcePath)) {
-        continue;
-      }
-      const content = await readFile(sourcePath, "utf8");
       artifacts.push({
-        vaultPath: `claude/commands/${entry.name}.age`,
+        vaultPath: `claude/commands/${name}.age`,
         sourcePath,
         plaintext: content,
         warnings: [],
@@ -63,18 +64,19 @@ export async function snapshotClaude(): Promise<ClaudeSnapshotResult> {
   }
 
   try {
-    const entries = await readdir(AgentPaths.claude.agentsDir, { withFileTypes: true });
-    for (const entry of entries) {
-      if (!entry.isFile() || !entry.name.endsWith(".md")) {
-        continue;
+    const names = await readdir(AgentPaths.claude.agentsDir);
+    for (const name of names) {
+      if (!name.endsWith(".md")) continue;
+      const sourcePath = join(AgentPaths.claude.agentsDir, name);
+      if (shouldNeverSync(sourcePath)) continue;
+      let content: string;
+      try {
+        content = await readFile(sourcePath, "utf8");
+      } catch {
+        continue; // skip directories or unreadable entries
       }
-      const sourcePath = join(AgentPaths.claude.agentsDir, entry.name);
-      if (shouldNeverSync(sourcePath)) {
-        continue;
-      }
-      const content = await readFile(sourcePath, "utf8");
       artifacts.push({
-        vaultPath: `claude/agents/${entry.name}.age`,
+        vaultPath: `claude/agents/${name}.age`,
         sourcePath,
         plaintext: content,
         warnings: [],
@@ -138,10 +140,13 @@ import { decryptString } from "../core/encryptor";
 
 async function readAgeFiles(dir: string): Promise<{ name: string; fullPath: string }[]> {
   try {
-    const entries = await _readdir(dir, { withFileTypes: true });
-    return entries
-      .filter((e) => e.isFile() && e.name.endsWith(".age"))
-      .map((e) => ({ name: e.name, fullPath: join(dir, e.name) }));
+    const names = await _readdir(dir);
+    return names
+      .filter((name) => name.endsWith(".age"))
+      .map((name) => ({
+        name,
+        fullPath: join(dir, name),
+      }));
   } catch {
     return [];
   }

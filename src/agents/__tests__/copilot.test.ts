@@ -1,43 +1,27 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, mock, test } from "bun:test";
-import { mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { rm } from "node:fs/promises";
+import { createRequire } from "node:module";
 import { join } from "node:path";
+import { AgentPaths } from "../../config/paths";
 import { createTmpDir } from "../../test-helpers/fixtures";
 
-// ─── Mock AgentPaths before dynamic import ────────────────────────────────────
+{
+  const require = createRequire(import.meta.url);
+  const realFsPromises = require("fs/promises") as typeof import("node:fs/promises");
+  mock.module("node:fs/promises", () => realFsPromises);
+}
 
-const mockCopilotPaths = {
-  instructionsFile: "",
-  instructionsDir: "",
-  skillsDir: "",
-  promptsDir: "",
-  agentsDir: "",
-  vscodeMcpInSettings: "",
+type MutableCopilotPaths = {
+  instructionsFile: string;
+  instructionsDir: string;
+  skillsDir: string;
+  promptsDir: string;
+  agentsDir: string;
+  vscodeMcpInSettings: string;
 };
 
-mock.module("../../config/paths", () => ({
-  AgentPaths: {
-    claude: {
-      claudeMd: "",
-      settingsJson: "",
-      commandsDir: "",
-      agentsDir: "",
-      mcpJson: "",
-      credentials: "",
-    },
-    cursor: { mcpGlobal: "", commandsDir: "", settingsJson: "" },
-    codex: {
-      root: "",
-      agentsMd: "",
-      configToml: "",
-      rulesDir: "",
-      authJson: "",
-    },
-    copilot: mockCopilotPaths,
-    vscode: { mcpJson: "" },
-  },
-  resolveAgentSyncHome: () => "/tmp/agentsync",
-  resolveDaemonSocketPath: () => "/tmp/agentsync/daemon.sock",
-}));
+const testCopilotPaths = AgentPaths.copilot as MutableCopilotPaths;
 
 type CopilotModule = typeof import("../copilot");
 let copilotModule: CopilotModule;
@@ -53,12 +37,12 @@ describe("snapshotCopilot", () => {
 
   beforeEach(async () => {
     tmpDir = await createTmpDir();
-    mockCopilotPaths.instructionsFile = join(tmpDir, "instructions");
-    mockCopilotPaths.instructionsDir = join(tmpDir, "instructions");
-    mockCopilotPaths.skillsDir = join(tmpDir, "skills");
-    mockCopilotPaths.promptsDir = join(tmpDir, "prompts");
-    mockCopilotPaths.agentsDir = join(tmpDir, "agents");
-    mockCopilotPaths.vscodeMcpInSettings = join(tmpDir, "vscode-settings.json");
+    testCopilotPaths.instructionsFile = join(tmpDir, "instructions");
+    testCopilotPaths.instructionsDir = join(tmpDir, "instructions");
+    testCopilotPaths.skillsDir = join(tmpDir, "skills");
+    testCopilotPaths.promptsDir = join(tmpDir, "prompts");
+    testCopilotPaths.agentsDir = join(tmpDir, "agents");
+    testCopilotPaths.vscodeMcpInSettings = join(tmpDir, "vscode-settings.json");
   });
 
   afterEach(async () => {
@@ -74,9 +58,9 @@ describe("snapshotCopilot", () => {
     // Note: instructionsFile and instructionsDir are the same path in copilot
     // The file is read if it exists as a file, but readdir would fail on a file path
     // We test instructions dir entries separately
-    await mkdir(mockCopilotPaths.instructionsDir, { recursive: true });
-    await writeFile(
-      join(mockCopilotPaths.instructionsDir, "global.instructions.md"),
+    mkdirSync(testCopilotPaths.instructionsDir, { recursive: true });
+    writeFileSync(
+      join(testCopilotPaths.instructionsDir, "global.instructions.md"),
       "# Global instructions",
       "utf8",
     );
@@ -90,8 +74,8 @@ describe("snapshotCopilot", () => {
   });
 
   test("snapshots .prompt.md files from prompts dir", async () => {
-    await mkdir(mockCopilotPaths.promptsDir, { recursive: true });
-    await writeFile(join(mockCopilotPaths.promptsDir, "test.prompt.md"), "# Test prompt", "utf8");
+    mkdirSync(testCopilotPaths.promptsDir, { recursive: true });
+    writeFileSync(join(testCopilotPaths.promptsDir, "test.prompt.md"), "# Test prompt", "utf8");
 
     const result = await copilotModule.snapshotCopilot();
     const art = result.artifacts.find((a) => a.vaultPath === "copilot/prompts/test.prompt.md.age");
@@ -99,9 +83,9 @@ describe("snapshotCopilot", () => {
   });
 
   test("snapshots skill directories as base64 tar archives", async () => {
-    const skillDir = join(mockCopilotPaths.skillsDir, "my-skill");
-    await mkdir(skillDir, { recursive: true });
-    await writeFile(join(skillDir, "SKILL.md"), "# My skill", "utf8");
+    const skillDir = join(testCopilotPaths.skillsDir, "my-skill");
+    mkdirSync(skillDir, { recursive: true });
+    writeFileSync(join(skillDir, "SKILL.md"), "# My skill", "utf8");
 
     const result = await copilotModule.snapshotCopilot();
     const art = result.artifacts.find((a) => a.vaultPath === "copilot/skills/my-skill.tar.age");
@@ -114,8 +98,8 @@ describe("snapshotCopilot", () => {
   });
 
   test("skill without SKILL.md is not snapshotted", async () => {
-    const skillDir = join(mockCopilotPaths.skillsDir, "invalid-skill");
-    await mkdir(skillDir, { recursive: true });
+    const skillDir = join(testCopilotPaths.skillsDir, "invalid-skill");
+    mkdirSync(skillDir, { recursive: true });
     // No SKILL.md — should not be included
 
     const result = await copilotModule.snapshotCopilot();
@@ -127,8 +111,8 @@ describe("snapshotCopilot", () => {
 
   test("snapshots top-level instructions file as copilot/instructions.md.age", async () => {
     // Set instructionsFile to a dedicated file path distinct from instructionsDir
-    mockCopilotPaths.instructionsFile = join(tmpDir, "instructions.md");
-    await writeFile(mockCopilotPaths.instructionsFile, "# Top-level", "utf8");
+    testCopilotPaths.instructionsFile = join(tmpDir, "instructions.md");
+    writeFileSync(testCopilotPaths.instructionsFile, "# Top-level", "utf8");
 
     const result = await copilotModule.snapshotCopilot();
     const art = result.artifacts.find((a) => a.vaultPath === "copilot/instructions.md.age");
@@ -137,9 +121,9 @@ describe("snapshotCopilot", () => {
   });
 
   test("snapshots agents directories as base64 tar archives", async () => {
-    const agentDir = join(mockCopilotPaths.agentsDir, "my-copilot-agent");
-    await mkdir(agentDir, { recursive: true });
-    await writeFile(join(agentDir, "agent.md"), "# Agent", "utf8");
+    const agentDir = join(testCopilotPaths.agentsDir, "my-copilot-agent");
+    mkdirSync(agentDir, { recursive: true });
+    writeFileSync(join(agentDir, "agent.md"), "# Agent", "utf8");
 
     const result = await copilotModule.snapshotCopilot();
     const art = result.artifacts.find(
@@ -158,12 +142,12 @@ describe("apply* functions", () => {
 
   beforeEach(async () => {
     tmpDir = await createTmpDir();
-    mockCopilotPaths.instructionsFile = join(tmpDir, "instructions");
-    mockCopilotPaths.instructionsDir = join(tmpDir, "instructions");
-    mockCopilotPaths.skillsDir = join(tmpDir, "skills");
-    mockCopilotPaths.promptsDir = join(tmpDir, "prompts");
-    mockCopilotPaths.agentsDir = join(tmpDir, "agents");
-    mockCopilotPaths.vscodeMcpInSettings = join(tmpDir, "vscode-settings.json");
+    testCopilotPaths.instructionsFile = join(tmpDir, "instructions");
+    testCopilotPaths.instructionsDir = join(tmpDir, "instructions");
+    testCopilotPaths.skillsDir = join(tmpDir, "skills");
+    testCopilotPaths.promptsDir = join(tmpDir, "prompts");
+    testCopilotPaths.agentsDir = join(tmpDir, "agents");
+    testCopilotPaths.vscodeMcpInSettings = join(tmpDir, "vscode-settings.json");
   });
 
   afterEach(async () => {
@@ -172,7 +156,7 @@ describe("apply* functions", () => {
 
   test("applyCopilotInstructions writes instructions file", async () => {
     await copilotModule.applyCopilotInstructions("# Instructions");
-    const content = await Bun.file(mockCopilotPaths.instructionsFile).text();
+    const content = await Bun.file(testCopilotPaths.instructionsFile).text();
     expect(content).toBe("# Instructions");
   });
 
@@ -180,8 +164,8 @@ describe("apply* functions", () => {
     const { archiveDirectory } = await import("../../core/tar");
     // Create a source skill dir to archive
     const srcSkill = join(tmpDir, "src-skill");
-    await mkdir(srcSkill, { recursive: true });
-    await writeFile(join(srcSkill, "SKILL.md"), "# Skill content", "utf8");
+    mkdirSync(srcSkill, { recursive: true });
+    writeFileSync(join(srcSkill, "SKILL.md"), "# Skill content", "utf8");
 
     const buf = await archiveDirectory(srcSkill);
     const base64 = buf.toString("base64");
@@ -189,7 +173,7 @@ describe("apply* functions", () => {
     await copilotModule.applyCopilotSkill("my-skill", base64);
 
     const extracted = await Bun.file(
-      join(mockCopilotPaths.skillsDir, "my-skill", "SKILL.md"),
+      join(testCopilotPaths.skillsDir, "my-skill", "SKILL.md"),
     ).text();
     expect(extracted).toBe("# Skill content");
   });
@@ -197,14 +181,14 @@ describe("apply* functions", () => {
   test("applyCopilotAgent extracts a tar archive into agents dir", async () => {
     const { archiveDirectory } = await import("../../core/tar");
     const srcAgent = join(tmpDir, "src-agent");
-    await mkdir(srcAgent, { recursive: true });
-    await writeFile(join(srcAgent, "agent.md"), "# Agent content", "utf8");
+    mkdirSync(srcAgent, { recursive: true });
+    writeFileSync(join(srcAgent, "agent.md"), "# Agent content", "utf8");
 
     const buf = await archiveDirectory(srcAgent);
     await copilotModule.applyCopilotAgent("my-agent", buf.toString("base64"));
 
     const extracted = await Bun.file(
-      join(mockCopilotPaths.agentsDir, "my-agent", "agent.md"),
+      join(testCopilotPaths.agentsDir, "my-agent", "agent.md"),
     ).text();
     expect(extracted).toBe("# Agent content");
   });
@@ -212,14 +196,14 @@ describe("apply* functions", () => {
   test("applyCopilotInstructionFile writes to instructions subdir", async () => {
     await copilotModule.applyCopilotInstructionFile("global.instructions.md", "# Instruction file");
     const content = await Bun.file(
-      join(mockCopilotPaths.instructionsDir, "global.instructions.md"),
+      join(testCopilotPaths.instructionsDir, "global.instructions.md"),
     ).text();
     expect(content).toBe("# Instruction file");
   });
 
   test("applyCopilotPrompt writes to prompts dir", async () => {
     await copilotModule.applyCopilotPrompt("test.prompt.md", "# Prompt");
-    const content = await Bun.file(join(mockCopilotPaths.promptsDir, "test.prompt.md")).text();
+    const content = await Bun.file(join(testCopilotPaths.promptsDir, "test.prompt.md")).text();
     expect(content).toBe("# Prompt");
   });
 });
@@ -231,12 +215,12 @@ describe("applyCopilotVault dryRun", () => {
 
   beforeEach(async () => {
     tmpDir = await createTmpDir();
-    mockCopilotPaths.instructionsFile = join(tmpDir, "apply", "instructions");
-    mockCopilotPaths.instructionsDir = join(tmpDir, "apply", "instructions");
-    mockCopilotPaths.skillsDir = join(tmpDir, "apply", "skills");
-    mockCopilotPaths.promptsDir = join(tmpDir, "apply", "prompts");
-    mockCopilotPaths.agentsDir = join(tmpDir, "apply", "agents");
-    mockCopilotPaths.vscodeMcpInSettings = join(tmpDir, "apply", "vscode-settings.json");
+    testCopilotPaths.instructionsFile = join(tmpDir, "apply", "instructions");
+    testCopilotPaths.instructionsDir = join(tmpDir, "apply", "instructions");
+    testCopilotPaths.skillsDir = join(tmpDir, "apply", "skills");
+    testCopilotPaths.promptsDir = join(tmpDir, "apply", "prompts");
+    testCopilotPaths.agentsDir = join(tmpDir, "apply", "agents");
+    testCopilotPaths.vscodeMcpInSettings = join(tmpDir, "apply", "vscode-settings.json");
   });
 
   afterEach(async () => {
@@ -252,13 +236,13 @@ describe("applyCopilotVault dryRun", () => {
 
     const vaultDir = join(tmpDir, "vault");
     const copilotVaultDir = join(vaultDir, "copilot");
-    await mkdir(copilotVaultDir, { recursive: true });
+    mkdirSync(copilotVaultDir, { recursive: true });
     const encrypted = await encryptString("# dry run", [recipient]);
-    await writeFile(join(copilotVaultDir, "instructions.md.age"), encrypted, "utf8");
+    writeFileSync(join(copilotVaultDir, "instructions.md.age"), encrypted, "utf8");
 
     await copilotModule.applyCopilotVault(vaultDir, identity, true);
 
-    const exists = await Bun.file(mockCopilotPaths.instructionsFile).exists();
+    const exists = await Bun.file(testCopilotPaths.instructionsFile).exists();
     expect(exists).toBeFalse();
   });
 
@@ -271,13 +255,13 @@ describe("applyCopilotVault dryRun", () => {
 
     const vaultDir = join(tmpDir, "vault-nodry");
     const copilotVaultDir = join(vaultDir, "copilot");
-    await mkdir(copilotVaultDir, { recursive: true });
+    mkdirSync(copilotVaultDir, { recursive: true });
     const encrypted = await encryptString("# applied", [recipient]);
-    await writeFile(join(copilotVaultDir, "instructions.md.age"), encrypted, "utf8");
+    writeFileSync(join(copilotVaultDir, "instructions.md.age"), encrypted, "utf8");
 
     await copilotModule.applyCopilotVault(vaultDir, identity, false);
 
-    const content = await Bun.file(mockCopilotPaths.instructionsFile).text();
+    const content = await Bun.file(testCopilotPaths.instructionsFile).text();
     expect(content).toBe("# applied");
   });
 
@@ -290,14 +274,14 @@ describe("applyCopilotVault dryRun", () => {
 
     const vaultDir = join(tmpDir, "vault-instr");
     const instrVaultDir = join(vaultDir, "copilot", "instructions");
-    await mkdir(instrVaultDir, { recursive: true });
+    mkdirSync(instrVaultDir, { recursive: true });
     const encrypted = await encryptString("# instr file", [recipient]);
-    await writeFile(join(instrVaultDir, "global.instructions.md.age"), encrypted, "utf8");
+    writeFileSync(join(instrVaultDir, "global.instructions.md.age"), encrypted, "utf8");
 
     await copilotModule.applyCopilotVault(vaultDir, identity, false);
 
     const content = await Bun.file(
-      join(mockCopilotPaths.instructionsDir, "global.instructions.md"),
+      join(testCopilotPaths.instructionsDir, "global.instructions.md"),
     ).text();
     expect(content).toBe("# instr file");
   });

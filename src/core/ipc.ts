@@ -10,7 +10,7 @@
 
 import { randomUUID } from "node:crypto";
 import { unlink } from "node:fs/promises";
-import { type Server, type Socket, createConnection, createServer } from "node:net";
+import { createConnection, createServer, type Server, type Socket } from "node:net";
 import { resolveDaemonSocketPath } from "../config/paths";
 
 export interface IpcRequest {

@@ -1,48 +1,24 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, mock, test } from "bun:test";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { mkdir, rm, writeFile } from "node:fs/promises";
+import { createRequire } from "node:module";
 import { join } from "node:path";
+import { AgentPaths } from "../../config/paths";
 import { createAgeIdentity, createTmpDir } from "../../test-helpers/fixtures";
 
-// ─── Mock AgentPaths before any dynamic import of cursor ─────────────────────
-// bun:test mock.module() is NOT hoisted — call synchronously before dynamic import.
+{
+  const require = createRequire(import.meta.url);
+  const realFsPromises = require("fs/promises") as typeof import("node:fs/promises");
+  mock.module("node:fs/promises", () => realFsPromises);
+}
 
-const mockCursorPaths = {
-  mcpGlobal: "",
-  commandsDir: "",
-  settingsJson: "",
+type MutableCursorPaths = {
+  mcpGlobal: string;
+  commandsDir: string;
+  settingsJson: string;
 };
 
-mock.module("../../config/paths", () => ({
-  AgentPaths: {
-    claude: {
-      claudeMd: "",
-      settingsJson: "",
-      commandsDir: "",
-      agentsDir: "",
-      mcpJson: "",
-      credentials: "",
-    },
-    cursor: mockCursorPaths,
-    codex: {
-      root: "",
-      agentsMd: "",
-      configToml: "",
-      rulesDir: "",
-      authJson: "",
-    },
-    copilot: {
-      instructionsFile: "",
-      instructionsDir: "",
-      skillsDir: "",
-      promptsDir: "",
-      agentsDir: "",
-      vscodeMcpInSettings: "",
-    },
-    vscode: { mcpJson: "" },
-  },
-  resolveAgentSyncHome: () => "/tmp/agentsync",
-  resolveDaemonSocketPath: () => "/tmp/agentsync/daemon.sock",
-}));
+const testCursorPaths = AgentPaths.cursor as MutableCursorPaths;
 
 type CursorModule = typeof import("../cursor");
 let cursorModule: CursorModule;
@@ -58,9 +34,9 @@ describe("snapshotCursor", () => {
 
   beforeEach(async () => {
     tmpDir = await createTmpDir();
-    mockCursorPaths.settingsJson = join(tmpDir, "settings.json");
-    mockCursorPaths.mcpGlobal = join(tmpDir, "mcp.json");
-    mockCursorPaths.commandsDir = join(tmpDir, "commands");
+    testCursorPaths.settingsJson = join(tmpDir, "settings.json");
+    testCursorPaths.mcpGlobal = join(tmpDir, "mcp.json");
+    testCursorPaths.commandsDir = join(tmpDir, "commands");
   });
 
   afterEach(async () => {
@@ -80,19 +56,19 @@ describe("snapshotCursor", () => {
       rules: "Always write tests\n- prefer TDD",
       theme: "dark",
     };
-    await writeFile(mockCursorPaths.settingsJson, JSON.stringify(settings), "utf8");
+    await writeFile(testCursorPaths.settingsJson, JSON.stringify(settings), "utf8");
 
     const result = await snapshotCursor();
     const artifact = result.artifacts.find((a) => a.vaultPath === "cursor/user-rules.md.age");
     expect(artifact).toBeDefined();
     expect(artifact?.plaintext).toBe(settings.rules);
-    expect(artifact?.sourcePath).toBe(mockCursorPaths.settingsJson);
+    expect(artifact?.sourcePath).toBe(testCursorPaths.settingsJson);
   });
 
   test("skips rules when settings.json has no rules field", async () => {
     const { snapshotCursor } = cursorModule;
     await writeFile(
-      mockCursorPaths.settingsJson,
+      testCursorPaths.settingsJson,
       JSON.stringify({ theme: "light", fontSize: 14 }),
       "utf8",
     );
@@ -103,7 +79,7 @@ describe("snapshotCursor", () => {
   test("skips rules when rules field is not a string", async () => {
     const { snapshotCursor } = cursorModule;
     await writeFile(
-      mockCursorPaths.settingsJson,
+      testCursorPaths.settingsJson,
       JSON.stringify({ rules: ["array", "of", "rules"] }),
       "utf8",
     );
@@ -116,7 +92,7 @@ describe("snapshotCursor", () => {
     const mcp = {
       mcpServers: { "my-server": { command: "node", args: ["server.js"] } },
     };
-    await writeFile(mockCursorPaths.mcpGlobal, JSON.stringify(mcp), "utf8");
+    await writeFile(testCursorPaths.mcpGlobal, JSON.stringify(mcp), "utf8");
 
     const result = await snapshotCursor();
     const artifact = result.artifacts.find((a) => a.vaultPath === "cursor/mcp.json.age");
@@ -130,9 +106,9 @@ describe("snapshotCursor", () => {
 
   test("captures command .md files as cursor/commands/<name>.age", async () => {
     const { snapshotCursor } = cursorModule;
-    await mkdir(mockCursorPaths.commandsDir, { recursive: true });
-    await writeFile(join(mockCursorPaths.commandsDir, "fix.md"), "# Fix\nFix the bug.", "utf8");
-    await writeFile(join(mockCursorPaths.commandsDir, "explain.md"), "# Explain\nExplain.", "utf8");
+    mkdirSync(testCursorPaths.commandsDir, { recursive: true });
+    writeFileSync(join(testCursorPaths.commandsDir, "fix.md"), "# Fix\nFix the bug.", "utf8");
+    writeFileSync(join(testCursorPaths.commandsDir, "explain.md"), "# Explain\nExplain.", "utf8");
 
     const result = await snapshotCursor();
     const commands = result.artifacts.filter((a) => a.vaultPath.startsWith("cursor/commands/"));
@@ -149,9 +125,9 @@ describe("cursor apply functions", () => {
 
   beforeEach(async () => {
     tmpDir = await createTmpDir();
-    mockCursorPaths.settingsJson = join(tmpDir, "settings.json");
-    mockCursorPaths.mcpGlobal = join(tmpDir, "mcp.json");
-    mockCursorPaths.commandsDir = join(tmpDir, "commands");
+    testCursorPaths.settingsJson = join(tmpDir, "settings.json");
+    testCursorPaths.mcpGlobal = join(tmpDir, "mcp.json");
+    testCursorPaths.commandsDir = join(tmpDir, "commands");
   });
 
   afterEach(async () => {
@@ -161,14 +137,14 @@ describe("cursor apply functions", () => {
   test("applyCursorRules merges rules into existing settings.json, preserving other keys", async () => {
     const { applyCursorRules } = cursorModule;
     await writeFile(
-      mockCursorPaths.settingsJson,
+      testCursorPaths.settingsJson,
       JSON.stringify({ theme: "dark", fontSize: 14 }),
       "utf8",
     );
 
     await applyCursorRules("Always write tests");
 
-    const written = JSON.parse(await Bun.file(mockCursorPaths.settingsJson).text()) as Record<
+    const written = JSON.parse(await Bun.file(testCursorPaths.settingsJson).text()) as Record<
       string,
       unknown
     >;
@@ -181,7 +157,7 @@ describe("cursor apply functions", () => {
     const { applyCursorRules } = cursorModule;
     await applyCursorRules("My new rules");
 
-    const written = JSON.parse(await Bun.file(mockCursorPaths.settingsJson).text()) as Record<
+    const written = JSON.parse(await Bun.file(testCursorPaths.settingsJson).text()) as Record<
       string,
       unknown
     >;
@@ -192,14 +168,14 @@ describe("cursor apply functions", () => {
     const { applyCursorMcp } = cursorModule;
     const content = `${JSON.stringify({ mcpServers: {} }, null, 2)}\n`;
     await applyCursorMcp(content);
-    expect(await Bun.file(mockCursorPaths.mcpGlobal).text()).toBe(content);
+    expect(await Bun.file(testCursorPaths.mcpGlobal).text()).toBe(content);
   });
 
   test("applyCursorCommand writes named command file under commandsDir", async () => {
     const { applyCursorCommand } = cursorModule;
     await applyCursorCommand("my-cmd.md", "# My Cmd\nDo things.");
 
-    const target = join(mockCursorPaths.commandsDir, "my-cmd.md");
+    const target = join(testCursorPaths.commandsDir, "my-cmd.md");
     expect(await Bun.file(target).text()).toBe("# My Cmd\nDo things.");
   });
 });
@@ -211,9 +187,9 @@ describe("applyCursorVault dryRun", () => {
 
   beforeEach(async () => {
     tmpDir = await createTmpDir();
-    mockCursorPaths.settingsJson = join(tmpDir, "settings.json");
-    mockCursorPaths.mcpGlobal = join(tmpDir, "mcp.json");
-    mockCursorPaths.commandsDir = join(tmpDir, "commands");
+    testCursorPaths.settingsJson = join(tmpDir, "settings.json");
+    testCursorPaths.mcpGlobal = join(tmpDir, "mcp.json");
+    testCursorPaths.commandsDir = join(tmpDir, "commands");
   });
 
   afterEach(async () => {
@@ -235,6 +211,6 @@ describe("applyCursorVault dryRun", () => {
     await applyCursorVault(vaultDir, identity, true);
 
     // settings.json must NOT be created on dryRun
-    expect(await Bun.file(mockCursorPaths.settingsJson).exists()).toBe(false);
+    expect(await Bun.file(testCursorPaths.settingsJson).exists()).toBe(false);
   });
 });

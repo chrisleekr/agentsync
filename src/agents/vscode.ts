@@ -4,7 +4,7 @@ import { log } from "@clack/prompts";
 import { AgentPaths } from "../config/paths";
 import { decryptString } from "../core/encryptor";
 import { redactSecretLiterals } from "../core/sanitizer";
-import { type SnapshotArtifact, atomicWrite, collect, readIfExists } from "./_utils";
+import { atomicWrite, collect, readIfExists, type SnapshotArtifact } from "./_utils";
 
 export interface VsCodeSnapshotResult {
   artifacts: SnapshotArtifact[];
@@ -45,10 +45,13 @@ export async function applyVsCodeMcp(mcpJsonContent: string): Promise<void> {
 async function readAgeFiles(dir: string): Promise<{ name: string; fullPath: string }[]> {
   try {
     const { readdir } = await import("node:fs/promises");
-    const entries = await readdir(dir, { withFileTypes: true });
-    return entries
-      .filter((e) => e.isFile() && e.name.endsWith(".age"))
-      .map((e) => ({ name: e.name, fullPath: join(dir, e.name) }));
+    const names = await readdir(dir);
+    return names
+      .filter((name) => name.endsWith(".age"))
+      .map((name) => ({
+        name,
+        fullPath: join(dir, name),
+      }));
   } catch {
     return [];
   }

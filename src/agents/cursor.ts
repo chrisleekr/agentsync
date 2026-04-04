@@ -1,9 +1,9 @@
-import { mkdir, readFile, readdir } from "node:fs/promises";
+import { mkdir, readdir, readFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { log } from "@clack/prompts";
 import { AgentPaths } from "../config/paths";
 import { redactSecretLiterals, shouldNeverSync } from "../core/sanitizer";
-import { type SnapshotArtifact, atomicWrite, collect, readIfExists } from "./_utils";
+import { atomicWrite, collect, readIfExists, type SnapshotArtifact } from "./_utils";
 
 export interface CursorSnapshotResult {
   artifacts: SnapshotArtifact[];
@@ -61,18 +61,19 @@ export async function snapshotCursor(): Promise<CursorSnapshotResult> {
   }
 
   try {
-    const entries = await readdir(AgentPaths.cursor.commandsDir, { withFileTypes: true });
-    for (const entry of entries) {
-      if (!entry.isFile() || !entry.name.endsWith(".md")) {
-        continue;
+    const names = await readdir(AgentPaths.cursor.commandsDir);
+    for (const name of names) {
+      if (!name.endsWith(".md")) continue;
+      const sourcePath = join(AgentPaths.cursor.commandsDir, name);
+      if (shouldNeverSync(sourcePath)) continue;
+      let content: string;
+      try {
+        content = await readFile(sourcePath, "utf8");
+      } catch {
+        continue; // skip directories or unreadable entries
       }
-      const sourcePath = join(AgentPaths.cursor.commandsDir, entry.name);
-      if (shouldNeverSync(sourcePath)) {
-        continue;
-      }
-      const content = await readFile(sourcePath, "utf8");
       artifacts.push({
-        vaultPath: `cursor/commands/${entry.name}.age`,
+        vaultPath: `cursor/commands/${name}.age`,
         sourcePath,
         plaintext: content,
         warnings: [],
@@ -116,10 +117,13 @@ import { decryptString } from "../core/encryptor";
 
 async function readAgeFiles(dir: string): Promise<{ name: string; fullPath: string }[]> {
   try {
-    const entries = await readdir(dir, { withFileTypes: true });
-    return entries
-      .filter((e) => e.isFile() && e.name.endsWith(".age"))
-      .map((e) => ({ name: e.name, fullPath: join(dir, e.name) }));
+    const names = await readdir(dir);
+    return names
+      .filter((name) => name.endsWith(".age"))
+      .map((name) => ({
+        name,
+        fullPath: join(dir, name),
+      }));
   } catch {
     return [];
   }

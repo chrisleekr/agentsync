@@ -1,45 +1,21 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, mock, test } from "bun:test";
 import { mkdir, rm, writeFile } from "node:fs/promises";
+import { createRequire } from "node:module";
 import { join } from "node:path";
+import { AgentPaths } from "../../config/paths";
 import { createAgeIdentity, createTmpDir } from "../../test-helpers/fixtures";
 
-// ─── Mock AgentPaths before any dynamic import of vscode ─────────────────────
+{
+  const require = createRequire(import.meta.url);
+  const realFsPromises = require("fs/promises") as typeof import("node:fs/promises");
+  mock.module("node:fs/promises", () => realFsPromises);
+}
 
-const mockVsCodePaths = {
-  mcpJson: "",
+type MutableVsCodePaths = {
+  mcpJson: string;
 };
 
-mock.module("../../config/paths", () => ({
-  AgentPaths: {
-    claude: {
-      claudeMd: "",
-      settingsJson: "",
-      commandsDir: "",
-      agentsDir: "",
-      mcpJson: "",
-      credentials: "",
-    },
-    cursor: { mcpGlobal: "", commandsDir: "", settingsJson: "" },
-    codex: {
-      root: "",
-      agentsMd: "",
-      configToml: "",
-      rulesDir: "",
-      authJson: "",
-    },
-    copilot: {
-      instructionsFile: "",
-      instructionsDir: "",
-      skillsDir: "",
-      promptsDir: "",
-      agentsDir: "",
-      vscodeMcpInSettings: "",
-    },
-    vscode: mockVsCodePaths,
-  },
-  resolveAgentSyncHome: () => "/tmp/agentsync",
-  resolveDaemonSocketPath: () => "/tmp/agentsync/daemon.sock",
-}));
+const testVsCodePaths = AgentPaths.vscode as MutableVsCodePaths;
 
 type VsCodeModule = typeof import("../vscode");
 let vsCodeModule: VsCodeModule;
@@ -55,7 +31,7 @@ describe("snapshotVsCode", () => {
 
   beforeEach(async () => {
     tmpDir = await createTmpDir();
-    mockVsCodePaths.mcpJson = join(tmpDir, "mcp.json");
+    testVsCodePaths.mcpJson = join(tmpDir, "mcp.json");
   });
 
   afterEach(async () => {
@@ -76,7 +52,7 @@ describe("snapshotVsCode", () => {
         "test-server": { command: "bun", args: ["run", "server.ts"] },
       },
     };
-    await writeFile(mockVsCodePaths.mcpJson, JSON.stringify(mcp), "utf8");
+    await writeFile(testVsCodePaths.mcpJson, JSON.stringify(mcp), "utf8");
 
     const result = await snapshotVsCode();
     expect(result.artifacts).toHaveLength(1);
@@ -98,7 +74,7 @@ describe("snapshotVsCode", () => {
         },
       },
     };
-    await writeFile(mockVsCodePaths.mcpJson, JSON.stringify(mcp), "utf8");
+    await writeFile(testVsCodePaths.mcpJson, JSON.stringify(mcp), "utf8");
 
     const result = await snapshotVsCode();
     const artifact = result.artifacts[0];
@@ -123,7 +99,7 @@ describe("applyVsCodeMcp", () => {
 
   beforeEach(async () => {
     tmpDir = await createTmpDir();
-    mockVsCodePaths.mcpJson = join(tmpDir, "mcp.json");
+    testVsCodePaths.mcpJson = join(tmpDir, "mcp.json");
   });
 
   afterEach(async () => {
@@ -134,7 +110,7 @@ describe("applyVsCodeMcp", () => {
     const { applyVsCodeMcp } = vsCodeModule;
     const content = `${JSON.stringify({ mcpServers: {} }, null, 2)}\n`;
     await applyVsCodeMcp(content);
-    expect(await Bun.file(mockVsCodePaths.mcpJson).text()).toBe(content);
+    expect(await Bun.file(testVsCodePaths.mcpJson).text()).toBe(content);
   });
 });
 
@@ -145,7 +121,7 @@ describe("applyVsCodeVault dryRun", () => {
 
   beforeEach(async () => {
     tmpDir = await createTmpDir();
-    mockVsCodePaths.mcpJson = join(tmpDir, "mcp.json");
+    testVsCodePaths.mcpJson = join(tmpDir, "mcp.json");
   });
 
   afterEach(async () => {
@@ -169,6 +145,6 @@ describe("applyVsCodeVault dryRun", () => {
     await applyVsCodeVault(vaultDir, identity, true);
 
     // mcp.json must NOT be created on dryRun
-    expect(await Bun.file(mockVsCodePaths.mcpJson).exists()).toBe(false);
+    expect(await Bun.file(testVsCodePaths.mcpJson).exists()).toBe(false);
   });
 });

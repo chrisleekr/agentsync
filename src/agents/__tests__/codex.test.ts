@@ -1,43 +1,26 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, mock, test } from "bun:test";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { mkdir, rm, writeFile } from "node:fs/promises";
+import { createRequire } from "node:module";
 import { join } from "node:path";
+import { AgentPaths } from "../../config/paths";
 import { createTmpDir } from "../../test-helpers/fixtures";
 
-// ─── Mock AgentPaths before dynamic import ────────────────────────────────────
+{
+  const require = createRequire(import.meta.url);
+  const realFsPromises = require("fs/promises") as typeof import("node:fs/promises");
+  mock.module("node:fs/promises", () => realFsPromises);
+}
 
-const mockCodexPaths = {
-  root: "",
-  agentsMd: "",
-  configToml: "",
-  rulesDir: "",
-  authJson: "",
+type MutableCodexPaths = {
+  root: string;
+  agentsMd: string;
+  configToml: string;
+  rulesDir: string;
+  authJson: string;
 };
 
-mock.module("../../config/paths", () => ({
-  AgentPaths: {
-    claude: {
-      claudeMd: "",
-      settingsJson: "",
-      commandsDir: "",
-      agentsDir: "",
-      mcpJson: "",
-      credentials: "",
-    },
-    cursor: { mcpGlobal: "", commandsDir: "", settingsJson: "" },
-    codex: mockCodexPaths,
-    copilot: {
-      instructionsFile: "",
-      instructionsDir: "",
-      skillsDir: "",
-      promptsDir: "",
-      agentsDir: "",
-      vscodeMcpInSettings: "",
-    },
-    vscode: { mcpJson: "" },
-  },
-  resolveAgentSyncHome: () => "/tmp/agentsync",
-  resolveDaemonSocketPath: () => "/tmp/agentsync/daemon.sock",
-}));
+const testCodexPaths = AgentPaths.codex as MutableCodexPaths;
 
 type CodexModule = typeof import("../codex");
 let codexModule: CodexModule;
@@ -53,11 +36,11 @@ describe("snapshotCodex", () => {
 
   beforeEach(async () => {
     tmpDir = await createTmpDir();
-    mockCodexPaths.root = tmpDir;
-    mockCodexPaths.agentsMd = join(tmpDir, "AGENTS.md");
-    mockCodexPaths.configToml = join(tmpDir, "config.toml");
-    mockCodexPaths.rulesDir = join(tmpDir, "rules");
-    mockCodexPaths.authJson = join(tmpDir, "auth.json");
+    testCodexPaths.root = tmpDir;
+    testCodexPaths.agentsMd = join(tmpDir, "AGENTS.md");
+    testCodexPaths.configToml = join(tmpDir, "config.toml");
+    testCodexPaths.rulesDir = join(tmpDir, "rules");
+    testCodexPaths.authJson = join(tmpDir, "auth.json");
   });
 
   afterEach(async () => {
@@ -70,7 +53,7 @@ describe("snapshotCodex", () => {
   });
 
   test("snapshots AGENTS.md when it exists", async () => {
-    await writeFile(mockCodexPaths.agentsMd, "# My agents\n", "utf8");
+    await writeFile(testCodexPaths.agentsMd, "# My agents\n", "utf8");
     const result = await codexModule.snapshotCodex();
     const art = result.artifacts.find((a) => a.vaultPath === "codex/AGENTS.md.age");
     expect(art).toBeDefined();
@@ -78,7 +61,7 @@ describe("snapshotCodex", () => {
   });
 
   test("snapshots config.toml when it exists", async () => {
-    await writeFile(mockCodexPaths.configToml, 'model = "gpt-4"\n', "utf8");
+    await writeFile(testCodexPaths.configToml, 'model = "gpt-4"\n', "utf8");
     const result = await codexModule.snapshotCodex();
     const art = result.artifacts.find((a) => a.vaultPath === "codex/config.toml.age");
     expect(art).toBeDefined();
@@ -86,8 +69,8 @@ describe("snapshotCodex", () => {
   });
 
   test("snapshots .md files from rules dir", async () => {
-    await mkdir(mockCodexPaths.rulesDir, { recursive: true });
-    await writeFile(join(mockCodexPaths.rulesDir, "style.md"), "## Style rules", "utf8");
+    mkdirSync(testCodexPaths.rulesDir, { recursive: true });
+    writeFileSync(join(testCodexPaths.rulesDir, "style.md"), "## Style rules", "utf8");
 
     const result = await codexModule.snapshotCodex();
     const art = result.artifacts.find((a) => a.vaultPath === "codex/rules/style.md.age");
@@ -96,7 +79,7 @@ describe("snapshotCodex", () => {
   });
 
   test("does not snapshot auth.json (shouldNeverSync)", async () => {
-    await writeFile(mockCodexPaths.authJson, '{"token": "secret"}', "utf8");
+    await writeFile(testCodexPaths.authJson, '{"token": "secret"}', "utf8");
     // auth.json is in NEVER_SYNC_PATTERNS via "**/auth.json"
     // But snapshotCodex doesn't read auth.json — it only reads AGENTS.md, config.toml, and rules/*.md
     // So this test confirms auth.json is never included
@@ -113,11 +96,11 @@ describe("apply* functions", () => {
 
   beforeEach(async () => {
     tmpDir = await createTmpDir();
-    mockCodexPaths.root = tmpDir;
-    mockCodexPaths.agentsMd = join(tmpDir, "AGENTS.md");
-    mockCodexPaths.configToml = join(tmpDir, "config.toml");
-    mockCodexPaths.rulesDir = join(tmpDir, "rules");
-    mockCodexPaths.authJson = join(tmpDir, "auth.json");
+    testCodexPaths.root = tmpDir;
+    testCodexPaths.agentsMd = join(tmpDir, "AGENTS.md");
+    testCodexPaths.configToml = join(tmpDir, "config.toml");
+    testCodexPaths.rulesDir = join(tmpDir, "rules");
+    testCodexPaths.authJson = join(tmpDir, "auth.json");
   });
 
   afterEach(async () => {
@@ -126,21 +109,21 @@ describe("apply* functions", () => {
 
   test("applyCodexAgentsMd writes AGENTS.md", async () => {
     await codexModule.applyCodexAgentsMd("# Agents");
-    const content = await Bun.file(mockCodexPaths.agentsMd).text();
+    const content = await Bun.file(testCodexPaths.agentsMd).text();
     expect(content).toBe("# Agents");
   });
 
   test("applyCodexConfig writes config.toml when no file exists", async () => {
     await codexModule.applyCodexConfig('model = "o3"\n');
-    const content = await Bun.file(mockCodexPaths.configToml).text();
+    const content = await Bun.file(testCodexPaths.configToml).text();
     expect(content).toContain("o3");
   });
 
   test("applyCodexConfig merges into existing config (incoming wins)", async () => {
-    await writeFile(mockCodexPaths.configToml, 'model = "gpt-4"\nlocal_only = true\n', "utf8");
+    await writeFile(testCodexPaths.configToml, 'model = "gpt-4"\nlocal_only = true\n', "utf8");
     await codexModule.applyCodexConfig('model = "o3"\n');
 
-    const content = await Bun.file(mockCodexPaths.configToml).text();
+    const content = await Bun.file(testCodexPaths.configToml).text();
     // incoming model wins, local_only key is preserved
     expect(content).toContain("o3");
     expect(content).toContain("local_only");
@@ -148,7 +131,7 @@ describe("apply* functions", () => {
 
   test("applyCodexRule writes a rule file", async () => {
     await codexModule.applyCodexRule("testing.md", "## Testing rules");
-    const content = await Bun.file(join(mockCodexPaths.rulesDir, "testing.md")).text();
+    const content = await Bun.file(join(testCodexPaths.rulesDir, "testing.md")).text();
     expect(content).toBe("## Testing rules");
   });
 });
@@ -160,11 +143,11 @@ describe("applyCodexVault dryRun", () => {
 
   beforeEach(async () => {
     tmpDir = await createTmpDir();
-    mockCodexPaths.root = join(tmpDir, "apply");
-    mockCodexPaths.agentsMd = join(tmpDir, "apply", "AGENTS.md");
-    mockCodexPaths.configToml = join(tmpDir, "apply", "config.toml");
-    mockCodexPaths.rulesDir = join(tmpDir, "apply", "rules");
-    mockCodexPaths.authJson = join(tmpDir, "apply", "auth.json");
+    testCodexPaths.root = join(tmpDir, "apply");
+    testCodexPaths.agentsMd = join(tmpDir, "apply", "AGENTS.md");
+    testCodexPaths.configToml = join(tmpDir, "apply", "config.toml");
+    testCodexPaths.rulesDir = join(tmpDir, "apply", "rules");
+    testCodexPaths.authJson = join(tmpDir, "apply", "auth.json");
   });
 
   afterEach(async () => {
@@ -186,7 +169,7 @@ describe("applyCodexVault dryRun", () => {
 
     await codexModule.applyCodexVault(vaultDir, identity, true);
 
-    const exists = await Bun.file(mockCodexPaths.agentsMd).exists();
+    const exists = await Bun.file(testCodexPaths.agentsMd).exists();
     expect(exists).toBeFalse();
   });
 });

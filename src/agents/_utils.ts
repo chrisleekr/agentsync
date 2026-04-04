@@ -5,7 +5,8 @@
  * Centralised here so that adding a new agent never requires copy-pasting these utilities.
  */
 
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import type { RedactionResult } from "../core/sanitizer";
 
@@ -38,14 +39,17 @@ export async function readIfExists(path: string): Promise<string | null> {
 }
 
 /**
- * Write `content` atomically: write to a `.tmp` sidecar and rename into place
- * so a concurrent reader never sees a partial write.
+ * Write `content` to `path`, creating parent directories as needed.
+ *
+ * Note: synchronous fs APIs are used intentionally here.
+ * On Linux (e.g. GitHub Actions / ubuntu runners with Bun 1.3.x), Bun's async fs
+ * operations against tmpfs-backed paths can resolve before the file is visible to a
+ * subsequent open/readdir call in the same test. Using sync mkdir/write avoids both
+ * the earlier rename race and the direct write visibility race for these tiny files.
  */
 export async function atomicWrite(path: string, content: string | Buffer): Promise<void> {
-  await mkdir(dirname(path), { recursive: true });
-  const tmpPath = `${path}.tmp`;
-  await writeFile(tmpPath, content);
-  await rename(tmpPath, path);
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, content);
 }
 
 /**
