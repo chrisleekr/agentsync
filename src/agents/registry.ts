@@ -56,8 +56,8 @@ export const Agents: AgentDefinition[] = [
 // Re-export narrow types for callers that care about the specific shape
 export type {
   ClaudeSnapshotResult,
-  CursorSnapshotResult,
   CodexSnapshotResult,
   CopilotSnapshotResult,
+  CursorSnapshotResult,
   VsCodeSnapshotResult,
 };

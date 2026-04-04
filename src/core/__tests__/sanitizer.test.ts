@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import {
   NEVER_SYNC_PATTERNS,
-  redactSecretLiterals,
   redactionEnvNameForPath,
+  redactSecretLiterals,
   sanitizeClaudeHooks,
   sanitizeClaudeMcp,
   shouldNeverSync,

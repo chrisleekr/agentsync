@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { constants } from "node:fs";
-import { access, readFile, readdir, stat } from "node:fs/promises";
+import { access, readdir, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join, relative } from "node:path";
 import { promisify } from "node:util";
@@ -8,7 +8,6 @@ import { log } from "@clack/prompts";
 import { defineCommand } from "citty";
 import { loadConfig, resolveConfigPath } from "../config/loader";
 import { AgentPaths } from "../config/paths";
-import { AgentSyncConfigSchema } from "../config/schema";
 import { resolveRuntimeContext } from "./shared";
 
 interface Check {
@@ -54,7 +53,11 @@ export const doctorCommand = defineCommand({
     // 2. age-encryption module loads
     try {
       await import("age-encryption");
-      checks.push({ name: "age-encryption module", status: "pass", detail: "Resolves OK" });
+      checks.push({
+        name: "age-encryption module",
+        status: "pass",
+        detail: "Resolves OK",
+      });
     } catch (error) {
       checks.push({
         name: "age-encryption module",
@@ -66,7 +69,11 @@ export const doctorCommand = defineCommand({
     // 3. Claude settings.json readable
     try {
       await access(AgentPaths.claude.settingsJson, constants.R_OK);
-      checks.push({ name: "Claude settings.json", status: "pass", detail: "Readable" });
+      checks.push({
+        name: "Claude settings.json",
+        status: "pass",
+        detail: "Readable",
+      });
     } catch {
       checks.push({
         name: "Claude settings.json",
@@ -78,11 +85,12 @@ export const doctorCommand = defineCommand({
     // 4. Vault config parses correctly against schema
     try {
       const configPath = resolveConfigPath(runtime.vaultDir);
-      const raw = await readFile(configPath, "utf8");
-      const { parse } = await import("@iarna/toml");
-      const parsed = parse(raw);
-      AgentSyncConfigSchema.parse(parsed);
-      checks.push({ name: "agentsync.toml schema", status: "pass", detail: configPath });
+      await loadConfig(configPath);
+      checks.push({
+        name: "agentsync.toml schema",
+        status: "pass",
+        detail: configPath,
+      });
     } catch (err) {
       checks.push({
         name: "agentsync.toml schema",
@@ -97,7 +105,11 @@ export const doctorCommand = defineCommand({
       await promisify(execFile)("git", ["ls-remote", "--exit-code", config.remote.url, "HEAD"], {
         timeout: 10_000,
       });
-      checks.push({ name: "Git remote reachable", status: "pass", detail: config.remote.url });
+      checks.push({
+        name: "Git remote reachable",
+        status: "pass",
+        detail: config.remote.url,
+      });
     } catch {
       checks.push({
         name: "Git remote reachable",
@@ -131,7 +143,11 @@ export const doctorCommand = defineCommand({
           detail: `Unencrypted sensitive files found: ${suspicious.join(", ")}`,
         });
       } else {
-        checks.push({ name: "Credential files in vault", status: "pass", detail: "None found" });
+        checks.push({
+          name: "Credential files in vault",
+          status: "pass",
+          detail: "None found",
+        });
       }
     } catch {
       checks.push({
@@ -153,7 +169,11 @@ export const doctorCommand = defineCommand({
     if (daemonServicePath) {
       try {
         await access(daemonServicePath, constants.R_OK);
-        checks.push({ name: "Daemon service file", status: "pass", detail: daemonServicePath });
+        checks.push({
+          name: "Daemon service file",
+          status: "pass",
+          detail: daemonServicePath,
+        });
       } catch {
         checks.push({
           name: "Daemon service file",
@@ -164,6 +184,7 @@ export const doctorCommand = defineCommand({
     }
 
     // Print results
+    // biome-ignore lint/suspicious/noConsole: intentional CLI tabular output
     console.table(checks);
 
     const hasFailure = checks.some((c) => c.status === "fail");

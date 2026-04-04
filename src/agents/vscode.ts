@@ -4,7 +4,7 @@ import { log } from "@clack/prompts";
 import { AgentPaths } from "../config/paths";
 import { decryptString } from "../core/encryptor";
 import { redactSecretLiterals } from "../core/sanitizer";
-import { type SnapshotArtifact, atomicWrite, collect, readIfExists } from "./_utils";
+import { atomicWrite, collect, readIfExists, type SnapshotArtifact } from "./_utils";
 
 export interface VsCodeSnapshotResult {
   artifacts: SnapshotArtifact[];

@@ -85,14 +85,17 @@ Biome is the sole linter and formatter. ESLint, Prettier, and other
 formatting tools MUST NOT be added to the project.
 
 - `bunx biome ci .` MUST pass with zero errors in CI. Warnings for
-  `noExplicitAny` and `noConsoleLog` are permitted only in daemon
-  bootstrap code (`src/daemon/index.ts`).
+  `noExplicitAny` and `noConsole` are permitted only in daemon
+  bootstrap code (`src/daemon/index.ts`); `noConsole` MUST be set
+  to `"error"` for all other source files via a `biome.json`
+  `overrides` block.
 - All runtime data structures that cross a trust boundary (config
   files, IPC messages, CLI arguments) MUST be validated with Zod
   schemas defined in `src/config/schema.ts`.
 - `useConst` and `noUnusedVariables` rules are enforced at error
   level; no suppression comments are allowed for these rules.
-- Import ordering is managed by Biome's `organizeImports`; manual
+- Import ordering is managed by Biome's `assist.actions.source.organizeImports`
+  (Biome v2 path; v1 `organizeImports` section is removed); manual
   import sorting MUST NOT be performed.
 
 ### V. JSDoc Documentation Standards

@@ -1,9 +1,9 @@
-import { mkdir, readFile, readdir } from "node:fs/promises";
+import { mkdir, readdir, readFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { log } from "@clack/prompts";
 import { AgentPaths } from "../config/paths";
 import { redactSecretLiterals, shouldNeverSync } from "../core/sanitizer";
-import { type SnapshotArtifact, atomicWrite, collect, readIfExists } from "./_utils";
+import { atomicWrite, collect, readIfExists, type SnapshotArtifact } from "./_utils";
 
 export interface CursorSnapshotResult {
   artifacts: SnapshotArtifact[];

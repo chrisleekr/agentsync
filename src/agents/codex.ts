@@ -1,10 +1,10 @@
-import { mkdir, readFile, readdir } from "node:fs/promises";
+import { mkdir, readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { log } from "@clack/prompts";
 import * as TOML from "@iarna/toml";
 import { AgentPaths } from "../config/paths";
 import { type RedactionResult, redactSecretLiterals, shouldNeverSync } from "../core/sanitizer";
-import { type SnapshotArtifact, atomicWrite, collect, readIfExists } from "./_utils";
+import { atomicWrite, collect, readIfExists, type SnapshotArtifact } from "./_utils";
 
 export interface CodexSnapshotResult {
   artifacts: SnapshotArtifact[];

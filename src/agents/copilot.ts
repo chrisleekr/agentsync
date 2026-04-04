@@ -4,7 +4,7 @@ import { log } from "@clack/prompts";
 import { AgentPaths } from "../config/paths";
 import { shouldNeverSync } from "../core/sanitizer";
 import { archiveDirectory, extractArchive } from "../core/tar";
-import { type SnapshotArtifact, atomicWrite, readIfExists } from "./_utils";
+import { atomicWrite, readIfExists, type SnapshotArtifact } from "./_utils";
 
 export interface CopilotSnapshotResult {
   artifacts: SnapshotArtifact[];

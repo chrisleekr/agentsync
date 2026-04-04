@@ -10,7 +10,8 @@
  * 3. Individual tests mutate fakeArtifacts / fakeApplyCalls as needed; beforeEach
  *    resets them so each test starts clean.
  */
-import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
+// ── Suppress clack I/O ────────────────────────────────────────────────────────
+import { afterAll, beforeAll, beforeEach, describe, expect, mock, test } from "bun:test";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { readFile, rm } from "node:fs/promises";
 import { createRequire } from "node:module";
@@ -19,9 +20,6 @@ import { stringify as tomlStringify } from "@iarna/toml";
 import type { CommandDef } from "citty";
 import type { SnapshotArtifact } from "../../agents/_utils";
 import { createAgeIdentity, createBareRepo, createTmpDir } from "../../test-helpers/fixtures";
-
-// ── Suppress clack I/O ────────────────────────────────────────────────────────
-import { mock } from "bun:test";
 
 // Re-register node:fs/promises with the real implementation before any code runs.
 // The installer-windows/macos/linux tests mock this module; Bun shares module state

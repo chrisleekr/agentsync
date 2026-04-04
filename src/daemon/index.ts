@@ -1,4 +1,5 @@
 import { dirname } from "node:path";
+import { log } from "@clack/prompts";
 import { performPull } from "../commands/pull";
 import { performPush } from "../commands/push";
 import { resolveRuntimeContext } from "../commands/shared";
@@ -35,7 +36,7 @@ export async function startDaemon(): Promise<void> {
   });
 
   await ipc.listen(socketPath);
-  console.info(`${ts()} AgentSync daemon started (pid ${process.pid}, socket ${socketPath})`);
+  log.info(`${ts()} AgentSync daemon started (pid ${process.pid}, socket ${socketPath})`);
 
   // Watch agent config directories and push on change
   const watcher = new Watcher();

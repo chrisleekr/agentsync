@@ -1,11 +1,11 @@
 import { createHash } from "node:crypto";
-import { readFile, readdir, stat } from "node:fs/promises";
+import { readdir, readFile, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join, relative } from "node:path";
 import { log } from "@clack/prompts";
 import { defineCommand } from "citty";
-import { Agents } from "../agents/registry";
 import type { SnapshotArtifact } from "../agents/registry";
+import { Agents } from "../agents/registry";
 import { loadConfig, resolveConfigPath } from "../config/loader";
 import { decryptString } from "../core/encryptor";
 import { loadPrivateKey, resolveRuntimeContext } from "./shared";
@@ -50,16 +50,20 @@ export const statusCommand = defineCommand({
     description: "Show per-file sync status between local configs and vault",
   },
   args: {
-    verbose: { type: "boolean", description: "Show file hashes", default: false },
+    verbose: {
+      type: "boolean",
+      description: "Show file hashes",
+      default: false,
+    },
   },
   async run({ args }) {
     const runtime = await resolveRuntimeContext();
     const config = await loadConfig(resolveConfigPath(runtime.vaultDir));
 
-    console.info("AgentSync Status");
-    console.info(`Vault : ${runtime.vaultDir}`);
-    console.info(`Remote: ${config.remote.url} (${config.remote.branch})`);
-    console.info();
+    log.info("AgentSync Status");
+    log.info(`Vault : ${runtime.vaultDir}`);
+    log.info(`Remote: ${config.remote.url} (${config.remote.branch})`);
+    log.info(``);
 
     const enabledAgents = Agents.filter((a) => config.agents[a.name as keyof typeof config.agents]);
 
@@ -158,8 +162,8 @@ export const statusCommand = defineCommand({
     ].join("  ");
 
     const separator = "-".repeat(header.length);
-    console.info(header);
-    console.info(separator);
+    log.info(header);
+    log.info(separator);
 
     for (const row of rows) {
       const statusDisplay: Record<SyncStatus, string> = {
@@ -169,7 +173,7 @@ export const statusCommand = defineCommand({
         "local-only": "local-only",
         error: "error",
       };
-      console.info(
+      log.info(
         [
           row.agent.padEnd(colWidths.agent),
           row.file.padEnd(colWidths.file),
@@ -179,14 +183,14 @@ export const statusCommand = defineCommand({
       );
     }
 
-    console.info();
+    log.info("");
     const summary = {
       synced: rows.filter((r) => r.status === "synced").length,
       changed: rows.filter((r) => r.status === "local-changed").length,
       "local-only": rows.filter((r) => r.status === "local-only").length,
       errors: rows.filter((r) => r.status === "error").length,
     };
-    console.info(
+    log.info(
       `Summary: ${summary.synced} synced, ${summary.changed} changed, ${summary["local-only"]} local-only, ${summary.errors} errors`,
     );
   },

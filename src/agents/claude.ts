@@ -1,9 +1,9 @@
-import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { log } from "@clack/prompts";
 import { AgentPaths } from "../config/paths";
 import { sanitizeClaudeHooks, sanitizeClaudeMcp, shouldNeverSync } from "../core/sanitizer";
-import { type SnapshotArtifact, atomicWrite, collect, readIfExists } from "./_utils";
+import { atomicWrite, collect, readIfExists, type SnapshotArtifact } from "./_utils";
 
 export interface ClaudeSnapshotResult {
   artifacts: SnapshotArtifact[];
