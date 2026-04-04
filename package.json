@@ -19,13 +19,13 @@
     "prepare": "lefthook install"
   },
   "dependencies": {
-    "@clack/prompts": "^0.9.0",
+    "@clack/prompts": "^1.2.0",
     "@iarna/toml": "^2.2.5",
     "age-encryption": "^0.3.0",
-    "citty": "^0.1.6",
+    "citty": "^0.2.2",
     "simple-git": "^3.27.0",
     "tar": "^7.4.0",
-    "zod": "^3.23.8"
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",
