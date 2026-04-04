@@ -4,8 +4,7 @@
  * Shared per-test isolation utilities used across all test suites.
  */
 
-import { mkdir } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { generateIdentity, identityToRecipient } from "../core/encryptor";
 
@@ -14,8 +13,9 @@ import { generateIdentity, identityToRecipient } from "../core/encryptor";
  * Caller is responsible for removing it in afterEach.
  */
 export async function createTmpDir(): Promise<string> {
-  const dir = join(tmpdir(), `agentsync-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
-  await mkdir(dir, { recursive: true });
+  const root = join(process.cwd(), ".agentsync-test-tmp");
+  const dir = join(root, `agentsync-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+  mkdirSync(dir, { recursive: true });
   return dir;
 }
 
@@ -50,7 +50,7 @@ export async function createBareRepo(dir: string): Promise<string> {
  * The directory is created if it does not already exist.
  */
 export async function createIpcFixture(socketDir: string): Promise<{ socketPath: string }> {
-  await mkdir(socketDir, { recursive: true });
+  mkdirSync(socketDir, { recursive: true });
   return {
     socketPath: join(socketDir, "test-daemon.sock"),
   };

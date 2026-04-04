@@ -19,19 +19,22 @@ function sha256(content: string): string {
 /** Recursively collect all .age file paths under `dir`, returning paths relative to `base`. */
 async function collectAgeFiles(dir: string, base: string): Promise<string[]> {
   const results: string[] = [];
-  let entries: import("node:fs").Dirent[];
   try {
-    entries = await readdir(dir, { withFileTypes: true });
+    const names = await readdir(dir);
+    for (const name of names) {
+      const full = join(dir, name);
+      const entry = await stat(full).catch(() => null);
+      if (!entry) {
+        continue;
+      }
+      if (entry.isDirectory()) {
+        results.push(...(await collectAgeFiles(full, base)));
+      } else if (entry.isFile() && name.endsWith(".age")) {
+        results.push(relative(base, full));
+      }
+    }
   } catch {
     return results;
-  }
-  for (const entry of entries) {
-    const full = join(dir, entry.name);
-    if (entry.isDirectory()) {
-      results.push(...(await collectAgeFiles(full, base)));
-    } else if (entry.isFile() && entry.name.endsWith(".age")) {
-      results.push(relative(base, full));
-    }
   }
   return results;
 }

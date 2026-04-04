@@ -117,10 +117,13 @@ import { decryptString } from "../core/encryptor";
 
 async function readAgeFiles(dir: string): Promise<{ name: string; fullPath: string }[]> {
   try {
-    const entries = await readdir(dir, { withFileTypes: true });
-    return entries
-      .filter((e) => e.isFile() && e.name.endsWith(".age"))
-      .map((e) => ({ name: e.name, fullPath: join(dir, e.name) }));
+    const names = await readdir(dir);
+    return names
+      .filter((name) => name.endsWith(".age"))
+      .map((name) => ({
+        name,
+        fullPath: join(dir, name),
+      }));
   } catch {
     return [];
   }

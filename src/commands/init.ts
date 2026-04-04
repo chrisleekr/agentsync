@@ -1,6 +1,6 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { intro, log, outro } from "@clack/prompts";
+import { log, outro } from "@clack/prompts";
 import { defineCommand } from "citty";
 import { loadConfig, resolveConfigPath, writeConfig } from "../config/loader";
 import { generateIdentity, identityToRecipient } from "../core/encryptor";
@@ -56,7 +56,7 @@ export const initCommand = defineCommand({
     },
   },
   async run({ args }) {
-    intro("Initializing AgentSync");
+    log.info("Initializing AgentSync");
 
     const runtime = await resolveRuntimeContext();
     await mkdir(runtime.vaultDir, { recursive: true });

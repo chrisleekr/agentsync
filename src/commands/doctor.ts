@@ -123,12 +123,17 @@ export const doctorCommand = defineCommand({
     try {
       const allFiles: string[] = [];
       const scanDir = async (dir: string) => {
-        const entries = await readdir(dir, { withFileTypes: true }).catch(() => []);
-        for (const e of entries) {
-          if (e.isDirectory()) {
-            await scanDir(`${dir}/${e.name}`);
+        const names = await readdir(dir).catch(() => []);
+        for (const name of names) {
+          const fullPath = join(dir, name);
+          const entry = await stat(fullPath).catch(() => null);
+          if (!entry) {
+            continue;
+          }
+          if (entry.isDirectory()) {
+            await scanDir(fullPath);
           } else {
-            allFiles.push(relative(runtime.vaultDir, `${dir}/${e.name}`).toLowerCase());
+            allFiles.push(relative(runtime.vaultDir, fullPath).toLowerCase());
           }
         }
       };
