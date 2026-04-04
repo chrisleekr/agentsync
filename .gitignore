@@ -1,0 +1,12 @@
+node_modules/
+dist/
+coverage/
+.DS_Store
+.env
+*.log
+.plan
+
+# Spec Kit — ephemeral/local artifacts only
+.specify/extensions/.cache/
+.specify/extensions/.backup/
+.specify/extensions/*/local-config.yml

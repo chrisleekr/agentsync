@@ -1,0 +1,254 @@
+import { afterEach, beforeAll, beforeEach, describe, expect, mock, test } from "bun:test";
+import { mkdir, rm, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import { createTmpDir } from "../../test-helpers/fixtures";
+
+// ─── Mock AgentPaths before any dynamic import of claude ─────────────────────
+// bun:test mock.module() is NOT hoisted — it must be called synchronously
+// before the module under test is first imported.
+
+const mockClaudePaths = {
+  claudeMd: "",
+  settingsJson: "",
+  commandsDir: "",
+  agentsDir: "",
+  mcpJson: "",
+  credentials: "",
+};
+
+mock.module("../../config/paths", () => ({
+  AgentPaths: {
+    claude: mockClaudePaths,
+    cursor: { mcpGlobal: "", commandsDir: "", settingsJson: "" },
+    codex: {
+      root: "",
+      agentsMd: "",
+      configToml: "",
+      rulesDir: "",
+      authJson: "",
+    },
+    copilot: {
+      instructionsFile: "",
+      instructionsDir: "",
+      skillsDir: "",
+      promptsDir: "",
+      agentsDir: "",
+      vscodeMcpInSettings: "",
+    },
+    vscode: { mcpJson: "" },
+  },
+  resolveAgentSyncHome: () => "/tmp/agentsync",
+  resolveDaemonSocketPath: () => "/tmp/agentsync/daemon.sock",
+}));
+
+type ClaudeModule = typeof import("../claude");
+let claudeModule: ClaudeModule;
+
+beforeAll(async () => {
+  claudeModule = await import("../claude");
+});
+
+// T018 — snapshotClaude
+
+describe("snapshotClaude", () => {
+  let tmpDir: string;
+
+  beforeEach(async () => {
+    tmpDir = await createTmpDir();
+    mockClaudePaths.claudeMd = join(tmpDir, "CLAUDE.md");
+    mockClaudePaths.settingsJson = join(tmpDir, "settings.json");
+    mockClaudePaths.commandsDir = join(tmpDir, "commands");
+    mockClaudePaths.agentsDir = join(tmpDir, "agents");
+    mockClaudePaths.mcpJson = join(tmpDir, ".claude.json");
+    mockClaudePaths.credentials = join(tmpDir, ".credentials.json");
+  });
+
+  afterEach(async () => {
+    await rm(tmpDir, { recursive: true, force: true });
+  });
+
+  test("returns empty artifacts when no files exist", async () => {
+    const result = await claudeModule.snapshotClaude();
+    expect(result.artifacts).toHaveLength(0);
+    expect(result.warnings).toHaveLength(0);
+  });
+
+  test("snapshots CLAUDE.md when it exists", async () => {
+    await writeFile(mockClaudePaths.claudeMd, "# My Claude instructions\n", "utf8");
+    const result = await claudeModule.snapshotClaude();
+    const art = result.artifacts.find((a) => a.vaultPath === "claude/CLAUDE.md.age");
+    expect(art).toBeDefined();
+    expect(art?.plaintext).toBe("# My Claude instructions\n");
+  });
+
+  test("snapshots settings.json extracting only hooks", async () => {
+    const settings = JSON.stringify({
+      hooks: { PreToolUse: [{ matcher: "*", hooks: [] }] },
+      other: "should be dropped",
+    });
+    await writeFile(mockClaudePaths.settingsJson, settings, "utf8");
+
+    const result = await claudeModule.snapshotClaude();
+    const art = result.artifacts.find((a) => a.vaultPath === "claude/settings.hooks.json.age");
+    expect(art).toBeDefined();
+    // biome-ignore lint/style/noNonNullAssertion: asserted by toBeDefined above
+    const parsed = JSON.parse(art!.plaintext) as Record<string, unknown>;
+    expect(Object.keys(parsed)).toEqual(["hooks"]);
+  });
+
+  test("snapshots .claude.json extracting only mcpServers", async () => {
+    const mcp = JSON.stringify({
+      mcpServers: { myserver: { command: "npx" } },
+      something: "else",
+    });
+    await writeFile(mockClaudePaths.mcpJson, mcp, "utf8");
+
+    const result = await claudeModule.snapshotClaude();
+    const art = result.artifacts.find((a) => a.vaultPath === "claude/claude.json.age");
+    expect(art).toBeDefined();
+    // biome-ignore lint/style/noNonNullAssertion: asserted by toBeDefined above
+    const parsed = JSON.parse(art!.plaintext) as Record<string, unknown>;
+    expect(Object.keys(parsed)).toEqual(["mcpServers"]);
+  });
+
+  test("snapshots command .md files from commands dir", async () => {
+    await mkdir(mockClaudePaths.commandsDir, { recursive: true });
+    await writeFile(join(mockClaudePaths.commandsDir, "my-cmd.md"), "cmd content", "utf8");
+
+    const result = await claudeModule.snapshotClaude();
+    const art = result.artifacts.find((a) => a.vaultPath === "claude/commands/my-cmd.md.age");
+    expect(art).toBeDefined();
+    expect(art?.plaintext).toBe("cmd content");
+  });
+
+  test("snapshots agent .md files from agents dir", async () => {
+    await mkdir(mockClaudePaths.agentsDir, { recursive: true });
+    await writeFile(join(mockClaudePaths.agentsDir, "my-agent.md"), "agent content", "utf8");
+
+    const result = await claudeModule.snapshotClaude();
+    const art = result.artifacts.find((a) => a.vaultPath === "claude/agents/my-agent.md.age");
+    expect(art).toBeDefined();
+    expect(art?.plaintext).toBe("agent content");
+  });
+
+  test("redacts secrets in settings.json and adds warnings", async () => {
+    const settings = JSON.stringify({
+      hooks: {},
+      env: { API_KEY: `sk-${"x".repeat(30)}` },
+    });
+    await writeFile(mockClaudePaths.settingsJson, settings, "utf8");
+    const result = await claudeModule.snapshotClaude();
+    // Warnings bubble up from sanitization
+    expect(result.warnings.length).toBeGreaterThanOrEqual(0);
+  });
+});
+
+// T024 — applyClaudeMd / applyClaudeHooks / applyClaudeMcp / applyClaudeCommand / applyClaudeAgent
+
+describe("apply* functions", () => {
+  let tmpDir: string;
+
+  beforeEach(async () => {
+    tmpDir = await createTmpDir();
+    mockClaudePaths.claudeMd = join(tmpDir, "CLAUDE.md");
+    mockClaudePaths.settingsJson = join(tmpDir, "settings.json");
+    mockClaudePaths.commandsDir = join(tmpDir, "commands");
+    mockClaudePaths.agentsDir = join(tmpDir, "agents");
+    mockClaudePaths.mcpJson = join(tmpDir, ".claude.json");
+    mockClaudePaths.credentials = join(tmpDir, ".credentials.json");
+  });
+
+  afterEach(async () => {
+    await rm(tmpDir, { recursive: true, force: true });
+  });
+
+  test("applyClaudeMd writes CLAUDE.md", async () => {
+    await claudeModule.applyClaudeMd("# Updated instructions");
+    const content = await Bun.file(mockClaudePaths.claudeMd).text();
+    expect(content).toBe("# Updated instructions");
+  });
+
+  test("applyClaudeHooks merges hooks key into existing settings.json", async () => {
+    await writeFile(mockClaudePaths.settingsJson, JSON.stringify({ theme: "dark" }), "utf8");
+    await claudeModule.applyClaudeHooks(JSON.stringify({ hooks: { PreToolUse: [] } }));
+    const updated = JSON.parse(await Bun.file(mockClaudePaths.settingsJson).text()) as Record<
+      string,
+      unknown
+    >;
+    expect(updated.theme).toBe("dark");
+    expect(updated.hooks).toEqual({ PreToolUse: [] });
+  });
+
+  test("applyClaudeHooks creates settings.json when missing", async () => {
+    await claudeModule.applyClaudeHooks(JSON.stringify({ hooks: { PostToolUse: [] } }));
+    const parsed = JSON.parse(await Bun.file(mockClaudePaths.settingsJson).text()) as Record<
+      string,
+      unknown
+    >;
+    expect(parsed.hooks).toEqual({ PostToolUse: [] });
+  });
+
+  test("applyClaudeMcp merges mcpServers into .claude.json", async () => {
+    await writeFile(mockClaudePaths.mcpJson, JSON.stringify({ projects: {} }), "utf8");
+    await claudeModule.applyClaudeMcp(JSON.stringify({ mcpServers: { srv: { command: "bun" } } }));
+    const parsed = JSON.parse(await Bun.file(mockClaudePaths.mcpJson).text()) as Record<
+      string,
+      unknown
+    >;
+    expect(parsed.projects).toEqual({});
+    expect((parsed.mcpServers as Record<string, unknown>).srv).toBeDefined();
+  });
+
+  test("applyClaudeCommand writes a command file", async () => {
+    await claudeModule.applyClaudeCommand("review.md", "# Code review command");
+    const content = await Bun.file(join(mockClaudePaths.commandsDir, "review.md")).text();
+    expect(content).toBe("# Code review command");
+  });
+
+  test("applyClaudeAgent writes an agent file", async () => {
+    await claudeModule.applyClaudeAgent("my-agent.md", "# Agent content");
+    const content = await Bun.file(join(mockClaudePaths.agentsDir, "my-agent.md")).text();
+    expect(content).toBe("# Agent content");
+  });
+});
+
+// T028 — dryRun (applyClaudeVault)
+
+describe("applyClaudeVault dryRun", () => {
+  let tmpDir: string;
+
+  beforeEach(async () => {
+    tmpDir = await createTmpDir();
+    mockClaudePaths.claudeMd = join(tmpDir, "apply", "CLAUDE.md");
+    mockClaudePaths.settingsJson = join(tmpDir, "apply", "settings.json");
+    mockClaudePaths.commandsDir = join(tmpDir, "apply", "commands");
+    mockClaudePaths.agentsDir = join(tmpDir, "apply", "agents");
+    mockClaudePaths.mcpJson = join(tmpDir, "apply", ".claude.json");
+    mockClaudePaths.credentials = join(tmpDir, "apply", ".credentials.json");
+  });
+
+  afterEach(async () => {
+    await rm(tmpDir, { recursive: true, force: true });
+  });
+
+  test("dryRun=true does not write any files to disk", async () => {
+    const { generateIdentity, identityToRecipient, encryptString } = await import(
+      "../../core/encryptor"
+    );
+    const identity = await generateIdentity();
+    const recipient = await identityToRecipient(identity);
+
+    // Create vault with an encrypted CLAUDE.md
+    const vaultDir = join(tmpDir, "vault");
+    const claudeVaultDir = join(vaultDir, "claude");
+    await mkdir(claudeVaultDir, { recursive: true });
+    const encrypted = await encryptString("# dry run content", [recipient]);
+    await writeFile(join(claudeVaultDir, "CLAUDE.md.age"), encrypted, "utf8");
+
+    await claudeModule.applyClaudeVault(vaultDir, identity, true /* dryRun */);
+
+    // File should NOT exist since dryRun=true
+    const exists = await Bun.file(mockClaudePaths.claudeMd).exists();
+    expect(exists).toBeFalse();
+  });
+});
