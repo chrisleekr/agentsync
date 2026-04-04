@@ -66,6 +66,7 @@ You **MUST** consider the user input before proceeding (if not empty).
 
 5. **Generate PR description**: Using the `.github/pull_request_template.md` as the output structure, fill each section:
 
+   ```markdown
    ### PR Title
    - Format: `<type>: <concise description derived from spec.md feature name>`
    - Determine `<type>` from the actual diff — do NOT default to `feat`:
@@ -111,7 +112,7 @@ You **MUST** consider the user input before proceeding (if not empty).
    - Pre-fill based on what's actually true:
      - `[x]` or `[ ]` for "New code has tests where appropriate"
      - `[x]` or `[ ]` for "Documentation updated if behavior changed"
-
+   ```
 6. **Output**: Print the complete PR description in markdown, ready to paste into a GitHub PR. Start with the PR title on the first line prefixed with `# `, then the template sections.
 
 ## Critical Rules

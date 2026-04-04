@@ -13,6 +13,7 @@ You **MUST** consider the user input before proceeding (if not empty).
 ## Pre-Execution Checks
 
 **Check for extension hooks (before PR generation)**:
+
 - Check if `.specify/extensions.yml` exists in the project root.
 - If it exists, read it and look for entries under the `hooks.before_pr` key
 - If the YAML cannot be parsed or is invalid, skip hook checking silently and continue normally
@@ -22,6 +23,7 @@ You **MUST** consider the user input before proceeding (if not empty).
   - If the hook defines a non-empty `condition`, skip the hook and leave condition evaluation to the HookExecutor implementation
 - For each executable hook, output the following based on its `optional` flag:
   - **Optional hook** (`optional: true`):
+
     ```
     ## Extension Hooks
 
@@ -32,16 +34,19 @@ You **MUST** consider the user input before proceeding (if not empty).
     Prompt: {prompt}
     To execute: `/{command}`
     ```
+
   - **Mandatory hook** (`optional: false`):
+
     ```
     ## Extension Hooks
 
     **Automatic Pre-Hook**: {extension}
     Executing: `/{command}`
     EXECUTE_COMMAND: {command}
-    
+
     Wait for the result of the hook command before proceeding to the Outline.
     ```
+
 - If no hooks are registered or `.specify/extensions.yml` does not exist, skip silently
 
 ## Outline
@@ -66,6 +71,7 @@ You **MUST** consider the user input before proceeding (if not empty).
 
 5. **Generate PR description**: Using the `.github/pull_request_template.md` as the output structure, fill each section:
 
+   ```markdown
    ### PR Title
    - Format: `<type>: <concise description derived from spec.md feature name>`
    - Determine `<type>` from the actual diff — do NOT default to `feat`:
@@ -78,16 +84,19 @@ You **MUST** consider the user input before proceeding (if not empty).
    - If the diff mixes types, use the dominant type
 
    ### Summary
+
    - What this PR does (1-2 sentences from spec.md)
    - Why it's needed (motivation from spec.md)
    - Link to the spec: `See specs/<feature-dir>/spec.md for full specification`
 
    ### Changes
+
    - Organize changes by area/module based on `git diff --stat` output
    - List key files changed with brief descriptions of what changed in each
    - Include **two separate mermaid diagrams** — one "Before" and one "After" — showing the architectural or structural change introduced by this PR
 
    #### Mermaid Diagram Rules (MUST follow for GitHub compatibility)
+
    - Use `classDef` with high-contrast hex color pairs that meet WCAG 2 AA standards (minimum 4.5:1 ratio) such as `fill:#2c3e50,color:#ffffff` for dark backgrounds or `fill:#ecf0f1,color:#2c3e50` for light backgrounds
    - Use `<br/>` for new lines instead of `\n`
    - Avoid parentheses in node labels as they break Mermaid syntax
@@ -97,20 +106,24 @@ You **MUST** consider the user input before proceeding (if not empty).
    - Label diagrams clearly: `### Before` and `### After`
 
    ### Test Evidence
+
    - Paste relevant test output (pass/fail counts, coverage if available)
    - Reference completed tasks from tasks.md (count of checked vs total)
    - If tests could not be run, state why
 
    ### Risks / Follow-ups
+
    - Extract known limitations from spec.md and plan.md
    - Note any TODO/FIXME comments in the diff
    - List any deferred scope or tech debt introduced
    - If none, state "No known risks or follow-ups identified"
 
    ### Checklist
+
    - Pre-fill based on what's actually true:
      - `[x]` or `[ ]` for "New code has tests where appropriate"
      - `[x]` or `[ ]` for "Documentation updated if behavior changed"
+   ```
 
 6. **Output**: Print the complete PR description in markdown, ready to paste into a GitHub PR. Start with the PR title on the first line prefixed with `# `, then the template sections.
 
@@ -125,6 +138,7 @@ You **MUST** consider the user input before proceeding (if not empty).
 ## Post-Execution Checks
 
 **Check for extension hooks (after PR generation)**:
+
 - Check if `.specify/extensions.yml` exists in the project root.
 - If it exists, read it and look for entries under the `hooks.after_pr` key
 - If the YAML cannot be parsed or is invalid, skip hook checking silently and continue normally
@@ -134,6 +148,7 @@ You **MUST** consider the user input before proceeding (if not empty).
   - If the hook defines a non-empty `condition`, skip the hook and leave condition evaluation to the HookExecutor implementation
 - For each executable hook, output the following based on its `optional` flag:
   - **Optional hook** (`optional: true`):
+
     ```
     ## Extension Hooks
 
@@ -144,7 +159,9 @@ You **MUST** consider the user input before proceeding (if not empty).
     Prompt: {prompt}
     To execute: `/{command}`
     ```
+
   - **Mandatory hook** (`optional: false`):
+
     ```
     ## Extension Hooks
 
@@ -152,4 +169,5 @@ You **MUST** consider the user input before proceeding (if not empty).
     Executing: `/{command}`
     EXECUTE_COMMAND: {command}
     ```
+
 - If no hooks are registered or `.specify/extensions.yml` does not exist, skip silently
