@@ -1,4 +1,5 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, mock, test } from "bun:test";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { createTmpDir } from "../../test-helpers/fixtures";
@@ -112,8 +113,8 @@ describe("snapshotClaude", () => {
   });
 
   test("snapshots command .md files from commands dir", async () => {
-    await mkdir(mockClaudePaths.commandsDir, { recursive: true });
-    await writeFile(join(mockClaudePaths.commandsDir, "my-cmd.md"), "cmd content", "utf8");
+    mkdirSync(mockClaudePaths.commandsDir, { recursive: true });
+    writeFileSync(join(mockClaudePaths.commandsDir, "my-cmd.md"), "cmd content", "utf8");
 
     const result = await claudeModule.snapshotClaude();
     const art = result.artifacts.find((a) => a.vaultPath === "claude/commands/my-cmd.md.age");
@@ -122,8 +123,8 @@ describe("snapshotClaude", () => {
   });
 
   test("snapshots agent .md files from agents dir", async () => {
-    await mkdir(mockClaudePaths.agentsDir, { recursive: true });
-    await writeFile(join(mockClaudePaths.agentsDir, "my-agent.md"), "agent content", "utf8");
+    mkdirSync(mockClaudePaths.agentsDir, { recursive: true });
+    writeFileSync(join(mockClaudePaths.agentsDir, "my-agent.md"), "agent content", "utf8");
 
     const result = await claudeModule.snapshotClaude();
     const art = result.artifacts.find((a) => a.vaultPath === "claude/agents/my-agent.md.age");

@@ -1,6 +1,6 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { log, outro } from "@clack/prompts";
+import { log } from "@clack/prompts";
 import { defineCommand } from "citty";
 import { loadConfig, resolveConfigPath, writeConfig } from "../config/loader";
 import { generateIdentity, identityToRecipient } from "../core/encryptor";
@@ -132,6 +132,6 @@ export const initCommand = defineCommand({
       }
     }
 
-    outro(`Initialized vault at ${runtime.vaultDir}`);
+    log.success(`Initialized vault at ${runtime.vaultDir}`);
   },
 });

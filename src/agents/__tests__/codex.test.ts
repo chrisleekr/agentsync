@@ -1,4 +1,5 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, mock, test } from "bun:test";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { createTmpDir } from "../../test-helpers/fixtures";
@@ -86,8 +87,8 @@ describe("snapshotCodex", () => {
   });
 
   test("snapshots .md files from rules dir", async () => {
-    await mkdir(mockCodexPaths.rulesDir, { recursive: true });
-    await writeFile(join(mockCodexPaths.rulesDir, "style.md"), "## Style rules", "utf8");
+    mkdirSync(mockCodexPaths.rulesDir, { recursive: true });
+    writeFileSync(join(mockCodexPaths.rulesDir, "style.md"), "## Style rules", "utf8");
 
     const result = await codexModule.snapshotCodex();
     const art = result.artifacts.find((a) => a.vaultPath === "codex/rules/style.md.age");

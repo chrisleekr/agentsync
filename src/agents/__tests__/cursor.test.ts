@@ -1,4 +1,5 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, mock, test } from "bun:test";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { createAgeIdentity, createTmpDir } from "../../test-helpers/fixtures";
@@ -130,9 +131,9 @@ describe("snapshotCursor", () => {
 
   test("captures command .md files as cursor/commands/<name>.age", async () => {
     const { snapshotCursor } = cursorModule;
-    await mkdir(mockCursorPaths.commandsDir, { recursive: true });
-    await writeFile(join(mockCursorPaths.commandsDir, "fix.md"), "# Fix\nFix the bug.", "utf8");
-    await writeFile(join(mockCursorPaths.commandsDir, "explain.md"), "# Explain\nExplain.", "utf8");
+    mkdirSync(mockCursorPaths.commandsDir, { recursive: true });
+    writeFileSync(join(mockCursorPaths.commandsDir, "fix.md"), "# Fix\nFix the bug.", "utf8");
+    writeFileSync(join(mockCursorPaths.commandsDir, "explain.md"), "# Explain\nExplain.", "utf8");
 
     const result = await snapshotCursor();
     const commands = result.artifacts.filter((a) => a.vaultPath.startsWith("cursor/commands/"));
