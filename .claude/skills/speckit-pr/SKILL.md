@@ -75,7 +75,7 @@ You **MUST** consider the user input before proceeding (if not empty).
 
    ```markdown
    ### PR Title
-   - Format: `<type>: <concise description derived from spec.md feature name>`
+   - Format: `<type>(<scope>): <concise description derived from spec.md feature name>`
    - Determine `<type>` from the actual diff — do NOT default to `feat`:
      - `feat` — new user-facing capability
      - `fix` — bug fix
