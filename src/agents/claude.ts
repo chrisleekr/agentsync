@@ -41,18 +41,19 @@ export async function snapshotClaude(): Promise<ClaudeSnapshotResult> {
   }
 
   try {
-    const entries = await readdir(AgentPaths.claude.commandsDir, { withFileTypes: true });
-    for (const entry of entries) {
-      if (!entry.isFile() || !entry.name.endsWith(".md")) {
-        continue;
+    const names = await readdir(AgentPaths.claude.commandsDir);
+    for (const name of names) {
+      if (!name.endsWith(".md")) continue;
+      const sourcePath = join(AgentPaths.claude.commandsDir, name);
+      if (shouldNeverSync(sourcePath)) continue;
+      let content: string;
+      try {
+        content = await readFile(sourcePath, "utf8");
+      } catch {
+        continue; // skip directories or unreadable entries
       }
-      const sourcePath = join(AgentPaths.claude.commandsDir, entry.name);
-      if (shouldNeverSync(sourcePath)) {
-        continue;
-      }
-      const content = await readFile(sourcePath, "utf8");
       artifacts.push({
-        vaultPath: `claude/commands/${entry.name}.age`,
+        vaultPath: `claude/commands/${name}.age`,
         sourcePath,
         plaintext: content,
         warnings: [],
@@ -63,18 +64,19 @@ export async function snapshotClaude(): Promise<ClaudeSnapshotResult> {
   }
 
   try {
-    const entries = await readdir(AgentPaths.claude.agentsDir, { withFileTypes: true });
-    for (const entry of entries) {
-      if (!entry.isFile() || !entry.name.endsWith(".md")) {
-        continue;
+    const names = await readdir(AgentPaths.claude.agentsDir);
+    for (const name of names) {
+      if (!name.endsWith(".md")) continue;
+      const sourcePath = join(AgentPaths.claude.agentsDir, name);
+      if (shouldNeverSync(sourcePath)) continue;
+      let content: string;
+      try {
+        content = await readFile(sourcePath, "utf8");
+      } catch {
+        continue; // skip directories or unreadable entries
       }
-      const sourcePath = join(AgentPaths.claude.agentsDir, entry.name);
-      if (shouldNeverSync(sourcePath)) {
-        continue;
-      }
-      const content = await readFile(sourcePath, "utf8");
       artifacts.push({
-        vaultPath: `claude/agents/${entry.name}.age`,
+        vaultPath: `claude/agents/${name}.age`,
         sourcePath,
         plaintext: content,
         warnings: [],

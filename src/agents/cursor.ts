@@ -61,18 +61,19 @@ export async function snapshotCursor(): Promise<CursorSnapshotResult> {
   }
 
   try {
-    const entries = await readdir(AgentPaths.cursor.commandsDir, { withFileTypes: true });
-    for (const entry of entries) {
-      if (!entry.isFile() || !entry.name.endsWith(".md")) {
-        continue;
+    const names = await readdir(AgentPaths.cursor.commandsDir);
+    for (const name of names) {
+      if (!name.endsWith(".md")) continue;
+      const sourcePath = join(AgentPaths.cursor.commandsDir, name);
+      if (shouldNeverSync(sourcePath)) continue;
+      let content: string;
+      try {
+        content = await readFile(sourcePath, "utf8");
+      } catch {
+        continue; // skip directories or unreadable entries
       }
-      const sourcePath = join(AgentPaths.cursor.commandsDir, entry.name);
-      if (shouldNeverSync(sourcePath)) {
-        continue;
-      }
-      const content = await readFile(sourcePath, "utf8");
       artifacts.push({
-        vaultPath: `cursor/commands/${entry.name}.age`,
+        vaultPath: `cursor/commands/${name}.age`,
         sourcePath,
         plaintext: content,
         warnings: [],

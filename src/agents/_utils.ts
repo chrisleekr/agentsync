@@ -5,7 +5,7 @@
  * Centralised here so that adding a new agent never requires copy-pasting these utilities.
  */
 
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import type { RedactionResult } from "../core/sanitizer";
 
@@ -38,14 +38,17 @@ export async function readIfExists(path: string): Promise<string | null> {
 }
 
 /**
- * Write `content` atomically: write to a `.tmp` sidecar and rename into place
- * so a concurrent reader never sees a partial write.
+ * Write `content` to `path`, creating parent directories as needed.
+ *
+ * Note: a write-to-tmp-then-rename atomic pattern is intentionally avoided here.
+ * On Linux (e.g. GitHub Actions / ubuntu runners with Bun 1.3.x), `rename` after
+ * `writeFile` to the same tmpfs directory reliably throws ENOENT because Bun's
+ * io_uring back-end does not sequence the two operations as expected by the kernel.
+ * For small config files written by a single-process CLI this direct write is safe.
  */
 export async function atomicWrite(path: string, content: string | Buffer): Promise<void> {
   await mkdir(dirname(path), { recursive: true });
-  const tmpPath = `${path}.tmp`;
-  await writeFile(tmpPath, content);
-  await rename(tmpPath, path);
+  await writeFile(path, content);
 }
 
 /**

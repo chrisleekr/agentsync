@@ -37,17 +37,15 @@ export async function snapshotCopilot(): Promise<CopilotSnapshotResult> {
 
   // Instructions directory *.instructions.md
   try {
-    const entries = await readdir(AgentPaths.copilot.instructionsDir, {
-      withFileTypes: true,
-    });
-    for (const entry of entries) {
-      if (!entry.isFile() || !entry.name.endsWith(".instructions.md")) continue;
-      const sourcePath = join(AgentPaths.copilot.instructionsDir, entry.name);
+    const names = await readdir(AgentPaths.copilot.instructionsDir);
+    for (const name of names) {
+      if (!name.endsWith(".instructions.md")) continue;
+      const sourcePath = join(AgentPaths.copilot.instructionsDir, name);
       if (shouldNeverSync(sourcePath)) continue;
       const content = await readIfExists(sourcePath);
       if (content !== null) {
         artifacts.push({
-          vaultPath: `copilot/instructions/${entry.name}.age`,
+          vaultPath: `copilot/instructions/${name}.age`,
           sourcePath,
           plaintext: content,
           warnings: [],
@@ -60,17 +58,15 @@ export async function snapshotCopilot(): Promise<CopilotSnapshotResult> {
 
   // Prompts *.prompt.md
   try {
-    const entries = await readdir(AgentPaths.copilot.promptsDir, {
-      withFileTypes: true,
-    });
-    for (const entry of entries) {
-      if (!entry.isFile() || !entry.name.endsWith(".prompt.md")) continue;
-      const sourcePath = join(AgentPaths.copilot.promptsDir, entry.name);
+    const names = await readdir(AgentPaths.copilot.promptsDir);
+    for (const name of names) {
+      if (!name.endsWith(".prompt.md")) continue;
+      const sourcePath = join(AgentPaths.copilot.promptsDir, name);
       if (shouldNeverSync(sourcePath)) continue;
       const content = await readIfExists(sourcePath);
       if (content !== null) {
         artifacts.push({
-          vaultPath: `copilot/prompts/${entry.name}.age`,
+          vaultPath: `copilot/prompts/${name}.age`,
           sourcePath,
           plaintext: content,
           warnings: [],
@@ -84,17 +80,16 @@ export async function snapshotCopilot(): Promise<CopilotSnapshotResult> {
   // Skills — each skill is a directory containing at minimum SKILL.md.
   // Archive the whole directory as <name>.tar, then that tar content is what we encrypt.
   try {
-    const entries = await readdir(AgentPaths.copilot.skillsDir, {
-      withFileTypes: true,
-    });
-    for (const entry of entries) {
-      if (!entry.isDirectory()) continue;
-      const skillDir = join(AgentPaths.copilot.skillsDir, entry.name);
+    const names = await readdir(AgentPaths.copilot.skillsDir);
+    for (const name of names) {
+      const skillDir = join(AgentPaths.copilot.skillsDir, name);
+      const skillDirStat = await stat(skillDir).catch(() => null);
+      if (!skillDirStat?.isDirectory()) continue;
       const skillMd = join(skillDir, "SKILL.md");
       if (!(await fileExists(skillMd))) continue; // not a valid skill directory
       const tarBuffer = await archiveDirectory(skillDir);
       artifacts.push({
-        vaultPath: `copilot/skills/${entry.name}.tar.age`,
+        vaultPath: `copilot/skills/${name}.tar.age`,
         sourcePath: skillDir,
         // Store as base64 so it survives the UTF-8 string layer before encryption
         plaintext: tarBuffer.toString("base64"),
@@ -107,15 +102,14 @@ export async function snapshotCopilot(): Promise<CopilotSnapshotResult> {
 
   // Agents directories (tar each one, similar to skills)
   try {
-    const entries = await readdir(AgentPaths.copilot.agentsDir, {
-      withFileTypes: true,
-    });
-    for (const entry of entries) {
-      if (!entry.isDirectory()) continue;
-      const agentDir = join(AgentPaths.copilot.agentsDir, entry.name);
+    const names = await readdir(AgentPaths.copilot.agentsDir);
+    for (const name of names) {
+      const agentDir = join(AgentPaths.copilot.agentsDir, name);
+      const agentDirStat = await stat(agentDir).catch(() => null);
+      if (!agentDirStat?.isDirectory()) continue;
       const tarBuffer = await archiveDirectory(agentDir);
       artifacts.push({
-        vaultPath: `copilot/agents/${entry.name}.tar.age`,
+        vaultPath: `copilot/agents/${name}.tar.age`,
         sourcePath: agentDir,
         plaintext: tarBuffer.toString("base64"),
         warnings: [],

@@ -57,16 +57,19 @@ export async function snapshotCodex(): Promise<CodexSnapshotResult> {
   }
 
   try {
-    const entries = await readdir(AgentPaths.codex.rulesDir, {
-      withFileTypes: true,
-    });
-    for (const entry of entries) {
-      if (!entry.isFile() || !entry.name.endsWith(".md")) continue;
-      const sourcePath = join(AgentPaths.codex.rulesDir, entry.name);
+    const names = await readdir(AgentPaths.codex.rulesDir);
+    for (const name of names) {
+      if (!name.endsWith(".md")) continue;
+      const sourcePath = join(AgentPaths.codex.rulesDir, name);
       if (shouldNeverSync(sourcePath)) continue;
-      const content = await readFile(sourcePath, "utf8");
+      let content: string;
+      try {
+        content = await readFile(sourcePath, "utf8");
+      } catch {
+        continue; // skip directories or unreadable entries
+      }
       artifacts.push({
-        vaultPath: `codex/rules/${entry.name}.age`,
+        vaultPath: `codex/rules/${name}.age`,
         sourcePath,
         plaintext: content,
         warnings: [],
