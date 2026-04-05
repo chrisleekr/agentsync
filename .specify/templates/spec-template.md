@@ -18,6 +18,13 @@
   - Tested independently
   - Deployed independently
   - Demonstrated to users independently
+
+  Default expectation: new features require automated tests that cover
+  the success path and at least one error or edge-case path. A feature
+  may omit automated test cases only when it qualifies as
+  documentation-only under the constitution and instead defines manual
+  walkthrough validation steps in this spec or the linked plan or
+  quickstart artifact.
 -->
 
 ### User Story 1 - [Brief Title] (Priority: P1)
@@ -80,6 +87,10 @@
 <!--
   ACTION REQUIRED: The content in this section represents placeholders.
   Fill them out with the right functional requirements.
+
+  If reader understanding depends on explaining a workflow, structure,
+  lifecycle, or interaction, add a functional requirement for a Mermaid
+  diagram rather than leaving that need implicit.
 -->
 
 ### Functional Requirements
@@ -126,3 +137,23 @@
 - [Assumption about scope boundaries, e.g., "Mobile support is out of scope for v1"]
 - [Assumption about data/environment, e.g., "Existing authentication system will be reused"]
 - [Dependency on existing system/service, e.g., "Requires access to the existing user profile API"]
+
+## Documentation Impact
+
+<!--
+  OPTIONAL: Include this section when the feature changes repository-hosted
+  documentation or when readers would benefit from a Mermaid diagram.
+
+  Example prompts for this section:
+  - Which docs must change?
+  - Does the feature qualify for the documentation-only testing
+    exception? If yes, explain why the changed files are limited to
+    repository-hosted docs and feature-planning artifacts and confirm no
+    runtime source, exported symbol, configuration schema, packaging,
+    CI, or generated workflow script behavior changes.
+  - Does the feature require a Mermaid diagram to explain flow, structure,
+    lifecycle, or interaction clearly?
+  - What manual walkthrough steps must reviewers validate in the spec,
+    plan, or quickstart artifacts?
+  - What must reviewers validate in those docs?
+-->

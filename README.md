@@ -76,6 +76,10 @@ Not yet positioned as a full hosted service:
 
 This is the contributor workflow for developing from a clone of the repository. It is separate from the published CLI path above.
 
+If your change follows the spec-kit workflow, start with [docs/speckit.md](docs/speckit.md).
+If you are maintaining the repo-local speckit setup itself, use
+[docs/speckit-local-development.md](docs/speckit-local-development.md).
+
 Install dependencies and verify the repo first:
 
 ```bash
@@ -115,6 +119,8 @@ bun run src/cli.ts pull
 
 ## Documentation
 
+- [Speckit guide](docs/speckit.md): start or continue feature work through the repo's spec-kit workflow
+- [Speckit local development guide](docs/speckit-local-development.md): prompt-file locations, active-feature detection, timestamp branches, and workflow upkeep rules
 - [Development guide](docs/development.md): contributor setup, local workflow, and verification steps
 - [Architecture guide](docs/architecture.md): module map, sync flow, security boundaries, and daemon design
 - [Maintenance guide](docs/maintenance.md): release upkeep, OIDC-only publish rules, and documentation/JSDoc change policy
@@ -131,5 +137,6 @@ bun run src/cli.ts pull
 
 If you are evaluating the released CLI path, start with the [latest release](https://github.com/chrisleekr/agentsync/releases/latest) and then [docs/command-reference.md](docs/command-reference.md).
 If you are developing from source, start with [docs/development.md](docs/development.md).
+If you are doing feature planning or workflow work through spec-kit, start with [docs/speckit.md](docs/speckit.md).
 If you want the system model before changing code, read [docs/architecture.md](docs/architecture.md).
 If you are modifying commands or agent integrations, read [docs/maintenance.md](docs/maintenance.md) before opening a PR.

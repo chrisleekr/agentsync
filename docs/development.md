@@ -41,6 +41,15 @@ bun run pack:dry-run
 4. Inspect drift with `bun run src/cli.ts status`.
 5. Run diagnostics with `bun run src/cli.ts doctor` when setup looks wrong.
 
+## Speckit workflow
+
+Use [speckit.md](speckit.md) when the change starts as feature planning or documentation through
+the spec-kit workflow rather than as direct source edits.
+
+Use [speckit-local-development.md](speckit-local-development.md) when you need the local details
+behind prompt files, agent files, `.specify/` scripts, active-feature detection, or timestamp
+branch naming.
+
 ## Common contributor loop
 
 ```bash
@@ -72,6 +81,8 @@ The exact resolved paths live in `src/config/paths.ts`. Use that module as the s
 
 ## When to branch into deeper docs
 
+- Use [speckit.md](speckit.md) when you need the command order, artifact map, or next-step logic for a spec-kit feature.
+- Use [speckit-local-development.md](speckit-local-development.md) when you need repo-local speckit behavior, maintenance rules, or recovery guidance.
 - Use [architecture.md](architecture.md) when a code change touches sync flow, daemon behavior, or security boundaries.
 - Use [command-reference.md](command-reference.md) when a released command contract or install path changes.
 - Use [troubleshooting.md](troubleshooting.md) when reproducing setup, key, or remote failures.
