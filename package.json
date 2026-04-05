@@ -1,13 +1,45 @@
 {
-  "name": "agentsync",
+  "name": "@chrisleekr/agentsync",
   "version": "0.1.0",
-  "private": true,
+  "description": "Encrypted sync for AI agent configuration.",
+  "private": false,
   "type": "module",
+  "license": "MIT",
+  "homepage": "https://github.com/chrisleekr/agentsync#readme",
+  "bugs": {
+    "url": "https://github.com/chrisleekr/agentsync/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/chrisleekr/agentsync.git"
+  },
+  "keywords": [
+    "agentsync",
+    "bun",
+    "cli",
+    "encryption",
+    "age",
+    "claude",
+    "cursor",
+    "codex",
+    "copilot",
+    "vscode"
+  ],
   "bin": {
-    "agentsync": "src/cli.ts"
+    "agentsync": "dist/cli.js"
+  },
+  "files": [
+    "dist/cli.js",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "build": "bun build --compile src/cli.ts --outfile dist/agentsync",
+    "build:package": "bun run scripts/build-package.ts",
+    "pack:dry-run": "bun run build:package && npm pack --dry-run --json --ignore-scripts",
     "typecheck": "bunx tsc --noEmit",
     "lint": "bunx biome ci .",
     "lint:fix": "bunx biome check --write .",
@@ -16,6 +48,7 @@
     "test": "bun test",
     "test:coverage": "bun test --coverage",
     "check": "bun run typecheck && bun run lint && bun run test",
+    "prepack": "bun run build:package",
     "prepare": "lefthook install"
   },
   "dependencies": {
@@ -33,5 +66,8 @@
     "bun-types": "^1.3.9",
     "lefthook": "^2.1.4",
     "typescript": "^6.0.0"
+  },
+  "volta": {
+    "node": "22.14.0"
   }
 }

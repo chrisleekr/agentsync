@@ -4,9 +4,31 @@
 
 This guide is the concise lookup surface for supported AgentSync commands. Use it when you already know the problem you are solving and need the right command, inputs, and caveats quickly.
 
+## Released CLI install path
+
+Use the published CLI path only after the version you want appears in both the npm package registry and the GitHub Releases list.
+
+Released CLI verification command:
+
+```bash
+bunx --package @chrisleekr/agentsync agentsync --version
+```
+
+Use the GitHub Release record as the canonical source for:
+
+- the published version you are installing
+- what changed in that release
+
+Start here:
+
+- [Latest release](https://github.com/chrisleekr/agentsync/releases/latest)
+- [All releases](https://github.com/chrisleekr/agentsync/releases)
+
 ## Support-state rule
 
-Everything in this guide describes the current local CLI and daemon workflow. If a behavior is not listed here, treat it as unsupported or future-facing until the implementation lands.
+Everything in this guide describes the released CLI path once a version has been published. If a behavior is not listed here, treat it as unsupported or future-facing.
+
+If you are running from a local clone instead of the published package, use the source-based commands in [development.md](development.md).
 
 ## init
 
@@ -15,7 +37,7 @@ Everything in this guide describes the current local CLI and daemon workflow. If
 **Typical usage**:
 
 ```bash
-bun run src/cli.ts init --remote <git-url> --branch main
+agentsync init --remote <git-url> --branch main
 ```
 
 **Needs**: remote URL, optional branch, writable local runtime directory.
@@ -34,8 +56,8 @@ bun run src/cli.ts init --remote <git-url> --branch main
 **Typical usage**:
 
 ```bash
-bun run src/cli.ts push
-bun run src/cli.ts push --agent claude
+agentsync push
+agentsync push --agent claude
 ```
 
 **Needs**: initialized vault, configured recipients, readable local agent config.
@@ -55,8 +77,8 @@ bun run src/cli.ts push --agent claude
 **Typical usage**:
 
 ```bash
-bun run src/cli.ts pull
-bun run src/cli.ts pull --agent cursor
+agentsync pull
+agentsync pull --agent cursor
 ```
 
 **Needs**: initialized vault, readable private key, reachable Git remote.
@@ -75,8 +97,8 @@ bun run src/cli.ts pull --agent cursor
 **Typical usage**:
 
 ```bash
-bun run src/cli.ts status
-bun run src/cli.ts status --verbose
+agentsync status
+agentsync status --verbose
 ```
 
 **Outcome**: table of synced, local-only, vault-only, changed, or error states.
@@ -88,7 +110,7 @@ bun run src/cli.ts status --verbose
 **Typical usage**:
 
 ```bash
-bun run src/cli.ts doctor
+agentsync doctor
 ```
 
 **Checks include**:
@@ -107,8 +129,8 @@ bun run src/cli.ts doctor
 **Typical usage**:
 
 ```bash
-bun run src/cli.ts daemon install
-bun run src/cli.ts daemon status
+agentsync daemon install
+agentsync daemon status
 ```
 
 **Outcome**: manages the OS-specific wrapper around `daemon _run`.
@@ -125,8 +147,8 @@ bun run src/cli.ts daemon status
 **Typical usage**:
 
 ```bash
-bun run src/cli.ts key add <name> <age-public-key>
-bun run src/cli.ts key rotate
+agentsync key add <name> <age-public-key>
+agentsync key rotate
 ```
 
 **Outcome**: the vault is re-encrypted for the updated recipient set.
@@ -135,6 +157,10 @@ bun run src/cli.ts key rotate
 
 - Rotation depends on the old private key still being available so existing vault files can be decrypted.
 - Recipient names should describe machines clearly because they become the stable config key.
+
+## Source-based execution
+
+If you are working from a clone before a package is published, use the contributor workflow from [development.md](development.md) and run commands through `bun run src/cli.ts ...`.
 
 ## Related docs
 

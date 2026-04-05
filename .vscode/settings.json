@@ -25,5 +25,5 @@
     ".specify/scripts/bash/": true,
     ".specify/scripts/powershell/": true
   },
-  "cSpell.words": ["agentsync", "bunx", "citty", "encryptor", "iarna"]
+  "cSpell.words": ["agentsync", "bunx", "chrisleekr", "citty", "encryptor", "iarna"]
 }
