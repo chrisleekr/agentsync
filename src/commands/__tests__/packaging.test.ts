@@ -18,6 +18,7 @@ const { readFile } = createRequire(import.meta.url)(
 const rootDir = process.cwd();
 const packageEntryPath = join(rootDir, "dist", "cli.js");
 const packageJsonPath = join(rootDir, "package.json");
+const releaseWorkflowPath = join(rootDir, ".github", "workflows", "release-please.yml");
 const sourceCliPath = join(rootDir, "src", "cli.ts");
 const nodeVersionPinPath = join(rootDir, ".nvmrc");
 
@@ -32,6 +33,11 @@ const packageJsonSchema = z.object({
   homepage: z.string(),
   bugs: z.object({ url: z.string() }),
   license: z.string(),
+  volta: z
+    .object({
+      node: z.string(),
+    })
+    .optional(),
 });
 
 const npmPackFileSchema = z.object({
@@ -68,31 +74,6 @@ function parseNpmPackOutput(rawOutput: string) {
   return npmPackOutputSchema.parse(JSON.parse(rawOutput.slice(jsonStart, jsonEnd + 1)) as unknown);
 }
 
-function normalizeVersion(version: string) {
-  return version.trim().replace(/^v/, "").split(".").map(Number);
-}
-
-function isVersionAtLeast(actualVersion: string, minimumVersion: string) {
-  const actual = normalizeVersion(actualVersion);
-  const minimum = normalizeVersion(minimumVersion);
-  const parts = Math.max(actual.length, minimum.length);
-
-  for (let index = 0; index < parts; index += 1) {
-    const actualPart = actual[index] ?? 0;
-    const minimumPart = minimum[index] ?? 0;
-
-    if (actualPart > minimumPart) {
-      return true;
-    }
-
-    if (actualPart < minimumPart) {
-      return false;
-    }
-  }
-
-  return true;
-}
-
 describe("package release surface", () => {
   test("package manifest is publishable and exposes the scoped bunx contract", async () => {
     const packageJson = packageJsonSchema.parse(
@@ -124,13 +105,16 @@ describe("package release surface", () => {
     expect(cliVersionOutput).toBe(packageJson.version);
   });
 
-  test("package validation uses the pinned Node toolchain and minimum npm version", async () => {
+  test("package validation pins the release workflow Node and npm toolchain without reading local versions", async () => {
     const pinnedNodeVersion = (await readFile(nodeVersionPinPath, "utf8")).trim();
-    const nodeVersion = runCommand("node", ["--version"]);
-    const npmVersion = runCommand("npm", ["--version"]);
+    const workflow = await readFile(releaseWorkflowPath, "utf8");
+    const packageJson = packageJsonSchema.parse(
+      JSON.parse(await readFile(packageJsonPath, "utf8")) as unknown,
+    );
 
-    expect(isVersionAtLeast(nodeVersion, pinnedNodeVersion)).toBeTrue();
-    expect(isVersionAtLeast(npmVersion, "11.5.1")).toBeTrue();
+    expect(packageJson.volta?.node).toBe(pinnedNodeVersion);
+    expect(workflow).toContain("node-version-file: .nvmrc");
+    expect(workflow).toContain("run: npm install --global npm@11.5.1");
   });
 
   test("npm pack dry-run includes the published CLI and excludes repo-only source files", async () => {

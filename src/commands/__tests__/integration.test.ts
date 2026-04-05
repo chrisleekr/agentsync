@@ -3,65 +3,69 @@
  *
  * Strategy
  * --------
- * 1. Mock @clack/prompts (suppress I/O) and ../agents/registry (fake "claude" agent
- *    with controllable artifacts) — modules are resolved from mock before imports.
- * 2. A shared vault is initialised once in beforeAll using a helper that sets the
- *    local git branch to "main" explicitly (portable across git versions).
- * 3. Individual tests mutate fakeArtifacts / fakeApplyCalls as needed; beforeEach
- *    resets them so each test starts clean.
+ * 1. Mock @clack/prompts and the agent registry before importing command modules.
+ * 2. Use shared machine/runtime fixtures so tests can model first-machine and second-machine flows.
+ * 3. Capture log output so divergence tests can assert the absence of false success footers.
  */
-// ── Suppress clack I/O ────────────────────────────────────────────────────────
-import { afterAll, beforeAll, beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, mock, test } from "bun:test";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
-import { readFile, rm } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { join } from "node:path";
-import { stringify as tomlStringify } from "@iarna/toml";
 import type { CommandDef } from "citty";
 import type { SnapshotArtifact } from "../../agents/_utils";
-import { createAgeIdentity, createBareRepo, createTmpDir } from "../../test-helpers/fixtures";
+import { loadConfig, resolveConfigPath, writeConfig } from "../../config/loader";
+import {
+  createAgeIdentity,
+  createBareRepo,
+  createMachineFixture,
+  createTmpDir,
+  runGit,
+  seedVaultRepo,
+  type TestMachineFixture,
+} from "../../test-helpers/fixtures";
 
-// Re-register node:fs/promises with the real implementation before any code runs.
-// The installer-windows/macos/linux tests mock this module; Bun shares module state
-// across test files in the same run, causing the mock to bleed in here.
-// We load the real module via the "fs/promises" alias (no "node:" prefix), which is
-// a distinct cache key unaffected by mock.module("node:fs/promises", ...).
+const fakeLogs = {
+  success: [] as string[],
+  info: [] as string[],
+  warn: [] as string[],
+  error: [] as string[],
+};
+
 {
-  const _require = createRequire(import.meta.url);
-  const realFsPromises = _require("fs/promises") as typeof import("node:fs/promises");
+  const require = createRequire(import.meta.url);
+  // biome-ignore lint/style/useNodejsImportProtocol: The fs/promises alias bypasses Bun's shared node:fs/promises mock cache between test files.
+  const realFsPromises = require("fs/promises") as typeof import("node:fs/promises");
   mock.module("node:fs/promises", () => realFsPromises);
 }
+
+const { readFile, rm } = createRequire(import.meta.url)(
+  "fs/promises",
+) as typeof import("node:fs/promises");
 
 mock.module("@clack/prompts", () => ({
   intro: () => {},
   outro: () => {},
   log: {
-    success: () => {},
-    info: () => {},
-    warn: () => {},
-    error: () => {},
+    success: (message: string) => {
+      fakeLogs.success.push(message);
+    },
+    info: (message: string) => {
+      fakeLogs.info.push(message);
+    },
+    warn: (message: string) => {
+      fakeLogs.warn.push(message);
+    },
+    error: (message: string) => {
+      fakeLogs.error.push(message);
+    },
   },
   note: () => {},
   spinner: () => ({ start: () => {}, stop: () => {}, message: () => {} }),
 }));
 
-// ── Fake "claude" agent with controllable artifacts ───────────────────────────
 const fakeArtifacts: SnapshotArtifact[] = [];
 const fakeApplyCalls: string[] = [];
 
-mock.module("../../agents/registry", () => ({
-  Agents: [
-    {
-      name: "claude",
-      snapshot: async () => ({ artifacts: [...fakeArtifacts], warnings: [] }),
-      apply: async (vaultDir: string) => {
-        fakeApplyCalls.push(vaultDir);
-      },
-    },
-  ],
-}));
-
-// ── Lazily imported command modules (after mocks) ─────────────────────────────
 type PushMod = typeof import("../../commands/push");
 type PullMod = typeof import("../../commands/pull");
 type InitMod = typeof import("../../commands/init");
@@ -72,166 +76,247 @@ let pullMod: PullMod;
 let initMod: InitMod;
 let keyMod: KeyMod;
 
-// ── Test-scoped vault helpers ──────────────────────────────────────────────────
+const RUNTIME_ENV_KEYS = ["AGENTSYNC_VAULT_DIR", "AGENTSYNC_KEY_PATH", "AGENTSYNC_MACHINE"];
 
-/** Build a ready-to-use vault backed by a local bare repo. Sets branch="main" portably.
- *
- * Uses node:fs sync APIs and Bun.spawnSync exclusively — node:fs/promises is mocked by
- * installer-windows.test.ts (mock.module), and when Bun shares module state the mock
- * silently swallows writes. Sync node:fs is a separate module path and is unaffected.
- */
-function initTestVault(
-  vaultDir: string,
-  bareRepoPath: string,
-  keyPath: string,
-  machineName: string,
-  identity: string,
-  recipient: string,
-): void {
-  // Write files using node:fs sync (NOT node:fs/promises — the latter is mocked).
-  mkdirSync(vaultDir, { recursive: true });
-  writeFileSync(keyPath, `${identity}\n`, { mode: 0o600 });
+async function withMachineEnv<T>(machine: TestMachineFixture, run: () => Promise<T>): Promise<T> {
+  const saved = Object.fromEntries(RUNTIME_ENV_KEYS.map((key) => [key, process.env[key]]));
 
-  const configData = {
-    version: "1",
-    recipients: { [machineName]: recipient },
-    agents: {
-      cursor: false,
-      claude: true,
-      codex: false,
-      copilot: false,
-      vscode: false,
-    },
-    remote: { url: bareRepoPath, branch: "main" },
-    sync: {
-      debounceMs: 300,
-      autoPush: true,
-      autoPull: true,
-      pullIntervalMs: 300_000,
-    },
-  };
-  writeFileSync(
-    join(vaultDir, "agentsync.toml"),
-    tomlStringify(configData as unknown as Parameters<typeof tomlStringify>[0]),
-    "utf8",
-  );
-  writeFileSync(join(vaultDir, ".gitignore"), "*.tmp\n", "utf8");
+  process.env.AGENTSYNC_VAULT_DIR = machine.vaultDir;
+  process.env.AGENTSYNC_KEY_PATH = machine.keyPath;
+  process.env.AGENTSYNC_MACHINE = machine.machineName;
 
-  // Initialize git repo and cut the first commit entirely via spawn so we avoid
-  // edge cases in simple-git around unborn branches and missing git user config.
-  const steps: [string, ...string[]][] = [
-    ["git", "init", vaultDir],
-    ["git", "-C", vaultDir, "symbolic-ref", "HEAD", "refs/heads/main"],
-    ["git", "-C", vaultDir, "config", "user.name", "Agent Sync Test"],
-    ["git", "-C", vaultDir, "config", "user.email", "test@agentsync.local"],
-    ["git", "-C", vaultDir, "config", "commit.gpgsign", "false"],
-    ["git", "-C", vaultDir, "remote", "add", "origin", bareRepoPath],
-    ["git", "-C", vaultDir, "add", "."],
-    ["git", "-C", vaultDir, "commit", "-m", `init: ${machineName}`],
-    ["git", "-C", vaultDir, "push", "--set-upstream", "origin", "main"],
-  ];
-
-  for (const [cmd, ...args] of steps) {
-    const r = Bun.spawnSync([cmd, ...args]);
-    if (r.exitCode !== 0) {
-      const stdout = new TextDecoder().decode(r.stdout);
-      const stderr = new TextDecoder().decode(r.stderr);
-      throw new Error(
-        `${cmd} ${args.join(" ")} failed (code ${r.exitCode}):\nstdout: ${stdout}\nstderr: ${stderr}`,
-      );
+  try {
+    return await run();
+  } finally {
+    for (const key of RUNTIME_ENV_KEYS) {
+      const value = saved[key];
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
     }
   }
 }
 
-// ── Load modules once before all tests run ────────────────────────────────────
+async function createDivergentMachinePair(rootDir: string): Promise<{
+  machineA: TestMachineFixture;
+  machineB: TestMachineFixture;
+}> {
+  mkdirSync(rootDir, { recursive: true });
+  const bareRepoPath = await createBareRepo(rootDir);
+  const machineA = await createMachineFixture(rootDir, "machine-a");
+  const machineB = await createMachineFixture(rootDir, "machine-b");
+
+  seedVaultRepo({ machine: machineA, bareRepoPath });
+
+  await withMachineEnv(machineB, async () => {
+    await initMod.initCommand.run?.({
+      args: { remote: bareRepoPath, branch: "main" },
+      rawArgs: [],
+      cmd: {} as never,
+    } as never);
+  });
+
+  fakeArtifacts.push({
+    vaultPath: "claude/divergence.age",
+    sourcePath: "/fake/.claude/divergence.md",
+    plaintext: "# remote divergence update",
+    warnings: [],
+  });
+
+  await withMachineEnv(machineA, async () => {
+    await pushMod.performPush({ agent: "claude" });
+  });
+
+  fakeArtifacts.length = 0;
+
+  runGit(["config", "user.name", "Agent Sync Test"], machineB.vaultDir);
+  runGit(["config", "user.email", "test@agentsync.local"], machineB.vaultDir);
+  writeFileSync(join(machineB.vaultDir, "local-only.txt"), "local-only\n", "utf8");
+  runGit(["add", "local-only.txt"], machineB.vaultDir);
+  runGit(["commit", "-m", "local-only change"], machineB.vaultDir);
+
+  return { machineA, machineB };
+}
+
 beforeAll(async () => {
   pushMod = await import("../../commands/push");
   pullMod = await import("../../commands/pull");
   initMod = await import("../../commands/init");
   keyMod = await import("../../commands/key");
+
+  const testAgents = [
+    {
+      name: "claude" as const,
+      snapshot: async () => ({ artifacts: [...fakeArtifacts], warnings: [] }),
+      apply: async (vaultDir: string) => {
+        fakeApplyCalls.push(vaultDir);
+      },
+    },
+  ];
+
+  pushMod.__setPushAgentsForTesting(testAgents);
+  pullMod.__setPullAgentsForTesting(testAgents);
 });
 
-// ── Shared vault: set up once, shared across the integration suite ─────────────
 describe("integration", () => {
   let tmpDir: string;
-  let bareRepoPath: string;
   let vaultDir: string;
   let keyPath: string;
+  let machine: TestMachineFixture;
   const machineName = "test-machine";
-
-  // Saved env vars restored in afterAll
   const savedEnv: Record<string, string | undefined> = {};
 
   beforeAll(async () => {
     tmpDir = await createTmpDir();
-    bareRepoPath = await createBareRepo(tmpDir);
-    vaultDir = join(tmpDir, "vault");
-    keyPath = join(tmpDir, "key.txt");
+    const bareRepoPath = await createBareRepo(tmpDir);
+    machine = await createMachineFixture(tmpDir, machineName);
+    vaultDir = machine.vaultDir;
+    keyPath = machine.keyPath;
 
-    // Persist env overrides so all command internals find our vault / key.
-    for (const k of ["AGENTSYNC_VAULT_DIR", "AGENTSYNC_KEY_PATH", "AGENTSYNC_MACHINE"]) {
-      savedEnv[k] = process.env[k];
+    for (const key of RUNTIME_ENV_KEYS) {
+      savedEnv[key] = process.env[key];
     }
     process.env.AGENTSYNC_VAULT_DIR = vaultDir;
     process.env.AGENTSYNC_KEY_PATH = keyPath;
     process.env.AGENTSYNC_MACHINE = machineName;
 
-    const { identity, recipient } = await createAgeIdentity();
-    initTestVault(vaultDir, bareRepoPath, keyPath, machineName, identity, recipient);
+    seedVaultRepo({ machine, bareRepoPath });
   });
 
   afterAll(async () => {
-    for (const [k, v] of Object.entries(savedEnv)) {
-      if (v === undefined) delete process.env[k];
-      else process.env[k] = v;
+    for (const [key, value] of Object.entries(savedEnv)) {
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
     }
+    pushMod.__setPushAgentsForTesting(null);
+    pullMod.__setPullAgentsForTesting(null);
     await rm(tmpDir, { recursive: true, force: true });
+    mock.restore();
   });
 
   beforeEach(() => {
     fakeArtifacts.length = 0;
     fakeApplyCalls.length = 0;
+    fakeLogs.success.length = 0;
+    fakeLogs.info.length = 0;
+    fakeLogs.warn.length = 0;
+    fakeLogs.error.length = 0;
+    process.exitCode = 0;
   });
 
-  // ── T038: init command ──────────────────────────────────────────────────────
+  afterEach(() => {
+    process.exitCode = 0;
+  });
+
   test("T038 — init command writes agentsync.toml and key.txt in a fresh vault", async () => {
-    const initDir = join(tmpDir, "init-test");
-    const initBare = join(tmpDir, "init-bare.git");
-    const initKey = join(tmpDir, "init-key.txt");
+    const initRoot = join(tmpDir, "init-empty-remote");
+    mkdirSync(initRoot, { recursive: true });
+    const initBare = await createBareRepo(initRoot);
+    const initMachine = await createMachineFixture(initRoot, "init-machine");
 
-    // Create a bare repo for this isolated init test
-    Bun.spawnSync(["git", "init", "--bare", initBare]);
-
-    const savedVaultDir = process.env.AGENTSYNC_VAULT_DIR;
-    const savedKeyPath = process.env.AGENTSYNC_KEY_PATH;
-    const savedMachine = process.env.AGENTSYNC_MACHINE;
-
-    process.env.AGENTSYNC_VAULT_DIR = initDir;
-    process.env.AGENTSYNC_KEY_PATH = initKey;
-    process.env.AGENTSYNC_MACHINE = "init-machine";
-
-    try {
+    await withMachineEnv(initMachine, async () => {
       await initMod.initCommand.run?.({
         args: { remote: initBare, branch: "main" },
         rawArgs: [],
         cmd: {} as never,
       } as never);
+    });
 
-      // Key file must be created
-      expect(existsSync(initKey)).toBe(true);
-
-      // Config file must be present
-      const configContent = await readFile(join(initDir, "agentsync.toml"), "utf8");
-      expect(configContent).toMatch(/recipients/);
-      expect(configContent).toMatch(/init-machine/);
-    } finally {
-      process.env.AGENTSYNC_VAULT_DIR = savedVaultDir;
-      process.env.AGENTSYNC_KEY_PATH = savedKeyPath;
-      process.env.AGENTSYNC_MACHINE = savedMachine;
-    }
+    expect(existsSync(initMachine.keyPath)).toBe(true);
+    const configContent = await readFile(join(initMachine.vaultDir, "agentsync.toml"), "utf8");
+    expect(configContent).toMatch(/recipients/);
+    expect(configContent).toMatch(/init-machine/);
+    expect(runGit(["rev-parse", "--abbrev-ref", "HEAD"], initMachine.vaultDir)).toBe("main");
   });
 
-  // ── T039: performPush ───────────────────────────────────────────────────────
+  test("init joins an existing remote vault without creating a non-fast-forward local-first history", async () => {
+    const root = join(tmpDir, "existing-remote-bootstrap");
+    mkdirSync(root, { recursive: true });
+    const bareRepoPath = await createBareRepo(root);
+    const machineA = await createMachineFixture(root, "machine-a");
+    const machineB = await createMachineFixture(root, "machine-b");
+
+    seedVaultRepo({ machine: machineA, bareRepoPath });
+
+    await withMachineEnv(machineB, async () => {
+      await initMod.initCommand.run?.({
+        args: { remote: bareRepoPath, branch: "main" },
+        rawArgs: [],
+        cmd: {} as never,
+      } as never);
+    });
+
+    const configContent = await readFile(join(machineB.vaultDir, "agentsync.toml"), "utf8");
+    expect(configContent).toContain("machine-a");
+    expect(configContent).toContain("machine-b");
+    expect(fakeLogs.error).toHaveLength(0);
+    expect(fakeLogs.warn.some((message) => message.includes("non-fast-forward"))).toBe(false);
+    expect(runGit(["rev-parse", "HEAD"], machineB.vaultDir)).toBe(
+      runGit(["rev-parse", "origin/main"], machineB.vaultDir),
+    );
+  });
+
+  test("init reports a controlled bootstrap failure when local history already diverged", async () => {
+    const root = join(tmpDir, "init-divergence");
+    mkdirSync(root, { recursive: true });
+    const bareRepoPath = await createBareRepo(root);
+    const machineA = await createMachineFixture(root, "machine-a");
+    const machineB = await createMachineFixture(root, "machine-b");
+
+    seedVaultRepo({ machine: machineA, bareRepoPath });
+
+    await writeConfig(resolveConfigPath(machineB.vaultDir), {
+      version: "1",
+      recipients: { [machineB.machineName]: machineB.recipient },
+      agents: {
+        cursor: false,
+        claude: true,
+        codex: false,
+        copilot: false,
+        vscode: false,
+      },
+      remote: {
+        url: bareRepoPath,
+        branch: "main",
+      },
+      sync: {
+        debounceMs: 300,
+        autoPush: true,
+        autoPull: true,
+        pullIntervalMs: 300_000,
+      },
+    });
+    writeFileSync(join(machineB.vaultDir, ".gitignore"), "*.tmp\n", "utf8");
+    runGit(["init"], machineB.vaultDir);
+    runGit(["symbolic-ref", "HEAD", "refs/heads/main"], machineB.vaultDir);
+    runGit(["config", "user.name", "Agent Sync Test"], machineB.vaultDir);
+    runGit(["config", "user.email", "test@agentsync.local"], machineB.vaultDir);
+    runGit(["remote", "add", "origin", bareRepoPath], machineB.vaultDir);
+    runGit(["add", "."], machineB.vaultDir);
+    runGit(["commit", "-m", "local-only bootstrap"], machineB.vaultDir);
+
+    await withMachineEnv(machineB, async () => {
+      await initMod.initCommand.run?.({
+        args: { remote: bareRepoPath, branch: "main" },
+        rawArgs: [],
+        cmd: {} as never,
+      } as never);
+    });
+
+    expect(process.exitCode).toBe(1);
+    expect(
+      fakeLogs.error.some((message) =>
+        message.includes("AgentSync only supports fast-forward sync"),
+      ),
+    ).toBe(true);
+    expect(fakeLogs.success.some((message) => message.includes("Initialized vault"))).toBe(false);
+  });
+
   test("T039 — performPush encrypts artifact and writes .age file to vault", async () => {
     fakeArtifacts.push({
       vaultPath: "claude/CLAUDE.age",
@@ -242,27 +327,26 @@ describe("integration", () => {
 
     const result = await pushMod.performPush({ agent: "claude" });
 
+    expect(result.fatal).toBe(false);
     expect(result.pushed).toBe(1);
     expect(result.errors).toHaveLength(0);
 
     const ageFile = join(vaultDir, "claude", "CLAUDE.age");
     expect(existsSync(ageFile)).toBe(true);
 
-    // Confirm the file is ASCII-armored age-encrypted (BEGIN/END header).
     const content = await readFile(ageFile, "utf8");
     expect(content).toContain("BEGIN AGE ENCRYPTED FILE");
   });
 
-  // ── T040: performPull ───────────────────────────────────────────────────────
   test("T040 — performPull calls agent.apply for each enabled agent", async () => {
     const result = await pullMod.performPull({ agent: "claude" });
 
+    expect(result.fatal).toBe(false);
     expect(result.errors).toHaveLength(0);
     expect(result.applied).toBe(1);
     expect(fakeApplyCalls).toContain(vaultDir);
   });
 
-  // ── T052: abort-on-secret ──────────────────────────────────────────────────
   test("T052 — performPush aborts when an artifact warning contains 'Redacted literal secret'", async () => {
     fakeArtifacts.push({
       vaultPath: "claude/settings.age",
@@ -273,17 +357,15 @@ describe("integration", () => {
 
     const result = await pushMod.performPush({ agent: "claude" });
 
+    expect(result.fatal).toBe(true);
     expect(result.pushed).toBe(0);
     expect(result.errors.length).toBeGreaterThan(0);
     expect(result.errors[0]).toMatch(/Push aborted/);
-    // Original per-agent warning must be propagated for diagnostics.
-    expect(result.errors.some((e) => e.includes("Redacted literal secret"))).toBe(true);
+    expect(result.errors.some((message) => message.includes("Redacted literal secret"))).toBe(true);
   });
 
-  // ── T041: status command (smoke test) ──────────────────────────────────────
   test("T041 — status command runs without throwing", async () => {
     const statusMod = await import("../../commands/status");
-    // Await directly — if the command throws, bun:test marks this test as failed.
     await statusMod.statusCommand.run?.({
       args: { verbose: false },
       rawArgs: [],
@@ -291,7 +373,6 @@ describe("integration", () => {
     } as never);
   });
 
-  // ── T042: doctor command (smoke test) ──────────────────────────────────────
   test("T042 — doctor command runs without throwing", async () => {
     const doctorMod = await import("../../commands/doctor");
     await doctorMod.doctorCommand.run?.({
@@ -301,9 +382,7 @@ describe("integration", () => {
     } as never);
   });
 
-  // ── T043: key add ──────────────────────────────────────────────────────────
   test("T043 — key add appends recipient to config and re-encrypts vault files", async () => {
-    // Push a file so re-encryption has something to process.
     fakeArtifacts.push({
       vaultPath: "claude/CLAUDE.age",
       sourcePath: "/fake/.claude/CLAUDE.md",
@@ -325,16 +404,62 @@ describe("integration", () => {
     expect(configContent).toContain("work-laptop");
     expect(configContent).toContain(newRecipient);
 
-    // The .age file must still exist and be valid ASCII-armored age-encrypted after re-encryption.
     const ageFile = join(vaultDir, "claude", "CLAUDE.age");
     expect(existsSync(ageFile)).toBe(true);
     const content = await readFile(ageFile, "utf8");
     expect(content).toContain("BEGIN AGE ENCRYPTED FILE");
   });
 
-  // ── T044: key rotate ───────────────────────────────────────────────────────
+  test("key add re-checks aliases after reconciling with a newer remote config", async () => {
+    const root = join(tmpDir, "key-add-reconcile");
+    mkdirSync(root, { recursive: true });
+    const bareRepoPath = await createBareRepo(root);
+    const machineA = await createMachineFixture(root, "machine-a");
+    const machineB = await createMachineFixture(root, "machine-b");
+    const { recipient: remoteRecipient } = await createAgeIdentity();
+    const { recipient: conflictingRecipient } = await createAgeIdentity();
+
+    seedVaultRepo({ machine: machineA, bareRepoPath });
+
+    await withMachineEnv(machineB, async () => {
+      await initMod.initCommand.run?.({
+        args: { remote: bareRepoPath, branch: "main" },
+        rawArgs: [],
+        cmd: {} as never,
+      } as never);
+    });
+
+    runGit(["pull", "--ff-only", "origin", "main"], machineA.vaultDir);
+
+    const machineAConfigPath = resolveConfigPath(machineA.vaultDir);
+    const machineAConfig = await loadConfig(machineAConfigPath);
+    machineAConfig.recipients["work-laptop"] = remoteRecipient;
+    await writeConfig(machineAConfigPath, machineAConfig);
+    runGit(["add", "agentsync.toml"], machineA.vaultDir);
+    runGit(["commit", "-m", "add work-laptop recipient"], machineA.vaultDir);
+    runGit(["push", "origin", "main"], machineA.vaultDir);
+
+    fakeLogs.error.length = 0;
+    process.exitCode = 0;
+
+    await withMachineEnv(machineB, async () => {
+      await (keyMod.keyCommand.subCommands as unknown as Record<string, CommandDef>).add.run?.({
+        args: { name: "work-laptop", pubkey: conflictingRecipient },
+        rawArgs: [],
+        cmd: {} as never,
+      } as never);
+    });
+
+    expect(process.exitCode).toBe(1);
+    expect(
+      fakeLogs.error.some((message) => message.includes("Recipient 'work-laptop' already exists")),
+    ).toBe(true);
+
+    const machineBConfig = await loadConfig(resolveConfigPath(machineB.vaultDir));
+    expect(machineBConfig.recipients["work-laptop"]).toBe(remoteRecipient);
+  });
+
   test("T044 — key rotate replaces private key and updates config recipient", async () => {
-    // Read current key before rotation.
     const oldKeyContent = await readFile(keyPath, "utf8");
 
     await (keyMod.keyCommand.subCommands as unknown as Record<string, CommandDef>).rotate.run?.({
@@ -343,17 +468,45 @@ describe("integration", () => {
       cmd: {} as never,
     } as never);
 
-    // Private key file must have been overwritten with a new identity.
     const newKeyContent = await readFile(keyPath, "utf8");
     expect(newKeyContent.trim()).not.toBe(oldKeyContent.trim());
     expect(newKeyContent.trim()).toMatch(/^AGE-SECRET-KEY-/);
 
-    // Config must reflect the new recipient public key for this machine.
     const configContent = await readFile(join(vaultDir, "agentsync.toml"), "utf8");
     expect(configContent).toMatch(/test-machine/);
   });
 
-  // ── Push CLI command handler ───────────────────────────────────────────────
+  test("key rotate leaves config and key unchanged when re-encryption fails", async () => {
+    fakeArtifacts.push({
+      vaultPath: "claude/CLAUDE.age",
+      sourcePath: "/fake/.claude/CLAUDE.md",
+      plaintext: "# rotate failure test",
+      warnings: [],
+    });
+    await pushMod.performPush({ agent: "claude" });
+    fakeArtifacts.length = 0;
+
+    const configPath = resolveConfigPath(vaultDir);
+    const configBefore = await loadConfig(configPath);
+    const oldKeyContent = await readFile(keyPath, "utf8");
+
+    writeFileSync(join(vaultDir, "claude", "broken.age"), "not a valid age payload", "utf8");
+    fakeLogs.error.length = 0;
+    process.exitCode = 0;
+
+    await (keyMod.keyCommand.subCommands as unknown as Record<string, CommandDef>).rotate.run?.({
+      args: {},
+      rawArgs: [],
+      cmd: {} as never,
+    } as never);
+
+    expect(process.exitCode).toBe(1);
+    expect(fakeLogs.error.length).toBeGreaterThan(0);
+    expect(await readFile(keyPath, "utf8")).toBe(oldKeyContent);
+
+    const configAfter = await loadConfig(configPath);
+    expect(configAfter.recipients[machineName]).toBe(configBefore.recipients[machineName]);
+  });
 
   test("pushCommand.run with dryRun=true does not write vault files", async () => {
     fakeArtifacts.push({
@@ -363,7 +516,6 @@ describe("integration", () => {
       warnings: [],
     });
 
-    // Should complete without error; exercises the dryRun CLI code path
     await pushMod.pushCommand.run?.({
       args: { agent: "claude", dryRun: true, message: undefined },
       rawArgs: [],
@@ -371,7 +523,6 @@ describe("integration", () => {
     } as never);
 
     expect(existsSync(join(vaultDir, "claude", "dry-cli.age"))).toBe(false);
-    fakeArtifacts.length = 0;
   });
 
   test("pushCommand.run without dryRun encrypts and pushes artifacts", async () => {
@@ -389,12 +540,61 @@ describe("integration", () => {
     } as never);
 
     expect(existsSync(join(vaultDir, "claude", "cli-push.age"))).toBe(true);
-    fakeArtifacts.length = 0;
   });
 
   test("performPush returns early when no agents match requested name", async () => {
     const result = await pushMod.performPush({ agent: "nonexistent-agent" });
     expect(result.pushed).toBe(0);
     expect(result.errors).toHaveLength(0);
+    expect(result.fatal).toBe(false);
+  });
+
+  test("pull reports a controlled divergence error and suppresses the success footer", async () => {
+    const { machineB } = await createDivergentMachinePair(join(tmpDir, "pull-divergence"));
+    fakeLogs.success.length = 0;
+    fakeLogs.info.length = 0;
+    fakeLogs.warn.length = 0;
+    fakeLogs.error.length = 0;
+
+    await withMachineEnv(machineB, async () => {
+      await pullMod.pullCommand.run?.({
+        args: { agent: undefined, dryRun: false, force: false },
+        rawArgs: [],
+        cmd: {} as never,
+      } as never);
+    });
+
+    expect(process.exitCode).toBe(1);
+    expect(
+      fakeLogs.error.some((message) =>
+        message.includes("AgentSync only supports fast-forward sync"),
+      ),
+    ).toBe(true);
+    expect(fakeLogs.success.some((message) => message.includes("Pull completed"))).toBe(false);
+    expect(fakeApplyCalls).toHaveLength(0);
+  });
+
+  test("performPush inherits the shared divergence policy before writing vault artifacts", async () => {
+    const { machineB } = await createDivergentMachinePair(join(tmpDir, "push-divergence"));
+
+    fakeArtifacts.push({
+      vaultPath: "claude/blocked.age",
+      sourcePath: "/fake/.claude/blocked.md",
+      plaintext: "# blocked by divergence",
+      warnings: [],
+    });
+
+    const result = await withMachineEnv(machineB, async () =>
+      pushMod.performPush({ agent: "claude" }),
+    );
+
+    expect(result.fatal).toBe(true);
+    expect(result.pushed).toBe(0);
+    expect(
+      result.errors.some((message) =>
+        message.includes("AgentSync only supports fast-forward sync"),
+      ),
+    ).toBe(true);
+    expect(existsSync(join(machineB.vaultDir, "claude", "blocked.age"))).toBe(false);
   });
 });

@@ -9,14 +9,23 @@ import { IpcServer } from "../core/ipc";
 import { Watcher } from "../core/watcher";
 
 /** Delegate pull requests through the shared command pipeline used by the CLI. */
-async function runPull(): Promise<{ applied: number; errors: string[] }> {
-  return performPull();
+async function runPull(): Promise<{ applied: number; errors: string[]; fatal: boolean }> {
+  const result = await performPull();
+  if (result.fatal) {
+    for (const err of result.errors) {
+      log.error(`${ts()} ${err}`);
+    }
+  }
+  return result;
 }
 
 /** Format daemon log timestamps consistently across lifecycle events. */
 const ts = () => new Date().toISOString();
 
-/** Start the IPC server, file watchers, and periodic pull loop for background sync. */
+/**
+ * Start the IPC server, file watchers, and periodic pull loop for background sync.
+ * @returns A promise that resolves once the daemon has bound its IPC socket and registered watchers.
+ */
 export async function startDaemon(): Promise<void> {
   const runtime = await resolveRuntimeContext();
   const config = await loadConfig(resolveConfigPath(runtime.vaultDir));
@@ -30,6 +39,11 @@ export async function startDaemon(): Promise<void> {
 
   ipc.on("push", async () => {
     const result = await performPush();
+    if (result.fatal) {
+      for (const err of result.errors) {
+        log.error(`${ts()} ${err}`);
+      }
+    }
     return result;
   });
 
@@ -53,7 +67,12 @@ export async function startDaemon(): Promise<void> {
 
   for (const target of watchTargets) {
     watcher.add(target, debounceMs, async () => {
-      await performPush();
+      const result = await performPush();
+      if (result.fatal) {
+        for (const err of result.errors) {
+          log.error(`${ts()} ${err}`);
+        }
+      }
     });
   }
 

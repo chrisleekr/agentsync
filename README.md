@@ -73,6 +73,8 @@ Start here:
 
 The vault is a normal Git repository that stores encrypted artifacts such as `claude/CLAUDE.md.age` or `copilot/skills/<name>.tar.age`. AgentSync never pushes plaintext configs. Files that match hard never-sync patterns or contain literal secrets abort the push before encryption.
 
+When you point a second machine at an existing vault, `init` now joins the remote history before writing machine-specific config. Sync commands also use one explicit fast-forward-only reconciliation rule, so divergent local history stops with recovery guidance instead of silently merging or printing a success-style footer.
+
 ## Current implementation status
 
 Currently supported:
@@ -82,6 +84,8 @@ Currently supported:
 - Push, pull, status, doctor, daemon, and key CLI entry points
 - Agent snapshot and apply flows for Claude, Cursor, Codex, Copilot, and VS Code
 - Secret redaction and never-sync enforcement before artifacts reach the vault
+- Existing-vault bootstrap for second-machine setup when the remote branch already has history
+- Shared fast-forward-only reconciliation across `init`, `pull`, `push`, `key`, and daemon sync
 
 Not yet positioned as a full hosted service:
 
@@ -120,6 +124,8 @@ Initialize a vault and machine key:
 ```bash
 bun run src/cli.ts init --remote git@github.com:<you>/agentsync-vault.git --branch main
 ```
+
+Run that same `init` command on another machine against the same remote when you want that machine to join the existing vault. If the local vault already diverged from the remote, AgentSync stops with recovery guidance rather than merging histories implicitly.
 
 Push local agent configs into the encrypted vault:
 
