@@ -20,6 +20,33 @@ AgentSync has three main layers:
 - **Recipient**: An age public key listed in `agentsync.toml`. The vault is encrypted for all configured recipients.
 - **Never-sync patterns**: Hard exclusions in `src/core/sanitizer.ts` that block sensitive files before encryption.
 - **Redaction**: Secret detection that aborts the push if literal credentials appear in supported config content.
+- **Reconciliation policy**: A shared fast-forward-only Git rule in `src/core/git.ts` that decides whether sync work may continue.
+
+## Reconciliation flow
+
+```mermaid
+flowchart TD
+	InitNode[Command resolves runtime and vault repo]:::step
+	RemoteNode{Does remote branch<br/>already exist}:::decision
+	EmptyNode[Allow first-machine bootstrap<br/>and push upstream]:::step
+	JoinNode[Fetch remote branch and<br/>align local history first]:::step
+	SafeNode{Can local branch<br/>fast-forward or match remote}:::decision
+	WorkNode[Run init pull push key<br/>or daemon work]:::step
+	StopNode[Stop with recovery guidance<br/>and no success footer]:::error
+
+	InitNode --> RemoteNode
+	RemoteNode -- no --> EmptyNode --> WorkNode
+	RemoteNode -- yes --> JoinNode --> SafeNode
+	SafeNode -- yes --> WorkNode
+	SafeNode -- no --> StopNode
+
+	classDef step fill:#ecf0f1,color:#2c3e50,stroke:#2c3e50,stroke-width:1.5px;
+	classDef decision fill:#fef3c7,color:#78350f,stroke:#78350f,stroke-width:1.5px;
+	classDef error fill:#7f1d1d,color:#ffffff,stroke:#7f1d1d,stroke-width:1.5px;
+```
+
+`init` uses this flow to distinguish first-machine bootstrap from second-machine join behavior.
+`pull`, `push`, `key add`, `key rotate`, and daemon-triggered sync all reuse the same reconciliation check before they apply, encrypt, or rewrite vault content.
 
 ## Main flow
 
@@ -29,14 +56,17 @@ AgentSync has three main layers:
 2. It snapshots enabled agents via the registry in `src/agents/registry.ts`.
 3. It aborts early if snapshot warnings show literal secrets.
 4. It encrypts each artifact with all configured recipients.
-5. It commits and pushes the resulting vault changes through `src/core/git.ts`.
+5. It reconciles with the remote using the shared fast-forward-only rule in `src/core/git.ts`.
+6. It commits and pushes the resulting vault changes through `src/core/git.ts`.
 
 ### Pull
 
 1. `src/commands/pull.ts` resolves runtime paths, loads config, and reads the private key.
-2. It pulls the latest vault branch.
+2. It reconciles the local vault branch with the remote using the shared fast-forward-only rule.
 3. It dispatches agent apply functions through the registry.
 4. Each agent decrypts and writes only its own artifact set.
+
+If the local vault diverged from the remote, the command flow stops before any apply or encryption work begins.
 
 ### Status and doctor
 

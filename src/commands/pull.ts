@@ -8,16 +8,17 @@ import { loadPrivateKey, resolveRuntimeContext } from "./shared";
 /** Pull the vault, decrypt enabled agent artifacts, and apply them locally. */
 export async function performPull(
   options: { agent?: string; dryRun?: boolean } = {},
-): Promise<{ applied: number; errors: string[] }> {
+): Promise<{ applied: number; errors: string[]; fatal: boolean }> {
   const errors: string[] = [];
   let applied = 0;
+  let fatal = false;
   try {
     const runtime = await resolveRuntimeContext();
     const config = await loadConfig(resolveConfigPath(runtime.vaultDir));
     const key = await loadPrivateKey(runtime.privateKeyPath);
 
     const git = new GitClient(runtime.vaultDir);
-    await git.pull("origin", config.remote.branch);
+    await git.reconcileWithRemote({ remote: "origin", branch: config.remote.branch });
 
     const requestedAgent = options.agent as AgentName | undefined;
     const agentsToSync = Agents.filter((a) => {
@@ -30,9 +31,10 @@ export async function performPull(
       applied++;
     }
   } catch (err) {
-    errors.push(String(err));
+    errors.push(err instanceof Error ? err.message : String(err));
+    fatal = true;
   }
-  return { applied, errors };
+  return { applied, errors, fatal };
 }
 
 /** CLI wrapper around the pull pipeline with optional agent filtering and dry-run output. */
@@ -57,6 +59,10 @@ export const pullCommand = defineCommand({
     });
     for (const err of result.errors) {
       log.error(err);
+    }
+    if (result.fatal) {
+      process.exitCode = 1;
+      return;
     }
     if (!args.dryRun) {
       log.success(`Pull completed: ${result.applied} agent(s) synced.`);

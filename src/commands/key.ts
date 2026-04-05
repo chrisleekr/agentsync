@@ -78,33 +78,46 @@ export const keyCommand = defineCommand({
           return;
         }
 
-        // Add recipient to config
-        config.recipients[name] = pubkey;
-        await writeConfig(configPath, config);
+        try {
+          const git = new GitClient(runtime.vaultDir);
+          const reconciliation = await git.reconcileWithRemote({
+            remote: "origin",
+            branch: config.remote.branch,
+            allowMissingRemote: true,
+          });
+          const refreshedConfig = await loadConfig(configPath);
 
-        // Pull latest vault state before re-encrypting to avoid overwriting remote changes
-        const git = new GitClient(runtime.vaultDir);
-        await git.pull("origin", config.remote.branch);
+          refreshedConfig.recipients[name] = pubkey;
+          await writeConfig(configPath, refreshedConfig);
 
-        // Re-encrypt all vault files so the new recipient can decrypt
-        const key = await loadPrivateKey(runtime.privateKeyPath);
-        const allRecipients = Object.values(config.recipients);
-        const ageFiles = await findAgeFiles(runtime.vaultDir);
+          const key = await loadPrivateKey(runtime.privateKeyPath);
+          const allRecipients = Object.values(refreshedConfig.recipients);
+          const ageFiles = await findAgeFiles(runtime.vaultDir);
 
-        for (const filePath of ageFiles) {
-          const encrypted = await readFile(filePath, "utf8");
-          const decrypted = await decryptString(encrypted, key);
-          const reEncrypted = await encryptString(decrypted, allRecipients);
-          await writeFile(filePath, reEncrypted, "utf8");
+          for (const filePath of ageFiles) {
+            const encrypted = await readFile(filePath, "utf8");
+            const decrypted = await decryptString(encrypted, key);
+            const reEncrypted = await encryptString(decrypted, allRecipients);
+            await writeFile(filePath, reEncrypted, "utf8");
+          }
+
+          await git.addAll();
+          const committed = await git.commit({ message: `key: add recipient ${name}` });
+          if (committed) {
+            await git.push(
+              "origin",
+              refreshedConfig.remote.branch,
+              reconciliation.status === "remote-missing" ? ["--set-upstream"] : [],
+            );
+          }
+
+          log.success(
+            `Added recipient '${name}'. Vault re-encrypted for ${allRecipients.length} recipient(s).`,
+          );
+        } catch (err) {
+          log.error(err instanceof Error ? err.message : String(err));
+          process.exitCode = 1;
         }
-
-        await git.addAll();
-        await git.commit({ message: `key: add recipient ${name}` });
-        await git.push("origin", config.remote.branch);
-
-        log.success(
-          `Added recipient '${name}'. Vault re-encrypted for ${allRecipients.length} recipient(s).`,
-        );
       },
     }),
 
@@ -113,63 +126,71 @@ export const keyCommand = defineCommand({
       async run() {
         const runtime = await resolveRuntimeContext();
         const configPath = resolveConfigPath(runtime.vaultDir);
-        const config = await loadConfig(configPath);
-
-        // Find our current machine name from config by matching old recipient key
         const oldKey = await loadPrivateKey(runtime.privateKeyPath);
-        const oldRecipient = await identityToRecipient(oldKey);
 
-        const machineEntry = Object.entries(config.recipients).find(
-          ([, pub]) => pub === oldRecipient,
-        );
+        try {
+          const git = new GitClient(runtime.vaultDir);
+          const initialConfig = await loadConfig(configPath);
+          const reconciliation = await git.reconcileWithRemote({
+            remote: "origin",
+            branch: initialConfig.remote.branch,
+            allowMissingRemote: true,
+          });
+          const config = await loadConfig(configPath);
+          const oldRecipient = await identityToRecipient(oldKey);
 
-        if (!machineEntry) {
-          log.error(
-            "Could not find the current machine's public key in config.recipients. " +
-              "Cannot determine which recipient to rotate.",
+          const machineEntry = Object.entries(config.recipients).find(
+            ([, pub]) => pub === oldRecipient,
           );
+
+          if (!machineEntry) {
+            log.error(
+              "Could not find the current machine's public key in config.recipients. " +
+                "Cannot determine which recipient to rotate.",
+            );
+            process.exitCode = 1;
+            return;
+          }
+
+          const [machineName] = machineEntry;
+          const newIdentity = await generateIdentity();
+          const newRecipient = await identityToRecipient(newIdentity);
+
+          config.recipients[machineName] = newRecipient;
+          await writeConfig(configPath, config);
+
+          const { open } = await import("node:fs/promises");
+          const fh = await open(runtime.privateKeyPath, "w", 0o600);
+          await fh.writeFile(`${newIdentity}\n`, "utf8");
+          await fh.close();
+
+          const allRecipients = Object.values(config.recipients);
+          const ageFiles = await findAgeFiles(runtime.vaultDir);
+
+          for (const filePath of ageFiles) {
+            const encrypted = await readFile(filePath, "utf8");
+            const decrypted = await decryptString(encrypted, oldKey);
+            const reEncrypted = await encryptString(decrypted, allRecipients);
+            await writeFile(filePath, reEncrypted, "utf8");
+          }
+
+          await git.addAll();
+          const committed = await git.commit({ message: `key: rotate ${machineName}` });
+          if (committed) {
+            await git.push(
+              "origin",
+              config.remote.branch,
+              reconciliation.status === "remote-missing" ? ["--set-upstream"] : [],
+            );
+          }
+
+          log.success(`Rotated key for '${machineName}'.`);
+          log.info(`New public key: ${newRecipient}`);
+          log.warn(`Remember to back up: ${runtime.privateKeyPath}`);
+        } catch (err) {
+          log.error(err instanceof Error ? err.message : String(err));
           process.exitCode = 1;
-          return;
         }
-
-        const [machineName] = machineEntry;
-
-        // Generate new identity
-        const newIdentity = await generateIdentity();
-        const newRecipient = await identityToRecipient(newIdentity);
-
-        // Update config to replace old recipient with new one
-        config.recipients[machineName] = newRecipient;
-        await writeConfig(configPath, config);
-
-        // Overwrite private key file (mode 0o600 preserved)
-        const { open } = await import("node:fs/promises");
-        const fh = await open(runtime.privateKeyPath, "w", 0o600);
-        await fh.writeFile(`${newIdentity}\n`, "utf8");
-        await fh.close();
-
-        // Pull latest vault state before re-encrypting to avoid overwriting remote changes
-        const git = new GitClient(runtime.vaultDir);
-        await git.pull("origin", config.remote.branch);
-
-        // Re-encrypt all vault files: decrypt with old key, encrypt for all new recipients
-        const allRecipients = Object.values(config.recipients);
-        const ageFiles = await findAgeFiles(runtime.vaultDir);
-
-        for (const filePath of ageFiles) {
-          const encrypted = await readFile(filePath, "utf8");
-          const decrypted = await decryptString(encrypted, oldKey);
-          const reEncrypted = await encryptString(decrypted, allRecipients);
-          await writeFile(filePath, reEncrypted, "utf8");
-        }
-
-        await git.addAll();
-        await git.commit({ message: `key: rotate ${machineName}` });
-        await git.push("origin", config.remote.branch);
-
-        log.success(`Rotated key for '${machineName}'.`);
-        log.info(`New public key: ${newRecipient}`);
-        log.warn(`Remember to back up: ${runtime.privateKeyPath}`);
       },
     }),
   },

@@ -51,11 +51,12 @@ bunx --package @chrisleekr/agentsync agentsync init --remote <git-url> --branch 
 
 **Needs**: remote URL, optional branch, writable local runtime directory.
 
-**Outcome**: local vault directory exists, machine recipient is registered in config, and the initial commit is pushed when the remote is reachable.
+**Outcome**: local vault directory exists, machine recipient is registered in config, and AgentSync either creates the first remote commit or joins the existing remote history before writing machine-specific changes.
 
 **Caveats**:
 
-- First-time pull may fail harmlessly if the remote has no history yet.
+- An empty remote branch is treated as first-machine bootstrap; an existing remote branch is joined before AgentSync writes local history.
+- If the local vault already diverged from the configured remote branch, `init` stops with a recovery error instead of pushing a local-first history.
 - The generated private key must be backed up outside the vault.
 
 ## push
@@ -75,7 +76,8 @@ bunx --package @chrisleekr/agentsync agentsync push --agent claude
 
 **Caveats**:
 
-- AgentSync pulls before push to reduce conflicts.
+- AgentSync reconciles against the remote with a fast-forward-only rule before it writes encrypted artifacts.
+- If the local vault and remote vault have diverged, `push` stops before writing or encrypting new artifact content.
 - Push aborts when literal secrets are detected in supported config content.
 - Files matching never-sync patterns are skipped even if an agent adapter sees them.
 
@@ -97,6 +99,8 @@ bunx --package @chrisleekr/agentsync agentsync pull --agent cursor
 **Caveats**:
 
 - Pull applies only enabled or explicitly requested agents.
+- Pull uses the same fast-forward-only reconciliation rule as `push`, `key`, and daemon sync.
+- If local and remote vault history diverged, `pull` exits with a recovery message and no success footer.
 - If the private key is missing, the command cannot decrypt anything.
 
 ## status
@@ -164,6 +168,8 @@ bunx --package @chrisleekr/agentsync agentsync key rotate
 
 **Caveats**:
 
+- `key add` and `key rotate` reconcile against the latest remote state before they rewrite encrypted vault content.
+- If the vault history diverged, key-management commands stop until the vault is reset or recloned onto the current remote branch.
 - Rotation depends on the old private key still being available so existing vault files can be decrypted.
 - Recipient names should describe machines clearly because they become the stable config key.
 

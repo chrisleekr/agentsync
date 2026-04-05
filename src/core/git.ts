@@ -2,6 +2,41 @@ import { mkdir, stat } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import simpleGit, { type SimpleGit } from "simple-git";
 
+const decoder = new TextDecoder();
+
+export type GitReconciliationCode = "DIVERGED_HISTORY" | "REMOTE_BRANCH_MISSING";
+
+export interface RemoteBranchState {
+  remote: string;
+  branch: string;
+  exists: boolean;
+  headCommit: string | null;
+}
+
+export interface GitReconciliationOptions {
+  remote?: string;
+  branch?: string;
+  allowMissingRemote?: boolean;
+}
+
+export interface GitReconciliationResult {
+  status: "noop" | "fast-forwarded" | "bootstrapped-existing" | "remote-missing";
+  remote: string;
+  branch: string;
+  localHead: string | null;
+  remoteHead: string | null;
+}
+
+export class GitReconciliationError extends Error {
+  constructor(
+    public readonly code: GitReconciliationCode,
+    message: string,
+  ) {
+    super(message);
+    this.name = "GitReconciliationError";
+  }
+}
+
 /** Options for creating a commit through the GitClient wrapper. */
 export interface CommitOptions {
   message: string;
@@ -14,6 +49,62 @@ export class GitClient {
 
   constructor(private readonly repoDir: string) {
     this.git = simpleGit(repoDir);
+  }
+
+  private runGit(args: string[]): { exitCode: number; stdout: string; stderr: string } {
+    const result = Bun.spawnSync(["git", "-C", this.repoDir, ...args]);
+    return {
+      exitCode: result.exitCode,
+      stdout: decoder.decode(result.stdout).trim(),
+      stderr: decoder.decode(result.stderr).trim(),
+    };
+  }
+
+  private assertGit(args: string[], action: string): string {
+    const result = this.runGit(args);
+    if (result.exitCode !== 0) {
+      throw new Error(`${action} failed: ${result.stderr || result.stdout || "no output"}`);
+    }
+    return result.stdout;
+  }
+
+  private async revParse(ref: string): Promise<string | null> {
+    const result = this.runGit(["rev-parse", "--verify", ref]);
+    return result.exitCode === 0 ? result.stdout : null;
+  }
+
+  private isAncestor(ancestor: string, descendant: string): boolean {
+    const result = this.runGit(["merge-base", "--is-ancestor", ancestor, descendant]);
+    if (result.exitCode === 0) {
+      return true;
+    }
+    if (result.exitCode === 1) {
+      return false;
+    }
+    throw new Error(result.stderr || result.stdout || "git merge-base failed");
+  }
+
+  private async ensureCheckedOutBranch(branch: string): Promise<void> {
+    const local = await this.git.branchLocal();
+    if (local.current === branch) {
+      return;
+    }
+
+    if (local.all.includes(branch)) {
+      await this.git.checkout(branch);
+      return;
+    }
+
+    if ((await this.revParse("HEAD")) !== null) {
+      this.assertGit(["checkout", "-b", branch], `git checkout -b ${branch}`);
+    }
+  }
+
+  private trySetUpstream(branch: string, remoteRef: string): void {
+    const result = this.runGit(["branch", "--set-upstream-to", remoteRef, branch]);
+    if (result.exitCode !== 0 && !result.stderr.includes("set up to track")) {
+      throw new Error(result.stderr || result.stdout || "git branch --set-upstream-to failed");
+    }
   }
 
   /** Clone a remote vault into a local working directory and return a bound client. */
@@ -41,6 +132,138 @@ export class GitClient {
   /** Run `git remote add <name> <url>` */
   async addRemote(name: string, url: string): Promise<void> {
     await this.git.remote(["add", name, url]);
+  }
+
+  /** Ensure the expected remote exists without failing when it was already configured. */
+  async ensureRemote(name: string, url: string): Promise<void> {
+    const result = this.runGit(["remote", "get-url", name]);
+    if (result.exitCode === 0) {
+      return;
+    }
+
+    await this.addRemote(name, url);
+  }
+
+  /** Set the unborn HEAD branch explicitly before the first commit. */
+  async setHeadBranch(branch: string): Promise<void> {
+    this.assertGit(
+      ["symbolic-ref", "HEAD", `refs/heads/${branch}`],
+      `git symbolic-ref HEAD ${branch}`,
+    );
+  }
+
+  /** Inspect whether a remote branch currently exists and, if it does, capture its head SHA. */
+  async inspectRemoteBranch(remote = "origin", branch = "main"): Promise<RemoteBranchState> {
+    const result = this.runGit(["ls-remote", "--heads", remote, branch]);
+    if (result.exitCode !== 0) {
+      throw new Error(result.stderr || result.stdout || `git ls-remote failed for ${remote}`);
+    }
+
+    const firstLine = result.stdout.split("\n").find((line) => line.trim().length > 0) ?? "";
+    const headCommit = firstLine.length > 0 ? (firstLine.split(/\s+/)[0] ?? null) : null;
+
+    return {
+      remote,
+      branch,
+      exists: headCommit !== null,
+      headCommit,
+    };
+  }
+
+  /** Reconcile the local branch against the remote using an explicit fast-forward-only policy. */
+  async reconcileWithRemote(
+    options: GitReconciliationOptions = {},
+  ): Promise<GitReconciliationResult> {
+    const remote = options.remote ?? "origin";
+    const branch = options.branch ?? "main";
+    const remoteState = await this.inspectRemoteBranch(remote, branch);
+
+    if (!remoteState.exists) {
+      if (options.allowMissingRemote) {
+        return {
+          status: "remote-missing",
+          remote,
+          branch,
+          localHead: await this.revParse("HEAD"),
+          remoteHead: null,
+        };
+      }
+
+      throw new GitReconciliationError(
+        "REMOTE_BRANCH_MISSING",
+        `Remote vault branch '${remote}/${branch}' was not found. Run init against the intended remote first, or verify the configured remote URL and branch.`,
+      );
+    }
+
+    this.assertGit(["fetch", "--prune", remote, branch], `git fetch ${remote} ${branch}`);
+    const remoteRef = `refs/remotes/${remote}/${branch}`;
+    const remoteHead = await this.revParse(remoteRef);
+
+    if (remoteHead === null) {
+      throw new Error(`Fetched '${remote}/${branch}' but could not resolve ${remoteRef}.`);
+    }
+
+    const localHead = await this.revParse("HEAD");
+    if (localHead === null) {
+      this.assertGit(
+        ["checkout", "-B", branch, remoteRef],
+        `git checkout -B ${branch} ${remoteRef}`,
+      );
+      this.trySetUpstream(branch, remoteRef);
+      return {
+        status: "bootstrapped-existing",
+        remote,
+        branch,
+        localHead: remoteHead,
+        remoteHead,
+      };
+    }
+
+    await this.ensureCheckedOutBranch(branch);
+    const branchHead = await this.revParse("HEAD");
+
+    if (branchHead === null) {
+      throw new Error(`Local branch '${branch}' could not be resolved after checkout.`);
+    }
+
+    if (branchHead === remoteHead) {
+      this.trySetUpstream(branch, remoteRef);
+      return {
+        status: "noop",
+        remote,
+        branch,
+        localHead: branchHead,
+        remoteHead,
+      };
+    }
+
+    if (this.isAncestor(branchHead, remoteHead)) {
+      this.assertGit(["merge", "--ff-only", remoteRef], `git merge --ff-only ${remoteRef}`);
+      this.trySetUpstream(branch, remoteRef);
+      return {
+        status: "fast-forwarded",
+        remote,
+        branch,
+        localHead: await this.revParse("HEAD"),
+        remoteHead,
+      };
+    }
+
+    if (this.isAncestor(remoteHead, branchHead)) {
+      this.trySetUpstream(branch, remoteRef);
+      return {
+        status: "noop",
+        remote,
+        branch,
+        localHead: branchHead,
+        remoteHead,
+      };
+    }
+
+    throw new GitReconciliationError(
+      "DIVERGED_HISTORY",
+      `Vault history diverged from '${remote}/${branch}'. AgentSync only supports fast-forward sync. Back up any local-only vault changes, then reset or reclone the vault to '${remote}/${branch}' before retrying.`,
+    );
   }
 
   /** Pull the latest changes for a remote branch into the current repository. */

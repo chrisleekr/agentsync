@@ -15,6 +15,8 @@ Auto-generated from all feature plans. Last updated: 2026-04-05
 - Repository-hosted Markdown files under `README.md`, `docs/`, `.github/`, and `.specify/` as referenced documentation sources (20260405-195011-speckit-dev-docs)
 - Markdown documentation plus TypeScript 6.x and Bun 1.3.9 repository contex + Existing repo toolchain only; no new runtime or documentation dependencies (20260405-213451-released-cli-docs)
 - Repository-hosted Markdown files and feature-planning artifacts only (20260405-213451-released-cli-docs)
+- TypeScript 6.0.0, strict mode + Bun 1.3.9, `simple-git ^3.27.0`, `citty ^0.2.2`, `@clack/prompts ^1.2.0`, `age-encryption ^0.3.0`, `zod ^4.0.0` (20260405-223110-fix-recipient-sync)
+- Local filesystem plus a Git-backed encrypted vault repository (20260405-223110-fix-recipient-sync)
 
 - TypeScript 5.8+ (strict mode; `any` forbidden — use `unknown` + Zod) + `bun:test` (built-in), `age-encryption ^0.3.0`, `simple-git ^3.27.0`, `tar ^7.4.0`, `zod ^3.23.8`, `@iarna/toml ^2.2.5` (001-initial-function-testing)
 
@@ -34,9 +36,9 @@ npm test && npm run lint
 TypeScript 5.8+ (strict mode; `any` forbidden — use `unknown` + Zod): Follow standard conventions
 
 ## Recent Changes
+- 20260405-223110-fix-recipient-sync: Added TypeScript 6.0.0, strict mode + Bun 1.3.9, `simple-git ^3.27.0`, `citty ^0.2.2`, `@clack/prompts ^1.2.0`, `age-encryption ^0.3.0`, `zod ^4.0.0`
 - 20260405-213451-released-cli-docs: Added Markdown documentation plus TypeScript 6.x and Bun 1.3.9 repository contex + Existing repo toolchain only; no new runtime or documentation dependencies
 - 20260405-195011-speckit-dev-docs: Added Markdown documentation plus TypeScript 6.0.0 repository contex + Existing repo toolchain only; authoritative research sources are official spec-kit documentation and the `github/spec-kit` repository
-- 20260405-112827-bunx-release: Added TypeScript 6.0.0 (strict) with Bun 1.3.9 runtime; Node 22.14.0+ and npm 11.5.1+ for trusted publishing + Bun 1.3.9, `citty`, `simple-git`, `zod`, release-please, GitHub Actions, npm registry trusted publishing via OIDC
 
 
 <!-- MANUAL ADDITIONS START -->

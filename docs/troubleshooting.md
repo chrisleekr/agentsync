@@ -15,6 +15,12 @@ Check:
 - your Git transport is configured for that remote
 - the vault directory is writable
 
+Interpret the failure first:
+
+- If the remote branch is empty, AgentSync should create the first vault commit locally and push it upstream.
+- If the remote branch already exists, AgentSync should join that history before it writes this machine's config.
+- If you see a fast-forward-only divergence error, the local vault already contains history that does not match the remote and must be recovered before `init` can finish.
+
 Next step:
 
 ```bash
@@ -22,6 +28,23 @@ bun run src/cli.ts doctor
 ```
 
 If the failure happened on the first remote pull, that can be normal for an empty remote.
+
+## Local and remote vault history diverged
+
+Symptoms:
+
+- `pull`, `push`, `key add`, `key rotate`, or `init` reports that AgentSync only supports fast-forward sync
+- the command tells you to reset or reclone the vault to `origin/<branch>` before retrying
+- `pull` stops without printing `Pull completed: ...`
+
+Next steps:
+
+1. Back up any local-only vault changes you still need.
+2. Inspect the local vault repo and confirm the configured remote branch is the intended source of truth.
+3. Reset the local vault to the remote branch or remove the local vault directory and run `init` again against the same remote.
+4. Re-run the original command only after the local vault matches the remote history.
+
+Do not resolve this by relying on Git merge or rebase defaults. AgentSync intentionally fails closed here so every machine uses the same reconciliation model.
 
 ## Push aborts because secrets were detected
 

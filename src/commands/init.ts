@@ -7,6 +7,21 @@ import { generateIdentity, identityToRecipient } from "../core/encryptor";
 import { GitClient } from "../core/git";
 import { loadPrivateKey, resolveRuntimeContext } from "./shared";
 
+const DEFAULT_AGENTS = {
+  cursor: true,
+  claude: true,
+  codex: true,
+  copilot: true,
+  vscode: false,
+};
+
+const DEFAULT_SYNC = {
+  debounceMs: 300,
+  autoPush: true,
+  autoPull: true,
+  pullIntervalMs: 300_000,
+};
+
 /** Load or create the local age keypair so init can register this machine as a recipient. */
 async function ensureKeypair(path: string): Promise<{ identity: string; recipient: string }> {
   let identity: string;
@@ -59,75 +74,69 @@ export const initCommand = defineCommand({
 
     const { recipient } = await ensureKeypair(runtime.privateKeyPath);
 
-    const configPath = resolveConfigPath(runtime.vaultDir);
+    let git = new GitClient(runtime.vaultDir);
 
-    // Load existing config if present so we don't overwrite other machines' recipients
-    let existingRecipients: Record<string, string> = {};
     try {
-      const existing = await loadConfig(configPath);
-      existingRecipients = existing.recipients;
-    } catch {
-      // No existing config — start fresh
-    }
+      const repoInitialized = await git.isInitialized();
+      const remoteState = await git.inspectRemoteBranch(args.remote, args.branch);
 
-    const config = {
-      version: "1",
-      recipients: {
-        ...existingRecipients,
-        [runtime.machineName]: recipient,
-      },
-      agents: {
-        cursor: true,
-        claude: true,
-        codex: true,
-        copilot: true,
-        vscode: false,
-      },
-      remote: {
-        url: args.remote,
-        branch: args.branch,
-      },
-      sync: {
-        debounceMs: 300,
-        autoPush: true,
-        autoPull: true,
-        pullIntervalMs: 300_000,
-      },
-    };
-
-    await writeConfig(configPath, config);
-
-    const gitignorePath = join(runtime.vaultDir, ".gitignore");
-    await writeFile(gitignorePath, "*.tmp\n", "utf8");
-
-    // Ensure manifest was written.
-    await readFile(configPath, "utf8");
-
-    // Set up git repository if not already initialised
-    const git = new GitClient(runtime.vaultDir);
-    if (!(await git.isInitialized())) {
-      await git.init();
-      await git.addRemote("origin", args.remote);
-    }
-
-    // Best-effort pull (tolerate failure for brand-new vaults)
-    try {
-      await git.pull("origin", args.branch);
-    } catch {
-      // New vault — no history on remote yet
-    }
-
-    await git.addAll();
-    const committed = await git.commit({ message: `init: ${runtime.machineName}` });
-    if (committed) {
-      try {
-        await git.push("origin", args.branch, ["--set-upstream"]);
-        log.info("Vault pushed to remote.");
-      } catch (err) {
-        log.warn(`Initial push failed — push manually later: ${String(err)}`);
+      if (!repoInitialized) {
+        if (remoteState.exists) {
+          git = await GitClient.clone(args.remote, runtime.vaultDir, args.branch);
+          log.info(`Joined existing remote vault history from ${args.remote}.`);
+        } else {
+          await git.init();
+          await git.setHeadBranch(args.branch);
+          await git.ensureRemote("origin", args.remote);
+        }
+      } else {
+        await git.ensureRemote("origin", args.remote);
+        await git.reconcileWithRemote({
+          remote: "origin",
+          branch: args.branch,
+          allowMissingRemote: true,
+        });
       }
-    }
 
-    log.success(`Initialized vault at ${runtime.vaultDir}`);
+      const configPath = resolveConfigPath(runtime.vaultDir);
+
+      let existing = null;
+      try {
+        existing = await loadConfig(configPath);
+      } catch {
+        existing = null;
+      }
+
+      const config = {
+        version: existing?.version ?? "1",
+        recipients: {
+          ...(existing?.recipients ?? {}),
+          [runtime.machineName]: recipient,
+        },
+        agents: existing?.agents ?? DEFAULT_AGENTS,
+        remote: {
+          url: args.remote,
+          branch: args.branch,
+        },
+        sync: existing?.sync ?? DEFAULT_SYNC,
+      };
+
+      await writeConfig(configPath, config);
+
+      const gitignorePath = join(runtime.vaultDir, ".gitignore");
+      await writeFile(gitignorePath, "*.tmp\n", "utf8");
+      await readFile(configPath, "utf8");
+
+      const committed = await git.commit({ message: `init: ${runtime.machineName}` });
+      if (committed) {
+        await git.push("origin", args.branch, remoteState.exists ? [] : ["--set-upstream"]);
+        log.info("Vault pushed to remote.");
+      }
+
+      log.success(`Initialized vault at ${runtime.vaultDir}`);
+    } catch (err) {
+      log.error(err instanceof Error ? err.message : String(err));
+      process.exitCode = 1;
+    }
   },
 });
