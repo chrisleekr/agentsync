@@ -1,0 +1,17 @@
+node_modules/
+coverage/
+.DS_Store
+.env
+.env*
+*.log
+*.tmp
+*.swp
+.vscode/
+.idea/
+.specify/
+specs/
+tests/
+docs/agentsync-logo.png
+src/
+**/__tests__/
+src/test-helpers/

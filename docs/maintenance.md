@@ -13,12 +13,31 @@ Use this guide when a change affects user-facing behavior, exported symbols, syn
 - `docs/troubleshooting.md` owns failure cases and next diagnostic steps.
 - This page owns upkeep rules and review checkpoints.
 
+## Release workflow ownership rules
+
+- The GitHub Release record created by release-please is the canonical release-information surface.
+- The npm publish path must use GitHub OIDC trusted publishing only.
+- Long-lived npm write tokens are not a supported normal-release credential model for this repo.
+- User-facing documentation must not present `bunx` installation as supported until release validation succeeds for that workflow.
+
+## Publish workflow checklist
+
+Before merging a release-surface change, verify:
+
+1. `.nvmrc`, `package.json` Volta pin, and workflow Node version expectations still align.
+2. `.github/workflows/release-please.yml` grants `id-token: write` and `contents: read` to the publish job.
+3. The publish job upgrades npm to `11.5.1` or later when required.
+4. No step relies on `NPM_TOKEN`, `NODE_AUTH_TOKEN`, or equivalent long-lived npm publish secrets.
+5. `README.md` and `docs/command-reference.md` point users to the GitHub Release record for version and change information.
+6. `bun run build:package`, `bun run pack:dry-run`, and `bun run check` all pass.
+
 ## When docs must be updated
 
 Update repository docs in the same change when you:
 
 - add or remove a CLI command or subcommand
 - change required inputs, defaults, or outcomes for an existing workflow
+- change how the released CLI is installed or how release notes are surfaced
 - alter agent support, path resolution, daemon behavior, or vault semantics
 - introduce a new platform-specific caveat
 - change secret-handling or recipient expectations
@@ -41,7 +60,8 @@ Before merging, verify:
 4. Architecture-sensitive changes are reflected in `docs/architecture.md`.
 5. Exported production symbols changed by the PR have updated JSDoc.
 6. Support-state wording is explicit where behavior is partial, planned, or unsupported.
-7. `bun run check` still passes.
+7. `README.md` and `docs/command-reference.md` still point to the canonical GitHub Release record for release notes.
+8. `bun run check` still passes.
 
 ## Terminology guardrails
 

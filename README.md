@@ -19,6 +19,31 @@ AgentSync is a Bun-based CLI and background daemon that snapshots AI agent confi
 
 It is for people who keep global agent configuration in tools like Claude, Cursor, Codex, Copilot, and VS Code and want one encrypted source of truth instead of manually copying files between laptops.
 
+## Released CLI path
+
+Use the published package path only after a tagged GitHub Release and npm publish have both completed for the version you want.
+
+Prerequisites for the released CLI path:
+
+- Bun 1.3.9 or later
+- A published AgentSync package for the version you want to run
+
+First-run verification command for the published CLI:
+
+```bash
+bunx --package @chrisleekr/agentsync agentsync --version
+```
+
+Use the GitHub Release record as the canonical place to see:
+
+- which version you are installing
+- what changed in that release
+
+Start here:
+
+- [Latest release](https://github.com/chrisleekr/agentsync/releases/latest)
+- [All releases](https://github.com/chrisleekr/agentsync/releases)
+
 ## What a vault means here
 
 The vault is a normal Git repository that stores encrypted artifacts such as `claude/CLAUDE.md.age` or `copilot/skills/<name>.tar.age`. AgentSync never pushes plaintext configs. Files that match hard never-sync patterns or contain literal secrets abort the push before encryption.
@@ -47,7 +72,9 @@ Not yet positioned as a full hosted service:
 - One or more supported agent config directories on the machine you are syncing
 - macOS, Linux, or Windows for daemon installation paths described in the docs
 
-## Quick start
+## Contributor setup from source
+
+This is the contributor workflow for developing from a clone of the repository. It is separate from the published CLI path above.
 
 Install dependencies and verify the repo first:
 
@@ -90,8 +117,8 @@ bun run src/cli.ts pull
 
 - [Development guide](docs/development.md): contributor setup, local workflow, and verification steps
 - [Architecture guide](docs/architecture.md): module map, sync flow, security boundaries, and daemon design
-- [Maintenance guide](docs/maintenance.md): when docs and JSDoc must change, plus review checkpoints
-- [Command reference](docs/command-reference.md): supported commands, inputs, outcomes, caveats, and support-state notes
+- [Maintenance guide](docs/maintenance.md): release upkeep, OIDC-only publish rules, and documentation/JSDoc change policy
+- [Command reference](docs/command-reference.md): released CLI install path, command usage, prerequisites, caveats, and release-info lookup
 - [Troubleshooting guide](docs/troubleshooting.md): common setup, key, remote, and daemon failures with next actions
 
 ## Safety notes
@@ -102,6 +129,7 @@ bun run src/cli.ts pull
 
 ## Next steps
 
-If you are evaluating the project, start with [docs/development.md](docs/development.md).
+If you are evaluating the released CLI path, start with the [latest release](https://github.com/chrisleekr/agentsync/releases/latest) and then [docs/command-reference.md](docs/command-reference.md).
+If you are developing from source, start with [docs/development.md](docs/development.md).
 If you want the system model before changing code, read [docs/architecture.md](docs/architecture.md).
 If you are modifying commands or agent integrations, read [docs/maintenance.md](docs/maintenance.md) before opening a PR.
