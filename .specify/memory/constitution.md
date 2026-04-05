@@ -1,21 +1,24 @@
 <!-- Sync Impact Report
-  Version change: 1.1.0 → 1.2.0
+  Version change: 1.3.0 → 1.4.0
   Modified principles:
-    - None renamed
+    - II. Test Coverage (NON-NEGOTIABLE) → II. Test Coverage (NON-NEGOTIABLE)
   Added sections: None
   Modified sections:
-    - Development Workflow: Branch strategy bullet expanded to mandate
-      timestamp naming (YYYYMMDD-HHMMSS-<slug>) and prohibit sequential
-      numeric prefixes for new branches.
+    - Principle II expanded with a narrow documentation-only exception to the
+      automated test-case requirement when all changed files are limited to
+      repository-hosted documentation and feature-planning artifacts and the
+      change does not affect runtime source, exported symbols, configuration
+      schemas, packaging logic, CI automation, or generated workflow scripts.
+    - Principle II now requires documentation-only exceptions to preserve the
+      `bun run check` merge gate, Mermaid validation, and manual walkthrough
+      validation steps in the relevant feature artifacts.
   Removed sections: None
   Templates requiring updates:
-    - .specify/templates/plan-template.md ✅ updated ([###-feature-name] → [YYYYMMDD-HHMMSS-feature-name])
-    - .specify/templates/spec-template.md ✅ updated ([###-feature-name] → [YYYYMMDD-HHMMSS-feature-name])
-    - .specify/templates/tasks-template.md ✅ updated ([###-feature-name] → [YYYYMMDD-HHMMSS-feature-name])
-    - .specify/init-options.json ⚠️ pending: "branch_numbering" should be changed from "sequential" to "timestamp"
-  Follow-up TODOs:
-    - TODO(INIT_OPTIONS): Update .specify/init-options.json "branch_numbering" from "sequential" to "timestamp"
-      so new project scaffolding respects this convention by default.
+    - .specify/templates/plan-template.md ✅ updated
+    - .specify/templates/spec-template.md ✅ updated
+    - .specify/templates/tasks-template.md ✅ updated
+    - docs/maintenance.md ✅ updated
+  Follow-up TODOs: None
 -->
 
 # AgentSync Constitution
@@ -54,6 +57,16 @@ its sole test runner.
 - All other modules MUST maintain ≥70% line coverage.
 - New features MUST include tests that exercise both the success path
   and at least one error/edge-case path before the PR is mergeable.
+- Documentation-only features are exempt from the automated test-case
+  requirement above only when all changed files are limited to
+  repository-hosted documentation and feature-planning artifacts, and
+  the change does not alter runtime source files, exported symbols,
+  configuration schemas, packaging logic, CI automation, or generated
+  workflow scripts. These features MUST still:
+  1. run `bun run check` before merge,
+  2. validate any introduced or modified Mermaid diagrams, and
+  3. define manual walkthrough validation steps in the relevant feature
+     artifacts.
 - Test files MUST be placed in a `__tests__/` subdirectory within the
   same directory as the module they test, using the `*.test.ts` naming
   convention (e.g. `src/core/__tests__/git.test.ts` for `src/core/git.ts`).
@@ -98,12 +111,15 @@ formatting tools MUST NOT be added to the project.
   (Biome v2 path; v1 `organizeImports` section is removed); manual
   import sorting MUST NOT be performed.
 
-### V. JSDoc Documentation Standards
+### V. Documentation Standards
 
 All exported functions, classes, interfaces, and types MUST have JSDoc
-comments. Documentation MUST be concise — a single sentence stating
-_what_ the symbol does — and MUST explain _why_ it exists and any
-non-obvious behaviour or constraints.
+comments. Repository-hosted explanatory documentation MUST use Mermaid
+diagrams when a visual explanation materially improves reader
+comprehension of a flow, structure, lifecycle, or interaction compared
+with prose alone. Documentation MUST stay concise, must explain _what_
+exists and _why_ it matters, and MUST avoid decorative diagrams that do
+not add explanatory value.
 
 - `@param`, `@returns`, and `@throws` tags MUST be present for public
   API functions that have multiple parameters, non-void return values,
@@ -113,6 +129,17 @@ non-obvious behaviour or constraints.
 - Documentation MUST be updated in the same commit as any change that
   alters a symbol's observable behaviour, signature, or semantics.
   Stale JSDoc is treated as a documentation defect.
+- Repository docs that describe architecture, workflow, state changes,
+  command flow, review flow, or other decision-heavy interactions MUST
+  include a Mermaid diagram when that diagram makes the explanation
+  faster or less ambiguous for readers.
+- Mermaid diagrams MUST be authored for comprehension, not decoration.
+  They MUST reflect the documented behavior accurately, use labels that
+  stand on their own, and remain small enough to review without
+  reverse-engineering the surrounding prose.
+- Every Mermaid diagram introduced or modified in repository-hosted docs
+  MUST be validated before merge. Invalid Mermaid syntax is treated as a
+  documentation defect.
 - Auto-derived types (e.g., `z.infer<typeof Schema>`) are exempt from
   inline JSDoc but MUST have a one-line comment at the declaration site
   identifying the source schema.
@@ -160,8 +187,12 @@ non-obvious behaviour or constraints.
 - **Documentation gate**: Every PR that adds or modifies an exported
   symbol MUST include up-to-date JSDoc for those symbols (Principle V).
   Reviewers MUST reject PRs where JSDoc is absent or describes outdated
-  behaviour. Documentation updates MUST land in the same commit as the
-  implementation change — not as a follow-up.
+  behaviour. When a documentation page explains a workflow, structure,
+  lifecycle, or interaction that is materially clearer as a diagram,
+  the PR MUST include or update the Mermaid diagram in the same change
+  and MUST validate that diagram before merge. Documentation updates
+  MUST land in the same commit as the implementation change — not as a
+  follow-up.
 
 ## Governance
 
@@ -182,4 +213,4 @@ review MUST verify compliance with the principles above.
   constitution, the constitution takes precedence. The conflicting
   artifact MUST be amended to align.
 
-**Version**: 1.2.0 | **Ratified**: 2026-04-04 | **Last Amended**: 2026-04-04
+**Version**: 1.4.0 | **Ratified**: 2026-04-04 | **Last Amended**: 2026-04-05

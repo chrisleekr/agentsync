@@ -11,6 +11,8 @@ Auto-generated from all feature plans. Last updated: 2026-04-05
 - TypeScript 6.0.0 (strict) with Bun 1.3.9 runtime; Node 22.14.0+ and npm 11.5.1+ for npm trusted publishing + Bun 1.3.9, `citty`, `simple-git`, `zod`, release-please, GitHub Actions, npm registry trusted publishing via OIDC (20260405-112827-bunx-release)
 - N/A for runtime data; repository files, GitHub Releases, and npm registry package metadata (20260405-112827-bunx-release)
 - TypeScript 6.0.0 (strict) with Bun 1.3.9 runtime; Node 22.14.0+ and npm 11.5.1+ for trusted publishing + Bun 1.3.9, `citty`, `simple-git`, `zod`, release-please, GitHub Actions, npm registry trusted publishing via OIDC (20260405-112827-bunx-release)
+- Markdown documentation plus TypeScript 6.0.0 repository contex + Existing repo toolchain only; authoritative research sources are official spec-kit documentation and the `github/spec-kit` repository (20260405-195011-speckit-dev-docs)
+- Repository-hosted Markdown files under `README.md`, `docs/`, `.github/`, and `.specify/` as referenced documentation sources (20260405-195011-speckit-dev-docs)
 
 - TypeScript 5.8+ (strict mode; `any` forbidden — use `unknown` + Zod) + `bun:test` (built-in), `age-encryption ^0.3.0`, `simple-git ^3.27.0`, `tar ^7.4.0`, `zod ^3.23.8`, `@iarna/toml ^2.2.5` (001-initial-function-testing)
 
@@ -30,9 +32,9 @@ npm test && npm run lint
 TypeScript 5.8+ (strict mode; `any` forbidden — use `unknown` + Zod): Follow standard conventions
 
 ## Recent Changes
+- 20260405-195011-speckit-dev-docs: Added Markdown documentation plus TypeScript 6.0.0 repository contex + Existing repo toolchain only; authoritative research sources are official spec-kit documentation and the `github/spec-kit` repository
 - 20260405-112827-bunx-release: Added TypeScript 6.0.0 (strict) with Bun 1.3.9 runtime; Node 22.14.0+ and npm 11.5.1+ for trusted publishing + Bun 1.3.9, `citty`, `simple-git`, `zod`, release-please, GitHub Actions, npm registry trusted publishing via OIDC
 - 20260405-112827-bunx-release: Added TypeScript 6.0.0 (strict) with Bun 1.3.9 runtime; Node 22.14.0+ and npm 11.5.1+ for npm trusted publishing + Bun 1.3.9, `citty`, `simple-git`, `zod`, release-please, GitHub Actions, npm registry trusted publishing via OIDC
-- 20260405-091845-improve-project-docs: Added TypeScript 6.x (strict mode) plus Markdown documentation + Bun 1.3.9, `citty ^0.2.2`, `@clack/prompts ^1.2.0`, `simple-git ^3.27.0`, `zod ^4.0.0`
 
 
 <!-- MANUAL ADDITIONS START -->
