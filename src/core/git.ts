@@ -2,11 +2,13 @@ import { mkdir, stat } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import simpleGit, { type SimpleGit } from "simple-git";
 
+/** Options for creating a commit through the GitClient wrapper. */
 export interface CommitOptions {
   message: string;
   addAll?: boolean;
 }
 
+/** Thin repository-scoped wrapper around simple-git for vault workflows. */
 export class GitClient {
   private readonly git: SimpleGit;
 
@@ -14,6 +16,7 @@ export class GitClient {
     this.git = simpleGit(repoDir);
   }
 
+  /** Clone a remote vault into a local working directory and return a bound client. */
   static async clone(remoteUrl: string, targetDir: string, branch = "main"): Promise<GitClient> {
     await mkdir(dirname(targetDir), { recursive: true });
     await simpleGit().clone(remoteUrl, targetDir, ["--branch", branch]);
@@ -40,14 +43,17 @@ export class GitClient {
     await this.git.remote(["add", name, url]);
   }
 
+  /** Pull the latest changes for a remote branch into the current repository. */
   async pull(remote = "origin", branch = "main"): Promise<void> {
     await this.git.pull(remote, branch);
   }
 
+  /** Stage all current repository changes. */
   async addAll(): Promise<void> {
     await this.git.add(".");
   }
 
+  /** Create a commit only when there are staged or unstaged file changes to record. */
   async commit({ message, addAll = true }: CommitOptions): Promise<boolean> {
     if (addAll) {
       await this.addAll();
@@ -62,10 +68,12 @@ export class GitClient {
     return true;
   }
 
+  /** Push the current branch to the configured remote with optional raw git flags. */
   async push(remote = "origin", branch = "main", options: string[] = []): Promise<void> {
     await this.git.push(remote, branch, options);
   }
 
+  /** Return the checked-out local branch name for this repository. */
   async currentBranch(): Promise<string> {
     const branch = await this.git.branchLocal();
     return branch.current;

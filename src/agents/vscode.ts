@@ -6,11 +6,13 @@ import { decryptString } from "../core/encryptor";
 import { redactSecretLiterals } from "../core/sanitizer";
 import { atomicWrite, collect, readIfExists, type SnapshotArtifact } from "./_utils";
 
+/** Snapshot payload for the VS Code adapter. */
 export interface VsCodeSnapshotResult {
   artifacts: SnapshotArtifact[];
   warnings: string[];
 }
 
+/** Collect the VS Code MCP configuration that AgentSync manages. */
 export async function snapshotVsCode(): Promise<VsCodeSnapshotResult> {
   const artifacts: SnapshotArtifact[] = [];
   const warnings: string[] = [];
@@ -36,12 +38,14 @@ export async function snapshotVsCode(): Promise<VsCodeSnapshotResult> {
   return { artifacts, warnings };
 }
 
+/** Restore the synced VS Code MCP configuration file. */
 export async function applyVsCodeMcp(mcpJsonContent: string): Promise<void> {
   await atomicWrite(AgentPaths.vscode.mcpJson, mcpJsonContent);
 }
 
 // ─── Apply (pull side) ────────────────────────────────────────────────────────
 
+/** Read encrypted files from a vault subdirectory, ignoring missing directories. */
 async function readAgeFiles(dir: string): Promise<{ name: string; fullPath: string }[]> {
   try {
     const { readdir } = await import("node:fs/promises");
@@ -57,9 +61,7 @@ async function readAgeFiles(dir: string): Promise<{ name: string; fullPath: stri
   }
 }
 
-/**
- * Decrypt and apply all VS Code vault artifacts to the local machine.
- */
+/** Decrypt and apply all VS Code vault artifacts to the local machine. */
 export async function applyVsCodeVault(
   vaultDir: string,
   key: string,

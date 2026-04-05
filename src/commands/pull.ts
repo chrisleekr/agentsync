@@ -5,6 +5,7 @@ import { loadConfig, resolveConfigPath } from "../config/loader";
 import { GitClient } from "../core/git";
 import { loadPrivateKey, resolveRuntimeContext } from "./shared";
 
+/** Pull the vault, decrypt enabled agent artifacts, and apply them locally. */
 export async function performPull(
   options: { agent?: string; dryRun?: boolean } = {},
 ): Promise<{ applied: number; errors: string[] }> {
@@ -34,6 +35,7 @@ export async function performPull(
   return { applied, errors };
 }
 
+/** CLI wrapper around the pull pipeline with optional agent filtering and dry-run output. */
 export const pullCommand = defineCommand({
   meta: {
     name: "pull",

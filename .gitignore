@@ -1,8 +1,10 @@
 node_modules/
 dist/
+build/
 coverage/
 .DS_Store
 .env
+.env*
 *.log
 .plan
 .agentsync-test-tmp

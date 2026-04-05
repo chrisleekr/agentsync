@@ -13,12 +13,14 @@ import { unlink } from "node:fs/promises";
 import { createConnection, createServer, type Server, type Socket } from "node:net";
 import { resolveDaemonSocketPath } from "../config/paths";
 
+/** Request envelope sent from CLI clients to the daemon IPC server. */
 export interface IpcRequest {
   id: string;
   cmd: string;
   args?: unknown;
 }
 
+/** Response envelope returned by the daemon IPC server. */
 export interface IpcResponse {
   id: string;
   ok: boolean;
@@ -26,18 +28,20 @@ export interface IpcResponse {
   error?: string;
 }
 
+/** Async daemon handler registered for one IPC command name. */
 export type CommandHandler = (args: unknown) => Promise<unknown>;
 
-// ─── Server (runs inside daemon) ───────────────────────────────────────────
-
+/** Minimal newline-delimited JSON IPC server used by the background daemon. */
 export class IpcServer {
   private server: Server | null = null;
   private readonly handlers = new Map<string, CommandHandler>();
 
+  /** Register a handler for one command name. */
   on(cmd: string, handler: CommandHandler): void {
     this.handlers.set(cmd, handler);
   }
 
+  /** Start listening on the daemon socket or named pipe. */
   async listen(socketPath = resolveDaemonSocketPath()): Promise<void> {
     // Remove a stale socket file left by a previous crash so we don't get EADDRINUSE.
     try {
@@ -52,6 +56,7 @@ export class IpcServer {
     });
   }
 
+  /** Stop accepting new IPC connections. */
   close(): void {
     this.server?.close();
   }
@@ -99,9 +104,9 @@ export class IpcServer {
   }
 }
 
-// ─── Client (used by CLI commands to query the daemon) ─────────────────────
-
+/** Minimal IPC client used by CLI commands to talk to the daemon. */
 export class IpcClient {
+  /** Send one command to the daemon and await the matching response envelope. */
   async send(
     cmd: string,
     args?: unknown,

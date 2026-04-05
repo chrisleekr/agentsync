@@ -1,5 +1,6 @@
 import { basename } from "node:path";
 
+/** Global path patterns that AgentSync must never copy into the encrypted vault. */
 export const NEVER_SYNC_PATTERNS = [
   "**/auth.json",
   "**/.credentials.json",
@@ -76,6 +77,7 @@ function looksLikeSecretLiteral(value: string): boolean {
   return SECRET_VALUE_PATTERNS.some((pattern) => pattern.test(value));
 }
 
+/** Recursively replace literal-looking secrets while preserving surrounding structure. */
 export function redactSecretLiterals(
   input: unknown,
   fieldName = "value",
@@ -116,6 +118,7 @@ export function redactSecretLiterals(
   return { value: input, warnings: [] };
 }
 
+/** Keep only Claude hook settings and redact any embedded literal secrets. */
 export function sanitizeClaudeHooks(rawSettingsJson: string): RedactionResult<string> {
   const parsed = JSON.parse(rawSettingsJson) as Record<string, unknown>;
   const hooksOnly = { hooks: parsed.hooks ?? {} };
@@ -126,6 +129,7 @@ export function sanitizeClaudeHooks(rawSettingsJson: string): RedactionResult<st
   };
 }
 
+/** Keep only Claude MCP settings and redact any embedded literal secrets. */
 export function sanitizeClaudeMcp(rawClaudeJson: string): RedactionResult<string> {
   const parsed = JSON.parse(rawClaudeJson) as Record<string, unknown>;
   const mcpOnly = { mcpServers: parsed.mcpServers ?? {} };
@@ -136,6 +140,7 @@ export function sanitizeClaudeMcp(rawClaudeJson: string): RedactionResult<string
   };
 }
 
+/** Derive a stable redaction placeholder name from the original file name. */
 export function redactionEnvNameForPath(path: string): string {
   const file = basename(path).replace(/[^a-zA-Z0-9]+/g, "_");
   return `AGENTSYNC_REDACTED_${file.toUpperCase()}`;

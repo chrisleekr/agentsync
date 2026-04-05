@@ -1,40 +1,94 @@
 # AgentSync
 
-AgentSync is a Bun-based CLI daemon that syncs AI agent global configuration files to an encrypted Git vault.
+![AgentSync logo](docs/agentsync-logo.png)
+
+AgentSync is a Bun-based CLI and background daemon that snapshots AI agent configuration from your machine, encrypts it with age recipients, and stores it in a Git-backed vault so you can pull the same setup onto another machine.
+
+It is for people who keep global agent configuration in tools like Claude, Cursor, Codex, Copilot, and VS Code and want one encrypted source of truth instead of manually copying files between laptops.
+
+## What a vault means here
+
+The vault is a normal Git repository that stores encrypted artifacts such as `claude/CLAUDE.md.age` or `copilot/skills/<name>.tar.age`. AgentSync never pushes plaintext configs. Files that match hard never-sync patterns or contain literal secrets abort the push before encryption.
 
 ## Current implementation status
 
-This repository currently includes a Phase 1 baseline:
+Currently supported:
 
-- Core config loading and schema validation
-- Secret redaction and hard exclusions
-- Claude agent snapshot and apply flow
-- CLI commands: `init`, `push`, `pull`, `status`, `doctor`
-- CI workflow with typecheck, lint, and Bun tests
+- Local config loading, schema validation, and vault path resolution
+- age recipient management for machine-based encryption
+- Push, pull, status, doctor, daemon, and key CLI entry points
+- Agent snapshot and apply flows for Claude, Cursor, Codex, Copilot, and VS Code
+- Secret redaction and never-sync enforcement before artifacts reach the vault
+
+Not yet positioned as a full hosted service:
+
+- No remote conflict UI beyond the CLI flow
+- No web dashboard or multi-user admin surface
+- No runtime API server outside the local daemon IPC channel
+
+## Prerequisites
+
+- Bun 1.3.9 or later
+- A Git remote you control for the encrypted vault
+- An age keypair managed by AgentSync or migrated into the local key path
+- One or more supported agent config directories on the machine you are syncing
+- macOS, Linux, or Windows for daemon installation paths described in the docs
 
 ## Quick start
 
+Install dependencies and verify the repo first:
+
 ```bash
 bun install
-bun run typecheck
-bun run test
-bun run lint
+bun run check
 ```
 
-Initialize:
+Initialize a vault and machine key:
 
 ```bash
 bun run src/cli.ts init --remote git@github.com:<you>/agentsync-vault.git --branch main
 ```
 
-Push Claude artifacts:
+Push local agent configs into the encrypted vault:
 
 ```bash
-bun run src/cli.ts push --agent claude
+bun run src/cli.ts push
 ```
 
-Pull Claude artifacts:
+Pull the vault back onto this machine or a new one:
 
 ```bash
-bun run src/cli.ts pull --agent claude
+bun run src/cli.ts pull
 ```
+
+## Command summary
+
+| Command  | Why you run it                                                                   |
+| -------- | -------------------------------------------------------------------------------- |
+| `init`   | Create the local vault workspace, key, config, and initial remote state          |
+| `push`   | Snapshot local agent configs, redact secrets, encrypt artifacts, and push to Git |
+| `pull`   | Pull the latest vault state and apply decrypted artifacts locally                |
+| `status` | Compare local files with the vault and surface drift                             |
+| `doctor` | Run environment, key, vault, and daemon diagnostics                              |
+| `daemon` | Install or manage background auto-sync                                           |
+| `key`    | Add recipients or rotate the local machine key                                   |
+
+## Documentation
+
+- [Development guide](docs/development.md): contributor setup, local workflow, and verification steps
+- [Architecture guide](docs/architecture.md): module map, sync flow, security boundaries, and daemon design
+- [Maintenance guide](docs/maintenance.md): when docs and JSDoc must change, plus review checkpoints
+- [Command reference](docs/command-reference.md): supported commands, inputs, outcomes, caveats, and support-state notes
+- [Troubleshooting guide](docs/troubleshooting.md): common setup, key, remote, and daemon failures with next actions
+
+## Safety notes
+
+- Treat the private key file as recoverability-critical material. Back it up outside the vault.
+- Do not paste literal API keys or tokens into synced config. AgentSync aborts pushes when it detects them.
+- Use the command reference and troubleshooting guide when a workflow is partially supported or platform-specific instead of assuming parity across all agents.
+
+## Next steps
+
+If you are evaluating the project, start with [docs/development.md](docs/development.md).
+If you want the system model before changing code, read [docs/architecture.md](docs/architecture.md).
+If you are modifying commands or agent integrations, read [docs/maintenance.md](docs/maintenance.md) before opening a PR.

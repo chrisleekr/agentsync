@@ -10,11 +10,13 @@ import { applyCursorVault, snapshotCursor } from "./cursor";
 import type { VsCodeSnapshotResult } from "./vscode";
 import { applyVsCodeVault, snapshotVsCode } from "./vscode";
 
+/** Supported agent adapters that can snapshot to and restore from the vault. */
 export type AgentName = "cursor" | "claude" | "codex" | "copilot" | "vscode";
 
 // Re-export canonical snapshot types so callers only need to import from registry.
 export type { SnapshotArtifact, SnapshotResult };
 
+/** Common contract that every agent adapter must satisfy. */
 export interface AgentDefinition {
   name: AgentName;
   snapshot: () => Promise<SnapshotResult>;
@@ -25,6 +27,7 @@ export interface AgentDefinition {
   apply: (vaultDir: string, key: string, dryRun: boolean) => Promise<void>;
 }
 
+/** Ordered registry used by commands to iterate over every supported agent adapter. */
 export const Agents: AgentDefinition[] = [
   {
     name: "claude",

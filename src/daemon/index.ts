@@ -8,12 +8,15 @@ import { AgentPaths } from "../config/paths";
 import { IpcServer } from "../core/ipc";
 import { Watcher } from "../core/watcher";
 
+/** Delegate pull requests through the shared command pipeline used by the CLI. */
 async function runPull(): Promise<{ applied: number; errors: string[] }> {
   return performPull();
 }
 
+/** Format daemon log timestamps consistently across lifecycle events. */
 const ts = () => new Date().toISOString();
 
+/** Start the IPC server, file watchers, and periodic pull loop for background sync. */
 export async function startDaemon(): Promise<void> {
   const runtime = await resolveRuntimeContext();
   const config = await loadConfig(resolveConfigPath(runtime.vaultDir));

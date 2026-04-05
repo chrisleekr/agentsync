@@ -3,12 +3,14 @@ import { hostname } from "node:os";
 import { join } from "node:path";
 import { resolveAgentSyncHome } from "../config/paths";
 
+/** Runtime paths and machine identity resolved from the local environment. */
 export interface RuntimeContext {
   vaultDir: string;
   privateKeyPath: string;
   machineName: string;
 }
 
+/** Resolve the working directories and machine label that all commands share. */
 export async function resolveRuntimeContext(): Promise<RuntimeContext> {
   const baseDir = resolveAgentSyncHome();
   await mkdir(baseDir, { recursive: true });
@@ -22,6 +24,7 @@ export async function resolveRuntimeContext(): Promise<RuntimeContext> {
   };
 }
 
+/** Read the local age identity and trim trailing newlines before use. */
 export async function loadPrivateKey(path: string): Promise<string> {
   const key = await readFile(path, "utf8");
   return key.trim();

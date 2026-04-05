@@ -3,6 +3,7 @@ import { dirname, join } from "node:path";
 import { parse, stringify } from "@iarna/toml";
 import { type AgentSyncConfig, AgentSyncConfigSchema } from "./schema";
 
+/** Read and validate the vault config, stripping TOML symbol metadata before Zod parsing. */
 export async function loadConfig(configPath: string): Promise<AgentSyncConfig> {
   const raw = await readFile(configPath, "utf8");
   const parsed = parse(raw) as unknown;
@@ -12,12 +13,14 @@ export async function loadConfig(configPath: string): Promise<AgentSyncConfig> {
   return AgentSyncConfigSchema.parse(structuredClone(parsed));
 }
 
+/** Persist a validated config object back to the canonical agentsync TOML location. */
 export async function writeConfig(configPath: string, config: AgentSyncConfig): Promise<void> {
   await mkdir(dirname(configPath), { recursive: true });
   const serialized = stringify(config as unknown as Parameters<typeof stringify>[0]);
   await writeFile(configPath, serialized, "utf8");
 }
 
+/** Build the canonical config path inside a vault directory. */
 export function resolveConfigPath(vaultDir: string): string {
   return join(vaultDir, "agentsync.toml");
 }

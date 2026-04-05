@@ -14,6 +14,7 @@ const execFileAsync = promisify(execFile);
 
 const TASK_NAME = "AgentSync";
 
+/** Build the Task Scheduler XML definition for the current executable. */
 function buildXml(executablePath: string): string {
   const escapedPath = executablePath
     .replace(/&/g, "&amp;")
@@ -50,6 +51,7 @@ function buildXml(executablePath: string): string {
 `;
 }
 
+/** Install and start the Windows scheduled task that runs the daemon at logon. */
 export async function installWindows(executablePath: string): Promise<void> {
   const xml = buildXml(executablePath);
   const tmpXml = `${process.env.TEMP ?? "C:\\Temp"}\\agentsync-task.xml`;
@@ -76,6 +78,7 @@ export async function installWindows(executablePath: string): Promise<void> {
   await execFileAsync("schtasks", ["/Run", "/TN", TASK_NAME]);
 }
 
+/** Stop and delete the Windows scheduled task if it exists. */
 export async function uninstallWindows(): Promise<void> {
   try {
     await execFileAsync("schtasks", ["/End", "/TN", TASK_NAME]);
@@ -87,14 +90,17 @@ export async function uninstallWindows(): Promise<void> {
   log.success(`Removed Windows scheduled task: ${TASK_NAME}`);
 }
 
+/** Start the installed Windows scheduled task immediately. */
 export async function startWindows(): Promise<void> {
   await execFileAsync("schtasks", ["/Run", "/TN", TASK_NAME]);
 }
 
+/** Stop the running Windows scheduled task instance. */
 export async function stopWindows(): Promise<void> {
   await execFileAsync("schtasks", ["/End", "/TN", TASK_NAME]);
 }
 
+/** Check whether the Windows scheduled task already exists. */
 export async function isInstalledWindows(): Promise<boolean> {
   try {
     await execFileAsync("schtasks", ["/Query", "/TN", TASK_NAME]);

@@ -5,6 +5,7 @@ import { AgentPaths } from "../config/paths";
 import { redactSecretLiterals, shouldNeverSync } from "../core/sanitizer";
 import { atomicWrite, collect, readIfExists, type SnapshotArtifact } from "./_utils";
 
+/** Snapshot payload for the Cursor adapter. */
 export interface CursorSnapshotResult {
   artifacts: SnapshotArtifact[];
   warnings: string[];
@@ -28,6 +29,7 @@ async function readCursorRules(): Promise<string | null> {
   }
 }
 
+/** Collect Cursor rules, MCP config, and commands that are safe to sync. */
 export async function snapshotCursor(): Promise<CursorSnapshotResult> {
   const artifacts: SnapshotArtifact[] = [];
   const warnings: string[] = [];
@@ -105,6 +107,7 @@ export async function applyCursorMcp(mcpJsonContent: string): Promise<void> {
   await atomicWrite(AgentPaths.cursor.mcpGlobal, mcpJsonContent);
 }
 
+/** Restore one Cursor command markdown file from the vault. */
 export async function applyCursorCommand(commandName: string, content: string): Promise<void> {
   const target = join(AgentPaths.cursor.commandsDir, commandName);
   await mkdir(AgentPaths.cursor.commandsDir, { recursive: true });
@@ -115,6 +118,7 @@ export async function applyCursorCommand(commandName: string, content: string): 
 
 import { decryptString } from "../core/encryptor";
 
+/** Read encrypted files from a vault subdirectory, ignoring missing directories. */
 async function readAgeFiles(dir: string): Promise<{ name: string; fullPath: string }[]> {
   try {
     const names = await readdir(dir);
@@ -129,9 +133,7 @@ async function readAgeFiles(dir: string): Promise<{ name: string; fullPath: stri
   }
 }
 
-/**
- * Decrypt and apply all Cursor vault artifacts to the local machine.
- */
+/** Decrypt and apply all Cursor vault artifacts to the local machine. */
 export async function applyCursorVault(
   vaultDir: string,
   key: string,

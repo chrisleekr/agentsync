@@ -6,11 +6,13 @@ import { shouldNeverSync } from "../core/sanitizer";
 import { archiveDirectory, extractArchive } from "../core/tar";
 import { atomicWrite, readIfExists, type SnapshotArtifact } from "./_utils";
 
+/** Snapshot payload for the Copilot adapter. */
 export interface CopilotSnapshotResult {
   artifacts: SnapshotArtifact[];
   warnings: string[];
 }
 
+/** Check whether an optional skill directory sentinel file exists. */
 async function fileExists(path: string): Promise<boolean> {
   try {
     await stat(path);
@@ -20,6 +22,7 @@ async function fileExists(path: string): Promise<boolean> {
   }
 }
 
+/** Collect Copilot instructions, prompts, skills, and agents into vault artifacts. */
 export async function snapshotCopilot(): Promise<CopilotSnapshotResult> {
   const artifacts: SnapshotArtifact[] = [];
   const warnings: string[] = [];
@@ -122,10 +125,12 @@ export async function snapshotCopilot(): Promise<CopilotSnapshotResult> {
   return { artifacts, warnings };
 }
 
+/** Restore the legacy single-file Copilot instructions entry point. */
 export async function applyCopilotInstructions(content: string): Promise<void> {
   await atomicWrite(AgentPaths.copilot.instructionsFile, content);
 }
 
+/** Restore one Copilot instruction file from the vault. */
 export async function applyCopilotInstructionFile(
   fileName: string,
   content: string,
@@ -135,15 +140,14 @@ export async function applyCopilotInstructionFile(
   await atomicWrite(target, content);
 }
 
+/** Restore one Copilot prompt file from the vault. */
 export async function applyCopilotPrompt(fileName: string, content: string): Promise<void> {
   const target = join(AgentPaths.copilot.promptsDir, fileName);
   await mkdir(AgentPaths.copilot.promptsDir, { recursive: true });
   await atomicWrite(target, content);
 }
 
-/**
- * Extract a tar-archived (base64-encoded) skill directory into the skills dir.
- */
+/** Extract one archived Copilot skill directory into the local skills folder. */
 export async function applyCopilotSkill(skillName: string, base64Tar: string): Promise<void> {
   const targetDir = join(AgentPaths.copilot.skillsDir, skillName);
   await mkdir(targetDir, { recursive: true });
@@ -151,6 +155,7 @@ export async function applyCopilotSkill(skillName: string, base64Tar: string): P
   await extractArchive(tarBuffer, targetDir);
 }
 
+/** Extract one archived Copilot agent directory into the local agents folder. */
 export async function applyCopilotAgent(agentName: string, base64Tar: string): Promise<void> {
   const targetDir = join(AgentPaths.copilot.agentsDir, agentName);
   await mkdir(targetDir, { recursive: true });
@@ -163,6 +168,7 @@ export async function applyCopilotAgent(agentName: string, base64Tar: string): P
 import { readdir as _readdir, readFile } from "node:fs/promises";
 import { decryptString } from "../core/encryptor";
 
+/** Read encrypted files from a vault subdirectory, ignoring missing directories. */
 async function readAgeFiles(dir: string): Promise<{ name: string; fullPath: string }[]> {
   try {
     const names = await _readdir(dir);
@@ -177,9 +183,7 @@ async function readAgeFiles(dir: string): Promise<{ name: string; fullPath: stri
   }
 }
 
-/**
- * Decrypt and apply all Copilot vault artifacts to the local machine.
- */
+/** Decrypt and apply all Copilot vault artifacts to the local machine. */
 export async function applyCopilotVault(
   vaultDir: string,
   key: string,

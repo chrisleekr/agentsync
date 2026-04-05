@@ -5,11 +5,13 @@ import { AgentPaths } from "../config/paths";
 import { sanitizeClaudeHooks, sanitizeClaudeMcp, shouldNeverSync } from "../core/sanitizer";
 import { atomicWrite, collect, readIfExists, type SnapshotArtifact } from "./_utils";
 
+/** Snapshot payload for the Claude adapter. */
 export interface ClaudeSnapshotResult {
   artifacts: SnapshotArtifact[];
   warnings: string[];
 }
 
+/** Collect Claude files that are safe to store in the encrypted vault. */
 export async function snapshotClaude(): Promise<ClaudeSnapshotResult> {
   const artifacts: SnapshotArtifact[] = [];
   const warnings: string[] = [];
@@ -89,10 +91,12 @@ export async function snapshotClaude(): Promise<ClaudeSnapshotResult> {
   return { artifacts, warnings };
 }
 
+/** Restore the shared CLAUDE.md prompt file from the vault. */
 export async function applyClaudeMd(content: string): Promise<void> {
   await atomicWrite(AgentPaths.claude.claudeMd, content);
 }
 
+/** Merge synced Claude hooks back into the local settings file. */
 export async function applyClaudeHooks(hooksJsonContent: string): Promise<void> {
   const existingRaw = await readIfExists(AgentPaths.claude.settingsJson);
   const existing = existingRaw ? (JSON.parse(existingRaw) as Record<string, unknown>) : {};
@@ -101,6 +105,7 @@ export async function applyClaudeHooks(hooksJsonContent: string): Promise<void> 
   await atomicWrite(AgentPaths.claude.settingsJson, `${JSON.stringify(existing, null, 2)}\n`);
 }
 
+/** Merge synced Claude MCP servers back into the local Claude config file. */
 export async function applyClaudeMcp(claudeJsonContent: string): Promise<void> {
   const existingRaw = await readIfExists(AgentPaths.claude.mcpJson);
   const existing = existingRaw ? (JSON.parse(existingRaw) as Record<string, unknown>) : {};
@@ -109,6 +114,7 @@ export async function applyClaudeMcp(claudeJsonContent: string): Promise<void> {
   await atomicWrite(AgentPaths.claude.mcpJson, `${JSON.stringify(existing, null, 2)}\n`);
 }
 
+/** Preserve the previous command or agent file before overwrite during apply. */
 export async function ensureCommandBackup(path: string): Promise<void> {
   try {
     await stat(path);
@@ -118,6 +124,7 @@ export async function ensureCommandBackup(path: string): Promise<void> {
   }
 }
 
+/** Restore one Claude command markdown file from the vault. */
 export async function applyClaudeCommand(commandName: string, content: string): Promise<void> {
   const target = join(AgentPaths.claude.commandsDir, commandName);
   await mkdir(AgentPaths.claude.commandsDir, { recursive: true });
@@ -125,6 +132,7 @@ export async function applyClaudeCommand(commandName: string, content: string): 
   await atomicWrite(target, content);
 }
 
+/** Restore one Claude agent definition markdown file from the vault. */
 export async function applyClaudeAgent(agentName: string, content: string): Promise<void> {
   const target = join(AgentPaths.claude.agentsDir, agentName);
   await mkdir(AgentPaths.claude.agentsDir, { recursive: true });
@@ -138,6 +146,7 @@ import { readdir as _readdir } from "node:fs/promises";
 import { basename } from "node:path";
 import { decryptString } from "../core/encryptor";
 
+/** Read encrypted files from a vault subdirectory, ignoring missing directories. */
 async function readAgeFiles(dir: string): Promise<{ name: string; fullPath: string }[]> {
   try {
     const names = await _readdir(dir);
@@ -152,10 +161,7 @@ async function readAgeFiles(dir: string): Promise<{ name: string; fullPath: stri
   }
 }
 
-/**
- * Decrypt and apply all Claude vault artifacts to the local machine.
- * This is the counterpart to `snapshotClaude()` and drives the pull pipeline.
- */
+/** Decrypt and apply all Claude vault artifacts to the local machine. */
 export async function applyClaudeVault(
   vaultDir: string,
   key: string,

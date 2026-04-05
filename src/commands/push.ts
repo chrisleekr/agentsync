@@ -9,6 +9,7 @@ import { GitClient } from "../core/git";
 import { shouldNeverSync } from "../core/sanitizer";
 import { resolveRuntimeContext } from "./shared";
 
+/** Snapshot local agent state, encrypt it, and publish the resulting vault changes. */
 export async function performPush(
   options: { agent?: string; dryRun?: boolean; message?: string } = {},
 ): Promise<{ pushed: number; errors: string[] }> {
@@ -133,6 +134,7 @@ export async function performPush(
   return { pushed, errors: [...errors, ...allWarnings] };
 }
 
+/** CLI wrapper around the push pipeline with dry-run and commit-message controls. */
 export const pushCommand = defineCommand({
   meta: {
     name: "push",
