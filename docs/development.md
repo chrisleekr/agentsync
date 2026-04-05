@@ -4,6 +4,9 @@
 
 Use this guide when you need to run AgentSync locally, verify a change, or understand the contributor workflow without reading the source tree first.
 
+This guide is for contributor-from-source work from a local clone.
+If you want to run a published release, start in [../README.md](../README.md) and [command-reference.md](command-reference.md) instead.
+
 ## Prerequisites
 
 - Bun 1.3.9 or later
@@ -15,7 +18,7 @@ If you use `nvm`, run `nvm use` at the repo root.
 
 If you use Volta, the project pin in `package.json` should switch you to the expected Node version automatically.
 
-This guide is for contributor-from-source work. The published CLI path is documented separately in [../README.md](../README.md) and [command-reference.md](command-reference.md).
+This guide is for contributor-from-source work. Do not use `bun run src/cli.ts ...` as the default command path for a published release. The published CLI path is documented separately in [../README.md](../README.md) and [command-reference.md](command-reference.md).
 
 ## Install and verify
 

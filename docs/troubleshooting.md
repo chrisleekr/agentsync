@@ -4,6 +4,9 @@
 
 Use this guide when AgentSync setup or sync behavior fails and you need the next diagnostic step quickly, not a long theory dump.
 
+This guide primarily assumes contributor-from-source execution from a local clone.
+If you are using a published release, start in [../README.md](../README.md) and [command-reference.md](command-reference.md), then translate any `bun run src/cli.ts <command>` example here to `bunx --package @chrisleekr/agentsync agentsync <command>`.
+
 ## `init` failed or the vault did not push
 
 Check:
