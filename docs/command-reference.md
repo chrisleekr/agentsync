@@ -8,10 +8,19 @@ This guide is the concise lookup surface for supported AgentSync commands. Use i
 
 Use the published CLI path only after the version you want appears in both the npm package registry and the GitHub Releases list.
 
+Use this guide when you are running a published release through `bunx`.
+If you are working from a local clone or testing unreleased changes, use the source-based commands in [development.md](development.md) instead.
+
 Released CLI verification command:
 
 ```bash
 bunx --package @chrisleekr/agentsync agentsync --version
+```
+
+Published command pattern:
+
+```bash
+bunx --package @chrisleekr/agentsync agentsync <command> [options]
 ```
 
 Use the GitHub Release record as the canonical source for:
@@ -37,7 +46,7 @@ If you are running from a local clone instead of the published package, use the 
 **Typical usage**:
 
 ```bash
-agentsync init --remote <git-url> --branch main
+bunx --package @chrisleekr/agentsync agentsync init --remote <git-url> --branch main
 ```
 
 **Needs**: remote URL, optional branch, writable local runtime directory.
@@ -56,8 +65,8 @@ agentsync init --remote <git-url> --branch main
 **Typical usage**:
 
 ```bash
-agentsync push
-agentsync push --agent claude
+bunx --package @chrisleekr/agentsync agentsync push
+bunx --package @chrisleekr/agentsync agentsync push --agent claude
 ```
 
 **Needs**: initialized vault, configured recipients, readable local agent config.
@@ -77,8 +86,8 @@ agentsync push --agent claude
 **Typical usage**:
 
 ```bash
-agentsync pull
-agentsync pull --agent cursor
+bunx --package @chrisleekr/agentsync agentsync pull
+bunx --package @chrisleekr/agentsync agentsync pull --agent cursor
 ```
 
 **Needs**: initialized vault, readable private key, reachable Git remote.
@@ -97,8 +106,8 @@ agentsync pull --agent cursor
 **Typical usage**:
 
 ```bash
-agentsync status
-agentsync status --verbose
+bunx --package @chrisleekr/agentsync agentsync status
+bunx --package @chrisleekr/agentsync agentsync status --verbose
 ```
 
 **Outcome**: table of synced, local-only, vault-only, changed, or error states.
@@ -110,7 +119,7 @@ agentsync status --verbose
 **Typical usage**:
 
 ```bash
-agentsync doctor
+bunx --package @chrisleekr/agentsync agentsync doctor
 ```
 
 **Checks include**:
@@ -129,8 +138,8 @@ agentsync doctor
 **Typical usage**:
 
 ```bash
-agentsync daemon install
-agentsync daemon status
+bunx --package @chrisleekr/agentsync agentsync daemon install
+bunx --package @chrisleekr/agentsync agentsync daemon status
 ```
 
 **Outcome**: manages the OS-specific wrapper around `daemon _run`.
@@ -147,8 +156,8 @@ agentsync daemon status
 **Typical usage**:
 
 ```bash
-agentsync key add <name> <age-public-key>
-agentsync key rotate
+bunx --package @chrisleekr/agentsync agentsync key add <name> <age-public-key>
+bunx --package @chrisleekr/agentsync agentsync key rotate
 ```
 
 **Outcome**: the vault is re-encrypted for the updated recipient set.
