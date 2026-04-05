@@ -87,6 +87,14 @@ export const keyCommand = defineCommand({
           });
           const refreshedConfig = await loadConfig(configPath);
 
+          if (refreshedConfig.recipients[name]) {
+            log.error(
+              `Recipient '${name}' already exists. Use a different name or remove it first.`,
+            );
+            process.exitCode = 1;
+            return;
+          }
+
           refreshedConfig.recipients[name] = pubkey;
           await writeConfig(configPath, refreshedConfig);
 
@@ -156,30 +164,35 @@ export const keyCommand = defineCommand({
           const newIdentity = await generateIdentity();
           const newRecipient = await identityToRecipient(newIdentity);
 
-          config.recipients[machineName] = newRecipient;
-          await writeConfig(configPath, config);
-
-          const { open } = await import("node:fs/promises");
-          const fh = await open(runtime.privateKeyPath, "w", 0o600);
-          await fh.writeFile(`${newIdentity}\n`, "utf8");
-          await fh.close();
-
-          const allRecipients = Object.values(config.recipients);
+          const nextConfig = structuredClone(config);
+          nextConfig.recipients[machineName] = newRecipient;
+          const allRecipients = Object.values(nextConfig.recipients);
           const ageFiles = await findAgeFiles(runtime.vaultDir);
+          const rewrittenFiles = new Map<string, string>();
 
           for (const filePath of ageFiles) {
             const encrypted = await readFile(filePath, "utf8");
             const decrypted = await decryptString(encrypted, oldKey);
             const reEncrypted = await encryptString(decrypted, allRecipients);
+            rewrittenFiles.set(filePath, reEncrypted);
+          }
+
+          for (const [filePath, reEncrypted] of rewrittenFiles) {
             await writeFile(filePath, reEncrypted, "utf8");
           }
+
+          await writeFile(runtime.privateKeyPath, `${newIdentity}\n`, {
+            encoding: "utf8",
+            mode: 0o600,
+          });
+          await writeConfig(configPath, nextConfig);
 
           await git.addAll();
           const committed = await git.commit({ message: `key: rotate ${machineName}` });
           if (committed) {
             await git.push(
               "origin",
-              config.remote.branch,
+              nextConfig.remote.branch,
               reconciliation.status === "remote-missing" ? ["--set-upstream"] : [],
             );
           }

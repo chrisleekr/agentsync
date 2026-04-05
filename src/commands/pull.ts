@@ -5,7 +5,11 @@ import { loadConfig, resolveConfigPath } from "../config/loader";
 import { GitClient } from "../core/git";
 import { loadPrivateKey, resolveRuntimeContext } from "./shared";
 
-/** Pull the vault, decrypt enabled agent artifacts, and apply them locally. */
+/**
+ * Pull the vault, decrypt enabled agent artifacts, and apply them locally.
+ * @param options Optional agent filter and dry-run mode.
+ * @returns The number of applied agents, collected errors, and whether the run failed fatally.
+ */
 export async function performPull(
   options: { agent?: string; dryRun?: boolean } = {},
 ): Promise<{ applied: number; errors: string[]; fatal: boolean }> {

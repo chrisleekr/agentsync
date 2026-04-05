@@ -16,8 +16,8 @@
 
 **Purpose**: Prepare the shared multi-machine test fixtures and integration harness needed by all stories.
 
-- [X] T001 [P] Extend multi-machine bare-repo and divergent-history fixture support in `src/test-helpers/fixtures.ts`
-- [X] T002 [P] Refactor shared runtime-environment setup helpers for multi-machine sync scenarios in `src/commands/__tests__/integration.test.ts`
+- [x] T001 [P] Extend multi-machine bare-repo and divergent-history fixture support in `src/test-helpers/fixtures.ts`
+- [x] T002 [P] Refactor shared runtime-environment setup helpers for multi-machine sync scenarios in `src/commands/__tests__/integration.test.ts`
 
 ---
 
@@ -27,8 +27,8 @@
 
 **⚠️ CRITICAL**: No user story should be considered complete until T003-T004 are done.
 
-- [X] T003 Implement remote-state inspection, fast-forward-only update helpers, and typed reconciliation errors in `src/core/git.ts`
-- [X] T004 Add unit coverage for empty remote, existing remote, fast-forward update, and divergence cases in `src/core/__tests__/git.test.ts`
+- [x] T003 Implement remote-state inspection, fast-forward-only update helpers, and typed reconciliation errors in `src/core/git.ts`
+- [x] T004 Add unit coverage for empty remote, existing remote, fast-forward update, and divergence cases in `src/core/__tests__/git.test.ts`
 
 **Checkpoint**: The repository has one explicit Git reconciliation policy that command-layer code can reuse consistently.
 
@@ -42,16 +42,16 @@
 
 ### Tests for User Story 1
 
-- [X] T005 [US1] Add integration coverage for empty-remote init success, existing-remote bootstrap success, and bootstrap failure messaging in `src/commands/__tests__/integration.test.ts`
+- [x] T005 [US1] Add integration coverage for empty-remote init success, existing-remote bootstrap success, and bootstrap failure messaging in `src/commands/__tests__/integration.test.ts`
 
 ### Implementation for User Story 1
 
-- [X] T006 [US1] Rework existing-vault bootstrap sequencing to align local repository state before writing machine-specific history in `src/commands/init.ts`
-- [X] T007 [US1] Preserve recipient/config merging while applying the new bootstrap path in `src/commands/init.ts`
-- [X] T008 [US1] Tighten `init` success and error messaging so partial bootstrap states do not report full initialization in `src/commands/init.ts`
-- [X] T009 [P] [US1] Update existing-vault bootstrap and empty-remote distinction in `docs/command-reference.md`
-- [X] T010 [P] [US1] Add second-machine bootstrap failure and recovery guidance in `docs/troubleshooting.md`
-- [X] T011 [US1] Align entry-point setup guidance for existing-vault bootstrap semantics in `README.md`
+- [x] T006 [US1] Rework existing-vault bootstrap sequencing to align local repository state before writing machine-specific history in `src/commands/init.ts`
+- [x] T007 [US1] Preserve recipient/config merging while applying the new bootstrap path in `src/commands/init.ts`
+- [x] T008 [US1] Tighten `init` success and error messaging so partial bootstrap states do not report full initialization in `src/commands/init.ts`
+- [x] T009 [P] [US1] Update existing-vault bootstrap and empty-remote distinction in `docs/command-reference.md`
+- [x] T010 [P] [US1] Add second-machine bootstrap failure and recovery guidance in `docs/troubleshooting.md`
+- [x] T011 [US1] Align entry-point setup guidance for existing-vault bootstrap semantics in `README.md`
 
 **Checkpoint**: User Story 1 is complete when a second machine can initialize against an existing remote vault on the first attempt without creating divergent local-first history.
 
@@ -65,16 +65,16 @@
 
 ### Tests for User Story 2
 
-- [X] T012 [US2] Add integration coverage for divergent `pull` failures, no-success-footer behavior, and one additional shared-policy consumer in `src/commands/__tests__/integration.test.ts`
+- [x] T012 [US2] Add integration coverage for divergent `pull` failures, no-success-footer behavior, and one additional shared-policy consumer in `src/commands/__tests__/integration.test.ts`
 
 ### Implementation for User Story 2
 
-- [X] T013 [US2] Apply shared fast-forward-only reconciliation and hard-failure command outcomes in `src/commands/pull.ts`
-- [X] T014 [P] [US2] Apply shared reconciliation and controlled failure handling before vault writes in `src/commands/push.ts`
-- [X] T015 [P] [US2] Apply shared reconciliation and controlled failure handling before re-encryption in `src/commands/key.ts`
-- [X] T016 [US2] Align daemon-triggered pull and push behavior with the command-layer reconciliation policy in `src/daemon/index.ts`
-- [X] T017 [US2] Update divergence behavior and recovery guidance in `docs/command-reference.md` and `docs/troubleshooting.md`
-- [X] T018 [US2] Update the sync-flow explanation and Mermaid workflow coverage in `docs/architecture.md`
+- [x] T013 [US2] Apply shared fast-forward-only reconciliation and hard-failure command outcomes in `src/commands/pull.ts`
+- [x] T014 [P] [US2] Apply shared reconciliation and controlled failure handling before vault writes in `src/commands/push.ts`
+- [x] T015 [P] [US2] Apply shared reconciliation and controlled failure handling before re-encryption in `src/commands/key.ts`
+- [x] T016 [US2] Align daemon-triggered pull and push behavior with the command-layer reconciliation policy in `src/daemon/index.ts`
+- [x] T017 [US2] Update divergence behavior and recovery guidance in `docs/command-reference.md` and `docs/troubleshooting.md`
+- [x] T018 [US2] Update the sync-flow explanation and Mermaid workflow coverage in `docs/architecture.md`
 
 **Checkpoint**: User Story 2 is complete when divergence is handled consistently across manual and background sync flows and no failing reconciliation path reports success.
 
@@ -88,8 +88,8 @@
 
 ### Implementation for User Story 3
 
-- [X] T019 [US3] Perform a final consistency validation pass across `README.md`, `docs/command-reference.md`, `docs/troubleshooting.md`, and `docs/architecture.md` against the already-implemented reconciliation behavior
-- [X] T020 [US3] Verify maintainer-facing consistency between repository docs, `specs/20260405-223110-fix-recipient-sync/quickstart.md`, and `specs/20260405-223110-fix-recipient-sync/contracts/vault-sync-workflow.md`
+- [x] T019 [US3] Perform a final consistency validation pass across `README.md`, `docs/command-reference.md`, `docs/troubleshooting.md`, and `docs/architecture.md` against the already-implemented reconciliation behavior
+- [x] T020 [US3] Verify maintainer-facing consistency between repository docs, `specs/20260405-223110-fix-recipient-sync/quickstart.md`, and `specs/20260405-223110-fix-recipient-sync/contracts/vault-sync-workflow.md`
 
 **Checkpoint**: User Story 3 is complete when the public docs and architecture explanation describe the same bootstrap and recovery workflow as the implemented command behavior.
 
@@ -99,11 +99,18 @@
 
 **Purpose**: Run final verification across implementation, documentation, and reviewer walkthrough artifacts.
 
-- [X] T021 [P] Validate Mermaid diagrams changed by this feature in `docs/architecture.md` and `specs/20260405-223110-fix-recipient-sync/quickstart.md`
-- [X] T022 [P] Execute the reviewer walkthrough in `specs/20260405-223110-fix-recipient-sync/quickstart.md`
-- [X] T023 [P] Verify the implemented behavior against `specs/20260405-223110-fix-recipient-sync/contracts/vault-sync-workflow.md`
-- [X] T024 [P] Execute a timed manual validation from `specs/20260405-223110-fix-recipient-sync/quickstart.md` confirming a reviewer can identify the divergence blocker and required recovery action within 60 seconds for SC-002
-- [ ] T025 Run `bun run check` from the repository root
+- [x] T021 [P] Validate Mermaid diagrams changed by this feature in `docs/architecture.md` and `specs/20260405-223110-fix-recipient-sync/quickstart.md`
+- [x] T022 [P] Execute the reviewer walkthrough in `specs/20260405-223110-fix-recipient-sync/quickstart.md`
+- [x] T023 [P] Verify the implemented behavior against `specs/20260405-223110-fix-recipient-sync/contracts/vault-sync-workflow.md`
+- [x] T024 [P] Execute a timed manual validation from `specs/20260405-223110-fix-recipient-sync/quickstart.md` confirming a reviewer can identify the blocker category, blocked sync action, and required recovery action within 60 seconds for SC-002
+- [x] T025 [P] Fix exact remote ref inspection and mismatched remote URL handling in `src/core/git.ts` and `src/core/__tests__/git.test.ts`
+- [x] T026 [P] Re-check recipient aliases after reconciliation and make key rotation transactional in `src/commands/key.ts` and `src/commands/__tests__/integration.test.ts`
+- [x] T027 [P] Replace hand-written TOML fixture setup and clarify pre-fix reproduction guidance in `src/commands/__tests__/integration.test.ts` and `specs/20260405-223110-fix-recipient-sync/quickstart.md`
+- [x] T028 [P] Execute targeted regression verification in `src/core/__tests__/git.test.ts` and `src/commands/__tests__/integration.test.ts`
+- [x] T029 [P] Run `bun test --coverage` and confirm touched modules satisfy constitution thresholds
+- [x] T030 [P] Update or verify JSDoc for exported symbols changed in `src/core/git.ts`, `src/commands/key.ts`, `src/commands/pull.ts`, `src/commands/push.ts`, and `src/daemon/index.ts`
+- [ ] T031 Run `bun run check` from the repository root as the final repository-wide verification gate
+- [x] T032 If T031 fails only because local npm is below `11.5.1`, record the blocker evidence from `src/commands/__tests__/packaging.test.ts` and mark it as an environment issue rather than unresolved feature behavior
 
 ---
 
@@ -116,7 +123,7 @@
 - **Phase 3 (US1)**: Starts after Phase 2; delivers the existing-vault bootstrap MVP.
 - **Phase 4 (US2)**: Starts after Phase 2; depends on the shared Git reconciliation helpers from T003-T004.
 - **Phase 5 (US3)**: Starts after the paired runtime-and-documentation work in US1 and US2; focuses on final consistency validation and harmonization.
-- **Phase 6 (Polish)**: Starts after all desired user stories are complete.
+- **Phase 6 (Polish)**: Starts after all desired user stories are complete and now includes review-remediation tasks, coverage and JSDoc compliance checks, and the final repository-wide gate.
 
 ### User Story Dependencies
 
@@ -136,7 +143,8 @@
 
 - T001 and T002 can run in parallel during Setup.
 - T014 and T015 can run in parallel during US2 because they modify different files.
-- T021, T022, T023, and T024 can run in parallel during Polish before T025.
+- T021, T022, T023, T024, T025, T026, T027, T028, T029, and T030 can run in parallel during Polish before T031.
+- T032 runs only if T031 fails solely because the local npm version does not satisfy the packaging test contract.
 
 ---
 
@@ -155,7 +163,13 @@ Task: "Apply shared reconciliation and controlled failure handling before re-enc
 Task: "Validate Mermaid diagrams changed by this feature in `docs/architecture.md` and `specs/20260405-223110-fix-recipient-sync/quickstart.md`"
 Task: "Execute the reviewer walkthrough in `specs/20260405-223110-fix-recipient-sync/quickstart.md`"
 Task: "Verify the implemented behavior against `specs/20260405-223110-fix-recipient-sync/contracts/vault-sync-workflow.md`"
-Task: "Execute a timed manual validation from `specs/20260405-223110-fix-recipient-sync/quickstart.md` confirming a reviewer can identify the divergence blocker and required recovery action within 60 seconds for SC-002"
+Task: "Execute a timed manual validation from `specs/20260405-223110-fix-recipient-sync/quickstart.md` confirming a reviewer can identify the blocker category, blocked sync action, and required recovery action within 60 seconds for SC-002"
+Task: "Fix exact remote ref inspection and mismatched remote URL handling in `src/core/git.ts` and `src/core/__tests__/git.test.ts`"
+Task: "Re-check recipient aliases after reconciliation and make key rotation transactional in `src/commands/key.ts` and `src/commands/__tests__/integration.test.ts`"
+Task: "Replace hand-written TOML fixture setup and clarify pre-fix reproduction guidance in `src/commands/__tests__/integration.test.ts` and `specs/20260405-223110-fix-recipient-sync/quickstart.md`"
+Task: "Execute targeted regression verification in `src/core/__tests__/git.test.ts` and `src/commands/__tests__/integration.test.ts`"
+Task: "Run `bun test --coverage` and confirm touched modules satisfy constitution thresholds"
+Task: "Update or verify JSDoc for exported symbols changed in `src/core/git.ts`, `src/commands/key.ts`, `src/commands/pull.ts`, `src/commands/push.ts`, and `src/daemon/index.ts`"
 ```
 
 ---
@@ -191,3 +205,4 @@ Task: "Execute a timed manual validation from `specs/20260405-223110-fix-recipie
 - `[P]` is used only where tasks can proceed without touching the same file.
 - The MVP scope is Phase 1 + Phase 2 + US1.
 - This feature does not qualify for the documentation-only exception because runtime command behavior changes.
+- T031 is currently blocked only by the local npm toolchain contract in `src/commands/__tests__/packaging.test.ts` at the `npm >= 11.5.1` assertion; `bun run check` and `bun test --coverage` otherwise pass feature validation and coverage thresholds for the touched modules.

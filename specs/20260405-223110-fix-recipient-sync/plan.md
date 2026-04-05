@@ -39,7 +39,8 @@ content is only written after the repository state is safe to update.
 
 **Status: PASS** — This is runtime behavior work, so automated tests are mandatory. The plan
 includes success and error-path coverage for existing-vault bootstrap, fast-forward update, and
-divergence failure messaging. Validation will run through `bun run check`.
+divergence failure messaging. Validation will run through `bun run check`, and touched modules
+must also be checked with `bun test --coverage` against the constitution thresholds.
 
 ### Principle III — Cross-Platform Daemon Reliability
 
@@ -255,7 +256,9 @@ Phase E: Update docs and validate Mermaid plus repository checks
 1. `init` against an empty remote still succeeds.
 2. `init` against an already-populated remote joins existing history without non-fast-forward push.
 3. `pull` on a divergent local branch returns a controlled error and no success-style output.
-4. At least one other reconciliation consumer such as `push` or `key add` inherits the same policy.
+4. Divergence errors expose the blocker category, blocked sync action, and recovery step required by the spec.
+5. At least one other reconciliation consumer such as `push` or `key add` inherits the same policy.
+6. Touched modules satisfy the constitution coverage thresholds under `bun test --coverage`.
 
 ### Phase E — Documentation, Diagram, and Verification
 
@@ -276,4 +279,7 @@ paired runtime-and-doc changes from earlier phases land.
 1. Verify the user-facing and architecture documentation updated in earlier phases matches the final runtime behavior.
 2. Validate the Mermaid workflow explanations before merge.
 3. Execute the reviewer walkthrough and contract-compliance checks against the implemented behavior.
-4. Run `bun run check` as the final verification gate.
+4. Update or verify JSDoc on every exported symbol changed by this feature.
+5. Run `bun test --coverage` for the touched modules and confirm constitution thresholds are met.
+6. Run `bun run check` as the final repository verification gate.
+7. If a local toolchain mismatch blocks repository-wide validation, record it as an environment blocker instead of treating it as unresolved feature behavior.

@@ -14,6 +14,7 @@ import { createRequire } from "node:module";
 import { join } from "node:path";
 import type { CommandDef } from "citty";
 import type { SnapshotArtifact } from "../../agents/_utils";
+import { loadConfig, resolveConfigPath, writeConfig } from "../../config/loader";
 import {
   createAgeIdentity,
   createBareRepo,
@@ -261,11 +262,27 @@ describe("integration", () => {
 
     seedVaultRepo({ machine: machineA, bareRepoPath });
 
-    writeFileSync(
-      join(machineB.vaultDir, "agentsync.toml"),
-      `version = "1"\n[recipients]\n${machineB.machineName} = "${machineB.recipient}"\n[agents]\ncursor = false\nclaude = true\ncodex = false\ncopilot = false\nvscode = false\n[remote]\nurl = "${bareRepoPath}"\nbranch = "main"\n[sync]\ndebounceMs = 300\nautoPush = true\nautoPull = true\npullIntervalMs = 300000\n`,
-      "utf8",
-    );
+    await writeConfig(resolveConfigPath(machineB.vaultDir), {
+      version: "1",
+      recipients: { [machineB.machineName]: machineB.recipient },
+      agents: {
+        cursor: false,
+        claude: true,
+        codex: false,
+        copilot: false,
+        vscode: false,
+      },
+      remote: {
+        url: bareRepoPath,
+        branch: "main",
+      },
+      sync: {
+        debounceMs: 300,
+        autoPush: true,
+        autoPull: true,
+        pullIntervalMs: 300_000,
+      },
+    });
     writeFileSync(join(machineB.vaultDir, ".gitignore"), "*.tmp\n", "utf8");
     runGit(["init"], machineB.vaultDir);
     runGit(["symbolic-ref", "HEAD", "refs/heads/main"], machineB.vaultDir);
@@ -385,6 +402,55 @@ describe("integration", () => {
     expect(content).toContain("BEGIN AGE ENCRYPTED FILE");
   });
 
+  test("key add re-checks aliases after reconciling with a newer remote config", async () => {
+    const root = join(tmpDir, "key-add-reconcile");
+    mkdirSync(root, { recursive: true });
+    const bareRepoPath = await createBareRepo(root);
+    const machineA = await createMachineFixture(root, "machine-a");
+    const machineB = await createMachineFixture(root, "machine-b");
+    const { recipient: remoteRecipient } = await createAgeIdentity();
+    const { recipient: conflictingRecipient } = await createAgeIdentity();
+
+    seedVaultRepo({ machine: machineA, bareRepoPath });
+
+    await withMachineEnv(machineB, async () => {
+      await initMod.initCommand.run?.({
+        args: { remote: bareRepoPath, branch: "main" },
+        rawArgs: [],
+        cmd: {} as never,
+      } as never);
+    });
+
+    runGit(["pull", "--ff-only", "origin", "main"], machineA.vaultDir);
+
+    const machineAConfigPath = resolveConfigPath(machineA.vaultDir);
+    const machineAConfig = await loadConfig(machineAConfigPath);
+    machineAConfig.recipients["work-laptop"] = remoteRecipient;
+    await writeConfig(machineAConfigPath, machineAConfig);
+    runGit(["add", "agentsync.toml"], machineA.vaultDir);
+    runGit(["commit", "-m", "add work-laptop recipient"], machineA.vaultDir);
+    runGit(["push", "origin", "main"], machineA.vaultDir);
+
+    fakeLogs.error.length = 0;
+    process.exitCode = 0;
+
+    await withMachineEnv(machineB, async () => {
+      await (keyMod.keyCommand.subCommands as unknown as Record<string, CommandDef>).add.run?.({
+        args: { name: "work-laptop", pubkey: conflictingRecipient },
+        rawArgs: [],
+        cmd: {} as never,
+      } as never);
+    });
+
+    expect(process.exitCode).toBe(1);
+    expect(
+      fakeLogs.error.some((message) => message.includes("Recipient 'work-laptop' already exists")),
+    ).toBe(true);
+
+    const machineBConfig = await loadConfig(resolveConfigPath(machineB.vaultDir));
+    expect(machineBConfig.recipients["work-laptop"]).toBe(remoteRecipient);
+  });
+
   test("T044 — key rotate replaces private key and updates config recipient", async () => {
     const oldKeyContent = await readFile(keyPath, "utf8");
 
@@ -400,6 +466,38 @@ describe("integration", () => {
 
     const configContent = await readFile(join(vaultDir, "agentsync.toml"), "utf8");
     expect(configContent).toMatch(/test-machine/);
+  });
+
+  test("key rotate leaves config and key unchanged when re-encryption fails", async () => {
+    fakeArtifacts.push({
+      vaultPath: "claude/CLAUDE.age",
+      sourcePath: "/fake/.claude/CLAUDE.md",
+      plaintext: "# rotate failure test",
+      warnings: [],
+    });
+    await pushMod.performPush({ agent: "claude" });
+    fakeArtifacts.length = 0;
+
+    const configPath = resolveConfigPath(vaultDir);
+    const configBefore = await loadConfig(configPath);
+    const oldKeyContent = await readFile(keyPath, "utf8");
+
+    writeFileSync(join(vaultDir, "claude", "broken.age"), "not a valid age payload", "utf8");
+    fakeLogs.error.length = 0;
+    process.exitCode = 0;
+
+    await (keyMod.keyCommand.subCommands as unknown as Record<string, CommandDef>).rotate.run?.({
+      args: {},
+      rawArgs: [],
+      cmd: {} as never,
+    } as never);
+
+    expect(process.exitCode).toBe(1);
+    expect(fakeLogs.error.length).toBeGreaterThan(0);
+    expect(await readFile(keyPath, "utf8")).toBe(oldKeyContent);
+
+    const configAfter = await loadConfig(configPath);
+    expect(configAfter.recipients[machineName]).toBe(configBefore.recipients[machineName]);
   });
 
   test("pushCommand.run with dryRun=true does not write vault files", async () => {

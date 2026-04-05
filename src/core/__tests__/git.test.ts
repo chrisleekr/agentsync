@@ -5,6 +5,7 @@ import {
   createBareRepo,
   createDivergentHistoryFixture,
   createTmpDir,
+  runGit,
 } from "../../test-helpers/fixtures";
 import { GitClient, type GitReconciliationError } from "../git";
 
@@ -96,6 +97,46 @@ describe("GitClient", () => {
 
     expect(state.exists).toBe(false);
     expect(state.headCommit).toBeNull();
+  });
+
+  test("inspectRemoteBranch only matches the exact branch ref", async () => {
+    const sourceDir = join(tmpDir, "release-source");
+    const inspectorDir = join(tmpDir, "inspector");
+    await mkdir(sourceDir, { recursive: true });
+    await mkdir(inspectorDir, { recursive: true });
+
+    runGit(["init"], sourceDir);
+    runGit(["symbolic-ref", "HEAD", "refs/heads/release/main"], sourceDir);
+    runGit(["config", "user.name", "Agent Sync Test"], sourceDir);
+    runGit(["config", "user.email", "test@agentsync.local"], sourceDir);
+    runGit(["remote", "add", "origin", bareRepoPath], sourceDir);
+    await writeFile(join(sourceDir, "data.txt"), "release-only", "utf8");
+    runGit(["add", "."], sourceDir);
+    runGit(["commit", "-m", "release main only"], sourceDir);
+    runGit(["push", "--set-upstream", "origin", "release/main"], sourceDir);
+
+    const git = new GitClient(inspectorDir);
+    const mainState = await git.inspectRemoteBranch(bareRepoPath, "main");
+    const releaseState = await git.inspectRemoteBranch(bareRepoPath, "release/main");
+
+    expect(mainState.exists).toBe(false);
+    expect(mainState.headCommit).toBeNull();
+    expect(releaseState.exists).toBe(true);
+    expect(releaseState.headCommit).not.toBeNull();
+  });
+
+  test("ensureRemote rejects a mismatched existing remote URL", async () => {
+    const workDir = join(tmpDir, "work");
+    const otherBareRepoPath = await createBareRepo(join(tmpDir, "other-remote"));
+    await mkdir(workDir, { recursive: true });
+
+    const git = new GitClient(workDir);
+    await git.init();
+    await git.addRemote("origin", bareRepoPath);
+
+    await expect(git.ensureRemote("origin", otherBareRepoPath)).rejects.toThrow(
+      "Remote 'origin' is configured",
+    );
   });
 
   test("reconcileWithRemote bootstraps an existing remote into an empty local repo", async () => {

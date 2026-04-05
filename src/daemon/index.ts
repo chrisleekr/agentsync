@@ -22,7 +22,10 @@ async function runPull(): Promise<{ applied: number; errors: string[]; fatal: bo
 /** Format daemon log timestamps consistently across lifecycle events. */
 const ts = () => new Date().toISOString();
 
-/** Start the IPC server, file watchers, and periodic pull loop for background sync. */
+/**
+ * Start the IPC server, file watchers, and periodic pull loop for background sync.
+ * @returns A promise that resolves once the daemon has bound its IPC socket and registered watchers.
+ */
 export async function startDaemon(): Promise<void> {
   const runtime = await resolveRuntimeContext();
   const config = await loadConfig(resolveConfigPath(runtime.vaultDir));

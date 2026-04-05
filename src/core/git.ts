@@ -4,8 +4,10 @@ import simpleGit, { type SimpleGit } from "simple-git";
 
 const decoder = new TextDecoder();
 
+/** Stable error categories returned by the vault reconciliation flow. */
 export type GitReconciliationCode = "DIVERGED_HISTORY" | "REMOTE_BRANCH_MISSING";
 
+/** Snapshot of whether a target remote branch exists and which commit it currently points to. */
 export interface RemoteBranchState {
   remote: string;
   branch: string;
@@ -13,12 +15,14 @@ export interface RemoteBranchState {
   headCommit: string | null;
 }
 
+/** Options that control how the local vault reconciles against a remote branch. */
 export interface GitReconciliationOptions {
   remote?: string;
   branch?: string;
   allowMissingRemote?: boolean;
 }
 
+/** Result metadata returned after attempting to reconcile the local branch with the remote. */
 export interface GitReconciliationResult {
   status: "noop" | "fast-forwarded" | "bootstrapped-existing" | "remote-missing";
   remote: string;
@@ -27,6 +31,7 @@ export interface GitReconciliationResult {
   remoteHead: string | null;
 }
 
+/** Error raised when reconciliation fails in a product-defined, user-visible way. */
 export class GitReconciliationError extends Error {
   constructor(
     public readonly code: GitReconciliationCode,
@@ -107,7 +112,13 @@ export class GitClient {
     }
   }
 
-  /** Clone a remote vault into a local working directory and return a bound client. */
+  /**
+   * Clone a remote vault into a local working directory and return a bound client.
+   * @param remoteUrl Remote repository URL or path to clone.
+   * @param targetDir Local directory that will receive the clone.
+   * @param branch Branch to checkout during clone.
+   * @returns A Git client bound to the cloned repository.
+   */
   static async clone(remoteUrl: string, targetDir: string, branch = "main"): Promise<GitClient> {
     await mkdir(dirname(targetDir), { recursive: true });
     await simpleGit().clone(remoteUrl, targetDir, ["--branch", branch]);
@@ -138,6 +149,11 @@ export class GitClient {
   async ensureRemote(name: string, url: string): Promise<void> {
     const result = this.runGit(["remote", "get-url", name]);
     if (result.exitCode === 0) {
+      if (result.stdout !== url) {
+        throw new Error(
+          `Remote '${name}' is configured for '${result.stdout}', expected '${url}'. Update or remove the existing remote before retrying.`,
+        );
+      }
       return;
     }
 
@@ -154,13 +170,18 @@ export class GitClient {
 
   /** Inspect whether a remote branch currently exists and, if it does, capture its head SHA. */
   async inspectRemoteBranch(remote = "origin", branch = "main"): Promise<RemoteBranchState> {
-    const result = this.runGit(["ls-remote", "--heads", remote, branch]);
+    const refName = `refs/heads/${branch}`;
+    const result = this.runGit(["ls-remote", "--heads", remote, refName]);
     if (result.exitCode !== 0) {
       throw new Error(result.stderr || result.stdout || `git ls-remote failed for ${remote}`);
     }
 
-    const firstLine = result.stdout.split("\n").find((line) => line.trim().length > 0) ?? "";
-    const headCommit = firstLine.length > 0 ? (firstLine.split(/\s+/)[0] ?? null) : null;
+    const matchingLine =
+      result.stdout
+        .split("\n")
+        .map((line) => line.trim())
+        .find((line) => line.endsWith(` ${refName}`) || line.endsWith(`\t${refName}`)) ?? "";
+    const headCommit = matchingLine.length > 0 ? (matchingLine.split(/\s+/)[0] ?? null) : null;
 
     return {
       remote,

@@ -2,7 +2,7 @@
 
 **Feature Branch**: `20260405-223110-fix-recipient-sync`  
 **Created**: 2026-04-05  
-**Status**: Draft  
+**Status**: In Validation  
 **Input**: User description: "Recipient sync process issue"
 
 ## User Scenarios & Testing _(mandatory)_
@@ -64,7 +64,7 @@ Maintainers and reviewers need bootstrap, pull, push, key management, daemon syn
 - **FR-001**: The system MUST detect whether the configured remote branch is empty, already populated, or divergent before deciding how to bootstrap or update the local vault.
 - **FR-002**: The `init` workflow MUST join an existing remote vault history safely instead of creating a local-first commit path that predictably leads to a non-fast-forward rejection.
 - **FR-003**: Sync workflows that update from the remote branch MUST use an explicit product-defined Git reconciliation strategy rather than relying on the user's global Git pull configuration.
-- **FR-004**: When the local and remote vault histories cannot be reconciled automatically, the system MUST stop with a user-understandable recovery message that explains the next required action.
+- **FR-004**: When the local and remote vault histories cannot be reconciled automatically, the system MUST stop with a user-understandable recovery message that identifies the blocker category, names the blocked sync action, and explains the next required recovery action.
 - **FR-005**: The system MUST not emit a success-style completion message for `init`, `pull`, or other sync flows when Git reconciliation failed before the intended outcome was achieved.
 - **FR-006**: The chosen reconciliation behavior MUST be applied consistently across `init`, `pull`, `push`, key-management flows that sync with the remote, and daemon-triggered sync operations.
 - **FR-007**: The system MUST preserve existing recipient, key, and encrypted-vault safety guarantees while fixing Git bootstrap and divergence handling.
@@ -83,7 +83,7 @@ Maintainers and reviewers need bootstrap, pull, push, key management, daemon syn
 ### Measurable Outcomes
 
 - **SC-001**: On a fresh second machine pointed at an existing remote vault, `init` completes without a non-fast-forward rejection and leaves the local vault aligned to the remote branch on the first attempt.
-- **SC-002**: When local and remote vault history are irreconcilable automatically, users can identify the blocker and the required recovery action within 60 seconds of seeing the error.
+- **SC-002**: When local and remote vault history are irreconcilable automatically, users can identify the blocker category, the blocked sync action, and the required recovery action within 60 seconds of seeing the error.
 - **SC-003**: Reviewer walkthroughs of `init`, `pull`, daemon sync, and troubleshooting guidance show the same reconciliation model and no contradictory success or failure messaging.
 - **SC-004**: Git reconciliation failures do not result in successful-looking runs that leave the vault partially bootstrapped, divergent, or incorrectly reported as synced.
 
@@ -98,4 +98,4 @@ Maintainers and reviewers need bootstrap, pull, push, key management, daemon syn
 
 - Expected documentation surfaces include `README.md`, `docs/command-reference.md`, `docs/troubleshooting.md`, and `docs/architecture.md` so existing-vault bootstrap and divergence handling are described consistently.
 - A Mermaid diagram is required because second-machine bootstrap and reconciliation involve multiple decision points that are materially clearer visually than in prose alone.
-- Reviewer walkthrough steps must confirm: `init` joins an existing remote safely, reconciliation failures do not emit false success messages, daemon and manual sync stay aligned, and the published troubleshooting guidance matches the product behavior.
+- Reviewer walkthrough steps must confirm: `init` joins an existing remote safely, reconciliation failures do not emit false success messages, divergence errors state the blocker category, blocked sync action, and recovery action explicitly, daemon and manual sync stay aligned, and the published troubleshooting guidance matches the product behavior.

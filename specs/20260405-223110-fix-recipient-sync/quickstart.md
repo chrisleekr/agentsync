@@ -36,6 +36,9 @@ flowchart TD
 
 ## Reproduce the reported failure on current behavior
 
+Before running this section, check out `main` or the PR base commit. The fixed branch no longer
+reproduces the historical bootstrap failure by design.
+
 1. Create a bare remote and initialize it from a first local machine:
 
 ```bash
@@ -48,7 +51,7 @@ AGENTSYNC_MACHINE="machine-a" \
 bun run src/cli.ts init --remote "$tmp_root/vault.git" --branch main
 ```
 
-2. Simulate a second laptop pointing at the same remote:
+1. Simulate a second laptop pointing at the same remote:
 
 ```bash
 AGENTSYNC_VAULT_DIR="$tmp_root/machine-b-vault" \
@@ -57,7 +60,7 @@ AGENTSYNC_MACHINE="machine-b" \
 bun run src/cli.ts init --remote "$tmp_root/vault.git" --branch main
 ```
 
-3. Confirm the pre-fix failure shape:
+1. Confirm the pre-fix failure shape:
 
 - `init` reports an initial push failure with a non-fast-forward rejection.
 - A later `pull` on the second machine reports a divergent-branch reconciliation error.
@@ -73,8 +76,8 @@ bun run src/cli.ts init --remote "$tmp_root/vault.git" --branch main
 4. If a deliberate local divergence is created afterward, confirm `pull` exits with a controlled
    reconciliation error and does not print a success footer.
 5. Run the timed `SC-002` manual check: start a 60-second timer as soon as the divergence error is
-   displayed, then confirm the reviewer can identify both the blocker category and the required
-   recovery action before the timer expires.
+   displayed, then confirm the reviewer can identify the blocker category, the blocked sync
+   action, and the required recovery action before the timer expires.
 6. Confirm `push`, `key add`, or `key rotate` inherit the same reconciliation rule.
 
 ---
@@ -94,6 +97,6 @@ bun run check
 - [ ] Second-machine `init` no longer creates a divergent local-first history against an existing remote vault.
 - [ ] `pull` no longer depends on user Git configuration to decide merge or rebase behavior.
 - [ ] Reconciliation failures no longer emit success-style completion output.
-- [ ] From the displayed divergence error, a reviewer can identify the blocker and required recovery action within 60 seconds.
+- [ ] From the displayed divergence error, a reviewer can identify the blocker category, blocked sync action, and required recovery action within 60 seconds.
 - [ ] CLI and daemon sync paths use the same shared reconciliation policy.
 - [ ] The Mermaid workflow diagram matches the implemented bootstrap behavior.
