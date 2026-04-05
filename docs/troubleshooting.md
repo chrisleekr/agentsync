@@ -98,6 +98,15 @@ If the service is installed but not healthy, inspect platform logs:
 
 Do not guess file paths. Use the values defined in `src/config/paths.ts` as the source of truth.
 
+## Speckit workflow confusion
+
+Use [speckit.md](speckit.md) when the problem is command order, artifact expectations, or which
+workflow stage comes next.
+
+Use [speckit-local-development.md](speckit-local-development.md) when the problem is active
+feature detection, timestamp branch mapping, re-running a planning stage, or understanding why
+the baseline workflow has no `.specify/extensions.yml`.
+
 ## Unsupported or future-facing expectations
 
 If you expect a hosted admin surface, network API, or rich conflict-resolution UI, that is outside the current support surface. The supported model is the local CLI plus daemon workflow described in the command reference and architecture guide.
