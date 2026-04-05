@@ -14,6 +14,7 @@ Use this guide when a change affects user-facing behavior, exported symbols, syn
 - `docs/command-reference.md` owns command contracts and support-state notes.
 - `docs/troubleshooting.md` owns failure cases and next diagnostic steps.
 - This page owns upkeep rules and review checkpoints.
+- The released CLI routing surface spans `README.md`, `docs/command-reference.md`, `docs/development.md`, `docs/maintenance.md`, and `docs/troubleshooting.md`; when one of those pages changes the released-versus-source boundary, review all five for consistency.
 
 ## Release workflow ownership rules
 
@@ -21,6 +22,7 @@ Use this guide when a change affects user-facing behavior, exported symbols, syn
 - The npm publish path must use GitHub OIDC trusted publishing only.
 - Long-lived npm write tokens are not a supported normal-release credential model for this repo.
 - User-facing documentation must not present `bunx` installation as supported until release validation succeeds for that workflow.
+- When the released CLI path changes, `README.md`, `docs/command-reference.md`, `docs/development.md`, `docs/maintenance.md`, and `docs/troubleshooting.md` must stay aligned on installation, usage, when-to-use guidance, and the GitHub Releases source of truth.
 
 ## Publish workflow checklist
 
@@ -92,6 +94,7 @@ Before merging, verify:
 9. Support-state wording is explicit where behavior is partial, planned, or unsupported.
 10. `README.md` and `docs/command-reference.md` still point to the canonical GitHub Release record for release notes.
 11. `bun run check` still passes.
+12. `README.md`, `docs/command-reference.md`, `docs/development.md`, `docs/maintenance.md`, and `docs/troubleshooting.md` still agree on when to use the released CLI path versus contributor-from-source commands.
 
 ## Terminology guardrails
 
