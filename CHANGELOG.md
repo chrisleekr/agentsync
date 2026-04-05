@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.2](https://github.com/chrisleekr/agentsync/compare/v0.1.1...v0.1.2) (2026-04-05)
+
+
+### Bug Fixes
+
+* **ci:** release please workflow to use PAT ([#14](https://github.com/chrisleekr/agentsync/issues/14)) ([531acaf](https://github.com/chrisleekr/agentsync/commit/531acafe1488cd237c5db72586e0529ef64af8a2))
+* **sync:** recover existing vault bootstrap and divergence handling ([#12](https://github.com/chrisleekr/agentsync/issues/12)) ([86879fd](https://github.com/chrisleekr/agentsync/commit/86879fd33e14e3f75973beebee350cd6be2eff09))
+
 ## [0.1.1](https://github.com/chrisleekr/agentsync/compare/v0.1.0...v0.1.1) (2026-04-05)
 
 
