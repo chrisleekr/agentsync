@@ -17,6 +17,7 @@ const PLIST_LABEL = "com.agentsync.daemon";
 const LAUNCH_AGENTS_DIR = join(homedir(), "Library", "LaunchAgents");
 const PLIST_PATH = join(LAUNCH_AGENTS_DIR, `${PLIST_LABEL}.plist`);
 
+/** Build the launchd plist for the current executable and log directory. */
 function buildPlist(executablePath: string, logDir: string): string {
   const stdoutLog = join(logDir, "agentsync.out.log");
   const stderrLog = join(logDir, "agentsync.err.log");
@@ -60,6 +61,7 @@ function buildPlist(executablePath: string, logDir: string): string {
 `;
 }
 
+/** Install and bootstrap the macOS LaunchAgent that runs the daemon. */
 export async function installMacOs(executablePath: string): Promise<void> {
   const logDir = join(homedir(), "Library", "Logs", "AgentSync");
   await mkdir(LAUNCH_AGENTS_DIR, { recursive: true });
@@ -73,6 +75,7 @@ export async function installMacOs(executablePath: string): Promise<void> {
   log.info(`Plist: ${PLIST_PATH}`);
 }
 
+/** Boot out and remove the macOS LaunchAgent definition if it exists. */
 export async function uninstallMacOs(): Promise<void> {
   try {
     await execFileAsync("launchctl", ["bootout", `gui/${process.getuid?.() ?? 501}`, PLIST_PATH]);
@@ -89,6 +92,7 @@ export async function uninstallMacOs(): Promise<void> {
   log.success(`Removed launchd service: ${PLIST_LABEL}`);
 }
 
+/** Restart the macOS LaunchAgent immediately. */
 export async function startMacOs(): Promise<void> {
   await execFileAsync("launchctl", [
     "kickstart",
@@ -97,6 +101,7 @@ export async function startMacOs(): Promise<void> {
   ]);
 }
 
+/** Ask launchd to stop the macOS daemon process. */
 export async function stopMacOs(): Promise<void> {
   await execFileAsync("launchctl", [
     "kill",
@@ -105,6 +110,7 @@ export async function stopMacOs(): Promise<void> {
   ]);
 }
 
+/** Check whether the macOS LaunchAgent plist is present on disk. */
 export async function isInstalledMacOs(): Promise<boolean> {
   try {
     await readFile(PLIST_PATH, "utf8");

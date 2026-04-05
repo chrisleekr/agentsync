@@ -3,6 +3,7 @@ import { defineCommand } from "citty";
 import { resolveDaemonSocketPath } from "../config/paths";
 import { IpcClient } from "../core/ipc";
 
+/** Resolve the executable invocation the service manager should launch on this machine. */
 function getExecutablePath(): string {
   // When compiled: process.execPath; during dev with `bun run src/cli.ts`: reconstruct
   if (process.argv[0].endsWith("bun") || process.argv[0].endsWith("bun.exe")) {
@@ -11,6 +12,7 @@ function getExecutablePath(): string {
   return process.execPath;
 }
 
+/** Platform-specific service hooks used by the daemon management subcommands. */
 interface PlatformInstaller {
   install(exe: string): Promise<void>;
   uninstall(): Promise<void>;
@@ -19,6 +21,7 @@ interface PlatformInstaller {
   isInstalled(): Promise<boolean>;
 }
 
+/** Load the installer implementation that matches the current operating system. */
 async function getInstaller(): Promise<PlatformInstaller> {
   const platform = process.platform;
   if (platform === "darwin") {
@@ -54,6 +57,7 @@ async function getInstaller(): Promise<PlatformInstaller> {
   throw new Error(`Unsupported platform: ${platform}`);
 }
 
+/** Expose daemon lifecycle commands and the hidden worker entry point. */
 export const daemonCommand = defineCommand({
   meta: {
     name: "daemon",

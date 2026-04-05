@@ -10,13 +10,14 @@ import { loadConfig, resolveConfigPath } from "../config/loader";
 import { decryptString } from "../core/encryptor";
 import { loadPrivateKey, resolveRuntimeContext } from "./shared";
 
+/** Build a short hash so status comparisons stay readable in terminal output. */
 type SyncStatus = "synced" | "local-changed" | "vault-only" | "local-only" | "error";
 
 function sha256(content: string): string {
   return createHash("sha256").update(content).digest("hex").slice(0, 12);
 }
 
-/** Recursively collect all .age file paths under `dir`, returning paths relative to `base`. */
+/** Recursively collect encrypted vault files so vault-only entries can be surfaced. */
 async function collectAgeFiles(dir: string, base: string): Promise<string[]> {
   const results: string[] = [];
   try {
@@ -39,6 +40,7 @@ async function collectAgeFiles(dir: string, base: string): Promise<string[]> {
   return results;
 }
 
+/** Table row describing how one local artifact compares with the encrypted vault copy. */
 interface StatusRow {
   agent: string;
   file: string;
@@ -47,6 +49,7 @@ interface StatusRow {
   detail: string;
 }
 
+/** Compare local snapshots with vault contents and print a per-artifact status table. */
 export const statusCommand = defineCommand({
   meta: {
     name: "status",

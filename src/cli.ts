@@ -8,6 +8,7 @@ import { pullCommand } from "./commands/pull";
 import { pushCommand } from "./commands/push";
 import { statusCommand } from "./commands/status";
 
+/** Root CLI command that wires every user-facing subcommand into a single entry point. */
 const main = defineCommand({
   meta: {
     name: "agentsync",

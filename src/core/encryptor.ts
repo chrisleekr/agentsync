@@ -52,6 +52,7 @@ export async function identityToRecipient(identity: string): Promise<string> {
   return age.identityToRecipient(identity);
 }
 
+/** Encrypt a UTF-8 file and write the armored ciphertext to disk. */
 export async function encryptFile(
   inputPath: string,
   outputPath: string,
@@ -62,6 +63,7 @@ export async function encryptFile(
   await writeFile(outputPath, encrypted, "utf8");
 }
 
+/** Decrypt an armored age file and write the plaintext back to disk. */
 export async function decryptFile(
   inputPath: string,
   outputPath: string,

@@ -7,12 +7,7 @@ import { generateIdentity, identityToRecipient } from "../core/encryptor";
 import { GitClient } from "../core/git";
 import { loadPrivateKey, resolveRuntimeContext } from "./shared";
 
-/**
- * Load an existing age identity from disk, or generate a new X25519 keypair
- * and persist it to disk with 0o600 permissions.
- * Returns { identity, recipient } where identity is the AGE-SECRET-KEY-1… string
- * and recipient is the age1… public key.
- */
+/** Load or create the local age keypair so init can register this machine as a recipient. */
 async function ensureKeypair(path: string): Promise<{ identity: string; recipient: string }> {
   let identity: string;
   let isNew = false;
@@ -38,6 +33,7 @@ async function ensureKeypair(path: string): Promise<{ identity: string; recipien
   return { identity, recipient };
 }
 
+/** Bootstrap a vault, local key material, and the initial git remote wiring. */
 export const initCommand = defineCommand({
   meta: {
     name: "init",

@@ -6,6 +6,7 @@ import { AgentPaths } from "../config/paths";
 import { type RedactionResult, redactSecretLiterals, shouldNeverSync } from "../core/sanitizer";
 import { atomicWrite, collect, readIfExists, type SnapshotArtifact } from "./_utils";
 
+/** Snapshot payload for the Codex adapter. */
 export interface CodexSnapshotResult {
   artifacts: SnapshotArtifact[];
   warnings: string[];
@@ -35,6 +36,7 @@ function sanitizeCodexConfig(raw: string): RedactionResult<string> {
   };
 }
 
+/** Collect Codex instructions, rules, and config that are safe to sync. */
 export async function snapshotCodex(): Promise<CodexSnapshotResult> {
   const artifacts: SnapshotArtifact[] = [];
   const warnings: string[] = [];
@@ -82,10 +84,12 @@ export async function snapshotCodex(): Promise<CodexSnapshotResult> {
   return { artifacts, warnings };
 }
 
+/** Restore the top-level Codex AGENTS.md file from the vault. */
 export async function applyCodexAgentsMd(content: string): Promise<void> {
   await atomicWrite(AgentPaths.codex.agentsMd, content);
 }
 
+/** Merge synced Codex config into the local TOML while preserving unrelated local keys. */
 export async function applyCodexConfig(content: string): Promise<void> {
   const existingRaw = await readIfExists(AgentPaths.codex.configToml);
   if (existingRaw === null) {
@@ -109,6 +113,7 @@ export async function applyCodexConfig(content: string): Promise<void> {
   await atomicWrite(AgentPaths.codex.configToml, TOML.stringify(merged));
 }
 
+/** Restore one Codex rule markdown file from the vault. */
 export async function applyCodexRule(ruleName: string, content: string): Promise<void> {
   const target = join(AgentPaths.codex.rulesDir, ruleName);
   await mkdir(AgentPaths.codex.rulesDir, { recursive: true });
@@ -120,6 +125,7 @@ export async function applyCodexRule(ruleName: string, content: string): Promise
 import { basename } from "node:path";
 import { decryptString } from "../core/encryptor";
 
+/** Read encrypted files from a vault subdirectory, ignoring missing directories. */
 async function readAgeFiles(dir: string): Promise<{ name: string; fullPath: string }[]> {
   try {
     const names = await readdir(dir);
@@ -134,9 +140,7 @@ async function readAgeFiles(dir: string): Promise<{ name: string; fullPath: stri
   }
 }
 
-/**
- * Decrypt and apply all Codex vault artifacts to the local machine.
- */
+/** Decrypt and apply all Codex vault artifacts to the local machine. */
 export async function applyCodexVault(
   vaultDir: string,
   key: string,

@@ -37,6 +37,7 @@ async function findAgeFiles(dir: string): Promise<string[]> {
   return results;
 }
 
+/** Manage recipients and local age key rotation for an existing vault. */
 export const keyCommand = defineCommand({
   meta: {
     name: "key",

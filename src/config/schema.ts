@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+/** Schema for the vault configuration file shared by every command and test. */
 export const AgentSyncConfigSchema = z.object({
   version: z.string().default("1"),
   recipients: z.record(z.string().min(1), z.string().min(1)),
@@ -22,4 +23,5 @@ export const AgentSyncConfigSchema = z.object({
   }),
 });
 
+/** Normalized runtime shape derived from the validated config schema. */
 export type AgentSyncConfig = z.infer<typeof AgentSyncConfigSchema>;

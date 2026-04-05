@@ -10,12 +10,14 @@ import { loadConfig, resolveConfigPath } from "../config/loader";
 import { AgentPaths } from "../config/paths";
 import { resolveRuntimeContext } from "./shared";
 
+/** Single diagnostic check row rendered by the doctor command. */
 interface Check {
   name: string;
   status: "pass" | "warn" | "fail";
   detail: string;
 }
 
+/** Inspect local prerequisites, vault health, and service wiring without changing state. */
 export const doctorCommand = defineCommand({
   meta: {
     name: "doctor",

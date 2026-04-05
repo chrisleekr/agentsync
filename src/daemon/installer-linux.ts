@@ -17,6 +17,7 @@ const SERVICE_NAME = "agentsync";
 const SYSTEMD_USER_DIR = join(homedir(), ".config", "systemd", "user");
 const SERVICE_PATH = join(SYSTEMD_USER_DIR, `${SERVICE_NAME}.service`);
 
+/** Build the systemd unit text for the current executable. */
 function buildUnit(executablePath: string): string {
   return `[Unit]
 Description=AgentSync daemon — encrypts and syncs AI agent configs
@@ -36,6 +37,7 @@ WantedBy=default.target
 `;
 }
 
+/** Install and start the Linux user service that runs the daemon in the background. */
 export async function installLinux(executablePath: string): Promise<void> {
   await mkdir(SYSTEMD_USER_DIR, { recursive: true });
   const unit = buildUnit(executablePath);
@@ -47,6 +49,7 @@ export async function installLinux(executablePath: string): Promise<void> {
   log.info(`Unit file: ${SERVICE_PATH}`);
 }
 
+/** Stop and remove the Linux user service definition if it exists. */
 export async function uninstallLinux(): Promise<void> {
   try {
     await execFileAsync("systemctl", ["--user", "disable", "--now", SERVICE_NAME]);
@@ -69,14 +72,17 @@ export async function uninstallLinux(): Promise<void> {
   log.success(`Removed systemd user service: ${SERVICE_NAME}`);
 }
 
+/** Start the installed Linux user service. */
 export async function startLinux(): Promise<void> {
   await execFileAsync("systemctl", ["--user", "start", SERVICE_NAME]);
 }
 
+/** Stop the installed Linux user service. */
 export async function stopLinux(): Promise<void> {
   await execFileAsync("systemctl", ["--user", "stop", SERVICE_NAME]);
 }
 
+/** Check whether the Linux user service file is present on disk. */
 export async function isInstalledLinux(): Promise<boolean> {
   try {
     await readFile(SERVICE_PATH, "utf8");

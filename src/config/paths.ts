@@ -4,6 +4,7 @@ import { join } from "node:path";
 const HOME = homedir();
 const PLATFORM = process.platform;
 
+/** Platform-aware locations for the agent files that AgentSync snapshots and restores. */
 export const AgentPaths = {
   cursor: {
     mcpGlobal: join(HOME, ".cursor", "mcp.json"),
@@ -62,6 +63,7 @@ export const AgentPaths = {
   },
 } as const;
 
+/** Resolve the OS-specific base directory used for AgentSync state. */
 export function resolveAgentSyncHome(): string {
   if (process.platform === "win32") {
     return join(process.env.APPDATA ?? HOME, "agentsync");
@@ -69,6 +71,7 @@ export function resolveAgentSyncHome(): string {
   return join(HOME, ".config", "agentsync");
 }
 
+/** Resolve the local IPC endpoint used by the background daemon. */
 export function resolveDaemonSocketPath(): string {
   if (process.platform === "win32") {
     return "\\\\.\\pipe\\agentsync";

@@ -5,6 +5,7 @@
  * (e.g. editor swap files) are collapsed into a single callback invocation.
  */
 
+/** Debounced callback invoked after a watched path settles. */
 export type WatchCallback = (path: string) => void | Promise<void>;
 
 // Use the Node.js `fs.watch` via Bun's Node compat layer — Bun also exposes
@@ -17,6 +18,7 @@ interface WatchedPath {
   debounceTimer: ReturnType<typeof setTimeout> | null;
 }
 
+/** Track file-system watchers and collapse rapid save bursts into single callbacks. */
 export class Watcher {
   private readonly watching = new Map<string, WatchedPath>();
 
