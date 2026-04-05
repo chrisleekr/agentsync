@@ -19,6 +19,7 @@ const rootDir = process.cwd();
 const packageEntryPath = join(rootDir, "dist", "cli.js");
 const packageJsonPath = join(rootDir, "package.json");
 const sourceCliPath = join(rootDir, "src", "cli.ts");
+const nodeVersionPinPath = join(rootDir, ".nvmrc");
 
 const packageJsonSchema = z.object({
   name: z.string(),
@@ -56,6 +57,42 @@ function runCommand(command: string, args: string[]): string {
   return result.stdout.trim();
 }
 
+function parseNpmPackOutput(rawOutput: string) {
+  const jsonStart = rawOutput.indexOf("[");
+  const jsonEnd = rawOutput.lastIndexOf("]");
+
+  if (jsonStart === -1 || jsonEnd === -1 || jsonEnd < jsonStart) {
+    throw new Error(`npm pack --json did not emit a parseable JSON array:\n${rawOutput}`);
+  }
+
+  return npmPackOutputSchema.parse(JSON.parse(rawOutput.slice(jsonStart, jsonEnd + 1)) as unknown);
+}
+
+function normalizeVersion(version: string) {
+  return version.trim().replace(/^v/, "").split(".").map(Number);
+}
+
+function isVersionAtLeast(actualVersion: string, minimumVersion: string) {
+  const actual = normalizeVersion(actualVersion);
+  const minimum = normalizeVersion(minimumVersion);
+  const parts = Math.max(actual.length, minimum.length);
+
+  for (let index = 0; index < parts; index += 1) {
+    const actualPart = actual[index] ?? 0;
+    const minimumPart = minimum[index] ?? 0;
+
+    if (actualPart > minimumPart) {
+      return true;
+    }
+
+    if (actualPart < minimumPart) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 describe("package release surface", () => {
   test("package manifest is publishable and exposes the scoped bunx contract", async () => {
     const packageJson = packageJsonSchema.parse(
@@ -87,11 +124,20 @@ describe("package release surface", () => {
     expect(cliVersionOutput).toBe(packageJson.version);
   });
 
+  test("package validation uses the pinned Node toolchain and minimum npm version", async () => {
+    const pinnedNodeVersion = (await readFile(nodeVersionPinPath, "utf8")).trim();
+    const nodeVersion = runCommand("node", ["--version"]);
+    const npmVersion = runCommand("npm", ["--version"]);
+
+    expect(isVersionAtLeast(nodeVersion, pinnedNodeVersion)).toBeTrue();
+    expect(isVersionAtLeast(npmVersion, "11.5.1")).toBeTrue();
+  });
+
   test("npm pack dry-run includes the published CLI and excludes repo-only source files", async () => {
     runCommand(process.execPath, ["run", "build:package"]);
 
     const rawPackOutput = runCommand("npm", ["pack", "--dry-run", "--json", "--ignore-scripts"]);
-    const packOutput = npmPackOutputSchema.parse(JSON.parse(rawPackOutput) as unknown);
+    const packOutput = parseNpmPackOutput(rawPackOutput);
     const packedFiles = packOutput[0]?.files.map((file) => file.path) ?? [];
 
     expect(packedFiles).toContain("dist/cli.js");

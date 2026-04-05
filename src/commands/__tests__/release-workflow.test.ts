@@ -14,6 +14,7 @@ const { readFile } = createRequire(import.meta.url)(
 ) as typeof import("node:fs/promises");
 
 const workflowPath = join(process.cwd(), ".github", "workflows", "release-please.yml");
+const ciWorkflowPath = join(process.cwd(), ".github", "workflows", "ci.yml");
 
 describe("release workflow publishing contract", () => {
   test("uses a GitHub-hosted OIDC publish job with least-privilege permissions", async () => {
@@ -29,5 +30,15 @@ describe("release workflow publishing contract", () => {
     expect(workflow).not.toMatch(
       /NPM_TOKEN|NODE_AUTH_TOKEN|secrets\.NPM_TOKEN|secrets\.NODE_AUTH_TOKEN/,
     );
+  });
+
+  test("pins the CI unit-test job to the publish validation Node and npm toolchain", async () => {
+    const ciWorkflow = await readFile(ciWorkflowPath, "utf8");
+
+    expect(ciWorkflow).toContain("name: Unit Tests");
+    expect(ciWorkflow).toContain("uses: actions/setup-node@v6");
+    expect(ciWorkflow).toContain("node-version-file: .nvmrc");
+    expect(ciWorkflow).toContain("name: Upgrade npm");
+    expect(ciWorkflow).toContain("npm install --global npm@11.5.1");
   });
 });
