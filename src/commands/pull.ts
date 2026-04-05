@@ -1,9 +1,15 @@
 import { log } from "@clack/prompts";
 import { defineCommand } from "citty";
-import { type AgentName, Agents } from "../agents/registry";
+import { type AgentDefinition, type AgentName, Agents } from "../agents/registry";
 import { loadConfig, resolveConfigPath } from "../config/loader";
 import { GitClient } from "../core/git";
 import { loadPrivateKey, resolveRuntimeContext } from "./shared";
+
+let agentDefinitions: AgentDefinition[] = Agents;
+
+export function __setPullAgentsForTesting(agents: AgentDefinition[] | null): void {
+  agentDefinitions = agents ?? Agents;
+}
 
 /**
  * Pull the vault, decrypt enabled agent artifacts, and apply them locally.
@@ -25,7 +31,7 @@ export async function performPull(
     await git.reconcileWithRemote({ remote: "origin", branch: config.remote.branch });
 
     const requestedAgent = options.agent as AgentName | undefined;
-    const agentsToSync = Agents.filter((a) => {
+    const agentsToSync = agentDefinitions.filter((a) => {
       if (requestedAgent) return a.name === requestedAgent;
       return config.agents[a.name as keyof typeof config.agents] === true;
     });

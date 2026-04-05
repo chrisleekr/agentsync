@@ -2,12 +2,18 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { log } from "@clack/prompts";
 import { defineCommand } from "citty";
-import { type AgentName, Agents } from "../agents/registry";
+import { type AgentDefinition, type AgentName, Agents } from "../agents/registry";
 import { loadConfig, resolveConfigPath } from "../config/loader";
 import { encryptString } from "../core/encryptor";
 import { GitClient } from "../core/git";
 import { shouldNeverSync } from "../core/sanitizer";
 import { resolveRuntimeContext } from "./shared";
+
+let agentDefinitions: AgentDefinition[] = Agents;
+
+export function __setPushAgentsForTesting(agents: AgentDefinition[] | null): void {
+  agentDefinitions = agents ?? Agents;
+}
 
 /**
  * Snapshot local agent state, encrypt it, and publish the resulting vault changes.
@@ -31,7 +37,7 @@ export async function performPush(
   }
 
   const requestedAgent = options.agent as AgentName | undefined;
-  const agentsToSync = Agents.filter((a) => {
+  const agentsToSync = agentDefinitions.filter((a) => {
     if (requestedAgent) return a.name === requestedAgent;
     return config.agents[a.name] === true;
   });
@@ -178,7 +184,7 @@ export const pushCommand = defineCommand({
       // Collect dry-run output manually for display
       const runtime = await resolveRuntimeContext();
       const config = await loadConfig(resolveConfigPath(runtime.vaultDir));
-      const agentsToSync = Agents.filter((a) => {
+      const agentsToSync = agentDefinitions.filter((a) => {
         if (requestedAgent) return a.name === requestedAgent;
         return config.agents[a.name] === true;
       });

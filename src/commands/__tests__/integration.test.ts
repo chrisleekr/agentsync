@@ -9,7 +9,6 @@
  */
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, mock, test } from "bun:test";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
-import { readFile, rm } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { join } from "node:path";
 import type { CommandDef } from "citty";
@@ -33,10 +32,15 @@ const fakeLogs = {
 };
 
 {
-  const _require = createRequire(import.meta.url);
-  const realFsPromises = _require("fs/promises") as typeof import("node:fs/promises");
+  const require = createRequire(import.meta.url);
+  // biome-ignore lint/style/useNodejsImportProtocol: The fs/promises alias bypasses Bun's shared node:fs/promises mock cache between test files.
+  const realFsPromises = require("fs/promises") as typeof import("node:fs/promises");
   mock.module("node:fs/promises", () => realFsPromises);
 }
+
+const { readFile, rm } = createRequire(import.meta.url)(
+  "fs/promises",
+) as typeof import("node:fs/promises");
 
 mock.module("@clack/prompts", () => ({
   intro: () => {},
@@ -61,18 +65,6 @@ mock.module("@clack/prompts", () => ({
 
 const fakeArtifacts: SnapshotArtifact[] = [];
 const fakeApplyCalls: string[] = [];
-
-mock.module("../../agents/registry", () => ({
-  Agents: [
-    {
-      name: "claude",
-      snapshot: async () => ({ artifacts: [...fakeArtifacts], warnings: [] }),
-      apply: async (vaultDir: string) => {
-        fakeApplyCalls.push(vaultDir);
-      },
-    },
-  ],
-}));
 
 type PushMod = typeof import("../../commands/push");
 type PullMod = typeof import("../../commands/pull");
@@ -153,6 +145,19 @@ beforeAll(async () => {
   pullMod = await import("../../commands/pull");
   initMod = await import("../../commands/init");
   keyMod = await import("../../commands/key");
+
+  const testAgents = [
+    {
+      name: "claude" as const,
+      snapshot: async () => ({ artifacts: [...fakeArtifacts], warnings: [] }),
+      apply: async (vaultDir: string) => {
+        fakeApplyCalls.push(vaultDir);
+      },
+    },
+  ];
+
+  pushMod.__setPushAgentsForTesting(testAgents);
+  pullMod.__setPullAgentsForTesting(testAgents);
 });
 
 describe("integration", () => {
@@ -188,7 +193,10 @@ describe("integration", () => {
         process.env[key] = value;
       }
     }
+    pushMod.__setPushAgentsForTesting(null);
+    pullMod.__setPullAgentsForTesting(null);
     await rm(tmpDir, { recursive: true, force: true });
+    mock.restore();
   });
 
   beforeEach(() => {

@@ -48,6 +48,7 @@
     "test": "bun test",
     "test:coverage": "bun test --coverage",
     "check": "bun run typecheck && bun run lint && bun run test",
+    "check:act": "act -W .github/workflows/ci.yml",
     "prepack": "bun run build:package",
     "prepare": "lefthook install"
   },

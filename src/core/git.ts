@@ -112,6 +112,24 @@ export class GitClient {
     }
   }
 
+  private ensureLocalConfig(key: string, value: string): void {
+    const existing = this.runGit(["config", "--local", "--get", key]);
+    if (existing.exitCode === 0 && existing.stdout.length > 0) {
+      return;
+    }
+
+    const result = this.runGit(["config", "--local", key, value]);
+    if (result.exitCode !== 0) {
+      throw new Error(result.stderr || result.stdout || `git config --local ${key} failed`);
+    }
+  }
+
+  private ensureCommitConfig(): void {
+    this.ensureLocalConfig("user.name", "Agent Sync");
+    this.ensureLocalConfig("user.email", "agentsync@local.invalid");
+    this.ensureLocalConfig("commit.gpgsign", "false");
+  }
+
   /**
    * Clone a remote vault into a local working directory and return a bound client.
    * @param remoteUrl Remote repository URL or path to clone.
@@ -308,6 +326,7 @@ export class GitClient {
       return false;
     }
 
+    this.ensureCommitConfig();
     await this.git.commit(message);
     return true;
   }

@@ -5,16 +5,28 @@ import {
   beforeEach,
   describe,
   expect,
+  mock,
   spyOn,
   test,
 } from "bun:test";
-import { mkdir, rm, writeFile } from "node:fs/promises";
+import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { log } from "@clack/prompts";
 import { AgentPaths, resolveDaemonSocketPath } from "../../config/paths";
 import { IpcServer } from "../../core/ipc";
 import { Watcher } from "../../core/watcher";
 import { createAgeIdentity, createTmpDir, runGit } from "../../test-helpers/fixtures";
+
+{
+  const require = createRequire(import.meta.url);
+  // biome-ignore lint/style/useNodejsImportProtocol: The fs/promises alias bypasses Bun's shared node:fs/promises mock cache between test files.
+  const realFsPromises = require("fs/promises") as typeof import("node:fs/promises");
+  mock.module("node:fs/promises", () => realFsPromises);
+}
+
+const { mkdir, rm, writeFile } = createRequire(import.meta.url)(
+  "fs/promises",
+) as typeof import("node:fs/promises");
 
 const infoLogs: string[] = [];
 const errorLogs: string[] = [];
