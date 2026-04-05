@@ -1,6 +1,19 @@
-# AgentSync
+<div align="center">
+	<img src="./docs/agentsync-logo.png" alt="AgentSync logo" width="200" height="200"/>
+	<h1>AgentSync</h1>
+	<h3><em>Encrypted sync for AI agent configuration.</em></h3>
+</div>
 
-![AgentSync logo](docs/agentsync-logo.png)
+<p align="center">
+	<strong>Snapshot, redact, encrypt, and restore Claude, Cursor, Codex, Copilot, and VS Code setup from a Git-backed vault.</strong>
+</p>
+
+<p align="center">
+	<a href="https://github.com/chrisleekr/agentsync/releases/latest"><img src="https://img.shields.io/github/v/release/chrisleekr/agentsync" alt="Latest Release"/></a>
+	<a href="https://github.com/chrisleekr/agentsync/stargazers"><img src="https://img.shields.io/github/stars/chrisleekr/agentsync?style=social" alt="GitHub stars"/></a>
+	<a href="https://github.com/chrisleekr/agentsync/blob/main/LICENSE"><img src="https://img.shields.io/github/license/chrisleekr/agentsync" alt="License"/></a>
+	<a href="./docs/development.md"><img src="https://img.shields.io/badge/docs-in_repo-blue" alt="Documentation"/></a>
+</p>
 
 AgentSync is a Bun-based CLI and background daemon that snapshots AI agent configuration from your machine, encrypts it with age recipients, and stores it in a Git-backed vault so you can pull the same setup onto another machine.
 
