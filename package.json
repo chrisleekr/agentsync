@@ -1,6 +1,6 @@
 {
   "name": "@chrisleekr/agentsync",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Encrypted sync for AI agent configuration.",
   "private": false,
   "type": "module",
