@@ -25,7 +25,7 @@ network:
 mcp-servers:
   tavily:
     command: npx
-    args: ["-y", "@tavily/mcp"]
+    args: ["-y", "tavily-mcp@latest"]
     env:
       TAVILY_API_KEY: "${{ secrets.TAVILY_API_KEY }}"
     allowed: ["search", "search_news"]
