@@ -76,7 +76,7 @@ const mockStop = mock(async () => {});
 const mockIsInstalled = mock(async () => true);
 const mockIsRegistered = mock(async () => true);
 
-// Mock the macOS installer module since tests run on macOS
+// Mock all platform installer modules so tests pass on any OS
 mock.module("../../daemon/installer-macos", () => ({
   installMacOs: mockInstall,
   uninstallMacOs: mockUninstall,
@@ -84,6 +84,23 @@ mock.module("../../daemon/installer-macos", () => ({
   stopMacOs: mockStop,
   isInstalledMacOs: mockIsInstalled,
   isRegisteredMacOs: mockIsRegistered,
+}));
+
+mock.module("../../daemon/installer-linux", () => ({
+  installLinux: mockInstall,
+  uninstallLinux: mockUninstall,
+  startLinux: mockStart,
+  stopLinux: mockStop,
+  isInstalledLinux: mockIsInstalled,
+  isRegisteredLinux: mockIsRegistered,
+}));
+
+mock.module("../../daemon/installer-windows", () => ({
+  installWindows: mockInstall,
+  uninstallWindows: mockUninstall,
+  startWindows: mockStart,
+  stopWindows: mockStop,
+  isInstalledWindows: mockIsInstalled,
 }));
 
 const successLogs: string[] = [];
