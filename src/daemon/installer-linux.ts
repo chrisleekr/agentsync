@@ -48,11 +48,7 @@ WantedBy=default.target
  */
 export async function isRegisteredLinux(): Promise<boolean> {
   try {
-    const { stdout } = await execFileAsync("systemctl", [
-      "--user",
-      "is-enabled",
-      SERVICE_NAME,
-    ]);
+    const { stdout } = await execFileAsync("systemctl", ["--user", "is-enabled", SERVICE_NAME]);
     return stdout.trim() === "enabled";
   } catch {
     return false;
@@ -102,17 +98,12 @@ export async function uninstallLinux(): Promise<void> {
  */
 export async function startLinux(): Promise<void> {
   if (!(await isRegisteredLinux())) {
-    throw new Error(
-      "Service not bootstrapped — run `agentsync daemon install` first.",
-    );
+    throw new Error("Service not bootstrapped — run `agentsync daemon install` first.");
   }
   await Promise.race([
     execFileAsync("systemctl", ["--user", "start", SERVICE_NAME]),
     new Promise<never>((_, reject) =>
-      setTimeout(
-        () => reject(new Error("Service manager start timed out.")),
-        10_000,
-      ),
+      setTimeout(() => reject(new Error("Service manager start timed out.")), 10_000),
     ),
   ]);
 }

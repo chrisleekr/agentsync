@@ -11,10 +11,13 @@ import { IpcClient } from "../core/ipc";
  * (created by bunx or the OS). Such paths are not stable across reboots.
  */
 function isEphemeralPath(filePath: string): boolean {
+  // Check the raw path first — bunx creates paths like /tmp/bunx-<uid>-<hash>/...
+  // which may not exist on disk during tests or after the bunx process exits.
+  if (filePath.includes("bunx-")) return true;
   try {
     const resolved = realpathSync(filePath);
     const tmp = realpathSync(tmpdir());
-    return resolved.startsWith(tmp) || resolved.includes("bunx-");
+    return resolved.startsWith(tmp);
   } catch {
     return false;
   }
@@ -27,8 +30,7 @@ function isEphemeralPath(filePath: string): boolean {
  * @throws {Error} when the script path is inside a temporary directory (e.g. bunx).
  */
 export function getExecutableArgs(): string[] {
-  const isBun =
-    process.argv[0].endsWith("bun") || process.argv[0].endsWith("bun.exe");
+  const isBun = process.argv[0].endsWith("bun") || process.argv[0].endsWith("bun.exe");
   if (isBun) {
     if (isEphemeralPath(process.argv[1])) {
       throw new Error(
@@ -123,9 +125,7 @@ export const daemonCommand = defineCommand({
       async run() {
         const installer = await getInstaller();
         if (!(await installer.isRegistered())) {
-          log.error(
-            "Service not bootstrapped — run `agentsync daemon install` first.",
-          );
+          log.error("Service not bootstrapped — run `agentsync daemon install` first.");
           process.exitCode = 1;
           return;
         }
@@ -151,9 +151,7 @@ export const daemonCommand = defineCommand({
           const response = await client.send("status", {}, resolveDaemonSocketPath());
           if (response.ok) {
             const parsed = DaemonStatusSchema.safeParse(response.data);
-            const pid = parsed.success
-              ? parsed.data.pid
-              : (response.data as { pid: number }).pid;
+            const pid = parsed.success ? parsed.data.pid : (response.data as { pid: number }).pid;
             const failures = parsed.success ? parsed.data.consecutiveFailures : 0;
             const lastErr = parsed.success ? parsed.data.lastError : null;
             log.success(`Daemon is running (pid: ${pid})`);

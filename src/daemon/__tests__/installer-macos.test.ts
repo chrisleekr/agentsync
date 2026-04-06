@@ -22,23 +22,45 @@ const execFileCalls: Array<{ cmd: string; args: string[] }> = [];
 // Control whether launchctl commands succeed or fail
 let launchctlShouldFail = false;
 let launchctlFailStderr = "Bootstrap failed: 5: Input/output error";
+let launchctlPrintShouldFail = true; // default: not registered
+
+const execFileMock = (
+  cmd: string,
+  args: string[],
+  callback: (err: Error | null, stdout: string, stderr: string) => void,
+) => {
+  execFileCalls.push({ cmd, args });
+  if (cmd === "launchctl" && args[0] === "print" && launchctlPrintShouldFail) {
+    callback(new Error("Could not find service"), "", "Could not find service");
+    return;
+  }
+  if (launchctlShouldFail && cmd === "launchctl" && args[0] === "bootstrap") {
+    const err = Object.assign(new Error("launchctl failed"), {
+      stderr: launchctlFailStderr,
+    });
+    callback(err, "", launchctlFailStderr);
+    return;
+  }
+  callback(null, "", "");
+};
+
+const { promisify } = require("node:util") as typeof import("node:util");
+(execFileMock as unknown as Record<symbol, unknown>)[promisify.custom] = (
+  cmd: string,
+  args: string[],
+): Promise<{ stdout: string; stderr: string }> =>
+  new Promise((resolve, reject) => {
+    execFileMock(cmd, args, (err, stdout, stderr) => {
+      if (err) {
+        reject(Object.assign(err, { stdout, stderr }));
+        return;
+      }
+      resolve({ stdout, stderr });
+    });
+  });
 
 mock.module("node:child_process", () => ({
-  execFile: (
-    cmd: string,
-    args: string[],
-    callback: (err: Error | null, stdout: string, stderr: string) => void,
-  ) => {
-    execFileCalls.push({ cmd, args });
-    if (launchctlShouldFail && cmd === "launchctl" && args[0] === "bootstrap") {
-      const err = Object.assign(new Error("launchctl failed"), {
-        stderr: launchctlFailStderr,
-      });
-      callback(err, "", launchctlFailStderr);
-      return;
-    }
-    callback(null, "", "");
-  },
+  execFile: execFileMock,
 }));
 
 mock.module("node:fs/promises", () => ({
@@ -80,6 +102,7 @@ beforeEach(() => {
   execFileCalls.length = 0;
   launchctlShouldFail = false;
   launchctlFailStderr = "Bootstrap failed: 5: Input/output error";
+  launchctlPrintShouldFail = true; // default: not registered
 });
 
 // ── T029: buildPlist emits separate <string> elements ─────────────────────────

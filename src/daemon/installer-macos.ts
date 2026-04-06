@@ -95,11 +95,7 @@ export async function installMacOs(args: string[]): Promise<void> {
 
   // Bootout first — ignore errors (service may not be loaded)
   try {
-    await execFileAsync("launchctl", [
-      "bootout",
-      `gui/${process.getuid?.() ?? 501}`,
-      PLIST_PATH,
-    ]);
+    await execFileAsync("launchctl", ["bootout", `gui/${process.getuid?.() ?? 501}`, PLIST_PATH]);
   } catch {
     // Not loaded — expected on first install
   }
@@ -108,11 +104,7 @@ export async function installMacOs(args: string[]): Promise<void> {
   await writeFile(PLIST_PATH, plist, "utf8");
 
   try {
-    await execFileAsync("launchctl", [
-      "bootstrap",
-      `gui/${process.getuid?.() ?? 501}`,
-      PLIST_PATH,
-    ]);
+    await execFileAsync("launchctl", ["bootstrap", `gui/${process.getuid?.() ?? 501}`, PLIST_PATH]);
   } catch (err) {
     const msg = extractServiceManagerError(err);
     throw new Error(
@@ -127,11 +119,7 @@ export async function installMacOs(args: string[]): Promise<void> {
 /** Boot out and remove the macOS LaunchAgent definition if it exists. */
 export async function uninstallMacOs(): Promise<void> {
   try {
-    await execFileAsync("launchctl", [
-      "bootout",
-      `gui/${process.getuid?.() ?? 501}`,
-      PLIST_PATH,
-    ]);
+    await execFileAsync("launchctl", ["bootout", `gui/${process.getuid?.() ?? 501}`, PLIST_PATH]);
   } catch {
     // Service may not be loaded — ignore
   }
@@ -151,10 +139,7 @@ export async function uninstallMacOs(): Promise<void> {
  */
 export async function isRegisteredMacOs(): Promise<boolean> {
   try {
-    await execFileAsync("launchctl", [
-      "print",
-      `gui/${process.getuid?.() ?? 501}/${PLIST_LABEL}`,
-    ]);
+    await execFileAsync("launchctl", ["print", `gui/${process.getuid?.() ?? 501}/${PLIST_LABEL}`]);
     return true;
   } catch {
     return false;
@@ -167,9 +152,7 @@ export async function isRegisteredMacOs(): Promise<boolean> {
  */
 export async function startMacOs(): Promise<void> {
   if (!(await isRegisteredMacOs())) {
-    throw new Error(
-      "Service not bootstrapped — run `agentsync daemon install` first.",
-    );
+    throw new Error("Service not bootstrapped — run `agentsync daemon install` first.");
   }
   await Promise.race([
     execFileAsync("launchctl", [
@@ -178,10 +161,7 @@ export async function startMacOs(): Promise<void> {
       `gui/${process.getuid?.() ?? 501}/${PLIST_LABEL}`,
     ]),
     new Promise<never>((_, reject) =>
-      setTimeout(
-        () => reject(new Error("Service manager start timed out.")),
-        10_000,
-      ),
+      setTimeout(() => reject(new Error("Service manager start timed out.")), 10_000),
     ),
   ]);
 }

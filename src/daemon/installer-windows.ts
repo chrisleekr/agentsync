@@ -16,10 +16,7 @@ const TASK_NAME = "AgentSync";
 
 /** Escape a string for use in XML attribute and text content. */
 function escapeXml(value: string): string {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
+  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
 /**
@@ -29,9 +26,7 @@ function escapeXml(value: string): string {
  */
 export function buildXml(args: string[]): string {
   const command = escapeXml(args[0] ?? "");
-  const scriptAndSubcmd = [...args.slice(1), "daemon", "_run"]
-    .map(escapeXml)
-    .join(" ");
+  const scriptAndSubcmd = [...args.slice(1), "daemon", "_run"].map(escapeXml).join(" ");
 
   return `<?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.4" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
@@ -111,17 +106,12 @@ export async function uninstallWindows(): Promise<void> {
  */
 export async function startWindows(): Promise<void> {
   if (!(await isInstalledWindows())) {
-    throw new Error(
-      "Service not bootstrapped — run `agentsync daemon install` first.",
-    );
+    throw new Error("Service not bootstrapped — run `agentsync daemon install` first.");
   }
   await Promise.race([
     execFileAsync("schtasks", ["/Run", "/TN", TASK_NAME]),
     new Promise<never>((_, reject) =>
-      setTimeout(
-        () => reject(new Error("Service manager start timed out.")),
-        10_000,
-      ),
+      setTimeout(() => reject(new Error("Service manager start timed out.")), 10_000),
     ),
   ]);
 }

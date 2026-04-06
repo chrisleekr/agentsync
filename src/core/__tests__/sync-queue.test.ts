@@ -22,7 +22,9 @@ describe("SyncQueue", () => {
       order.push(2);
     });
 
-    // At this point neither has completed — first is still pending
+    // Flush microtask so fn is called and resolveFirst is assigned
+    await Promise.resolve();
+    // First is still pending (its inner promise hasn't resolved)
     expect(order).toEqual([]);
 
     resolveFirst();
@@ -49,6 +51,9 @@ describe("SyncQueue", () => {
       secondStarted = true;
     });
 
+    // Flush microtask so fn is called and resolveFirst is assigned
+    await Promise.resolve();
+
     // First is still pending — second must not have started
     expect(secondStarted).toBe(false);
 
@@ -56,7 +61,7 @@ describe("SyncQueue", () => {
     await first;
 
     // Now second should have run
-    await new Promise((r) => setTimeout(r, 0)); // flush microtasks
+    await new Promise((r) => setTimeout(r, 0));
     expect(secondStarted).toBe(true);
   });
 
@@ -85,6 +90,8 @@ describe("SyncQueue", () => {
       idleResolved = true;
     });
 
+    // Flush microtask so fn is called and resolveFirst is assigned
+    await Promise.resolve();
     await new Promise((r) => setTimeout(r, 0));
     expect(idleResolved).toBe(false);
 
