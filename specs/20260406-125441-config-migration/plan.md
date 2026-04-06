@@ -17,7 +17,7 @@ Add an `agentsync migrate` command that translates configuration artefacts (glob
 **Project Type**: CLI tool
 **Performance Goals**: N/A — one-shot command, config files are small (<100KB)
 **Constraints**: No new runtime dependencies. Must not modify source agent files. Must abort on detected secret literals in MCP content (constitution Principle I). CLI arguments must be validated with Zod (constitution Principle IV).
-**Scale/Scope**: 5 agents × 3 config types = 15 directional pairs per type, ~40 registered translators total
+**Scale/Scope**: 5 agents, 3 config types, 12 registered translators per type (not all pairs supported), 36 total
 
 ## Constitution Check
 

@@ -5,10 +5,10 @@
  */
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { AgentPaths } from "../../config/paths";
 import { performMigrate, readSourceArtefacts } from "../migrate";
 
@@ -75,7 +75,7 @@ afterEach(async () => {
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function writeFixture(path: string, content: string) {
-  mkdirSync(join(path, ".."), { recursive: true });
+  mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, content);
 }
 
@@ -349,9 +349,10 @@ describe("performMigrate", () => {
     writeFileSync(join(testClaude.commandsDir, "review.md"), "# Review");
     writeFileSync(join(testClaude.commandsDir, "lint.md"), "# Lint");
 
-    // Make cursor commands dir read-only after first write would succeed
-    // We test this by writing to a valid target — the orchestrator should
-    // handle any errors per-artefact
+    // Make cursor commands dir read-only to force write failures
+    mkdirSync(testCursor.commandsDir, { recursive: true });
+    chmodSync(testCursor.commandsDir, 0o444);
+
     const result = await performMigrate({
       from: "claude",
       to: "cursor",
@@ -359,7 +360,10 @@ describe("performMigrate", () => {
       dryRun: false,
     });
 
-    // Both should succeed in normal conditions
-    expect(result.migrated.length).toBeGreaterThanOrEqual(1);
+    // Write failures should be recorded in errors, not thrown
+    expect(result.errors.length).toBeGreaterThan(0);
+
+    // Restore permissions for cleanup
+    chmodSync(testCursor.commandsDir, 0o755);
   });
 });

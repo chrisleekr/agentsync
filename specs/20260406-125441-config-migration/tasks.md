@@ -180,7 +180,7 @@
 ### Parallel Opportunities
 
 **Phase 2 (Foundational)** — Maximum parallelism:
-```
+```text
 T005 global-rules translators  ─┐
 T006 MCP translators            ├── All in parallel (different files)
 T007 commands translators       │
@@ -190,7 +190,7 @@ T010 commands tests             ─┘
 ```
 
 **Phases 4–7 (US2–US5)** — After US1 completes, all can proceed in parallel:
-```
+```text
 US2 dry-run (T019-T020)        ─┐
 US3 --type (T021-T022)          ├── All in parallel
 US4 --to all (T023-T024)        │
@@ -198,7 +198,7 @@ US5 --name (T025-T026)         ─┘
 ```
 
 **Phase 8 (Polish)** — docs and JSDoc in parallel:
-```
+```text
 T027 docs/migrate.md           ─┐
 T028 JSDoc comments             ─┘── In parallel
 ```

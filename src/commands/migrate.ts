@@ -63,13 +63,11 @@ export const migrateCommand = defineCommand({
     const options = parsed.data;
     const result = await performMigrate(options);
 
-    // Fatal errors — abort
-    if (result.errors.length > 0) {
+    const hasErrors = result.errors.length > 0;
+    if (hasErrors) {
       for (const e of result.errors) {
         log.error(e);
       }
-      process.exitCode = 1;
-      return;
     }
 
     // Dry-run output
@@ -87,6 +85,7 @@ export const migrateCommand = defineCommand({
       } else {
         log.info(`Dry run complete. ${result.migrated.length} artefact(s) would be written.`);
       }
+      if (hasErrors) process.exitCode = 1;
       return;
     }
 
@@ -104,5 +103,6 @@ export const migrateCommand = defineCommand({
         log.warn(`Skipped (${s.reason}): ${s.pair.from}\u2192${s.pair.to} ${s.pair.type}`);
       }
     }
+    if (hasErrors) process.exitCode = 1;
   },
 });

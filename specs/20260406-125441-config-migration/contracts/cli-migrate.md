@@ -5,7 +5,7 @@
 
 ## Command Signature
 
-```
+```bash
 agentsync migrate --from <agent> --to <agent|all> [--type <config-type>] [--name <artefact>] [--dry-run]
 ```
 
@@ -30,43 +30,41 @@ agentsync migrate --from <agent> --to <agent|all> [--type <config-type>] [--name
 
 ### Success (exit code 0)
 
-```
+```text
 ◆  agentsync migrate
 
 │  → ~/.cursor/mcp.json: cursor MCP servers written
 │  → ~/.cursor/commands/review.md: cursor command written
-│  ⚠ Skipped (no translator): claude→cursor skills
 │
-└  Migrated 2 artefact(s). 1 pair(s) skipped.
+└  Migrated 2 artefact(s).
 ```
 
 ### Dry-run (exit code 0)
 
-```
+```text
 ◆  agentsync migrate --dry-run
 
 │  [dry-run] → ~/.cursor/mcp.json: cursor MCP servers
 │  [dry-run] → ~/.cursor/commands/review.md: cursor command
-│  [dry-run] skipped (no translator): claude→cursor skills
 │
 └  Dry run complete. 2 artefact(s) would be written.
 ```
 
 ### Error — invalid agent (exit code 1)
 
-```
+```text
 ✖  Unknown agent "vim". Valid agents: claude, cursor, codex, copilot, vscode
 ```
 
 ### Error — --name without --type (exit code 1)
 
-```
+```text
 ✖  --name requires --type to be specified
 ```
 
 ### Error — secret detected in MCP content (exit code 1)
 
-```
+```text
 ✖  Literal secret detected in MCP server "github", field "env.GITHUB_TOKEN"
 ✖  Migration aborted. Remove secret literals from source config and retry.
 ```

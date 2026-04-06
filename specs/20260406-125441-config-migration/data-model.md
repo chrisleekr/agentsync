@@ -56,14 +56,14 @@ Aggregate outcome of a migration operation.
 |-------|------|-------------|
 | migrated | MigratedArtifact[] | Successfully translated and written (or previewed) items |
 | skipped | Array<{ reason: string; pair: MigrationPair }> | Items not migrated, with explanation |
-| warnings | string[] | Non-fatal issues (e.g., secret redaction applied) |
+| warnings | string[] | Non-fatal issues (e.g., unsupported field ignored, deprecated mapping applied) |
 | errors | string[] | Fatal issues that prevented migration |
 
 ### Translator (Function Type)
 
 Pure function that converts source content to target format.
 
-```
+```typescript
 (sourceContent: string, sourceName?: string) → { content: string; targetName: string } | null
 ```
 

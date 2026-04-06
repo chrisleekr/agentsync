@@ -22,7 +22,11 @@ const mdToMd: Translator = (content, sourceName) => {
 const mdToPromptMd: Translator = (content, sourceName) => {
   const trimmed = content.trim();
   if (!trimmed || !sourceName) return null;
-  const base = sourceName.endsWith(".md") ? sourceName.slice(0, -3) : sourceName;
+  const base = sourceName.endsWith(".prompt.md")
+    ? sourceName.slice(0, -".prompt.md".length)
+    : sourceName.endsWith(".md")
+      ? sourceName.slice(0, -3)
+      : sourceName;
   return { content: `${trimmed}\n`, targetName: `${base}.prompt.md` };
 };
 

@@ -60,7 +60,7 @@ export async function readSourceArtefacts(
       if (filePath) {
         const content = await readIfExists(filePath);
         if (content) {
-          const name = basename(filePath) ?? "rules.md";
+          const name = basename(filePath) || "rules.md";
           results.push({ content, name });
         }
       }
@@ -78,7 +78,7 @@ export async function readSourceArtefacts(
     if (filePath) {
       const content = await readIfExists(filePath);
       if (content) {
-        const name = basename(filePath) ?? "mcp";
+        const name = basename(filePath) || "mcp";
         results.push({ content, name });
       }
     }
@@ -297,13 +297,18 @@ export async function performMigrate(options: MigrateOptions): Promise<MigrateRe
               return result;
             }
           } catch {
-            // For TOML content, check the raw string
-            const redacted = redactSecretLiterals(finalContent, "mcpContent");
-            if (redacted.warnings.length > 0) {
-              result.errors.push(
-                ...redacted.warnings.map((w) => `${w} — migration aborted for security`),
-              );
-              return result;
+            // For TOML content, parse it first then check for secrets
+            try {
+              const tomlParsed = TOML.parse(finalContent);
+              const redacted = redactSecretLiterals(tomlParsed, "mcpContent");
+              if (redacted.warnings.length > 0) {
+                result.errors.push(
+                  ...redacted.warnings.map((w) => `${w} — migration aborted for security`),
+                );
+                return result;
+              }
+            } catch {
+              // If TOML parsing also fails, content is malformed — skip secret check
             }
           }
         }

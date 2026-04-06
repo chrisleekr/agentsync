@@ -93,7 +93,9 @@ describe("global-rules translators", () => {
   test("round-trip claude → codex → claude preserves content", () => {
     const original = "# My Rules\n\nBe helpful and concise.";
     const toCodex = translateGlobalRules.claudeToCodex(original);
-    const backToClaude = translateGlobalRules.codexToClaude(toCodex?.content as string);
+    expect(toCodex).not.toBeNull();
+    if (!toCodex) return;
+    const backToClaude = translateGlobalRules.codexToClaude(toCodex.content);
     expect(backToClaude?.content).toBe(original);
   });
 });

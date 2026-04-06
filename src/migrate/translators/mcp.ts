@@ -11,6 +11,7 @@
  */
 
 import * as TOML from "@iarna/toml";
+import { z } from "zod";
 import type { Translator } from "../types";
 
 interface McpServer {
@@ -20,16 +21,33 @@ interface McpServer {
   env?: Record<string, string>;
 }
 
+const McpServerSchema = z.object({
+  command: z.string().min(1),
+  args: z.array(z.string()).optional().default([]),
+  env: z.record(z.string(), z.string()).optional().default({}),
+});
+
+const JsonMcpSchema = z.object({
+  mcpServers: z.record(z.string(), McpServerSchema).default({}),
+});
+
+const TomlMcpSchema = z.object({
+  mcp: z
+    .object({
+      servers: z.record(z.string(), McpServerSchema).default({}),
+    })
+    .default({ servers: {} }),
+});
+
 // ── JSON parsing (Claude, Cursor, VS Code) ───────────────────────────────────
 
 function parseJsonMcp(raw: string): McpServer[] {
-  const parsed = JSON.parse(raw) as Record<string, unknown>;
-  const servers = (parsed.mcpServers ?? {}) as Record<string, Record<string, unknown>>;
-  return Object.entries(servers).map(([name, cfg]) => ({
+  const parsed = JsonMcpSchema.parse(JSON.parse(raw));
+  return Object.entries(parsed.mcpServers).map(([name, cfg]) => ({
     name,
-    command: cfg.command as string,
-    args: (cfg.args as string[] | undefined) ?? [],
-    env: (cfg.env as Record<string, string> | undefined) ?? {},
+    command: cfg.command,
+    args: cfg.args,
+    env: cfg.env,
   }));
 }
 
@@ -44,14 +62,13 @@ function serializeJsonMcp(servers: McpServer[]): string {
 // ── TOML parsing (Codex) ─────────────────────────────────────────────────────
 
 function parseTomlMcp(raw: string): McpServer[] {
-  const parsed = TOML.parse(raw) as Record<string, unknown>;
-  const mcp = (parsed.mcp ?? {}) as Record<string, unknown>;
-  const servers = (mcp.servers ?? {}) as Record<string, Record<string, unknown>>;
-  return Object.entries(servers).map(([name, cfg]) => ({
+  // Round-trip through JSON to convert TOML's special array/integer types to plain JS objects
+  const parsed = TomlMcpSchema.parse(JSON.parse(JSON.stringify(TOML.parse(raw))));
+  return Object.entries(parsed.mcp.servers).map(([name, cfg]) => ({
     name,
-    command: cfg.command as string,
-    args: (cfg.args as string[] | undefined) ?? [],
-    env: (cfg.env as Record<string, string> | undefined) ?? {},
+    command: cfg.command,
+    args: cfg.args,
+    env: cfg.env,
   }));
 }
 
