@@ -126,6 +126,22 @@ describe("buildXml", () => {
     const args = xml.match(/<Arguments>(.*?)<\/Arguments>/)?.[1] ?? "";
     expect(args).toContain('\\"');
   });
+
+  // T074a: trailing backslashes are doubled per CommandLineToArgvW
+  test("args with trailing backslash have it doubled inside quotes (T074a)", () => {
+    const xml = m.buildXml(["bun", "C:\\path\\"]);
+    const args = xml.match(/<Arguments>(.*?)<\/Arguments>/)?.[1] ?? "";
+    // Trailing \ before closing " must be doubled: "C:\path\\" → Windows sees C:\path\
+    expect(args).toContain('"C:\\path\\\\"');
+  });
+
+  // T074a: backslashes before quotes are doubled
+  test("backslashes immediately before a quote are doubled (T074a)", () => {
+    const xml = m.buildXml(["bun", 'C:\\path\\"name']);
+    const args = xml.match(/<Arguments>(.*?)<\/Arguments>/)?.[1] ?? "";
+    // The \" sequence: backslash must be doubled so Windows sees literal \ + literal "
+    expect(args).toContain('\\\\\\"');
+  });
 });
 
 describe("installWindows", () => {

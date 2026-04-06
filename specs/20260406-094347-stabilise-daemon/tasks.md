@@ -275,6 +275,11 @@ T010  →  src/core/sync-queue.ts         (fill SyncQueue body)
 - [x] T072 [P] Add `isRegisteredWindows: mockIsRegistered` to Windows mock in `src/commands/__tests__/daemon.test.ts` line 98–104
 - [x] T073 [P] Replace `expect(signalHandlers.has("SIGTERM")).toBe(true)` with `expect(exitCode).toBeNull()` in `src/daemon/__tests__/index.test.ts` retry logic test (line 368)
 
+### Fix 6: Windows backslash escaping (CodeQL + CodeRabbit round 2)
+
+- [x] T074a [P] [US4] Update `src/daemon/__tests__/installer-windows.test.ts` — add test for `quoteWinArg` with trailing backslash (e.g. `C:\path\` → `"C:\\path\\"`) and backslash-before-quote (TDD: write test first)
+- [x] T074b [US4] Fix `quoteWinArg()` in `src/daemon/installer-windows.ts` — escape backslashes before quotes and trailing backslashes per `CommandLineToArgvW` conventions using `(\\*)("|$)` regex
+
 **Checkpoint**: All PR review findings addressed. Run `bun run check` to validate.
 
 ---

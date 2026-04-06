@@ -20,13 +20,19 @@ function escapeXml(value: string): string {
 }
 
 /**
- * Quote a single argument for Windows command-line parsing.
- * Wraps in double quotes if the value contains whitespace or `"`, and escapes
- * internal double quotes with `\"` per `CommandLineToArgvW` conventions.
+ * Quote a single argument for Windows command-line parsing per `CommandLineToArgvW`.
+ *
+ * Rules: backslashes before a `"` or at end-of-string must be doubled so the
+ * closing quote is not accidentally escaped. Backslashes elsewhere are literal.
  */
 function quoteWinArg(arg: string): string {
-  if (/[\s"]/.test(arg) || arg === "") {
-    return `"${arg.replace(/"/g, '\\"')}"`;
+  if (/[\s"\\]/.test(arg) || arg === "") {
+    const escaped = arg.replace(
+      /(\\*)("|$)/g,
+      (_match, slashes: string, quote: string) =>
+        slashes.replace(/\\/g, "\\\\") + (quote ? '\\"' : ""),
+    );
+    return `"${escaped}"`;
   }
   return arg;
 }
