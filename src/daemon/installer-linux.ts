@@ -17,15 +17,28 @@ const SERVICE_NAME = "agentsync";
 const SYSTEMD_USER_DIR = join(homedir(), ".config", "systemd", "user");
 const SERVICE_PATH = join(SYSTEMD_USER_DIR, `${SERVICE_NAME}.service`);
 
-/** Build the systemd unit text for the current executable. */
-function buildUnit(executablePath: string): string {
+/**
+ * Quote a single argument for systemd ExecStart per systemd.syntax(7).
+ * Wraps in double quotes and applies C-style escaping for `\` and `"`.
+ */
+function quoteSystemdArg(arg: string): string {
+  return `"${arg.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+}
+
+/**
+ * Build the systemd unit text for the given executable args array.
+ * Each argument is individually quoted per systemd.syntax(7) to correctly
+ * handle paths containing spaces or special characters.
+ */
+export function buildUnit(args: string[]): string {
+  const execStart = [...args, "daemon", "_run"].map(quoteSystemdArg).join(" ");
   return `[Unit]
 Description=AgentSync daemon — encrypts and syncs AI agent configs
 After=network.target
 
 [Service]
 Type=simple
-ExecStart=${executablePath} daemon _run
+ExecStart=${execStart}
 Restart=on-failure
 RestartSec=5
 StandardOutput=journal
@@ -37,10 +50,25 @@ WantedBy=default.target
 `;
 }
 
-/** Install and start the Linux user service that runs the daemon in the background. */
-export async function installLinux(executablePath: string): Promise<void> {
+/**
+ * Check whether the Linux user service is registered with systemd.
+ * Returns true only when `systemctl --user is-enabled agentsync` outputs "enabled".
+ */
+export async function isRegisteredLinux(): Promise<boolean> {
+  try {
+    const { stdout } = await execFileAsync("systemctl", ["--user", "is-enabled", SERVICE_NAME]);
+    return stdout.trim() === "enabled";
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Install and start the Linux user service that runs the daemon in the background.
+ */
+export async function installLinux(args: string[]): Promise<void> {
   await mkdir(SYSTEMD_USER_DIR, { recursive: true });
-  const unit = buildUnit(executablePath);
+  const unit = buildUnit(args);
   await writeFile(SERVICE_PATH, unit, "utf8");
 
   await execFileAsync("systemctl", ["--user", "daemon-reload"]);
@@ -72,9 +100,28 @@ export async function uninstallLinux(): Promise<void> {
   log.success(`Removed systemd user service: ${SERVICE_NAME}`);
 }
 
-/** Start the installed Linux user service. */
+/**
+ * Start the installed Linux user service.
+ * Verifies registration first; applies a 10-second timeout on the start call.
+ */
 export async function startLinux(): Promise<void> {
-  await execFileAsync("systemctl", ["--user", "start", SERVICE_NAME]);
+  if (!(await isRegisteredLinux())) {
+    throw new Error("Service not bootstrapped — run `agentsync daemon install` first.");
+  }
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 10_000);
+  try {
+    await execFileAsync("systemctl", ["--user", "start", SERVICE_NAME], {
+      signal: controller.signal,
+    });
+  } catch (err) {
+    if ((err as Error).name === "AbortError") {
+      throw new Error("Service manager start timed out.");
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
 /** Stop the installed Linux user service. */

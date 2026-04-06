@@ -25,3 +25,16 @@ export const AgentSyncConfigSchema = z.object({
 
 /** Normalized runtime shape derived from the validated config schema. */
 export type AgentSyncConfig = z.infer<typeof AgentSyncConfigSchema>;
+
+/**
+ * Schema for the status payload returned by the daemon's IPC `status` command.
+ * All fields crossing the IPC trust boundary are validated with Zod per Constitution IV.
+ */
+export const DaemonStatusSchema = z.object({
+  pid: z.number().int().positive(),
+  consecutiveFailures: z.number().int().min(0),
+  lastError: z.string().nullable(),
+});
+
+/** Normalized status shape for the daemon IPC status response. */
+export type DaemonStatus = z.infer<typeof DaemonStatusSchema>;

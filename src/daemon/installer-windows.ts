@@ -14,12 +14,40 @@ const execFileAsync = promisify(execFile);
 
 const TASK_NAME = "AgentSync";
 
-/** Build the Task Scheduler XML definition for the current executable. */
-function buildXml(executablePath: string): string {
-  const escapedPath = executablePath
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
+/** Escape a string for use in XML attribute and text content. */
+function escapeXml(value: string): string {
+  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+/**
+ * Quote a single argument for Windows command-line parsing per `CommandLineToArgvW`.
+ *
+ * Rules: backslashes before a `"` or at end-of-string must be doubled so the
+ * closing quote is not accidentally escaped. Backslashes elsewhere are literal.
+ */
+function quoteWinArg(arg: string): string {
+  if (/[\s"\\]/.test(arg) || arg === "") {
+    const escaped = arg.replace(
+      /(\\*)("|$)/g,
+      (_match, slashes: string, quote: string) =>
+        slashes.replace(/\\/g, "\\\\") + (quote ? '\\"' : ""),
+    );
+    return `"${escaped}"`;
+  }
+  return arg;
+}
+
+/**
+ * Build the Task Scheduler XML definition for the given executable args array.
+ * `args[0]` becomes `<Command>` (the binary only); the remaining args plus
+ * `daemon _run` become `<Arguments>` — matching the Task Scheduler XML schema.
+ */
+export function buildXml(args: string[]): string {
+  const command = escapeXml(args[0] ?? "");
+  const scriptAndSubcmd = [...args.slice(1), "daemon", "_run"]
+    .map(quoteWinArg)
+    .map(escapeXml)
+    .join(" ");
 
   return `<?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.4" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
@@ -43,17 +71,20 @@ function buildXml(executablePath: string): string {
   </Settings>
   <Actions Context="Author">
     <Exec>
-      <Command>${escapedPath}</Command>
-      <Arguments>daemon _run</Arguments>
+      <Command>${command}</Command>
+      <Arguments>${scriptAndSubcmd}</Arguments>
     </Exec>
   </Actions>
 </Task>
 `;
 }
 
-/** Install and start the Windows scheduled task that runs the daemon at logon. */
-export async function installWindows(executablePath: string): Promise<void> {
-  const xml = buildXml(executablePath);
+/**
+ * Install and start the Windows scheduled task that runs the daemon at logon.
+ * `args[0]` is the binary; remaining args plus `daemon _run` go into `<Arguments>`.
+ */
+export async function installWindows(args: string[]): Promise<void> {
+  const xml = buildXml(args);
   const tmpXml = `${process.env.TEMP ?? "C:\\Temp"}\\agentsync-task.xml`;
 
   const { writeFile, rm } = await import("node:fs/promises");
@@ -90,9 +121,26 @@ export async function uninstallWindows(): Promise<void> {
   log.success(`Removed Windows scheduled task: ${TASK_NAME}`);
 }
 
-/** Start the installed Windows scheduled task immediately. */
+/**
+ * Start the Windows scheduled task.
+ * Uses `isInstalledWindows()` as the registration check; applies a 10-second timeout.
+ */
 export async function startWindows(): Promise<void> {
-  await execFileAsync("schtasks", ["/Run", "/TN", TASK_NAME]);
+  if (!(await isInstalledWindows())) {
+    throw new Error("Service not bootstrapped — run `agentsync daemon install` first.");
+  }
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 10_000);
+  try {
+    await execFileAsync("schtasks", ["/Run", "/TN", TASK_NAME], { signal: controller.signal });
+  } catch (err) {
+    if ((err as Error).name === "AbortError") {
+      throw new Error("Service manager start timed out.");
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
 /** Stop the running Windows scheduled task instance. */

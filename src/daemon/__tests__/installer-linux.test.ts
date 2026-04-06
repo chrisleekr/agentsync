@@ -1,5 +1,6 @@
 /**
- * T046 — installer-linux: installLinux, uninstallLinux, startLinux, stopLinux, isInstalledLinux
+ * Tests for installer-linux: installLinux, uninstallLinux, startLinux, stopLinux,
+ * isInstalledLinux, buildUnit, isRegisteredLinux
  *
  * Strategy
  * --------
@@ -10,16 +11,52 @@ import { afterAll, beforeAll, beforeEach, describe, expect, mock, test } from "b
 
 const fsWrites = new Map<string, string>();
 const execFileCalls: Array<{ cmd: string; args: string[] }> = [];
+let lastExecFileOpts: Record<string, unknown> | undefined;
+
+// Control is-enabled output for isRegisteredLinux tests
+let isEnabledStdout = "";
+let isEnabledShouldFail = false;
+
+// Build the execFile mock with custom promisify support so that
+// `promisify(execFile)` returns { stdout, stderr } rather than just stdout.
+const execFileMock = (
+  cmd: string,
+  args: string[],
+  callback: (err: Error | null, stdout: string, stderr: string) => void,
+) => {
+  execFileCalls.push({ cmd, args });
+  if (cmd === "systemctl" && args.includes("is-enabled")) {
+    if (isEnabledShouldFail) {
+      callback(new Error("not enabled"), "", "");
+      return;
+    }
+    callback(null, isEnabledStdout, "");
+    return;
+  }
+  callback(null, "", "");
+};
+
+const { promisify } = require("node:util") as typeof import("node:util");
+(execFileMock as unknown as Record<symbol, unknown>)[promisify.custom] = (
+  ...fnArgs: unknown[]
+): Promise<{ stdout: string; stderr: string }> =>
+  new Promise((resolve, reject) => {
+    const cmd = fnArgs[0] as string;
+    const args = fnArgs[1] as string[];
+    if (fnArgs.length > 2 && typeof fnArgs[2] === "object" && fnArgs[2] !== null) {
+      lastExecFileOpts = fnArgs[2] as Record<string, unknown>;
+    }
+    execFileMock(cmd, args, (err, stdout, stderr) => {
+      if (err) {
+        reject(Object.assign(err, { stdout, stderr }));
+        return;
+      }
+      resolve({ stdout, stderr });
+    });
+  });
 
 mock.module("node:child_process", () => ({
-  execFile: (
-    cmd: string,
-    args: string[],
-    callback: (err: Error | null, stdout: string, stderr: string) => void,
-  ) => {
-    execFileCalls.push({ cmd, args });
-    callback(null, "", "");
-  },
+  execFile: execFileMock,
 }));
 
 mock.module("node:fs/promises", () => ({
@@ -50,8 +87,6 @@ beforeAll(async () => {
   m = await import("../installer-linux");
 });
 
-// Restore mocked modules after this file completes so they do not bleed into
-// subsequent test files (e.g. integration.test.ts) that need the real node:fs/promises.
 afterAll(() => {
   mock.restore();
 });
@@ -59,11 +94,42 @@ afterAll(() => {
 beforeEach(() => {
   fsWrites.clear();
   execFileCalls.length = 0;
+  isEnabledStdout = "";
+  isEnabledShouldFail = false;
+  lastExecFileOpts = undefined;
+});
+
+// T034: buildUnit emits correct ExecStart
+describe("buildUnit", () => {
+  test("produces ExecStart with each arg quoted plus daemon _run (T034)", () => {
+    const unit = m.buildUnit(["bun", "/path/cli.js"]);
+    expect(unit).toContain('ExecStart="bun" "/path/cli.js" "daemon" "_run"');
+  });
+
+  test("single-element args produce correct ExecStart", () => {
+    const unit = m.buildUnit(["/usr/local/bin/agentsync"]);
+    expect(unit).toContain('ExecStart="/usr/local/bin/agentsync" "daemon" "_run"');
+  });
+
+  // T063: args containing spaces are quoted per systemd.syntax(7)
+  test("args containing spaces are quoted for systemd (T063)", () => {
+    const unit = m.buildUnit(["bun", "/home/user/My Program/cli.js"]);
+    expect(unit).toContain('"bun"');
+    expect(unit).toContain('"/home/user/My Program/cli.js"');
+    expect(unit).toContain('"daemon"');
+    expect(unit).toContain('"_run"');
+  });
+
+  test("args containing backslashes and quotes are C-style escaped (T063)", () => {
+    const unit = m.buildUnit(['/path/with"quote', "/path/with\\backslash"]);
+    expect(unit).toContain('"/path/with\\"quote"');
+    expect(unit).toContain('"/path/with\\\\backslash"');
+  });
 });
 
 describe("installLinux", () => {
   test("writes a systemd unit file with the correct service name", async () => {
-    await m.installLinux("/usr/local/bin/agentsync");
+    await m.installLinux(["/usr/local/bin/agentsync"]);
 
     const written = [...fsWrites.entries()].find(([p]) => p.endsWith(".service"));
     expect(written).toBeDefined();
@@ -74,7 +140,7 @@ describe("installLinux", () => {
   });
 
   test("calls systemctl daemon-reload and enable --now", async () => {
-    await m.installLinux("/usr/local/bin/agentsync");
+    await m.installLinux(["/usr/local/bin/agentsync"]);
 
     const daemonReload = execFileCalls.find(
       (c) => c.cmd === "systemctl" && c.args.includes("daemon-reload"),
@@ -87,14 +153,14 @@ describe("installLinux", () => {
   });
 
   test("isInstalledLinux returns true after install", async () => {
-    await m.installLinux("/usr/local/bin/agentsync");
+    await m.installLinux(["/usr/local/bin/agentsync"]);
     expect(await m.isInstalledLinux()).toBe(true);
   });
 });
 
 describe("uninstallLinux", () => {
   test("calls systemctl disable --now and daemon-reload", async () => {
-    await m.installLinux("/usr/local/bin/agentsync");
+    await m.installLinux(["/usr/local/bin/agentsync"]);
     execFileCalls.length = 0;
 
     await m.uninstallLinux();
@@ -106,18 +172,27 @@ describe("uninstallLinux", () => {
   });
 
   test("isInstalledLinux returns false after uninstall", async () => {
-    await m.installLinux("/usr/local/bin/agentsync");
+    await m.installLinux(["/usr/local/bin/agentsync"]);
     await m.uninstallLinux();
     expect(await m.isInstalledLinux()).toBe(false);
   });
 });
 
 describe("startLinux / stopLinux", () => {
-  test("startLinux calls systemctl start <service>", async () => {
+  test("startLinux throws when not registered", async () => {
+    isEnabledShouldFail = true;
+    await expect(m.startLinux()).rejects.toThrow("Service not bootstrapped");
+  });
+
+  // T070: startLinux passes AbortSignal to execFileAsync
+  test("startLinux passes signal option to execFileAsync for start (T070)", async () => {
+    isEnabledStdout = "enabled\n";
     await m.startLinux();
+
     const startCall = execFileCalls.find((c) => c.cmd === "systemctl" && c.args.includes("start"));
     expect(startCall).toBeDefined();
-    expect(startCall?.args).toContain("agentsync");
+    expect(lastExecFileOpts).toBeDefined();
+    expect(lastExecFileOpts?.signal).toBeInstanceOf(AbortSignal);
   });
 
   test("stopLinux calls systemctl stop <service>", async () => {
@@ -131,5 +206,22 @@ describe("startLinux / stopLinux", () => {
 describe("isInstalledLinux", () => {
   test("returns false when the service file does not exist", async () => {
     expect(await m.isInstalledLinux()).toBe(false);
+  });
+});
+
+describe("isRegisteredLinux", () => {
+  test("returns true when systemctl is-enabled outputs 'enabled'", async () => {
+    isEnabledStdout = "enabled\n";
+    expect(await m.isRegisteredLinux()).toBe(true);
+  });
+
+  test("returns false when systemctl is-enabled outputs anything else", async () => {
+    isEnabledStdout = "disabled\n";
+    expect(await m.isRegisteredLinux()).toBe(false);
+  });
+
+  test("returns false when systemctl is-enabled fails", async () => {
+    isEnabledShouldFail = true;
+    expect(await m.isRegisteredLinux()).toBe(false);
   });
 });
