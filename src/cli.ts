@@ -4,6 +4,7 @@ import { daemonCommand } from "./commands/daemon";
 import { doctorCommand } from "./commands/doctor";
 import { initCommand } from "./commands/init";
 import { keyCommand } from "./commands/key";
+import { migrateCommand } from "./commands/migrate";
 import { pullCommand } from "./commands/pull";
 import { pushCommand } from "./commands/push";
 import { statusCommand } from "./commands/status";
@@ -23,6 +24,7 @@ const main = defineCommand({
     doctor: doctorCommand,
     daemon: daemonCommand,
     key: keyCommand,
+    migrate: migrateCommand,
   },
 });
 
