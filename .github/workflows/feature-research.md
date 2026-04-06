@@ -20,7 +20,13 @@ engine:
 network:
   allowed:
     - defaults
+    - node
+    - github
     - "*.tavily.com"
+    - "*.cursor.com"
+    - "*.anthropic.com"
+    - "*.visualstudio.com"
+    - "*.openai.com"
 
 mcp-servers:
   tavily:
@@ -54,6 +60,11 @@ in the **past 7 days** for each of these tools:
 - GitHub Copilot
 - OpenAI Codex CLI
 - VS Code
+
+## Important
+
+You MUST use the `mcp__tavily__search` tool for all web searches and content
+retrieval. Do NOT use WebFetch or direct HTTP requests to external URLs unless travily is unable to retrieve the content you need.
 
 ## What to Check
 
