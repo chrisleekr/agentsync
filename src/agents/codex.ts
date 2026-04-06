@@ -4,13 +4,16 @@ import { log } from "@clack/prompts";
 import * as TOML from "@iarna/toml";
 import { AgentPaths } from "../config/paths";
 import { type RedactionResult, redactSecretLiterals, shouldNeverSync } from "../core/sanitizer";
-import { atomicWrite, collect, readIfExists, type SnapshotArtifact } from "./_utils";
+import {
+  atomicWrite,
+  collect,
+  readIfExists,
+  type SnapshotArtifact,
+  type SnapshotResult,
+} from "./_utils";
 
 /** Snapshot payload for the Codex adapter. */
-export interface CodexSnapshotResult {
-  artifacts: SnapshotArtifact[];
-  warnings: string[];
-}
+export type CodexSnapshotResult = SnapshotResult;
 
 /**
  * Sanitize Codex config.toml: parse the TOML properly, redact any secret-looking
@@ -37,7 +40,7 @@ function sanitizeCodexConfig(raw: string): RedactionResult<string> {
 }
 
 /** Collect Codex instructions, rules, and config that are safe to sync. */
-export async function snapshotCodex(): Promise<CodexSnapshotResult> {
+export async function snapshotCodex(): Promise<SnapshotResult> {
   const artifacts: SnapshotArtifact[] = [];
   const warnings: string[] = [];
 

@@ -4,6 +4,7 @@ import { homedir } from "node:os";
 import { join, relative } from "node:path";
 import { log } from "@clack/prompts";
 import { defineCommand } from "citty";
+import pc from "picocolors";
 import type { SnapshotArtifact } from "../agents/registry";
 import { Agents } from "../agents/registry";
 import { loadConfig, resolveConfigPath } from "../config/loader";
@@ -171,19 +172,20 @@ export const statusCommand = defineCommand({
     log.info(header);
     log.info(separator);
 
+    const statusColour: Record<SyncStatus, (s: string) => string> = {
+      synced: pc.green,
+      "local-changed": pc.yellow,
+      "vault-only": pc.cyan,
+      "local-only": pc.dim,
+      error: pc.red,
+    };
+
     for (const row of rows) {
-      const statusDisplay: Record<SyncStatus, string> = {
-        synced: "synced",
-        "local-changed": "local-changed",
-        "vault-only": "vault-only",
-        "local-only": "local-only",
-        error: "error",
-      };
       log.info(
         [
           row.agent.padEnd(colWidths.agent),
           row.file.padEnd(colWidths.file),
-          statusDisplay[row.status].padEnd(colWidths.status),
+          statusColour[row.status](row.status.padEnd(colWidths.status)),
           row.detail,
         ].join("  "),
       );

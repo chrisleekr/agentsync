@@ -214,3 +214,48 @@ describe("applyCursorVault dryRun", () => {
     expect(await Bun.file(testCursorPaths.settingsJson).exists()).toBe(false);
   });
 });
+
+// ── applyCursorVault unknown file warning ─────────────────────────────────────
+
+describe("applyCursorVault unknown .age file warning", () => {
+  let tmpDir: string;
+  const warnMessages: string[] = [];
+  let originalWarn: typeof import("@clack/prompts").log.warn;
+
+  beforeEach(async () => {
+    tmpDir = await createTmpDir();
+    testCursorPaths.settingsJson = join(tmpDir, "settings.json");
+    testCursorPaths.mcpGlobal = join(tmpDir, "mcp.json");
+    testCursorPaths.commandsDir = join(tmpDir, "commands");
+    warnMessages.length = 0;
+    const clack = await import("@clack/prompts");
+    originalWarn = clack.log.warn;
+    clack.log.warn = (msg?: string) => {
+      if (msg) warnMessages.push(msg);
+    };
+  });
+
+  afterEach(async () => {
+    const clack = await import("@clack/prompts");
+    clack.log.warn = originalWarn;
+    await rm(tmpDir, { recursive: true, force: true });
+  });
+
+  test("logs warning when encountering unrecognised .age file in cursor vault", async () => {
+    const { applyCursorVault } = cursorModule;
+    const { encryptString } = await import("../../core/encryptor");
+    const { identity, recipient } = await createAgeIdentity();
+
+    const vaultDir = join(tmpDir, "vault");
+    const cursorVaultDir = join(vaultDir, "cursor");
+    await mkdir(cursorVaultDir, { recursive: true });
+
+    // Place an unknown .age file
+    const encrypted = await encryptString("unknown content", [recipient]);
+    await writeFile(join(cursorVaultDir, "unknown-thing.age"), encrypted, "utf8");
+
+    await applyCursorVault(vaultDir, identity, false);
+
+    expect(warnMessages.some((m) => m.includes("unknown-thing.age"))).toBe(true);
+  });
+});

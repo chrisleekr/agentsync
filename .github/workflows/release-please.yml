@@ -67,12 +67,19 @@ jobs:
     needs: release-please
     if: ${{ needs.release-please.outputs.release_created }}
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: ubuntu-latest
             target: agentsync-linux-x64
+          - os: ubuntu-latest
+            target: agentsync-linux-arm64
+            bun_target: bun-linux-arm64
           - os: macos-latest
             target: agentsync-macos-arm64
+          - os: macos-latest
+            target: agentsync-macos-x64
+            bun_target: bun-darwin-x64
     runs-on: ${{ matrix.os }}
     permissions:
       contents: write
@@ -95,7 +102,7 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Build binary
-        run: bun build --compile src/cli.ts --outfile dist/${{ matrix.target }}
+        run: bun build --compile ${{ matrix.bun_target && format('--target {0}', matrix.bun_target) || '' }} src/cli.ts --outfile dist/${{ matrix.target }}
 
       - name: Upload release artifact
         env:

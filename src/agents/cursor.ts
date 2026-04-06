@@ -3,13 +3,16 @@ import { basename, join } from "node:path";
 import { log } from "@clack/prompts";
 import { AgentPaths } from "../config/paths";
 import { redactSecretLiterals, shouldNeverSync } from "../core/sanitizer";
-import { atomicWrite, collect, readIfExists, type SnapshotArtifact } from "./_utils";
+import {
+  atomicWrite,
+  collect,
+  readIfExists,
+  type SnapshotArtifact,
+  type SnapshotResult,
+} from "./_utils";
 
 /** Snapshot payload for the Cursor adapter. */
-export interface CursorSnapshotResult {
-  artifacts: SnapshotArtifact[];
-  warnings: string[];
-}
+export type CursorSnapshotResult = SnapshotResult;
 
 /**
  * Read the Cursor global `rules` field from its Electron settings.json.
@@ -30,7 +33,7 @@ async function readCursorRules(): Promise<string | null> {
 }
 
 /** Collect Cursor rules, MCP config, and commands that are safe to sync. */
-export async function snapshotCursor(): Promise<CursorSnapshotResult> {
+export async function snapshotCursor(): Promise<SnapshotResult> {
   const artifacts: SnapshotArtifact[] = [];
   const warnings: string[] = [];
 
@@ -158,6 +161,8 @@ export async function applyCursorVault(
         continue;
       }
       await applyCursorMcp(decrypted);
+    } else {
+      log.warn(`[cursor] Unrecognised vault file skipped: ${name}`);
     }
   }
 

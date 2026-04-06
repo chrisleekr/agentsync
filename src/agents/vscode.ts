@@ -4,16 +4,19 @@ import { log } from "@clack/prompts";
 import { AgentPaths } from "../config/paths";
 import { decryptString } from "../core/encryptor";
 import { redactSecretLiterals } from "../core/sanitizer";
-import { atomicWrite, collect, readIfExists, type SnapshotArtifact } from "./_utils";
+import {
+  atomicWrite,
+  collect,
+  readIfExists,
+  type SnapshotArtifact,
+  type SnapshotResult,
+} from "./_utils";
 
 /** Snapshot payload for the VS Code adapter. */
-export interface VsCodeSnapshotResult {
-  artifacts: SnapshotArtifact[];
-  warnings: string[];
-}
+export type VsCodeSnapshotResult = SnapshotResult;
 
 /** Collect the VS Code MCP configuration that AgentSync manages. */
-export async function snapshotVsCode(): Promise<VsCodeSnapshotResult> {
+export async function snapshotVsCode(): Promise<SnapshotResult> {
   const artifacts: SnapshotArtifact[] = [];
   const warnings: string[] = [];
 

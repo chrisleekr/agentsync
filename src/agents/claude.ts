@@ -3,16 +3,19 @@ import { join } from "node:path";
 import { log } from "@clack/prompts";
 import { AgentPaths } from "../config/paths";
 import { sanitizeClaudeHooks, sanitizeClaudeMcp, shouldNeverSync } from "../core/sanitizer";
-import { atomicWrite, collect, readIfExists, type SnapshotArtifact } from "./_utils";
+import {
+  atomicWrite,
+  collect,
+  readIfExists,
+  type SnapshotArtifact,
+  type SnapshotResult,
+} from "./_utils";
 
 /** Snapshot payload for the Claude adapter. */
-export interface ClaudeSnapshotResult {
-  artifacts: SnapshotArtifact[];
-  warnings: string[];
-}
+export type ClaudeSnapshotResult = SnapshotResult;
 
 /** Collect Claude files that are safe to store in the encrypted vault. */
-export async function snapshotClaude(): Promise<ClaudeSnapshotResult> {
+export async function snapshotClaude(): Promise<SnapshotResult> {
   const artifacts: SnapshotArtifact[] = [];
   const warnings: string[] = [];
 
