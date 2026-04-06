@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.4](https://github.com/chrisleekr/agentsync/compare/v0.1.3...v0.1.4) (2026-04-06)
+
+
+### Features
+
+* **workflows:** add GitHub Agentic Workflows for automated feature research ([#23](https://github.com/chrisleekr/agentsync/issues/23)) ([fcb6b5f](https://github.com/chrisleekr/agentsync/commit/fcb6b5fd66249687a34d7ff99854f6fd2169b0fc))
+
 ## [0.1.3](https://github.com/chrisleekr/agentsync/compare/v0.1.2...v0.1.3) (2026-04-06)
 
 
