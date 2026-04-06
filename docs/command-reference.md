@@ -173,6 +173,33 @@ bunx --package @chrisleekr/agentsync agentsync key rotate
 - Rotation depends on the old private key still being available so existing vault files can be decrypted.
 - Recipient names should describe machines clearly because they become the stable config key.
 
+## migrate
+
+**Why**: Translate configuration from one agent's format to another — global rules, MCP servers, or commands.
+
+**Typical usage**:
+
+```bash
+bunx --package @chrisleekr/agentsync agentsync migrate --from claude --to cursor
+bunx --package @chrisleekr/agentsync agentsync migrate --from claude --to all --type mcp
+bunx --package @chrisleekr/agentsync agentsync migrate --from claude --to cursor --type commands --name review.md
+bunx --package @chrisleekr/agentsync agentsync migrate --from claude --to cursor --dry-run
+```
+
+**Needs**: source agent config files present on disk. No vault initialisation required.
+
+**Outcome**: target agent config files are created or updated with translated content from the source agent.
+
+**Config types**: `global-rules`, `mcp`, `commands`. Omit `--type` to migrate all.
+
+**Caveats**:
+
+- Migration is a one-shot local operation — it does not push or pull from the vault.
+- Colliding entries are overwritten. For MCP servers, per-server merge preserves target-only servers.
+- Migration aborts if literal secrets (API keys, tokens) are detected in MCP content.
+- Skills migration is not supported — deferred to a follow-up issue.
+- Use `--dry-run` to preview changes before writing.
+
 ## Source-based execution
 
 If you are working from a clone before a package is published, use the contributor workflow from [development.md](development.md) and run commands through `bun run src/cli.ts ...`.
