@@ -1,4 +1,7 @@
 ---
+name: Feature Opportunity Researcher
+description: Weekly scan for new agent config fields not yet synced by AgentSync
+
 # Trigger - when should this workflow run?
 on:
   schedule: weekly on friday around 5pm utc+10
@@ -9,12 +12,23 @@ permissions:
   issues: read
   pull-requests: read
 
-engine: claude
+engine:
+  id: copilot
+  model: gpt-5.4
+  max-continuations: 3
 
-network: defaults
+network:
+  allowed:
+    - defaults
+    - "*.tavily.com"
 
-secrets:
-  TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
+mcp-servers:
+  tavily:
+    command: npx
+    args: ["-y", "@tavily/mcp"]
+    env:
+      TAVILY_API_KEY: "${{ secrets.TAVILY_API_KEY }}"
+    allowed: ["search", "search_news"]
 
 safe-outputs:
   create-issue:
@@ -22,7 +36,7 @@ safe-outputs:
     labels: [feature-research, automated]
     assignees: [chrisleekr]
     close-older-issues: true
-    expires: 7
+    expires: 7d
 ---
 
 # Feature Opportunity Researcher
