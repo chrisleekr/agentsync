@@ -1,24 +1,57 @@
+import { realpathSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { log } from "@clack/prompts";
 import { defineCommand } from "citty";
 import { resolveDaemonSocketPath } from "../config/paths";
+import { DaemonStatusSchema } from "../config/schema";
 import { IpcClient } from "../core/ipc";
 
-/** Resolve the executable invocation the service manager should launch on this machine. */
-function getExecutablePath(): string {
-  // When compiled: process.execPath; during dev with `bun run src/cli.ts`: reconstruct
-  if (process.argv[0].endsWith("bun") || process.argv[0].endsWith("bun.exe")) {
-    return `${process.argv[0]} ${process.argv[1]}`;
+/**
+ * Detect whether a file path resolves into a session-scoped temporary directory
+ * (created by bunx or the OS). Such paths are not stable across reboots.
+ */
+function isEphemeralPath(filePath: string): boolean {
+  try {
+    const resolved = realpathSync(filePath);
+    const tmp = realpathSync(tmpdir());
+    return resolved.startsWith(tmp) || resolved.includes("bunx-");
+  } catch {
+    return false;
   }
-  return process.execPath;
 }
 
-/** Platform-specific service hooks used by the daemon management subcommands. */
+/**
+ * Resolve the full executable invocation the service manager should use.
+ * Returns an array where each element becomes a separate `<string>` in the
+ * service definition (required by launchd and Task Scheduler).
+ * @throws {Error} when the script path is inside a temporary directory (e.g. bunx).
+ */
+export function getExecutableArgs(): string[] {
+  const isBun =
+    process.argv[0].endsWith("bun") || process.argv[0].endsWith("bun.exe");
+  if (isBun) {
+    if (isEphemeralPath(process.argv[1])) {
+      throw new Error(
+        "Executable is in a temporary directory. " +
+          "Install the package globally first: bun install -g @chrisleekr/agentsync",
+      );
+    }
+    return [process.argv[0], process.argv[1]];
+  }
+  return [process.execPath];
+}
+
+/**
+ * Platform-specific service hooks used by the daemon management subcommands.
+ * Each method maps to the corresponding OS service manager operation.
+ */
 interface PlatformInstaller {
-  install(exe: string): Promise<void>;
+  install(args: string[]): Promise<void>;
   uninstall(): Promise<void>;
   start(): Promise<void>;
   stop(): Promise<void>;
   isInstalled(): Promise<boolean>;
+  isRegistered(): Promise<boolean>;
 }
 
 /** Load the installer implementation that matches the current operating system. */
@@ -32,6 +65,7 @@ async function getInstaller(): Promise<PlatformInstaller> {
       start: m.startMacOs,
       stop: m.stopMacOs,
       isInstalled: m.isInstalledMacOs,
+      isRegistered: m.isRegisteredMacOs,
     };
   }
   if (platform === "linux") {
@@ -42,6 +76,7 @@ async function getInstaller(): Promise<PlatformInstaller> {
       start: m.startLinux,
       stop: m.stopLinux,
       isInstalled: m.isInstalledLinux,
+      isRegistered: m.isRegisteredLinux,
     };
   }
   if (platform === "win32") {
@@ -52,6 +87,7 @@ async function getInstaller(): Promise<PlatformInstaller> {
       start: m.startWindows,
       stop: m.stopWindows,
       isInstalled: m.isInstalledWindows,
+      isRegistered: m.isInstalledWindows,
     };
   }
   throw new Error(`Unsupported platform: ${platform}`);
@@ -77,8 +113,8 @@ export const daemonCommand = defineCommand({
       meta: { description: "Install and start the daemon as a system service" },
       async run() {
         const installer = await getInstaller();
-        const exe = getExecutablePath();
-        await installer.install(exe);
+        const args = getExecutableArgs();
+        await installer.install(args);
       },
     }),
 
@@ -86,8 +122,10 @@ export const daemonCommand = defineCommand({
       meta: { description: "Start the daemon service" },
       async run() {
         const installer = await getInstaller();
-        if (!(await installer.isInstalled())) {
-          log.error("Daemon not installed. Run: agentsync daemon install");
+        if (!(await installer.isRegistered())) {
+          log.error(
+            "Service not bootstrapped — run `agentsync daemon install` first.",
+          );
           process.exitCode = 1;
           return;
         }
@@ -112,7 +150,16 @@ export const daemonCommand = defineCommand({
         try {
           const response = await client.send("status", {}, resolveDaemonSocketPath());
           if (response.ok) {
-            log.success(`Daemon is running (pid: ${(response.data as { pid: number }).pid})`);
+            const parsed = DaemonStatusSchema.safeParse(response.data);
+            const pid = parsed.success
+              ? parsed.data.pid
+              : (response.data as { pid: number }).pid;
+            const failures = parsed.success ? parsed.data.consecutiveFailures : 0;
+            const lastErr = parsed.success ? parsed.data.lastError : null;
+            log.success(`Daemon is running (pid: ${pid})`);
+            if (failures > 0) {
+              log.warn(`Consecutive failures: ${failures}. Last error: ${lastErr ?? "unknown"}`);
+            }
           } else {
             log.error(`Daemon error: ${response.error}`);
             process.exitCode = 1;

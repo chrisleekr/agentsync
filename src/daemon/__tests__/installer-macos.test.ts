@@ -1,5 +1,6 @@
 /**
- * T045 — installer-macos: installMacOs, uninstallMacOs, startMacOs, stopMacOs, isInstalledMacOs
+ * Tests for installer-macos: installMacOs, uninstallMacOs, startMacOs, stopMacOs,
+ * isInstalledMacOs, buildPlist, isRegisteredMacOs, extractServiceManagerError
  *
  * Strategy
  * --------
@@ -18,6 +19,10 @@ import { afterAll, beforeAll, beforeEach, describe, expect, mock, test } from "b
 const fsWrites = new Map<string, string>();
 const execFileCalls: Array<{ cmd: string; args: string[] }> = [];
 
+// Control whether launchctl commands succeed or fail
+let launchctlShouldFail = false;
+let launchctlFailStderr = "Bootstrap failed: 5: Input/output error";
+
 mock.module("node:child_process", () => ({
   execFile: (
     cmd: string,
@@ -25,6 +30,13 @@ mock.module("node:child_process", () => ({
     callback: (err: Error | null, stdout: string, stderr: string) => void,
   ) => {
     execFileCalls.push({ cmd, args });
+    if (launchctlShouldFail && cmd === "launchctl" && args[0] === "bootstrap") {
+      const err = Object.assign(new Error("launchctl failed"), {
+        stderr: launchctlFailStderr,
+      });
+      callback(err, "", launchctlFailStderr);
+      return;
+    }
     callback(null, "", "");
   },
 }));
@@ -66,11 +78,49 @@ afterAll(() => {
 beforeEach(() => {
   fsWrites.clear();
   execFileCalls.length = 0;
+  launchctlShouldFail = false;
+  launchctlFailStderr = "Bootstrap failed: 5: Input/output error";
 });
 
+// ── T029: buildPlist emits separate <string> elements ─────────────────────────
+describe("buildPlist", () => {
+  test("emits separate <string> elements for each arg (T029)", () => {
+    const plist = m.buildPlist(["bun", "/path/cli.js"], "/var/log");
+    // Must have individual entries, not a space-joined single string
+    expect(plist).toContain("<string>bun</string>");
+    expect(plist).toContain("<string>/path/cli.js</string>");
+    expect(plist).toContain("<string>daemon</string>");
+    expect(plist).toContain("<string>_run</string>");
+    // Must NOT have the space-joined form as a single element
+    expect(plist).not.toContain("<string>bun /path/cli.js</string>");
+  });
+
+  test("ProgramArguments array contains exactly the args + daemon + _run as separate entries", () => {
+    const plist = m.buildPlist(["/usr/local/bin/agentsync"], "/var/log");
+    expect(plist).toContain("<string>/usr/local/bin/agentsync</string>");
+    expect(plist).toContain("<string>daemon</string>");
+    expect(plist).toContain("<string>_run</string>");
+  });
+});
+
+// ── T030: installMacOs calls bootout before bootstrap ─────────────────────────
 describe("installMacOs", () => {
+  test("calls launchctl bootout before launchctl bootstrap (T030)", async () => {
+    await m.installMacOs(["bun", "/path/cli.js"]);
+
+    const bootoutIdx = execFileCalls.findIndex(
+      (c) => c.cmd === "launchctl" && c.args[0] === "bootout",
+    );
+    const bootstrapIdx = execFileCalls.findIndex(
+      (c) => c.cmd === "launchctl" && c.args[0] === "bootstrap",
+    );
+    expect(bootoutIdx).toBeGreaterThanOrEqual(0);
+    expect(bootstrapIdx).toBeGreaterThanOrEqual(0);
+    expect(bootoutIdx).toBeLessThan(bootstrapIdx);
+  });
+
   test("writes a plist file with the correct label", async () => {
-    await m.installMacOs("/usr/local/bin/agentsync");
+    await m.installMacOs(["/usr/local/bin/agentsync"]);
 
     const written = [...fsWrites.entries()].find(([p]) => p.endsWith(".plist"));
     expect(written).toBeDefined();
@@ -81,7 +131,7 @@ describe("installMacOs", () => {
   });
 
   test("calls launchctl bootstrap with the plist path", async () => {
-    await m.installMacOs("/usr/local/bin/agentsync");
+    await m.installMacOs(["/usr/local/bin/agentsync"]);
 
     const bootstrapCall = execFileCalls.find(
       (c) => c.cmd === "launchctl" && c.args[0] === "bootstrap",
@@ -91,15 +141,33 @@ describe("installMacOs", () => {
   });
 
   test("isInstalledMacOs returns true after install", async () => {
-    await m.installMacOs("/usr/local/bin/agentsync");
+    await m.installMacOs(["/usr/local/bin/agentsync"]);
     expect(await m.isInstalledMacOs()).toBe(true);
+  });
+
+  // T031: bootstrap failure surfaces stderr, not stack trace
+  test("throws with service manager stderr (not stack trace) when bootstrap fails (T031)", async () => {
+    launchctlShouldFail = true;
+    launchctlFailStderr = "Bootstrap failed: 5: Input/output error";
+
+    let thrown: Error | null = null;
+    try {
+      await m.installMacOs(["/usr/local/bin/agentsync"]);
+    } catch (err) {
+      thrown = err as Error;
+    }
+
+    expect(thrown).not.toBeNull();
+    expect(thrown?.message).toContain("Bootstrap failed: 5");
+    // Must not contain a Node.js stack-trace marker
+    expect(thrown?.message).not.toContain("    at ");
   });
 });
 
 describe("uninstallMacOs", () => {
   test("calls launchctl bootout and removes the plist file", async () => {
     // Install first so there is a plist to remove.
-    await m.installMacOs("/usr/local/bin/agentsync");
+    await m.installMacOs(["/usr/local/bin/agentsync"]);
     execFileCalls.length = 0;
 
     await m.uninstallMacOs();
@@ -109,19 +177,22 @@ describe("uninstallMacOs", () => {
   });
 
   test("isInstalledMacOs returns false after uninstall", async () => {
-    await m.installMacOs("/usr/local/bin/agentsync");
+    await m.installMacOs(["/usr/local/bin/agentsync"]);
     await m.uninstallMacOs();
     expect(await m.isInstalledMacOs()).toBe(false);
   });
 });
 
+// ── T032: startMacOs throws immediately when not registered ───────────────────
 describe("startMacOs / stopMacOs", () => {
-  test("startMacOs calls launchctl kickstart", async () => {
-    await m.startMacOs();
+  test("startMacOs throws 'Service not bootstrapped' when isRegisteredMacOs returns false (T032)", async () => {
+    // launchctl print will fail (not registered), no kickstart call expected
+    await expect(m.startMacOs()).rejects.toThrow("Service not bootstrapped");
+
     const kickstartCall = execFileCalls.find(
       (c) => c.cmd === "launchctl" && c.args[0] === "kickstart",
     );
-    expect(kickstartCall).toBeDefined();
+    expect(kickstartCall).toBeUndefined();
   });
 
   test("stopMacOs calls launchctl kill with SIGTERM", async () => {
