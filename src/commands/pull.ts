@@ -31,7 +31,7 @@ export async function performPull(
     await git.reconcileWithRemote({
       remote: "origin",
       branch: config.remote.branch,
-      force: options.force,
+      force: options.dryRun ? false : options.force,
     });
 
     const requestedAgent = options.agent as AgentName | undefined;

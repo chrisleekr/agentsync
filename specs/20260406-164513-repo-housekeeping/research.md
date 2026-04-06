@@ -4,9 +4,11 @@
 
 ## R1: GitHub Actions Version Availability
 
-**Decision**: Pin to `actions/checkout@v4` and `actions/setup-node@v4`
+**Decision**: ~~Pin to `actions/checkout@v4` and `actions/setup-node@v4`~~ **SUPERSEDED**
 
-**Rationale**: As of April 2026, `@v4` is the latest stable release for both actions. The repo currently references `@v6` which does not exist — GitHub Actions resolves undefined major tags unpredictably (may fail or fall back). Both `ci.yml` and `release-please.yml` reference these invalid versions.
+**Status**: INVALIDATED during implementation. `actions/checkout@v6` and `actions/setup-node@v6` were confirmed as the current latest stable versions as of April 2026. The original research incorrectly claimed `@v4` was latest and that `@v6` did not exist. FR-001 was DROPPED — no changes to action versions are needed.
+
+**Original rationale** *(preserved for history)*: As of April 2026, `@v4` is the latest stable release for both actions. The repo currently references `@v6` which does not exist — GitHub Actions resolves undefined major tags unpredictably (may fail or fall back). Both `ci.yml` and `release-please.yml` reference these invalid versions.
 
 **Alternatives considered**:
 - Pin to SHA instead of tag: More secure against tag reassignment, but harder to maintain. Given this is a personal project, tag-based pinning is sufficient.

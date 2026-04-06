@@ -5,7 +5,7 @@
 
 ## Summary
 
-Fix 8 verified housekeeping issues across CI configuration (invalid action versions, incomplete binary matrix, missing package smoke test), type safety (unsafe `as` casts in registry, dead `force` arg in pull), dependency hygiene (`bun-types` version drift), and developer experience (colourless status output, silent vault file discard).
+Fix 7 verified housekeeping issues across CI configuration (incomplete binary matrix, missing package smoke test), type safety (unsafe `as` casts in registry, dead `force` arg in pull), dependency hygiene (`bun-types` version drift), and developer experience (colourless status output, silent vault file discard). *(FR-001 was DROPPED — see below.)*
 
 ## Technical Context
 
@@ -17,7 +17,7 @@ Fix 8 verified housekeeping issues across CI configuration (invalid action versi
 **Project Type**: CLI tool
 **Performance Goals**: N/A (housekeeping)
 **Constraints**: Constitution v1.4.0 compliance; `bun run check` must pass
-**Scale/Scope**: ~12 files modified (2 CI YAML, 7 source, 1 package.json, 4 test files), ~100 lines changed
+**Scale/Scope**: ~10 files modified (2 CI YAML, 7 source, 1 package.json, 4 test files), ~100 lines changed *(reduced from 12 after FR-001 was dropped)*
 
 ## Constitution Check
 
@@ -57,8 +57,8 @@ specs/20260406-164513-repo-housekeeping/
 
 ```text
 .github/workflows/
-├── ci.yml                  # FR-001: Fix action versions; FR-003: Add package smoke test
-└── release-please.yml      # FR-001: Fix action versions; FR-002: Expand binary matrix
+├── ci.yml                  # ~~FR-001: DROPPED~~; FR-003: Add package smoke test
+└── release-please.yml      # ~~FR-001: DROPPED~~; FR-002: Expand binary matrix
 
 src/
 ├── agents/
@@ -74,7 +74,7 @@ src/
 ├── core/
 │   └── git.ts              # FR-005: Add force to GitReconciliationOptions
 
-tests/                       # Corresponding test files
+src/                             # Corresponding test files (co-located)
 ├── commands/__tests__/
 │   ├── pull.test.ts        # Test force forwarding
 │   └── status.test.ts      # Test colour mapping
@@ -90,12 +90,9 @@ package.json                 # FR-004: Pin bun-types; add picocolors dep
 
 ## Phase 2: Implementation Approach
 
-### Group 1: CI Pipeline Fixes (FR-001, FR-002, FR-003) — Independent
+### Group 1: CI Pipeline Fixes (~~FR-001~~, FR-002, FR-003) — Independent
 
-**FR-001 — Fix GitHub Action versions** (~5 min):
-- In `ci.yml`: Replace all `actions/checkout@v6` → `@v4`, `actions/setup-node@v6` → `@v4`
-- In `release-please.yml`: Same replacements
-- Commit type: `fix(ci)`
+**~~FR-001 — Fix GitHub Action versions~~** — **DROPPED**: `actions/checkout@v6` and `actions/setup-node@v6` were verified as the latest stable versions as of April 2026. No change needed.
 
 **FR-002 — Expand binary matrix** (~15 min):
 - In `release-please.yml` `build-and-upload` job, add matrix entries:
@@ -199,9 +196,9 @@ package.json                 # FR-004: Pin bun-types; add picocolors dep
 
 ### Commit Strategy
 
-Conventional Commits, one commit per FR or logical group:
+Conventional Commits, one commit per FR or logical group (7 commits; commit #1 DROPPED):
 
-1. `fix(ci): pin actions/checkout and actions/setup-node to v4` (FR-001)
+1. ~~`fix(ci): pin actions/checkout and actions/setup-node to v4` (FR-001)~~ **DROPPED** — @v6 is latest; no fix needed
 2. `feat(ci): add linux-arm64 and macos-x64 to release binary matrix` (FR-002)
 3. `feat(ci): add package build smoke test to PR pipeline` (FR-003)
 4. `fix(deps): pin bun-types to exact version matching .bun-version` (FR-004)

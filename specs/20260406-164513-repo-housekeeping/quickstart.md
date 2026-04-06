@@ -4,13 +4,13 @@
 
 ## What This Changes
 
-This housekeeping batch fixes 8 verified issues across CI configuration, type safety, dead code, and developer experience.
+This housekeeping batch fixes 7 verified issues across CI configuration, type safety, dead code, and developer experience. *(Originally 8 — FR-001 was DROPPED after verifying @v6 actions are current.)*
 
 ## Validation Steps
 
 ### P1: CI Pipeline Correctness
 
-1. **Action versions**: Open `.github/workflows/ci.yml` and `.github/workflows/release-please.yml` — all `actions/checkout` and `actions/setup-node` references should be `@v4`
+1. ~~**Action versions**~~: **N/A — FR-001 DROPPED**. `actions/checkout@v6` and `actions/setup-node@v6` are already the latest versions. No change needed.
 2. **Binary matrix**: In `release-please.yml`, the `build-and-upload` matrix should have 4 entries: linux-x64, linux-arm64, macos-arm64, macos-x64
 3. **Package smoke test**: In `ci.yml`, a new `build-package` job should run `bun run build:package && npm pack --dry-run` on PRs
 

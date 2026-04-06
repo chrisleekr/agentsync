@@ -133,7 +133,7 @@
 
 ### Parallel Opportunities
 
-- T004-T005 (action version fixes) can run in parallel — different files
+- ~~T004-T005 (action version fixes) can run in parallel — different files~~ **DROPPED** — FR-001 not applicable
 - T008-T010 (US2 tests) can all run in parallel
 - T015-T019 (adapter return type changes) can all run in parallel — different files
 - T023-T024 (US3 tests) can run in parallel
@@ -166,19 +166,19 @@ Task: "T019 - Change snapshotVsCode return type in src/agents/vscode.ts"
 1. Complete Phase 1: Setup (T001-T003)
 2. Complete Phase 2: User Story 1 — CI fixes (T004-T007)
 3. **STOP and VALIDATE**: Push PR, verify CI passes with valid actions and 4-target matrix
-4. This alone delivers the highest-impact fixes (broken CI versions)
+4. This alone delivers the highest-impact fixes (binary matrix expansion and package smoke test). *(FR-001 action-version fix was DROPPED — @v6 is already latest.)*
 
 ### Incremental Delivery
 
 1. Setup → Dependencies updated
-2. US1 → CI pipeline correct → Commit: `fix(ci)` + `feat(ci)` (3 commits)
+2. US1 → CI pipeline correct → Commit: `feat(ci)` (2 commits; ~~`fix(ci)` for FR-001 DROPPED~~)
 3. US2 → Type safety restored → Commit: `feat(pull)` + `refactor(agents)` (2 commits)
 4. US3 → Observability improved → Commit: `feat(status)` + `fix(cursor)` (2 commits)
 5. Polish → JSDoc + final validation → Commit: `docs(pull)` (1 commit)
 
-### Commit Plan (8 commits)
+### Commit Plan (7 commits, originally 8 — commit #1 DROPPED)
 
-1. `fix(ci): pin actions/checkout and actions/setup-node to v4`
+1. ~~`fix(ci): pin actions/checkout and actions/setup-node to v4`~~ **DROPPED** — @v6 is latest; no fix needed
 2. `feat(ci): add linux-arm64 and macos-x64 to release binary matrix`
 3. `feat(ci): add package build smoke test to PR pipeline`
 4. `fix(deps): pin bun-types to exact version matching .bun-version`

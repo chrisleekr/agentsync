@@ -18,13 +18,13 @@
 
 As a maintainer, I want all CI workflows to use valid, existing GitHub Action versions and produce binaries for all supported platforms, so that releases are reliable and reach all users.
 
-**Why this priority**: Invalid action versions (`@v6` for checkout and setup-node) risk silent CI failures or hard breaks. Missing binary targets mean users on Intel Mac and Linux ARM cannot use pre-built binaries despite the project supporting those platforms in code.
+**Why this priority**: ~~Invalid action versions (`@v6` for checkout and setup-node) risk silent CI failures or hard breaks.~~ *(FR-001 DROPPED — @v6 confirmed as latest.)* Missing binary targets mean users on Intel Mac and Linux ARM cannot use pre-built binaries despite the project supporting those platforms in code.
 
 **Independent Test**: Can be fully tested by pushing a commit to a PR and verifying all CI jobs pass. Release binary matrix can be validated by running `act` locally or by triggering a test release.
 
 **Acceptance Scenarios**:
 
-1. **Given** the CI workflow runs on a PR, **When** the checkout and setup-node actions execute, **Then** they resolve to valid, pinned action versions without warnings or fallback behaviour
+1. ~~**Given** the CI workflow runs on a PR, **When** the checkout and setup-node actions execute, **Then** they resolve to valid, pinned action versions without warnings or fallback behaviour~~ **N/A — FR-001 DROPPED** (existing @v6 references are already correct)
 2. **Given** a release is created, **When** the build-and-upload job runs, **Then** binaries are produced for linux-x64, linux-arm64, macos-arm64, and macos-x64 (Windows deferred until Windows CI exists)
 3. **Given** a PR is opened, **When** CI runs, **Then** a package build smoke test validates that `build:package` and `npm pack --dry-run` succeed
 
@@ -84,7 +84,7 @@ As a developer, I want the `status` command output to be visually scannable and 
 
 ### Measurable Outcomes
 
-- **SC-001**: All CI workflow jobs pass without warnings about missing or invalid action versions
+- ~~**SC-001**: All CI workflow jobs pass without warnings about missing or invalid action versions~~ **N/A — FR-001 DROPPED**
 - **SC-002**: Release artifacts include 4 platform binaries (up from 2) covering linux-x64, linux-arm64, macos-arm64, and macos-x64
 - **SC-003**: A deliberately broken `build:package` script causes CI to fail on PRs before reaching the release pipeline
 - **SC-004**: `bun run typecheck` passes with zero `as` casts in `registry.ts`
@@ -93,7 +93,7 @@ As a developer, I want the `status` command output to be visually scannable and 
 
 ## Assumptions
 
-- The latest stable versions of `actions/checkout` and `actions/setup-node` as of April 2026 are v4 — this will be verified against the official GitHub Actions marketplace before implementation
+- ~~The latest stable versions of `actions/checkout` and `actions/setup-node` as of April 2026 are v4~~ **CORRECTED**: v6 IS the latest stable version for both actions — verified during implementation. FR-001 was DROPPED.
 - Bun's `--target` cross-compilation supports linux-x64, linux-arm64, macos-arm64, and macos-x64 from ubuntu/macos runners; Windows is deferred pending CI infrastructure
 - `picocolors` is available as a transitive dependency of `@clack/prompts` and provides stable colour utility functions
 - The `force` argument in `pull.ts` was intended to be functional but was left unwired during initial implementation — it will be wired through to `reconcileWithRemote()`
