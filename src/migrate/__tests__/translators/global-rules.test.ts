@@ -49,6 +49,47 @@ describe("global-rules translators", () => {
     expect(result?.targetName).toBe("__cursor_rules__");
   });
 
+  test("copilot → claude targets CLAUDE.md", () => {
+    const result = translateGlobalRules.copilotToClaude("instructions content");
+    expect(result).not.toBeNull();
+    expect(result?.targetName).toBe("CLAUDE.md");
+    expect(result?.content).toBe("instructions content");
+  });
+
+  test("cursor → codex wraps with heading, targets AGENTS.md", () => {
+    const result = translateGlobalRules.cursorToCodex("cursor rules");
+    expect(result).not.toBeNull();
+    expect(result?.targetName).toBe("AGENTS.md");
+    expect(result?.content).toContain("migrated from Cursor");
+  });
+
+  test("codex → cursor returns sentinel", () => {
+    const result = translateGlobalRules.codexToCursor("codex rules");
+    expect(result).not.toBeNull();
+    expect(result?.targetName).toBe("__cursor_rules__");
+  });
+
+  test("cursor → copilot wraps with heading, targets instructions.md", () => {
+    const result = translateGlobalRules.cursorToCopilot("cursor rules");
+    expect(result).not.toBeNull();
+    expect(result?.targetName).toBe("instructions.md");
+    expect(result?.content).toContain("migrated from Cursor");
+  });
+
+  test("codex → copilot targets instructions.md", () => {
+    const result = translateGlobalRules.codexToCopilot("codex rules");
+    expect(result).not.toBeNull();
+    expect(result?.targetName).toBe("instructions.md");
+    expect(result?.content).toBe("codex rules");
+  });
+
+  test("copilot → codex targets AGENTS.md", () => {
+    const result = translateGlobalRules.copilotToCodex("copilot instructions");
+    expect(result).not.toBeNull();
+    expect(result?.targetName).toBe("AGENTS.md");
+    expect(result?.content).toBe("copilot instructions");
+  });
+
   test("round-trip claude → codex → claude preserves content", () => {
     const original = "# My Rules\n\nBe helpful and concise.";
     const toCodex = translateGlobalRules.claudeToCodex(original);
