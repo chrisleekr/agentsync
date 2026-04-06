@@ -19,14 +19,7 @@ engine:
 
 network:
   allowed:
-    - defaults
-    - node
-    - github
-    - "*.tavily.com"
-    - "*.cursor.com"
-    - "*.anthropic.com"
-    - "*.visualstudio.com"
-    - "*.openai.com"
+    - all
 
 mcp-servers:
   tavily:
