@@ -74,11 +74,15 @@ Read the source files to determine what config fields are currently synced.
 
 ## Known Sync Targets (baseline)
 
-- **Cursor**: `aicontext.personalContext` (SQLite), `.cursorrules`, `.cursor/rules/`
-- **Claude Code**: `~/.claude.json` (MCP), `~/.claude/settings.json` (hooks)
-- **Copilot**: `~/.copilot/instructions/`, `~/.copilot/skills/`, `~/.copilot/agents/`
-- **Codex**: `~/.codex/config.toml`, `~/.codex/instructions.md`
-- **VS Code**: `settings.json`, `.vscode/mcp.json`, `.github/copilot-instructions.md`
+> **Authoritative source:** Always read the `src/agents/*.ts` files listed above
+> before comparing. The list below is a convenience snapshot — if it conflicts
+> with the source code, trust the source code.
+
+- **Cursor**: `settings.json` (`rules` field), `~/.cursor/mcp.json` (MCP servers), `~/.cursor/commands/*.md`
+- **Claude Code**: `~/.claude/CLAUDE.md`, `~/.claude/settings.json` (hooks), `~/.claude.json` (MCP servers), `~/.claude/commands/*.md`, `~/.claude/agents/*.md`
+- **Copilot**: `~/.copilot/instructions/*.instructions.md`, `~/.copilot/prompts/*.prompt.md`, `~/.copilot/skills/` (directories with SKILL.md), `~/.copilot/agents/` (directories)
+- **Codex**: `~/.codex/AGENTS.md`, `~/.codex/config.toml`, `~/.codex/rules/*.md`
+- **VS Code**: platform-specific global `mcp.json` (e.g. `~/Library/Application Support/Code/User/mcp.json`)
 
 ## Output
 
