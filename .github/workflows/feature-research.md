@@ -11,10 +11,7 @@ permissions:
 
 engine: claude
 
-network:
-  allowed:
-    - defaults
-    - tavily
+network: defaults
 
 secrets:
   TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
