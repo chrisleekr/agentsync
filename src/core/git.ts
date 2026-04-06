@@ -20,6 +20,8 @@ export interface GitReconciliationOptions {
   remote?: string;
   branch?: string;
   allowMissingRemote?: boolean;
+  /** When true, reset local to remote HEAD instead of throwing on diverged history. */
+  force?: boolean;
 }
 
 /** Result metadata returned after attempting to reconcile the local branch with the remote. */
@@ -209,7 +211,10 @@ export class GitClient {
     };
   }
 
-  /** Reconcile the local branch against the remote using an explicit fast-forward-only policy. */
+  /**
+   * Reconcile the local branch against the remote using an explicit fast-forward-only policy.
+   * When `options.force` is true, diverged history is resolved by resetting local to the remote HEAD.
+   */
   async reconcileWithRemote(
     options: GitReconciliationOptions = {},
   ): Promise<GitReconciliationResult> {
@@ -295,6 +300,18 @@ export class GitClient {
         remote,
         branch,
         localHead: branchHead,
+        remoteHead,
+      };
+    }
+
+    if (options.force) {
+      this.assertGit(["reset", "--hard", remoteRef], `git reset --hard ${remoteRef}`);
+      this.trySetUpstream(branch, remoteRef);
+      return {
+        status: "fast-forwarded",
+        remote,
+        branch,
+        localHead: await this.revParse("HEAD"),
         remoteHead,
       };
     }

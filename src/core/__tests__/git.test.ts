@@ -202,6 +202,28 @@ describe("GitClient", () => {
     } satisfies Partial<GitReconciliationError>);
   });
 
+  test("reconcileWithRemote with force resets local to remote when history diverges", async () => {
+    const { secondaryDir } = await createDivergentHistoryFixture(tmpDir, "main");
+    const git = new GitClient(secondaryDir);
+
+    const result = await git.reconcileWithRemote({ remote: "origin", branch: "main", force: true });
+
+    expect(result.status).toBe("fast-forwarded");
+    expect(result.localHead).toBe(result.remoteHead);
+  });
+
+  test("reconcileWithRemote without force still throws DIVERGED_HISTORY on diverged history", async () => {
+    const { secondaryDir } = await createDivergentHistoryFixture(tmpDir, "main");
+    const git = new GitClient(secondaryDir);
+
+    await expect(
+      git.reconcileWithRemote({ remote: "origin", branch: "main", force: false }),
+    ).rejects.toMatchObject({
+      name: "GitReconciliationError",
+      code: "DIVERGED_HISTORY",
+    } satisfies Partial<GitReconciliationError>);
+  });
+
   test("currentBranch() returns a non-empty string after the first commit", async () => {
     const workDir = join(tmpDir, "work");
     await mkdir(workDir, { recursive: true });

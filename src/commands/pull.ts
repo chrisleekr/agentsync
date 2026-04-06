@@ -13,11 +13,11 @@ export function __setPullAgentsForTesting(agents: AgentDefinition[] | null): voi
 
 /**
  * Pull the vault, decrypt enabled agent artifacts, and apply them locally.
- * @param options Optional agent filter and dry-run mode.
+ * @param options Optional agent filter, dry-run mode, and force flag to skip conflict prompts.
  * @returns The number of applied agents, collected errors, and whether the run failed fatally.
  */
 export async function performPull(
-  options: { agent?: string; dryRun?: boolean } = {},
+  options: { agent?: string; dryRun?: boolean; force?: boolean } = {},
 ): Promise<{ applied: number; errors: string[]; fatal: boolean }> {
   const errors: string[] = [];
   let applied = 0;
@@ -28,7 +28,11 @@ export async function performPull(
     const key = await loadPrivateKey(runtime.privateKeyPath);
 
     const git = new GitClient(runtime.vaultDir);
-    await git.reconcileWithRemote({ remote: "origin", branch: config.remote.branch });
+    await git.reconcileWithRemote({
+      remote: "origin",
+      branch: config.remote.branch,
+      force: options.dryRun ? false : options.force,
+    });
 
     const requestedAgent = options.agent as AgentName | undefined;
     const agentsToSync = agentDefinitions.filter((a) => {
@@ -66,6 +70,7 @@ export const pullCommand = defineCommand({
     const result = await performPull({
       agent: args.agent as string | undefined,
       dryRun: args.dryRun,
+      force: args.force,
     });
     for (const err of result.errors) {
       log.error(err);

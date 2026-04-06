@@ -4,13 +4,10 @@ import { log } from "@clack/prompts";
 import { AgentPaths } from "../config/paths";
 import { shouldNeverSync } from "../core/sanitizer";
 import { archiveDirectory, extractArchive } from "../core/tar";
-import { atomicWrite, readIfExists, type SnapshotArtifact } from "./_utils";
+import { atomicWrite, readIfExists, type SnapshotArtifact, type SnapshotResult } from "./_utils";
 
 /** Snapshot payload for the Copilot adapter. */
-export interface CopilotSnapshotResult {
-  artifacts: SnapshotArtifact[];
-  warnings: string[];
-}
+export type CopilotSnapshotResult = SnapshotResult;
 
 /** Check whether an optional skill directory sentinel file exists. */
 async function fileExists(path: string): Promise<boolean> {
@@ -23,7 +20,7 @@ async function fileExists(path: string): Promise<boolean> {
 }
 
 /** Collect Copilot instructions, prompts, skills, and agents into vault artifacts. */
-export async function snapshotCopilot(): Promise<CopilotSnapshotResult> {
+export async function snapshotCopilot(): Promise<SnapshotResult> {
   const artifacts: SnapshotArtifact[] = [];
   const warnings: string[] = [];
 

@@ -31,27 +31,27 @@ export interface AgentDefinition {
 export const Agents: AgentDefinition[] = [
   {
     name: "claude",
-    snapshot: snapshotClaude as () => Promise<SnapshotResult>,
+    snapshot: snapshotClaude,
     apply: applyClaudeVault,
   },
   {
     name: "cursor",
-    snapshot: snapshotCursor as () => Promise<SnapshotResult>,
+    snapshot: snapshotCursor,
     apply: applyCursorVault,
   },
   {
     name: "codex",
-    snapshot: snapshotCodex as () => Promise<SnapshotResult>,
+    snapshot: snapshotCodex,
     apply: applyCodexVault,
   },
   {
     name: "copilot",
-    snapshot: snapshotCopilot as () => Promise<SnapshotResult>,
+    snapshot: snapshotCopilot,
     apply: applyCopilotVault,
   },
   {
     name: "vscode",
-    snapshot: snapshotVsCode as () => Promise<SnapshotResult>,
+    snapshot: snapshotVsCode,
     apply: applyVsCodeVault,
   },
 ];
