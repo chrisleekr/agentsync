@@ -1,6 +1,6 @@
 /**
- * T047 — installer-windows: installWindows, uninstallWindows, startWindows, stopWindows,
- * isInstalledWindows
+ * Tests for installer-windows: installWindows, uninstallWindows, startWindows, stopWindows,
+ * isInstalledWindows, buildXml
  *
  * Strategy
  * --------
@@ -15,24 +15,40 @@ const fsRms = new Set<string>();
 const execFileCalls: Array<{ cmd: string; args: string[] }> = [];
 
 // isInstalledWindows checks schtasks /Query exit code; simulate it via the mock.
-// We use a flag to control the success/failure of /Query calls.
 let queryExitCode = 0; // 0 = installed, non-zero = not installed
 
-mock.module("node:child_process", () => ({
-  execFile: (
-    cmd: string,
-    args: string[],
-    callback: (err: Error | null, stdout: string, stderr: string) => void,
-  ) => {
-    execFileCalls.push({ cmd, args });
-    if (cmd === "schtasks" && args[0] === "/Query") {
-      if (queryExitCode !== 0) {
-        callback(new Error("schtasks query failed"), "", "ERROR: task not found");
+const execFileMock = (
+  cmd: string,
+  args: string[],
+  callback: (err: Error | null, stdout: string, stderr: string) => void,
+) => {
+  execFileCalls.push({ cmd, args });
+  if (cmd === "schtasks" && args[0] === "/Query") {
+    if (queryExitCode !== 0) {
+      callback(new Error("schtasks query failed"), "", "ERROR: task not found");
+      return;
+    }
+  }
+  callback(null, "", "");
+};
+
+const { promisify } = require("node:util") as typeof import("node:util");
+(execFileMock as unknown as Record<symbol, unknown>)[promisify.custom] = (
+  cmd: string,
+  args: string[],
+): Promise<{ stdout: string; stderr: string }> =>
+  new Promise((resolve, reject) => {
+    execFileMock(cmd, args, (err, stdout, stderr) => {
+      if (err) {
+        reject(Object.assign(err, { stdout, stderr }));
         return;
       }
-    }
-    callback(null, "", "");
-  },
+      resolve({ stdout, stderr });
+    });
+  });
+
+mock.module("node:child_process", () => ({
+  execFile: execFileMock,
 }));
 
 mock.module("node:fs/promises", () => ({
@@ -63,8 +79,6 @@ beforeAll(async () => {
   m = await import("../installer-windows");
 });
 
-// Restore mocked modules after this file completes so they do not bleed into
-// subsequent test files (e.g. integration.test.ts) that need the real node:fs/promises.
 afterAll(() => {
   process.env.TEMP = originalTemp;
   mock.restore();
@@ -77,11 +91,26 @@ beforeEach(() => {
   queryExitCode = 0;
 });
 
+// T033: buildXml puts args[0] in <Command>, rest + daemon _run in <Arguments>
+describe("buildXml", () => {
+  test("<Command> holds only the binary, <Arguments> holds script + daemon _run (T033)", () => {
+    const xml = m.buildXml(["bun", "/path/cli.js"]);
+    expect(xml).toContain("<Command>bun</Command>");
+    expect(xml).toContain("<Arguments>/path/cli.js daemon _run</Arguments>");
+  });
+
+  test("single-element args put binary in <Command> and 'daemon _run' in <Arguments>", () => {
+    const xml = m.buildXml(["C:\\agentsync.exe"]);
+    // & is XML-escaped
+    expect(xml).toContain("<Command>C:\\agentsync.exe</Command>");
+    expect(xml).toContain("<Arguments>daemon _run</Arguments>");
+  });
+});
+
 describe("installWindows", () => {
   test("writes a task XML file containing the executable path", async () => {
-    await m.installWindows("C:\\Program Files\\agentsync.exe");
+    await m.installWindows(["C:\\Program Files\\agentsync.exe"]);
 
-    // A temporary XML file must have been written.
     const xmlEntry = [...fsWrites.entries()].find(([p]) => p.endsWith(".xml"));
     expect(xmlEntry).toBeDefined();
     if (!xmlEntry) return;
@@ -91,7 +120,7 @@ describe("installWindows", () => {
   });
 
   test("calls schtasks /Create with the task name", async () => {
-    await m.installWindows("C:\\Program Files\\agentsync.exe");
+    await m.installWindows(["C:\\Program Files\\agentsync.exe"]);
 
     const createCall = execFileCalls.find((c) => c.cmd === "schtasks" && c.args[0] === "/Create");
     expect(createCall).toBeDefined();
@@ -99,7 +128,7 @@ describe("installWindows", () => {
   });
 
   test("calls schtasks /Run after creating the task", async () => {
-    await m.installWindows("C:\\Program Files\\agentsync.exe");
+    await m.installWindows(["C:\\Program Files\\agentsync.exe"]);
 
     const runCall = execFileCalls.find((c) => c.cmd === "schtasks" && c.args[0] === "/Run");
     expect(runCall).toBeDefined();
@@ -107,7 +136,7 @@ describe("installWindows", () => {
   });
 
   test("removes the temporary XML file after creating the task", async () => {
-    await m.installWindows("C:\\Program Files\\agentsync.exe");
+    await m.installWindows(["C:\\Program Files\\agentsync.exe"]);
 
     const xmlEntry = [...fsRms].find((p) => p.endsWith(".xml"));
     expect(xmlEntry).toBeDefined();
@@ -126,11 +155,9 @@ describe("uninstallWindows", () => {
 });
 
 describe("startWindows / stopWindows", () => {
-  test("startWindows calls schtasks /Run with the task name", async () => {
-    await m.startWindows();
-    const runCall = execFileCalls.find((c) => c.cmd === "schtasks" && c.args[0] === "/Run");
-    expect(runCall).toBeDefined();
-    expect(runCall?.args).toContain("AgentSync");
+  test("startWindows throws when not registered", async () => {
+    queryExitCode = 1;
+    await expect(m.startWindows()).rejects.toThrow("Service not bootstrapped");
   });
 
   test("stopWindows calls schtasks /End with the task name", async () => {
@@ -150,5 +177,50 @@ describe("isInstalledWindows", () => {
   test("returns false when schtasks /Query fails", async () => {
     queryExitCode = 1;
     expect(await m.isInstalledWindows()).toBe(false);
+  });
+});
+
+// XML special character escaping in buildXml
+describe("buildXml XML escaping", () => {
+  test("escapes & in the command path", () => {
+    const xml = m.buildXml(["C:\\Program Files & More\\bun.exe"]);
+    expect(xml).toContain("<Command>C:\\Program Files &amp; More\\bun.exe</Command>");
+    expect(xml).not.toContain("<Command>C:\\Program Files & More\\bun.exe</Command>");
+  });
+
+  test("escapes < and > in arguments", () => {
+    const xml = m.buildXml(["bun", "/path/with/<brackets>/script.js"]);
+    expect(xml).toContain("&lt;brackets&gt;");
+    expect(xml).not.toContain("<brackets>");
+  });
+});
+
+// startWindows when registered
+describe("startWindows when registered", () => {
+  test("calls schtasks /Run when the task is installed", async () => {
+    queryExitCode = 0;
+    await m.startWindows();
+    const runCall = execFileCalls.find((c) => c.cmd === "schtasks" && c.args[0] === "/Run");
+    expect(runCall).toBeDefined();
+    expect(runCall?.args).toContain("AgentSync");
+  });
+});
+
+// Additional buildXml structure checks
+describe("buildXml structure", () => {
+  test("includes RestartOnFailure settings", () => {
+    const xml = m.buildXml(["bun.exe"]);
+    expect(xml).toContain("<RestartOnFailure>");
+    expect(xml).toContain("<Count>10</Count>");
+  });
+
+  test("includes LogonTrigger block", () => {
+    const xml = m.buildXml(["bun.exe"]);
+    expect(xml).toContain("<LogonTrigger>");
+  });
+
+  test("uses UTF-16 encoding declaration", () => {
+    const xml = m.buildXml(["bun.exe"]);
+    expect(xml).toContain("UTF-16");
   });
 });

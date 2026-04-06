@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { AgentSyncConfigSchema } from "../schema";
+import { AgentSyncConfigSchema, DaemonStatusSchema } from "../schema";
 
 const VALID_BASE = {
   version: "1",
@@ -118,5 +118,118 @@ describe("AgentSyncConfigSchema", () => {
     const { version: _v, ...withoutVersion } = VALID_BASE;
     const parsed = AgentSyncConfigSchema.parse(withoutVersion);
     expect(parsed.version).toBe("1");
+  });
+});
+
+describe("DaemonStatusSchema", () => {
+  test("parses a valid status payload with all fields", () => {
+    const result = DaemonStatusSchema.parse({
+      pid: 12345,
+      consecutiveFailures: 0,
+      lastError: null,
+    });
+    expect(result.pid).toBe(12345);
+    expect(result.consecutiveFailures).toBe(0);
+    expect(result.lastError).toBeNull();
+  });
+
+  test("parses a valid payload with a non-null lastError string", () => {
+    const result = DaemonStatusSchema.parse({
+      pid: 99,
+      consecutiveFailures: 3,
+      lastError: "[pull] remote not reachable",
+    });
+    expect(result.consecutiveFailures).toBe(3);
+    expect(result.lastError).toBe("[pull] remote not reachable");
+  });
+
+  test("rejects a negative pid", () => {
+    const result = DaemonStatusSchema.safeParse({
+      pid: -1,
+      consecutiveFailures: 0,
+      lastError: null,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  test("rejects a zero pid", () => {
+    const result = DaemonStatusSchema.safeParse({
+      pid: 0,
+      consecutiveFailures: 0,
+      lastError: null,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  test("rejects a non-integer pid", () => {
+    const result = DaemonStatusSchema.safeParse({
+      pid: 1.5,
+      consecutiveFailures: 0,
+      lastError: null,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  test("rejects a negative consecutiveFailures", () => {
+    const result = DaemonStatusSchema.safeParse({
+      pid: 100,
+      consecutiveFailures: -1,
+      lastError: null,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  test("rejects a non-integer consecutiveFailures", () => {
+    const result = DaemonStatusSchema.safeParse({
+      pid: 100,
+      consecutiveFailures: 1.7,
+      lastError: null,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  test("rejects a numeric lastError (must be string or null)", () => {
+    const result = DaemonStatusSchema.safeParse({
+      pid: 100,
+      consecutiveFailures: 0,
+      lastError: 42,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  test("rejects missing required fields", () => {
+    const result = DaemonStatusSchema.safeParse({ pid: 100 });
+    expect(result.success).toBe(false);
+  });
+
+  test("safeParse returns success: true on valid input", () => {
+    const result = DaemonStatusSchema.safeParse({
+      pid: 1,
+      consecutiveFailures: 0,
+      lastError: null,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  test("safeParse returns success: false on invalid input without throwing", () => {
+    const result = DaemonStatusSchema.safeParse({
+      pid: "not-a-number",
+      consecutiveFailures: 0,
+      lastError: null,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  test("accepts consecutiveFailures of 0 with lastError null — the 'healthy' state", () => {
+    const result = DaemonStatusSchema.safeParse({
+      pid: 42,
+      consecutiveFailures: 0,
+      lastError: null,
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.consecutiveFailures).toBe(0);
+      expect(result.data.lastError).toBeNull();
+    }
   });
 });
