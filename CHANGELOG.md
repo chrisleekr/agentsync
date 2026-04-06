@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.3](https://github.com/chrisleekr/agentsync/compare/v0.1.2...v0.1.3) (2026-04-06)
+
+
+### Features
+
+* **daemon:** stabilise daemon process — SyncQueue, retry, failure tracking, shutdown ([#16](https://github.com/chrisleekr/agentsync/issues/16)) ([946475c](https://github.com/chrisleekr/agentsync/commit/946475c6e8fc2dbb8ef0373f0d3e25240c335469))
+* **migrate:** add cross-agent configuration migration command ([#19](https://github.com/chrisleekr/agentsync/issues/19)) ([05415ef](https://github.com/chrisleekr/agentsync/commit/05415efa6edf08c631929b8b962df102a856dc16))
+
 ## [0.1.2](https://github.com/chrisleekr/agentsync/compare/v0.1.1...v0.1.2) (2026-04-05)
 
 
