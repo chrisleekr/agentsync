@@ -101,6 +101,7 @@ mock.module("../../daemon/installer-windows", () => ({
   startWindows: mockStart,
   stopWindows: mockStop,
   isInstalledWindows: mockIsInstalled,
+  isRegisteredWindows: mockIsRegistered,
 }));
 
 const successLogs: string[] = [];

@@ -1,378 +1,121 @@
-# Implementation Plan: Stabilise Daemon Process
+# Implementation Plan: [FEATURE]
 
-**Branch**: `20260406-094347-stabilise-daemon` | **Date**: 2026-04-06 | **Spec**: [spec.md](./spec.md)
-**Input**: Feature specification from `/specs/20260406-094347-stabilise-daemon/spec.md`
+**Branch**: `[YYYYMMDD-HHMMSS-feature-name]` | **Date**: [DATE] | **Spec**: [link]
+**Input**: Feature specification from `/specs/[YYYYMMDD-HHMMSS-feature-name]/spec.md`
 
----
+**Note**: This template is filled in by the `/speckit.plan` command. See `.specify/templates/plan-template.md` for the execution workflow.
 
 ## Summary
 
-Fix three confirmed installer bugs (malformed `ProgramArguments` on macOS/Windows, ephemeral bunx path allowed through, non-idempotent re-install) and harden the daemon runtime (sync operation queue with serialisation and retry-once, failure tracking surfaced via IPC, clean shutdown that drains in-flight operations and removes the socket file). Add a `DaemonStatusSchema` Zod schema, a `SyncQueue` utility, updated platform installer contracts, a daemon lifecycle Mermaid diagram, and full test coverage for all new behaviours.
-
----
+[Extract from feature spec: primary requirement + technical approach from research]
 
 ## Technical Context
 
-**Language/Version**: TypeScript 6.x, strict mode (`"strict": true`)
-**Runtime**: Bun 1.3.9 (Node.js compat layer for `node:fs`, `node:net`, `node:child_process`)
-**Primary Dependencies**: citty 0.2.x, @clack/prompts 1.2.x, zod 4.x, simple-git 3.x, age-encryption 0.3.x
-**Storage**: File system only (plist, systemd unit, IPC socket)
-**Testing**: `bun test` (`bun:test`), `__tests__/*.test.ts` co-located with modules
-**Target Platform**: macOS (launchd), Linux (systemd user), Windows (Task Scheduler)
-**Project Type**: CLI tool + background daemon
-**Performance Goals**: Shutdown ≤10s (SC-001), daemon start ≤10s (SC-007), startup error ≤3s (SC-006)
-**Constraints**: No new runtime dependencies; Zod required for all IPC message shapes crossing trust boundaries (Constitution IV)
+<!--
+  ACTION REQUIRED: Replace the content in this section with the technical details
+  for the project. The structure here is presented in advisory capacity to guide
+  the iteration process.
+-->
 
----
+**Language/Version**: [e.g., Python 3.11, Swift 5.9, Rust 1.75 or NEEDS CLARIFICATION]  
+**Primary Dependencies**: [e.g., FastAPI, UIKit, LLVM or NEEDS CLARIFICATION]  
+**Storage**: [if applicable, e.g., PostgreSQL, CoreData, files or N/A]  
+**Testing**: [e.g., pytest, XCTest, cargo test or NEEDS CLARIFICATION]  
+**Target Platform**: [e.g., Linux server, iOS 15+, WASM or NEEDS CLARIFICATION]
+**Project Type**: [e.g., library/cli/web-service/mobile-app/compiler/desktop-app or NEEDS CLARIFICATION]  
+**Performance Goals**: [domain-specific, e.g., 1000 req/s, 10k lines/sec, 60 fps or NEEDS CLARIFICATION]  
+**Constraints**: [domain-specific, e.g., <200ms p95, <100MB memory, offline-capable or NEEDS CLARIFICATION]  
+**Scale/Scope**: [domain-specific, e.g., 10k users, 1M LOC, 50 screens or NEEDS CLARIFICATION]
 
 ## Constitution Check
 
-*GATE: Must pass before implementation begins.*
+*GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-| Principle | Status | Notes |
-|-----------|--------|-------|
-| I. Security-First | PASS | No credential handling changes; age key paths not touched |
-| II. Test Coverage | REQUIRED — see below | All modified modules need updated/new tests |
-| III. Cross-Platform Daemon Reliability | DIRECTLY ADDRESSED | This feature fixes violations of this principle |
-| IV. Code Quality / Zod | REQUIRED | `DaemonStatusSchema` must be added; IPC status response validated with Zod |
-| V. Documentation / Mermaid | REQUIRED | `docs/daemon.md` with lifecycle state diagram (FR-010) |
+[Gates determined based on constitution file]
 
-**Test coverage obligations (Principle II)**:
-
-- `src/core/sync-queue.ts` — new module, must have `__tests__/sync-queue.test.ts` covering success path + serialisation + drain
-- `src/daemon/index.ts` — existing tests must be updated to cover: queue serialisation, retry-once on failure, failure count increment/reset, socket cleanup on shutdown, drain-before-exit
-- `src/commands/daemon.ts` — `getExecutableArgs()` must be tested: compiled binary path, bun+script path, ephemeral path detection/rejection
-- `src/daemon/installer-macos.ts` — tests must cover: separate `<string>` elements in plist, bootout+bootstrap sequence, clean error surfacing from launchctl
-- `src/daemon/installer-linux.ts` — tests must cover: updated `string[]` signature, registration check in `startLinux`
-- `src/daemon/installer-windows.ts` — tests must cover: `<Command>` = binary only, `<Arguments>` = remaining args + daemon _run
-
-**Documentation gate (Principle V)**:
-
-- `docs/daemon.md` must include a Mermaid state diagram validated in GitHub Markdown preview before merge
-- Diagram validation is a blocker for PR approval (documented in quickstart.md Scenario 8)
-
----
+- Test coverage impact: Default to automated test tasks for new feature
+  work. Only treat the feature as documentation-only when all changed
+  files are limited to repository-hosted documentation and
+  feature-planning artifacts and the change does not affect runtime
+  source files, exported symbols, configuration schemas, packaging
+  logic, CI automation, or generated workflow scripts.
+- Documentation impact: If the feature changes or adds explanatory docs,
+  identify whether a Mermaid diagram is required to explain workflow,
+  structure, lifecycle, or interaction behavior more clearly than prose.
+- Documentation-only validation impact: If the feature qualifies for the
+  documentation-only exception, record the manual walkthrough validation
+  steps and name the spec, plan, or quickstart artifact that will carry
+  them.
+- Diagram validation impact: If Mermaid is required, name the target doc
+  surfaces and include validation as part of the implementation and
+  review plan.
 
 ## Project Structure
 
 ### Documentation (this feature)
 
 ```text
-specs/20260406-094347-stabilise-daemon/
-├── plan.md           ← this file
-├── research.md       ← Phase 0 output
-├── data-model.md     ← Phase 1 output
-├── quickstart.md     ← Phase 1 output (manual validation steps)
-├── contracts/
-│   └── ipc-status.md ← IPC status command contract
-└── tasks.md          ← Phase 2 output (/speckit.tasks — not yet created)
+specs/[YYYYMMDD-HHMMSS-feature]/
+├── plan.md              # This file (/speckit.plan command output)
+├── research.md          # Phase 0 output (/speckit.plan command)
+├── data-model.md        # Phase 1 output (/speckit.plan command)
+├── quickstart.md        # Phase 1 output (/speckit.plan command)
+├── contracts/           # Phase 1 output (/speckit.plan command)
+└── tasks.md             # Phase 2 output (/speckit.tasks command - NOT created by /speckit.plan)
 ```
 
-### Source Code Changes
+### Source Code (repository root)
+<!--
+  ACTION REQUIRED: Replace the placeholder tree below with the concrete layout
+  for this feature. Delete unused options and expand the chosen structure with
+  real paths (e.g., apps/admin, packages/something). The delivered plan must
+  not include Option labels.
+-->
 
 ```text
+# [REMOVE IF UNUSED] Option 1: Single project (DEFAULT)
 src/
-├── commands/
-│   └── daemon.ts              MODIFY — getExecutableArgs(): string[], ephemeral check,
-│                                       isRegistered() per-platform, start timeout
-├── config/
-│   └── schema.ts              MODIFY — add DaemonStatusSchema + DaemonStatus type
-├── core/
-│   ├── sync-queue.ts          NEW    — SyncQueue class
-│   └── __tests__/
-│       └── sync-queue.test.ts NEW    — SyncQueue unit tests
-└── daemon/
-    ├── index.ts               MODIFY — queue, retry-once, failure tracking, clean shutdown
-    ├── installer-macos.ts     MODIFY — buildPlist(args: string[]), bootout→bootstrap,
-    │                                   launchctl print for isRegistered, clean errors
-    ├── installer-linux.ts     MODIFY — buildUnit(args: string[]), isRegistered via
-    │                                   systemctl is-enabled, clean errors
-    ├── installer-windows.ts   MODIFY — buildXml(args: string[]), split Command/Arguments
-    └── __tests__/
-        ├── index.test.ts      MODIFY — cover new behaviours
-        ├── installer-macos.test.ts    MODIFY
-        ├── installer-linux.test.ts    MODIFY
-        └── installer-windows.test.ts  MODIFY
+├── models/
+├── services/
+├── cli/
+└── lib/
 
-docs/
-└── daemon.md                  NEW    — daemon lifecycle Mermaid state diagram
+tests/
+├── contract/
+├── integration/
+└── unit/
+
+# [REMOVE IF UNUSED] Option 2: Web application (when "frontend" + "backend" detected)
+backend/
+├── src/
+│   ├── models/
+│   ├── services/
+│   └── api/
+└── tests/
+
+frontend/
+├── src/
+│   ├── components/
+│   ├── pages/
+│   └── services/
+└── tests/
+
+# [REMOVE IF UNUSED] Option 3: Mobile + API (when "iOS/Android" detected)
+api/
+└── [same as backend above]
+
+ios/ or android/
+└── [platform-specific structure: feature modules, UI flows, platform tests]
 ```
 
----
-
-## Phase 0: Research Output
-
-Research complete. See [research.md](./research.md). All NEEDS CLARIFICATION resolved:
-
-| Topic | Decision | Reference |
-|-------|----------|-----------|
-| macOS ProgramArguments format | Each element = separate `<string>` | R-001, `launchd.plist(5)` |
-| Windows Command/Arguments split | `<Command>` = binary only | R-002, Task Scheduler XML schema |
-| Linux ExecStart | No change needed — systemd tokenises correctly | R-003, `systemd.service(5)` |
-| macOS idempotent re-install | `bootout` (ignore error) → write plist → `bootstrap` | R-004 |
-| Ephemeral path detection | `os.tmpdir()` comparison + `bunx-` guard | R-005 |
-| macOS bootstrap state check | `launchctl print gui/<uid>/<label>` | R-006 |
-| Linux registration check | `systemctl --user is-enabled agentsync` | R-007 |
-| Sync serialisation | `SyncQueue` promise-chain, no new dep | R-008 |
-| Retry-once wrapper | Local `withRetry(fn)` helper | R-009 |
-| Failure record | In-memory `{ consecutiveFailures, lastError }` | R-010 |
-| Shutdown drain | `queue.whenIdle()` + `ipc.close()` + `unlink(socket)` | R-011 |
-
----
-
-## Phase 1: Design Details
-
-### 1.1 — `getExecutableArgs()` in `src/commands/daemon.ts`
-
-**Rename** `getExecutablePath(): string` → `getExecutableArgs(): string[]`.
-
-**Logic**:
-
-```typescript
-import { realpathSync } from "node:fs";
-import { tmpdir } from "node:os";
-
-function isEphemeralPath(filePath: string): boolean {
-  try {
-    const resolved = realpathSync(filePath);
-    const tmp = realpathSync(tmpdir());
-    return resolved.startsWith(tmp) || resolved.includes("bunx-");
-  } catch {
-    return false;
-  }
-}
-
-function getExecutableArgs(): string[] {
-  const isBun =
-    process.argv[0].endsWith("bun") || process.argv[0].endsWith("bun.exe");
-  if (isBun) {
-    if (isEphemeralPath(process.argv[1])) {
-      throw new Error(
-        "Executable is in a temporary directory. " +
-          "Install the package globally first: bun install -g @chrisleekr/agentsync"
-      );
-    }
-    return [process.argv[0], process.argv[1]];
-  }
-  return [process.execPath];
-}
-```
-
-**Callers** (`install` subcommand):
-
-```typescript
-const args = getExecutableArgs(); // string[]
-await installer.install(args);    // signature changes from (exe: string) to (args: string[])
-```
-
----
-
-### 1.2 — `PlatformInstaller` interface update
-
-Two changes to the `PlatformInstaller` interface in `daemon.ts`:
-
-1. `install(exe: string)` → `install(args: string[])` — receives the full executable args array instead of a single concatenated string.
-2. Add `isRegistered(): Promise<boolean>` — each platform module implements this to check whether the service is currently registered with the OS service manager (`launchctl print`, `systemctl is-enabled`, `schtasks /Query`). The `daemon start` subcommand calls this before attempting to start; the `daemon install` subcommand does not (it always registers). Stub implementations returning `Promise.resolve(false)` are added first (Phase 2) so TypeScript compiles; real implementations follow in Phase 6 (T035, T039, T041).
-
----
-
-### 1.3 — `src/daemon/installer-macos.ts`
-
-**`buildPlist(args: string[], logDir: string): string`**
-
-Replace the single `<string>${executablePath}</string>` with a loop:
-
-```typescript
-function buildPlist(args: string[], logDir: string): string {
-  const programArgs = [...args, "daemon", "_run"]
-    .map((a) => `    <string>${a}</string>`)
-    .join("\n");
-  // ... plist template with ${programArgs} in the <array> block
-}
-```
-
-**`installMacOs(args: string[]): Promise<void>`**
-
-```typescript
-export async function installMacOs(args: string[]): Promise<void> {
-  // 1. bootout existing service (ignore ENOENT / not-loaded errors)
-  try {
-    await execFileAsync("launchctl", ["bootout", `gui/${process.getuid?.() ?? 501}`, PLIST_PATH]);
-  } catch { /* not loaded — expected */ }
-
-  // 2. write plist
-  const plist = buildPlist(args, logDir);
-  await writeFile(PLIST_PATH, plist, "utf8");
-
-  // 3. bootstrap — surface clean error on failure
-  try {
-    await execFileAsync("launchctl", ["bootstrap", `gui/${process.getuid?.() ?? 501}`, PLIST_PATH]);
-  } catch (err) {
-    const msg = extractServiceManagerError(err);
-    throw new Error(`launchd bootstrap failed: ${msg}\nHint: Check that the executable path exists and is not in a temporary directory.`);
-  }
-  log.success(`Installed launchd service: ${PLIST_LABEL}`);
-}
-```
-
-**`extractServiceManagerError(err: unknown): string`** — a local helper that reads `(err as { stderr?: string }).stderr ?? String(err)` and strips internal stack frames. Returns only the service manager's stderr line.
-
-**`isRegisteredMacOs(): Promise<boolean>`** — runs `launchctl print gui/<uid>/com.agentsync.daemon` and returns `true` on exit code 0.
-
-**`startMacOs()`** — call `isRegisteredMacOs()` first; throw with actionable message if false. Wrap `kickstart` in `Promise.race` with a 10-second timeout.
-
----
-
-### 1.4 — `src/daemon/installer-linux.ts`
-
-**`buildUnit(args: string[]): string`**
-
-```typescript
-// ExecStart uses space-separated tokens; systemd tokenises correctly
-const execStart = [...args, "daemon", "_run"].join(" ");
-return `[Unit]\nDescription=...\n[Service]\nType=simple\nExecStart=${execStart}\n...`;
-```
-
-**`isRegisteredLinux(): Promise<boolean>`** — runs `systemctl --user is-enabled agentsync`. Returns `true` if stdout is `enabled`; `false` if `not-found` or `disabled`.
-
-**`startLinux()`** — check `isRegisteredLinux()` first; throw with actionable message if false. Wrap `systemctl --user start` in a 10-second timeout.
-
----
-
-### 1.5 — `src/daemon/installer-windows.ts`
-
-**`buildXml(args: string[]): string`**
-
-```typescript
-const command = escapeXml(args[0]);
-const scriptAndSubcmd = [...args.slice(1), "daemon", "_run"]
-  .map(escapeXml)
-  .join(" ");
-// <Command>${command}</Command>
-// <Arguments>${scriptAndSubcmd}</Arguments>
-```
-
-**`isInstalledWindows()`** — already queries `schtasks /Query`; this doubles as a registration check. **`startWindows()`** — check `isInstalledWindows()` first; wrap `schtasks /Run` in a 10-second timeout.
-
----
-
-### 1.6 — `src/core/sync-queue.ts` (new file)
-
-```typescript
-/** Serialises async operations so only one runs at a time. */
-export class SyncQueue {
-  private tail: Promise<void> = Promise.resolve();
-
-  /** Enqueue fn; it will run only after any currently running operation settles. */
-  enqueue<T>(fn: () => Promise<T>): Promise<T> {
-    const result = this.tail.then(fn);
-    this.tail = result.then(
-      () => {},
-      () => {},
-    );
-    return result;
-  }
-
-  /** Resolves when no operations are in progress or queued. */
-  whenIdle(): Promise<void> {
-    return this.tail;
-  }
-}
-```
-
----
-
-### 1.7 — `src/config/schema.ts` — add `DaemonStatusSchema`
-
-```typescript
-export const DaemonStatusSchema = z.object({
-  pid: z.number().int().positive(),
-  consecutiveFailures: z.number().int().min(0),
-  lastError: z.string().nullable(),
-});
-export type DaemonStatus = z.infer<typeof DaemonStatusSchema>;
-```
-
----
-
-### 1.8 — `src/daemon/index.ts` — runtime hardening
-
-**Key changes**:
-
-```typescript
-import { unlink } from "node:fs/promises";
-import { SyncQueue } from "../core/sync-queue";
-import { DaemonStatusSchema } from "../config/schema";
-
-// Failure record
-let consecutiveFailures = 0;
-let lastError: string | null = null;
-
-function recordSuccess(): void {
-  consecutiveFailures = 0;
-  lastError = null;
-}
-
-function recordFailure(err: string): void {
-  consecutiveFailures++;
-  lastError = err;
-}
-
-// Retry-once wrapper
-async function withRetry<T>(fn: () => Promise<T>): Promise<T> {
-  try {
-    return await fn();
-  } catch {
-    return fn(); // second attempt; throws if it also fails
-  }
-}
-
-// Sync queue
-const queue = new SyncQueue();
-
-// Updated status handler
-ipc.on("status", async () =>
-  DaemonStatusSchema.parse({ pid: process.pid, consecutiveFailures, lastError })
-);
-
-// Wrap every push/pull call with queue + retry + record
-async function runSyncOp(op: () => Promise<SyncResult>): Promise<SyncResult> {
-  return queue.enqueue(async () => {
-    try {
-      const result = await withRetry(op);
-      if (!result.fatal) recordSuccess();
-      else recordFailure(result.errors.join("; "));
-      return result;
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      recordFailure(msg);
-      throw err;
-    }
-  });
-}
-
-// Clean shutdown
-const shutdown = async () => {
-  clearInterval(pullTimer);
-  ipc.close();
-  // Drain in-flight ops, max 10s
-  await Promise.race([queue.whenIdle(), new Promise<void>((r) => setTimeout(r, 10_000))]);
-  await watcher.close();
-  try { await unlink(socketPath); } catch { /* already gone */ }
-  process.exit(0);
-};
-```
-
----
-
-### 1.9 — `docs/daemon.md` (new file)
-
-Must include a GitHub-compatible Mermaid state diagram. High-contrast colour pairs per the global CLAUDE.md rules. See quickstart.md Scenario 8 for validation requirements.
-
-State diagram covers: `Starting` → `Running` → `Syncing` → `Running` (success) / `Error` (retry) → `Running`, and `Running` → `ShuttingDown` → `Stopped`.
-
----
+**Structure Decision**: [Document the selected structure and reference the real
+directories captured above]
 
 ## Complexity Tracking
 
-No constitution violations requiring justification. All changes are additions or fixes within the existing module structure. No new project, no repository pattern, no abstraction layers beyond `SyncQueue` (which is 12 lines and has zero dependencies).
+> **Fill ONLY if Constitution Check has violations that must be justified**
+
+| Violation | Why Needed | Simpler Alternative Rejected Because |
+| --------- | ---------- | ----------------------------------- |
+| [e.g., 4th project] | [current need] | [why 3 projects insufficient] |
+| [e.g., Repository pattern] | [specific problem] | [why direct DB access insufficient] |

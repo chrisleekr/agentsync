@@ -11,6 +11,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, mock, test } from "b
 
 const fsWrites = new Map<string, string>();
 const execFileCalls: Array<{ cmd: string; args: string[] }> = [];
+let lastExecFileOpts: Record<string, unknown> | undefined;
 
 // Control is-enabled output for isRegisteredLinux tests
 let isEnabledStdout = "";
@@ -37,10 +38,14 @@ const execFileMock = (
 
 const { promisify } = require("node:util") as typeof import("node:util");
 (execFileMock as unknown as Record<symbol, unknown>)[promisify.custom] = (
-  cmd: string,
-  args: string[],
+  ...fnArgs: unknown[]
 ): Promise<{ stdout: string; stderr: string }> =>
   new Promise((resolve, reject) => {
+    const cmd = fnArgs[0] as string;
+    const args = fnArgs[1] as string[];
+    if (fnArgs.length > 2 && typeof fnArgs[2] === "object" && fnArgs[2] !== null) {
+      lastExecFileOpts = fnArgs[2] as Record<string, unknown>;
+    }
     execFileMock(cmd, args, (err, stdout, stderr) => {
       if (err) {
         reject(Object.assign(err, { stdout, stderr }));
@@ -91,18 +96,34 @@ beforeEach(() => {
   execFileCalls.length = 0;
   isEnabledStdout = "";
   isEnabledShouldFail = false;
+  lastExecFileOpts = undefined;
 });
 
 // T034: buildUnit emits correct ExecStart
 describe("buildUnit", () => {
-  test("produces ExecStart with each arg joined by space plus daemon _run (T034)", () => {
+  test("produces ExecStart with each arg quoted plus daemon _run (T034)", () => {
     const unit = m.buildUnit(["bun", "/path/cli.js"]);
-    expect(unit).toContain("ExecStart=bun /path/cli.js daemon _run");
+    expect(unit).toContain('ExecStart="bun" "/path/cli.js" "daemon" "_run"');
   });
 
   test("single-element args produce correct ExecStart", () => {
     const unit = m.buildUnit(["/usr/local/bin/agentsync"]);
-    expect(unit).toContain("ExecStart=/usr/local/bin/agentsync daemon _run");
+    expect(unit).toContain('ExecStart="/usr/local/bin/agentsync" "daemon" "_run"');
+  });
+
+  // T063: args containing spaces are quoted per systemd.syntax(7)
+  test("args containing spaces are quoted for systemd (T063)", () => {
+    const unit = m.buildUnit(["bun", "/home/user/My Program/cli.js"]);
+    expect(unit).toContain('"bun"');
+    expect(unit).toContain('"/home/user/My Program/cli.js"');
+    expect(unit).toContain('"daemon"');
+    expect(unit).toContain('"_run"');
+  });
+
+  test("args containing backslashes and quotes are C-style escaped (T063)", () => {
+    const unit = m.buildUnit(['/path/with"quote', "/path/with\\backslash"]);
+    expect(unit).toContain('"/path/with\\"quote"');
+    expect(unit).toContain('"/path/with\\\\backslash"');
   });
 });
 
@@ -161,6 +182,17 @@ describe("startLinux / stopLinux", () => {
   test("startLinux throws when not registered", async () => {
     isEnabledShouldFail = true;
     await expect(m.startLinux()).rejects.toThrow("Service not bootstrapped");
+  });
+
+  // T070: startLinux passes AbortSignal to execFileAsync
+  test("startLinux passes signal option to execFileAsync for start (T070)", async () => {
+    isEnabledStdout = "enabled\n";
+    await m.startLinux();
+
+    const startCall = execFileCalls.find((c) => c.cmd === "systemctl" && c.args.includes("start"));
+    expect(startCall).toBeDefined();
+    expect(lastExecFileOpts).toBeDefined();
+    expect(lastExecFileOpts?.signal).toBeInstanceOf(AbortSignal);
   });
 
   test("stopLinux calls systemctl stop <service>", async () => {

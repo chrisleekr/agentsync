@@ -18,12 +18,20 @@ const SYSTEMD_USER_DIR = join(homedir(), ".config", "systemd", "user");
 const SERVICE_PATH = join(SYSTEMD_USER_DIR, `${SERVICE_NAME}.service`);
 
 /**
+ * Quote a single argument for systemd ExecStart per systemd.syntax(7).
+ * Wraps in double quotes and applies C-style escaping for `\` and `"`.
+ */
+function quoteSystemdArg(arg: string): string {
+  return `"${arg.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+}
+
+/**
  * Build the systemd unit text for the given executable args array.
- * systemd tokenises ExecStart by spaces, so joining args is safe here;
- * the array form is used for interface consistency with macOS and Windows.
+ * Each argument is individually quoted per systemd.syntax(7) to correctly
+ * handle paths containing spaces or special characters.
  */
 export function buildUnit(args: string[]): string {
-  const execStart = [...args, "daemon", "_run"].join(" ");
+  const execStart = [...args, "daemon", "_run"].map(quoteSystemdArg).join(" ");
   return `[Unit]
 Description=AgentSync daemon — encrypts and syncs AI agent configs
 After=network.target
@@ -100,12 +108,20 @@ export async function startLinux(): Promise<void> {
   if (!(await isRegisteredLinux())) {
     throw new Error("Service not bootstrapped — run `agentsync daemon install` first.");
   }
-  await Promise.race([
-    execFileAsync("systemctl", ["--user", "start", SERVICE_NAME]),
-    new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error("Service manager start timed out.")), 10_000),
-    ),
-  ]);
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 10_000);
+  try {
+    await execFileAsync("systemctl", ["--user", "start", SERVICE_NAME], {
+      signal: controller.signal,
+    });
+  } catch (err) {
+    if ((err as Error).name === "AbortError") {
+      throw new Error("Service manager start timed out.");
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
 /** Stop the installed Linux user service. */

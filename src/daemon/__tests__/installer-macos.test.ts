@@ -18,6 +18,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, mock, test } from "b
 // ── In-memory FS state (captured before the module is imported) ───────────────
 const fsWrites = new Map<string, string>();
 const execFileCalls: Array<{ cmd: string; args: string[] }> = [];
+let lastExecFileOpts: Record<string, unknown> | undefined;
 
 // Control whether launchctl commands succeed or fail
 let launchctlShouldFail = false;
@@ -46,10 +47,14 @@ const execFileMock = (
 
 const { promisify } = require("node:util") as typeof import("node:util");
 (execFileMock as unknown as Record<symbol, unknown>)[promisify.custom] = (
-  cmd: string,
-  args: string[],
+  ...fnArgs: unknown[]
 ): Promise<{ stdout: string; stderr: string }> =>
   new Promise((resolve, reject) => {
+    const cmd = fnArgs[0] as string;
+    const args = fnArgs[1] as string[];
+    if (fnArgs.length > 2 && typeof fnArgs[2] === "object" && fnArgs[2] !== null) {
+      lastExecFileOpts = fnArgs[2] as Record<string, unknown>;
+    }
     execFileMock(cmd, args, (err, stdout, stderr) => {
       if (err) {
         reject(Object.assign(err, { stdout, stderr }));
@@ -103,6 +108,7 @@ beforeEach(() => {
   launchctlShouldFail = false;
   launchctlFailStderr = "Bootstrap failed: 5: Input/output error";
   launchctlPrintShouldFail = true; // default: not registered
+  lastExecFileOpts = undefined;
 });
 
 // ── T029: buildPlist emits separate <string> elements ─────────────────────────
@@ -123,6 +129,15 @@ describe("buildPlist", () => {
     expect(plist).toContain("<string>/usr/local/bin/agentsync</string>");
     expect(plist).toContain("<string>daemon</string>");
     expect(plist).toContain("<string>_run</string>");
+  });
+
+  // T064: XML special characters in args are escaped
+  test("escapes & and < in arg values (T064)", () => {
+    const plist = m.buildPlist(["/path/with&amp", "/path/<special>"], "/var/log");
+    expect(plist).toContain("<string>/path/with&amp;amp</string>");
+    expect(plist).toContain("<string>/path/&lt;special&gt;</string>");
+    // Must NOT contain unescaped & or < inside <string> elements
+    expect(plist).not.toContain("<string>/path/with&amp</string>");
   });
 });
 
@@ -216,6 +231,19 @@ describe("startMacOs / stopMacOs", () => {
       (c) => c.cmd === "launchctl" && c.args[0] === "kickstart",
     );
     expect(kickstartCall).toBeUndefined();
+  });
+
+  // T069: startMacOs passes AbortSignal to execFileAsync
+  test("startMacOs passes signal option to execFileAsync for kickstart (T069)", async () => {
+    launchctlPrintShouldFail = false; // registered
+    await m.startMacOs();
+
+    const kickstartCall = execFileCalls.find(
+      (c) => c.cmd === "launchctl" && c.args[0] === "kickstart",
+    );
+    expect(kickstartCall).toBeDefined();
+    expect(lastExecFileOpts).toBeDefined();
+    expect(lastExecFileOpts?.signal).toBeInstanceOf(AbortSignal);
   });
 
   test("stopMacOs calls launchctl kill with SIGTERM", async () => {

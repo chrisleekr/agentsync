@@ -115,6 +115,53 @@ describe("SyncQueue", () => {
     expect(result).toBe(42);
   });
 
+  // T058 — close() rejects new enqueues
+  test("close() causes subsequent enqueue() to reject", async () => {
+    const q = new SyncQueue();
+    q.close();
+    await expect(q.enqueue(async () => 1)).rejects.toThrow("SyncQueue is closed");
+  });
+
+  // T058 — whenIdle() still resolves after close()
+  test("whenIdle() resolves after close() when queue is idle", async () => {
+    const q = new SyncQueue();
+    q.close();
+    await expect(q.whenIdle()).resolves.toBeUndefined();
+  });
+
+  // T058 — close() does not abort in-flight work
+  test("close() does not abort already-enqueued work", async () => {
+    const q = new SyncQueue();
+    let ran = false;
+
+    let resolveFirst!: () => void;
+    const first = q.enqueue(
+      () =>
+        new Promise<void>((res) => {
+          resolveFirst = res;
+        }),
+    );
+
+    const second = q.enqueue(async () => {
+      ran = true;
+    });
+
+    // Flush microtask so fn is called and resolveFirst is assigned
+    await Promise.resolve();
+
+    // Close while work is in flight — should NOT abort existing work
+    q.close();
+
+    // New enqueues should be rejected
+    await expect(q.enqueue(async () => 99)).rejects.toThrow("SyncQueue is closed");
+
+    resolveFirst();
+    await first;
+    await second;
+
+    expect(ran).toBe(true);
+  });
+
   // failed operation does not block subsequent enqueued work
   test("a failed operation does not block subsequent enqueued work", async () => {
     const q = new SyncQueue();

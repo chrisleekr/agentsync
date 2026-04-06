@@ -13,6 +13,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, mock, test } from "b
 const fsWrites = new Map<string, string>();
 const fsRms = new Set<string>();
 const execFileCalls: Array<{ cmd: string; args: string[] }> = [];
+let lastExecFileOpts: Record<string, unknown> | undefined;
 
 // isInstalledWindows checks schtasks /Query exit code; simulate it via the mock.
 let queryExitCode = 0; // 0 = installed, non-zero = not installed
@@ -34,10 +35,14 @@ const execFileMock = (
 
 const { promisify } = require("node:util") as typeof import("node:util");
 (execFileMock as unknown as Record<symbol, unknown>)[promisify.custom] = (
-  cmd: string,
-  args: string[],
+  ...fnArgs: unknown[]
 ): Promise<{ stdout: string; stderr: string }> =>
   new Promise((resolve, reject) => {
+    const cmd = fnArgs[0] as string;
+    const args = fnArgs[1] as string[];
+    if (fnArgs.length > 2 && typeof fnArgs[2] === "object" && fnArgs[2] !== null) {
+      lastExecFileOpts = fnArgs[2] as Record<string, unknown>;
+    }
     execFileMock(cmd, args, (err, stdout, stderr) => {
       if (err) {
         reject(Object.assign(err, { stdout, stderr }));
@@ -89,6 +94,7 @@ beforeEach(() => {
   fsRms.clear();
   execFileCalls.length = 0;
   queryExitCode = 0;
+  lastExecFileOpts = undefined;
 });
 
 // T033: buildXml puts args[0] in <Command>, rest + daemon _run in <Arguments>
@@ -104,6 +110,21 @@ describe("buildXml", () => {
     // & is XML-escaped
     expect(xml).toContain("<Command>C:\\agentsync.exe</Command>");
     expect(xml).toContain("<Arguments>daemon _run</Arguments>");
+  });
+
+  // T065: args with spaces are quoted for Windows command-line parsing
+  test("args containing spaces are double-quoted in <Arguments> (T065)", () => {
+    const xml = m.buildXml(["bun", "C:\\Program Files\\cli.js"]);
+    expect(xml).toContain("<Command>bun</Command>");
+    // The script path should be quoted because it contains a space
+    expect(xml).toContain('"C:\\Program Files\\cli.js"');
+    expect(xml).toContain("daemon _run");
+  });
+
+  test("args containing double quotes are escaped with backslash (T065)", () => {
+    const xml = m.buildXml(["bun", '/path/with"quote']);
+    const args = xml.match(/<Arguments>(.*?)<\/Arguments>/)?.[1] ?? "";
+    expect(args).toContain('\\"');
   });
 });
 
@@ -158,6 +179,17 @@ describe("startWindows / stopWindows", () => {
   test("startWindows throws when not registered", async () => {
     queryExitCode = 1;
     await expect(m.startWindows()).rejects.toThrow("Service not bootstrapped");
+  });
+
+  // T071: startWindows passes AbortSignal to execFileAsync
+  test("startWindows passes signal option to execFileAsync for /Run (T071)", async () => {
+    queryExitCode = 0; // installed
+    await m.startWindows();
+
+    const runCall = execFileCalls.find((c) => c.cmd === "schtasks" && c.args[0] === "/Run");
+    expect(runCall).toBeDefined();
+    expect(lastExecFileOpts).toBeDefined();
+    expect(lastExecFileOpts?.signal).toBeInstanceOf(AbortSignal);
   });
 
   test("stopWindows calls schtasks /End with the task name", async () => {

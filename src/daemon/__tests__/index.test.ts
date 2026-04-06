@@ -362,10 +362,7 @@ describe("retry logic (US3)", () => {
     };
     expect(status.consecutiveFailures).toBeGreaterThanOrEqual(1);
     // Daemon must NOT exit — it stays alive for the next trigger (SC-004)
-    // exitCode should still be null (not set by the push handler)
-    // Note: exitCode may have been set by second-instance detection in a prior test,
-    // but within this test's context, push handler does not call process.exit
-    expect(signalHandlers.has("SIGTERM")).toBe(true); // daemon still alive
+    expect(exitCode).toBeNull();
   });
 });
 

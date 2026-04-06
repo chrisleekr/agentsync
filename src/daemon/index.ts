@@ -166,49 +166,58 @@ export async function startDaemon(): Promise<void> {
 
   for (const target of watchTargets) {
     watcher.add(target, debounceMs, async () => {
-      await queue.enqueue(async () => {
-        try {
-          const result = await withRetry(() => performPush());
-          if (result.fatal) {
-            for (const err of result.errors) {
-              log.error(`${ts()} ${err}`);
+      await queue
+        .enqueue(async () => {
+          try {
+            const result = await withRetry(() => performPush());
+            if (result.fatal) {
+              for (const err of result.errors) {
+                log.error(`${ts()} ${err}`);
+              }
+              recordFailure("push", result.errors.join("; "));
+            } else {
+              recordSuccess();
             }
-            recordFailure("push", result.errors.join("; "));
-          } else {
-            recordSuccess();
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            recordFailure("push", msg);
           }
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err);
-          recordFailure("push", msg);
-        }
-      });
+        })
+        .catch(() => {
+          // Queue closed during shutdown — safe to ignore
+        });
     });
   }
 
   // Periodic pull using interval from config
   const pullTimer = setInterval(async () => {
-    await queue.enqueue(async () => {
-      try {
-        const result = await withRetry(() => performPull());
-        if (result.fatal) {
-          for (const err of result.errors) {
-            log.error(`${ts()} ${err}`);
+    await queue
+      .enqueue(async () => {
+        try {
+          const result = await withRetry(() => performPull());
+          if (result.fatal) {
+            for (const err of result.errors) {
+              log.error(`${ts()} ${err}`);
+            }
+            recordFailure("pull", result.errors.join("; "));
+          } else {
+            recordSuccess();
           }
-          recordFailure("pull", result.errors.join("; "));
-        } else {
-          recordSuccess();
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          recordFailure("pull", msg);
         }
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        recordFailure("pull", msg);
-      }
-    });
+      })
+      .catch(() => {
+        // Queue closed during shutdown — safe to ignore
+      });
   }, pullIntervalMs);
 
   // ── Graceful shutdown (US1) ──────────────────────────────────────────────
   const shutdown = async () => {
     clearInterval(pullTimer);
     ipc.close();
+    queue.close();
     // Drain in-flight sync operations with a hard timeout (FR-013)
     await Promise.race([queue.whenIdle(), delay(10_000)]);
     await watcher.close();

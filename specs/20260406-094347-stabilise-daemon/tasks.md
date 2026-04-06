@@ -232,6 +232,50 @@ T010  →  src/core/sync-queue.ts         (fill SyncQueue body)
 4. Phase 5 (US3) → Auto-recovery ✓ — validate independently
 5. Phase 6 (US4) → Install reliability ✓ — validate independently (includes the confirmed Bug 1/2/3 fixes)
 6. Phase 7 → Polish, full CI gate, live macOS scenarios
+7. Phase 8 → PR review fixes (argument escaping, shutdown race, AbortController, test improvements)
+
+---
+
+## Phase 8: PR Review Fixes (CodeRabbit PR #16 Review)
+
+**Purpose**: Address valid findings from automated code review on PR #16. Fixes cover shutdown race condition, argument escaping for service managers, child process timeout handling, and test improvements.
+
+**Source**: CodeRabbit review comments on `chrisleekr/agentsync#16` (2026-04-06)
+
+### Fix 1: CLAUDE.md commands (documentation)
+
+- [x] T056 [P] Fix `CLAUDE.md` line 18 — replace `npm test && npm run lint` with `bun run check` to match actual `package.json` scripts
+
+### Fix 2: SyncQueue shutdown race (US1 — clean shutdown)
+
+- [x] T058 [US1] Update `src/core/__tests__/sync-queue.test.ts` — add tests for `close()` rejecting new enqueues and `whenIdle()` still resolving after close (TDD: write tests first)
+- [x] T057 [US1] Add `accepting` flag and `close()` method with JSDoc to `SyncQueue` in `src/core/sync-queue.ts` — `enqueue()` rejects when `accepting` is false
+- [x] T059 [US1] Update shutdown sequence in `src/daemon/index.ts` — call `queue.close()` after `ipc.close()` and before `queue.whenIdle()`; add `.catch()` to watcher/interval `enqueue()` calls to handle post-close rejections
+
+### Fix 3: Service manager argument escaping (US4 — installer reliability)
+
+- [x] T063 [P] [US4] Update `src/daemon/__tests__/installer-linux.test.ts` — add test for `buildUnit()` with args containing spaces (TDD: write test first)
+- [x] T064 [P] [US4] Update `src/daemon/__tests__/installer-macos.test.ts` — add test for `buildPlist()` with args containing `&` and `<` characters (TDD: write test first)
+- [x] T065 [P] [US4] Update `src/daemon/__tests__/installer-windows.test.ts` — add test for `buildXml()` with args containing spaces (TDD: write test first)
+- [x] T060 [P] [US4] Add `quoteSystemdArg()` to `src/daemon/installer-linux.ts` — wrap each ExecStart arg in double quotes with C-style escaping per `systemd.syntax(7)`; update misleading comment at line 22
+- [x] T061 [P] [US4] Add `escapeXml()` to `src/daemon/installer-macos.ts` — escape `&`, `<`, `>` in plist `<string>` values within `buildPlist()`
+- [x] T062 [P] [US4] Quote arguments with spaces in `buildXml()` in `src/daemon/installer-windows.ts` — wrap args containing whitespace in double quotes (with `\"` escaping for internal quotes) before XML-escaping
+
+### Fix 4: AbortController for child process timeout (US4 — installer reliability)
+
+- [x] T066 [US4] Replace `Promise.race` with `AbortController` + `signal` in `startMacOs()` in `src/daemon/installer-macos.ts` — properly cancel child process on timeout and clear timer on success
+- [x] T067 [US4] Replace `Promise.race` with `AbortController` + `signal` in `startLinux()` in `src/daemon/installer-linux.ts`
+- [x] T068 [US4] Replace `Promise.race` with `AbortController` + `signal` in `startWindows()` in `src/daemon/installer-windows.ts`
+- [x] T069 [P] [US4] Update `src/daemon/__tests__/installer-macos.test.ts` — verify `startMacOs()` passes `signal` option to `execFileAsync`
+- [x] T070 [P] [US4] Update `src/daemon/__tests__/installer-linux.test.ts` — verify `startLinux()` passes `signal` option to `execFileAsync`
+- [x] T071 [P] [US4] Update `src/daemon/__tests__/installer-windows.test.ts` — verify `startWindows()` passes `signal` option to `execFileAsync`
+
+### Fix 5: Test improvements (cross-cutting)
+
+- [x] T072 [P] Add `isRegisteredWindows: mockIsRegistered` to Windows mock in `src/commands/__tests__/daemon.test.ts` line 98–104
+- [x] T073 [P] Replace `expect(signalHandlers.has("SIGTERM")).toBe(true)` with `expect(exitCode).toBeNull()` in `src/daemon/__tests__/index.test.ts` retry logic test (line 368)
+
+**Checkpoint**: All PR review findings addressed. Run `bun run check` to validate.
 
 ---
 

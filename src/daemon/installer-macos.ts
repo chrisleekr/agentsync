@@ -13,6 +13,11 @@ import { log } from "@clack/prompts";
 
 const execFileAsync = promisify(execFile);
 
+/** Escape a string for safe inclusion in XML text content. */
+function escapeXml(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
 const PLIST_LABEL = "com.agentsync.daemon";
 const LAUNCH_AGENTS_DIR = join(homedir(), "Library", "LaunchAgents");
 const PLIST_PATH = join(LAUNCH_AGENTS_DIR, `${PLIST_LABEL}.plist`);
@@ -29,7 +34,7 @@ export function buildPlist(args: string[], logDir: string): string {
   const stderrLog = join(logDir, "agentsync.err.log");
 
   const programArgs = [...args, "daemon", "_run"]
-    .map((a) => `    <string>${a}</string>`)
+    .map((a) => `    <string>${escapeXml(a)}</string>`)
     .join("\n");
 
   return `<?xml version="1.0" encoding="UTF-8"?>
@@ -154,16 +159,22 @@ export async function startMacOs(): Promise<void> {
   if (!(await isRegisteredMacOs())) {
     throw new Error("Service not bootstrapped — run `agentsync daemon install` first.");
   }
-  await Promise.race([
-    execFileAsync("launchctl", [
-      "kickstart",
-      "-k",
-      `gui/${process.getuid?.() ?? 501}/${PLIST_LABEL}`,
-    ]),
-    new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error("Service manager start timed out.")), 10_000),
-    ),
-  ]);
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 10_000);
+  try {
+    await execFileAsync(
+      "launchctl",
+      ["kickstart", "-k", `gui/${process.getuid?.() ?? 501}/${PLIST_LABEL}`],
+      { signal: controller.signal },
+    );
+  } catch (err) {
+    if ((err as Error).name === "AbortError") {
+      throw new Error("Service manager start timed out.");
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
 /** Ask launchd to stop the macOS daemon process. */

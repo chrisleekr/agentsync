@@ -20,13 +20,28 @@ function escapeXml(value: string): string {
 }
 
 /**
+ * Quote a single argument for Windows command-line parsing.
+ * Wraps in double quotes if the value contains whitespace or `"`, and escapes
+ * internal double quotes with `\"` per `CommandLineToArgvW` conventions.
+ */
+function quoteWinArg(arg: string): string {
+  if (/[\s"]/.test(arg) || arg === "") {
+    return `"${arg.replace(/"/g, '\\"')}"`;
+  }
+  return arg;
+}
+
+/**
  * Build the Task Scheduler XML definition for the given executable args array.
  * `args[0]` becomes `<Command>` (the binary only); the remaining args plus
  * `daemon _run` become `<Arguments>` — matching the Task Scheduler XML schema.
  */
 export function buildXml(args: string[]): string {
   const command = escapeXml(args[0] ?? "");
-  const scriptAndSubcmd = [...args.slice(1), "daemon", "_run"].map(escapeXml).join(" ");
+  const scriptAndSubcmd = [...args.slice(1), "daemon", "_run"]
+    .map(quoteWinArg)
+    .map(escapeXml)
+    .join(" ");
 
   return `<?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.4" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
@@ -108,12 +123,18 @@ export async function startWindows(): Promise<void> {
   if (!(await isInstalledWindows())) {
     throw new Error("Service not bootstrapped — run `agentsync daemon install` first.");
   }
-  await Promise.race([
-    execFileAsync("schtasks", ["/Run", "/TN", TASK_NAME]),
-    new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error("Service manager start timed out.")), 10_000),
-    ),
-  ]);
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 10_000);
+  try {
+    await execFileAsync("schtasks", ["/Run", "/TN", TASK_NAME], { signal: controller.signal });
+  } catch (err) {
+    if ((err as Error).name === "AbortError") {
+      throw new Error("Service manager start timed out.");
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
 /** Stop the running Windows scheduled task instance. */
