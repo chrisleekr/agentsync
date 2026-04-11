@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.5](https://github.com/chrisleekr/agentsync/compare/v0.1.4...v0.1.5) (2026-04-11)
+
+
+### Features
+
+* **skills:** sync skill directories for Claude, Cursor, Codex + skill remove verb ([#26](https://github.com/chrisleekr/agentsync/issues/26)) ([dbd85c2](https://github.com/chrisleekr/agentsync/commit/dbd85c2b81b2f861c25b0e2fb62ade246e802c31))
+
 ## [0.1.4](https://github.com/chrisleekr/agentsync/compare/v0.1.3...v0.1.4) (2026-04-06)
 
 
