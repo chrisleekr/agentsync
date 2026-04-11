@@ -36,6 +36,25 @@ safe-outputs:
     assignees: [chrisleekr]
     close-older-issues: true
     expires: 7d
+
+post-steps:
+  - name: Assert agent emitted at least one safe-output record
+    if: always()
+    run: |
+      set -euo pipefail
+      AGENT_OUT=/tmp/gh-aw/agent_output.json
+      if [[ ! -s "$AGENT_OUT" ]]; then
+        echo "::error::Agent produced no output file at $AGENT_OUT"
+        exit 1
+      fi
+      CREATE_ISSUE_COUNT=$(jq '[.items[] | select(.type == "create_issue")] | length' "$AGENT_OUT")
+      NOOP_COUNT=$(jq '[.items[] | select(.type == "noop")] | length' "$AGENT_OUT")
+      echo "create_issue records: $CREATE_ISSUE_COUNT"
+      echo "noop records:         $NOOP_COUNT"
+      if [[ "$CREATE_ISSUE_COUNT" -lt 1 && "$NOOP_COUNT" -lt 1 ]]; then
+        echo "::error::FR-001 violation — agent emitted zero create_issue and zero noop safe-outputs. Failing the run to prevent silent success."
+        exit 1
+      fi
 ---
 
 # Feature Opportunity Researcher
@@ -58,6 +77,16 @@ in the **past 7 days** for each of these tools:
 
 You MUST use the `mcp__tavily__search` tool for all web searches and content
 retrieval. Do NOT use WebFetch or direct HTTP requests to external URLs unless travily is unable to retrieve the content you need.
+
+## Read-only scope
+
+This research task is **read-only** against the working tree. Do NOT run any
+repository build, test, or validation command. In particular, do NOT invoke
+`bun run check`, `bun install`, `bun test`, `npm test`, `npm install`, `git add`,
+`git commit`, or any equivalent. The GitHub-hosted `ubuntu-24.04` runner does
+not have Bun installed, and repository validation is not this workflow's job —
+your only task is to read source files under `src/agents/*.ts` and compare
+them against the upstream changelogs you retrieve through Tavily.
 
 ## What to Check
 
