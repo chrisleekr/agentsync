@@ -1,4 +1,4 @@
-import { afterEach, beforeAll, beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, mock, test } from "bun:test";
 import { mkdirSync, symlinkSync, writeFileSync } from "node:fs";
 import { readdir, rm } from "node:fs/promises";
 import { createRequire } from "node:module";
@@ -24,11 +24,20 @@ type MutableCopilotPaths = {
 
 const testCopilotPaths = AgentPaths.copilot as MutableCopilotPaths;
 
+// Capture the real paths once at module load so afterAll can put them back.
+// See claude.test.ts for the full explanation of the cross-file mutation
+// bleed this guards against.
+const originalCopilotPaths: MutableCopilotPaths = { ...testCopilotPaths };
+
 type CopilotModule = typeof import("../copilot");
 let copilotModule: CopilotModule;
 
 beforeAll(async () => {
   copilotModule = await import("../copilot");
+});
+
+afterAll(() => {
+  Object.assign(testCopilotPaths, originalCopilotPaths);
 });
 
 // T020 — snapshotCopilot

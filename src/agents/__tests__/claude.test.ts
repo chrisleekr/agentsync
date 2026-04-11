@@ -1,4 +1,4 @@
-import { afterEach, beforeAll, beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, mock, test } from "bun:test";
 import { mkdirSync, symlinkSync, writeFileSync } from "node:fs";
 import { mkdir, readdir, rm, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
@@ -25,11 +25,24 @@ type MutableClaudePaths = {
 
 const testClaudePaths = AgentPaths.claude as MutableClaudePaths;
 
+// Capture the real paths once at module load so afterAll can put them back.
+// Without this, the beforeEach hooks below mutate AgentPaths.claude.* to point
+// at per-test tmp dirs and the mutation bleeds into later test files in the
+// same bun test run — notably src/config/__tests__/paths.test.ts, which
+// asserts the original ~/.claude/... values. Different OSes give bun test a
+// different file load order, so the bleed shows up on CI Linux but may be
+// hidden on macOS depending on which file happens to run first.
+const originalClaudePaths: MutableClaudePaths = { ...testClaudePaths };
+
 type ClaudeModule = typeof import("../claude");
 let claudeModule: ClaudeModule;
 
 beforeAll(async () => {
   claudeModule = await import("../claude");
+});
+
+afterAll(() => {
+  Object.assign(testClaudePaths, originalClaudePaths);
 });
 
 // T018 — snapshotClaude

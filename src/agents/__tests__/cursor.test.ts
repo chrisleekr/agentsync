@@ -1,4 +1,4 @@
-import { afterEach, beforeAll, beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, mock, test } from "bun:test";
 import { mkdirSync, symlinkSync, writeFileSync } from "node:fs";
 import { mkdir, readdir, rm, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
@@ -22,11 +22,20 @@ type MutableCursorPaths = {
 
 const testCursorPaths = AgentPaths.cursor as MutableCursorPaths;
 
+// Capture the real paths once at module load so afterAll can put them back.
+// See claude.test.ts for the full explanation of the cross-file mutation
+// bleed this guards against.
+const originalCursorPaths: MutableCursorPaths = { ...testCursorPaths };
+
 type CursorModule = typeof import("../cursor");
 let cursorModule: CursorModule;
 
 beforeAll(async () => {
   cursorModule = await import("../cursor");
+});
+
+afterAll(() => {
+  Object.assign(testCursorPaths, originalCursorPaths);
 });
 
 // ── T021 — snapshotCursor ─────────────────────────────────────────────────────

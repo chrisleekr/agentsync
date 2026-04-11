@@ -1,4 +1,4 @@
-import { afterEach, beforeAll, beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, mock, test } from "bun:test";
 import { mkdirSync, symlinkSync, writeFileSync } from "node:fs";
 import { mkdir, readdir, rm, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
@@ -24,11 +24,20 @@ type MutableCodexPaths = {
 
 const testCodexPaths = AgentPaths.codex as MutableCodexPaths;
 
+// Capture the real paths once at module load so afterAll can put them back.
+// See claude.test.ts for the full explanation of the cross-file mutation
+// bleed this guards against.
+const originalCodexPaths: MutableCodexPaths = { ...testCodexPaths };
+
 type CodexModule = typeof import("../codex");
 let codexModule: CodexModule;
 
 beforeAll(async () => {
   codexModule = await import("../codex");
+});
+
+afterAll(() => {
+  Object.assign(testCodexPaths, originalCodexPaths);
 });
 
 // T019 — snapshotCodex
