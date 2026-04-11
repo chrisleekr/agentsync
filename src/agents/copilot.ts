@@ -132,6 +132,12 @@ export async function applyCopilotSkill(skillName: string, base64Tar: string): P
 
 /** Extract one archived Copilot agent directory into the local agents folder. */
 export async function applyCopilotAgent(agentName: string, base64Tar: string): Promise<void> {
+  // Symmetric path-traversal guard to the one in applyCopilotSkill: a vault
+  // file named `...tar.age` would basename-strip to `..` and resolve outside
+  // agentsDir, letting a compromised vault overwrite files in `~/.copilot/`
+  // or any parent directory. See validateSkillName in skills-walker.ts — the
+  // helper is named for skills but is the generic vault-basename check.
+  validateSkillName(agentName);
   const targetDir = join(AgentPaths.copilot.agentsDir, agentName);
   await mkdir(targetDir, { recursive: true });
   const tarBuffer = Buffer.from(base64Tar, "base64");
@@ -235,9 +241,18 @@ export async function applyCopilotVault(
   const agentFiles = await readAgeFiles(join(copilotDir, "agents"));
   for (const { name, fullPath } of agentFiles) {
     if (!name.endsWith(".tar.age")) continue;
+    const agentName = basename(name, ".tar.age");
+    try {
+      validateSkillName(agentName);
+    } catch (err) {
+      if (err instanceof InvalidSkillNameError) {
+        log.warn(`[copilot] Skipping vault agent with invalid name '${name}': ${err.reason}`);
+        continue;
+      }
+      throw err;
+    }
     const encrypted = await readFile(fullPath, "utf8");
     const decrypted = await decryptString(encrypted, key);
-    const agentName = basename(name, ".tar.age");
     if (dryRun) {
       log.info(`[dry-run] [copilot] would extract agent: ${agentName}`);
       continue;

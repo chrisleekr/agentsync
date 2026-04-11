@@ -368,6 +368,20 @@ describe("applyCopilotVault dryRun", () => {
     }
   });
 
+  // Thread 6 regression — the agents/ loop in applyCopilotVault mirrors the
+  // skills/ loop and was missed in the Phase 8 fix. Same basename-strip
+  // vector (`...tar.age` → `..`) would let a compromised vault overwrite
+  // files in the agent config root via path.join(agentsDir, "..").
+  test("applyCopilotAgent rejects traversal and hidden agent names", async () => {
+    const { InvalidSkillNameError } = await import("../skills-walker");
+    const badNames = ["", ".", "..", "../foo", "foo/bar", "foo\\bar", ".hidden", "foo\x00bar"];
+    for (const bad of badNames) {
+      await expect(copilotModule.applyCopilotAgent(bad, "")).rejects.toBeInstanceOf(
+        InvalidSkillNameError,
+      );
+    }
+  });
+
   test("applyCopilotVault skips adversarial vault filenames without traversal", async () => {
     const { generateIdentity, identityToRecipient, encryptString } = await import(
       "../../core/encryptor"
@@ -391,6 +405,37 @@ describe("applyCopilotVault dryRun", () => {
     await copilotModule.applyCopilotVault(vaultDir, identity, false);
 
     const escapedPayload = join(testCopilotPaths.skillsDir, "..", "instructions.md");
+    const leakedExists = await Bun.file(escapedPayload).exists();
+    expect(leakedExists).toBeFalse();
+  });
+
+  // Thread 6 regression end-to-end: an adversarial file in copilot/agents/
+  // must be rejected symmetrically with the skills/ loop above. Distinct
+  // payload filename (`AGENT_LEAKED.md`) so a false positive can't be
+  // mistaken for the skills-loop assertion's leakage.
+  test("applyCopilotVault skips adversarial agent filenames without traversal", async () => {
+    const { generateIdentity, identityToRecipient, encryptString } = await import(
+      "../../core/encryptor"
+    );
+    const { archiveDirectory } = await import("../../core/tar");
+    const identity = await generateIdentity();
+    const recipient = await identityToRecipient(identity);
+
+    const payloadSrc = join(tmpDir, "agent-payload-src");
+    mkdirSync(payloadSrc, { recursive: true });
+    writeFileSync(join(payloadSrc, "AGENT_LEAKED.md"), "LEAKED_AGENT_PAYLOAD", "utf8");
+    const tarBuffer = await archiveDirectory(payloadSrc);
+    const base64 = tarBuffer.toString("base64");
+    const encrypted = await encryptString(base64, [recipient]);
+
+    const vaultDir = join(tmpDir, "vault-adversarial-agent");
+    const agentsVaultDir = join(vaultDir, "copilot", "agents");
+    mkdirSync(agentsVaultDir, { recursive: true });
+    writeFileSync(join(agentsVaultDir, "...tar.age"), encrypted, "utf8");
+
+    await copilotModule.applyCopilotVault(vaultDir, identity, false);
+
+    const escapedPayload = join(testCopilotPaths.agentsDir, "..", "AGENT_LEAKED.md");
     const leakedExists = await Bun.file(escapedPayload).exists();
     expect(leakedExists).toBeFalse();
   });
