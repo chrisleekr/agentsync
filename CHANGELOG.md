@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.6](https://github.com/chrisleekr/agentsync/compare/v0.1.5...v0.1.6) (2026-04-11)
+
+
+### Bug Fixes
+
+* **workflow:** feature-research silent-success + strict-mode hardening ([#28](https://github.com/chrisleekr/agentsync/issues/28)) ([d7d7949](https://github.com/chrisleekr/agentsync/commit/d7d794967caa5a8067da2212a72594fb9948ca3d))
+
 ## [0.1.5](https://github.com/chrisleekr/agentsync/compare/v0.1.4...v0.1.5) (2026-04-11)
 
 
