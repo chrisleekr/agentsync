@@ -9,6 +9,7 @@ export const AgentPaths = {
   cursor: {
     mcpGlobal: join(HOME, ".cursor", "mcp.json"),
     commandsDir: join(HOME, ".cursor", "commands"),
+    skillsDir: join(HOME, ".cursor", "skills"),
     settingsJson: (() => {
       if (PLATFORM === "darwin") {
         return join(HOME, "Library", "Application Support", "Cursor", "User", "settings.json");
@@ -26,6 +27,7 @@ export const AgentPaths = {
     agentsDir: join(HOME, ".claude", "agents"),
     mcpJson: join(HOME, ".claude.json"),
     credentials: join(HOME, ".claude", ".credentials.json"),
+    skillsDir: join(HOME, ".claude", "skills"),
   },
   codex: {
     root: process.env.CODEX_HOME ?? join(HOME, ".codex"),
@@ -33,6 +35,7 @@ export const AgentPaths = {
     configToml: join(process.env.CODEX_HOME ?? join(HOME, ".codex"), "config.toml"),
     rulesDir: join(process.env.CODEX_HOME ?? join(HOME, ".codex"), "rules"),
     authJson: join(process.env.CODEX_HOME ?? join(HOME, ".codex"), "auth.json"),
+    skillsDir: join(process.env.CODEX_HOME ?? join(HOME, ".codex"), "skills"),
   },
   copilot: {
     instructionsFile: join(HOME, ".copilot", "instructions"),

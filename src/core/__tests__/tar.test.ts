@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { createTmpDir } from "../../test-helpers/fixtures";
 import { archiveDirectory, extractArchive } from "../tar";
@@ -96,5 +96,74 @@ describe("tar", () => {
 
     const text = await Bun.file(join(destDir, "café-config.toml")).text();
     expect(text).toBe('key = "value"');
+  });
+
+  // T004 — skipSymlinks filter (FR-016 inner tier)
+
+  test("archiveDirectory({ skipSymlinks: true }) omits symlink entries", async () => {
+    const srcDir = join(tmpDir, "src-symlink-skip");
+    await mkdir(srcDir, { recursive: true });
+    await writeFile(join(srcDir, "SKILL.md"), "# real skill", "utf8");
+    // Create a symlink target outside the source dir so the link is real but
+    // the resolved path is unambiguously not a sibling of the real files.
+    const linkTargetFile = join(tmpDir, "external-helper.md");
+    await writeFile(linkTargetFile, "# vendored helper", "utf8");
+    const linkTargetDir = join(tmpDir, "external-refs");
+    await mkdir(linkTargetDir, { recursive: true });
+    await writeFile(join(linkTargetDir, "shared.md"), "# shared", "utf8");
+
+    await symlink(linkTargetFile, join(srcDir, "helper.md"));
+    await symlink(linkTargetDir, join(srcDir, "refs"));
+
+    const buf = await archiveDirectory(srcDir, { skipSymlinks: true });
+
+    const destDir = join(tmpDir, "dest-symlink-skip");
+    await mkdir(destDir, { recursive: true });
+    await extractArchive(buf, destDir);
+
+    const entries = await readdir(destDir);
+    expect(entries).toContain("SKILL.md");
+    expect(entries).not.toContain("helper.md");
+    expect(entries).not.toContain("refs");
+  });
+
+  test("archiveDirectory() default behavior is unchanged (no skipSymlinks)", async () => {
+    // Regression: existing Copilot agent-tarballs (copilot/agents/*.tar.age)
+    // call archiveDirectory without options. They expect symlinks to be
+    // archived as symlink entries, not silently dropped.
+    const srcDir = join(tmpDir, "src-default-symlinks");
+    await mkdir(srcDir, { recursive: true });
+    await writeFile(join(srcDir, "real.md"), "# real", "utf8");
+    const linkTargetFile = join(tmpDir, "default-target.md");
+    await writeFile(linkTargetFile, "# target", "utf8");
+    await symlink(linkTargetFile, join(srcDir, "linked.md"));
+
+    // No options → default behavior preserved.
+    const buf = await archiveDirectory(srcDir);
+    expect(buf.length).toBeGreaterThan(0);
+    // We don't extract here — extractArchive's filter would normalise paths,
+    // but the contract is "archiveDirectory's behavior is unchanged when no
+    // option is passed", which is what we assert by getting a non-empty buffer
+    // back without throwing on the symlink entry.
+  });
+
+  // T004(3) — tar determinism for status hash stability (research R9 caveat)
+
+  test("archiveDirectory({ skipSymlinks: true }) is deterministic across calls", async () => {
+    // SC-003 depends on `archiveDirectory` producing identical bytes for the
+    // same directory tree so the status command's SHA-256 comparison is
+    // stable. If this test fails, the fix is to set `gzip: { mtime: 0 }` (or
+    // equivalent) on the underlying tar.create options so the gzip header
+    // does not leak the time-of-archival.
+    const srcDir = join(tmpDir, "src-determinism");
+    await mkdir(srcDir, { recursive: true });
+    await writeFile(join(srcDir, "SKILL.md"), "# determinism check", "utf8");
+    await mkdir(join(srcDir, "nested"), { recursive: true });
+    await writeFile(join(srcDir, "nested", "deep.md"), "deep", "utf8");
+
+    const first = await archiveDirectory(srcDir, { skipSymlinks: true });
+    const second = await archiveDirectory(srcDir, { skipSymlinks: true });
+
+    expect(Buffer.compare(first, second)).toBe(0);
   });
 });

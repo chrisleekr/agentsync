@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { log } from "@clack/prompts";
 import { AgentPaths } from "../config/paths";
 import { sanitizeClaudeHooks, sanitizeClaudeMcp, shouldNeverSync } from "../core/sanitizer";
+import { extractArchive } from "../core/tar";
 import {
   atomicWrite,
   collect,
@@ -10,6 +11,7 @@ import {
   type SnapshotArtifact,
   type SnapshotResult,
 } from "./_utils";
+import { collectSkillArtifacts } from "./skills-walker";
 
 /** Snapshot payload for the Claude adapter. */
 export type ClaudeSnapshotResult = SnapshotResult;
@@ -91,7 +93,33 @@ export async function snapshotClaude(): Promise<SnapshotResult> {
     // agents dir may not exist yet.
   }
 
+  // Skills — delegated to the shared walker (FR-001/FR-002/FR-006/FR-016/FR-017).
+  // The walker handles dot-skip, symlink rejection, sentinel verification, the
+  // never-sync interior scan, and the symlink-filtered tar archival in one
+  // place so every skill-bearing agent inherits identical rules.
+  const claudeSkills = await collectSkillArtifacts("claude", AgentPaths.claude.skillsDir);
+  artifacts.push(...claudeSkills.artifacts);
+  warnings.push(...claudeSkills.warnings);
+
   return { artifacts, warnings };
+}
+
+/**
+ * Restore one Claude skill directory from the vault by extracting its
+ * encrypted tar archive into `~/.claude/skills/<name>/`.
+ *
+ * Mirrors {@link applyCopilotSkill}: parents are created on demand and the
+ * tar's interior layout is preserved bit-for-bit.
+ *
+ * @param skillName  Basename of the skill (no extension).
+ * @param base64Tar  Base64-encoded `.tar.gz` payload that the walker
+ *                   produced on the source machine.
+ */
+export async function applyClaudeSkill(skillName: string, base64Tar: string): Promise<void> {
+  const targetDir = join(AgentPaths.claude.skillsDir, skillName);
+  await mkdir(targetDir, { recursive: true });
+  const tarBuffer = Buffer.from(base64Tar, "base64");
+  await extractArchive(tarBuffer, targetDir);
 }
 
 /** Restore the shared CLAUDE.md prompt file from the vault. */
@@ -224,5 +252,21 @@ export async function applyClaudeVault(
     } else {
       await applyClaudeAgent(agentName, decrypted);
     }
+  }
+
+  // Skills sub-directory — stored as <name>.tar.age (FR-005). Mirrors the
+  // Copilot apply path: each entry is decrypted, then the inner base64 tar
+  // is extracted into ~/.claude/skills/<name>/ via applyClaudeSkill.
+  const skillFiles = await readAgeFiles(join(claudeDir, "skills"));
+  for (const { name, fullPath } of skillFiles) {
+    if (!name.endsWith(".tar.age")) continue;
+    const encrypted = await readFile(fullPath, "utf8");
+    const decrypted = await decryptString(encrypted, key);
+    const skillName = basename(name, ".tar.age");
+    if (dryRun) {
+      log.info(`[dry-run] [claude] would extract skill: ${skillName}`);
+      continue;
+    }
+    await applyClaudeSkill(skillName, decrypted);
   }
 }

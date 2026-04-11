@@ -598,3 +598,245 @@ describe("integration", () => {
     expect(existsSync(join(machineB.vaultDir, "claude", "blocked.age"))).toBe(false);
   });
 });
+
+// ─── T026 — agent-skills-sync integration guarantees ─────────────────────────
+//
+// These tests run AFTER the main `describe("integration")` block above, so its
+// `afterAll` has already reset the push/pull agent registries to the real
+// `Agents` list. We therefore exercise the REAL Claude adapter (and its
+// walker wiring) rather than the mocked test-only fake used above.
+
+describe("T026 — skills sync integration guarantees", () => {
+  let tmpDir: string;
+  let machine: TestMachineFixture;
+  type MutableClaudePaths = {
+    claudeMd: string;
+    settingsJson: string;
+    commandsDir: string;
+    agentsDir: string;
+    mcpJson: string;
+    credentials: string;
+    skillsDir: string;
+  };
+  // Lazy reference — `AgentPaths` is imported inside each test via dynamic
+  // import to avoid colliding with the module-scoped mocks at file top.
+  let mutableClaudePaths: MutableClaudePaths;
+  const savedClaude: Partial<MutableClaudePaths> = {};
+  const savedEnv: Record<string, string | undefined> = {};
+
+  beforeEach(async () => {
+    const paths = await import("../../config/paths");
+    mutableClaudePaths = paths.AgentPaths.claude as MutableClaudePaths;
+    savedClaude.claudeMd = mutableClaudePaths.claudeMd;
+    savedClaude.settingsJson = mutableClaudePaths.settingsJson;
+    savedClaude.commandsDir = mutableClaudePaths.commandsDir;
+    savedClaude.agentsDir = mutableClaudePaths.agentsDir;
+    savedClaude.mcpJson = mutableClaudePaths.mcpJson;
+    savedClaude.credentials = mutableClaudePaths.credentials;
+    savedClaude.skillsDir = mutableClaudePaths.skillsDir;
+
+    tmpDir = await createTmpDir();
+    const bareRepoPath = await createBareRepo(tmpDir);
+    machine = await createMachineFixture(tmpDir, "skills-integration");
+
+    const claudeHome = join(tmpDir, "claude-home");
+    mutableClaudePaths.claudeMd = join(claudeHome, "CLAUDE.md");
+    mutableClaudePaths.settingsJson = join(claudeHome, "settings.json");
+    mutableClaudePaths.commandsDir = join(claudeHome, "commands");
+    mutableClaudePaths.agentsDir = join(claudeHome, "agents");
+    mutableClaudePaths.mcpJson = join(claudeHome, ".claude.json");
+    mutableClaudePaths.credentials = join(claudeHome, ".credentials.json");
+    mutableClaudePaths.skillsDir = join(claudeHome, "skills");
+
+    for (const key of RUNTIME_ENV_KEYS) {
+      savedEnv[key] = process.env[key];
+    }
+    process.env.AGENTSYNC_VAULT_DIR = machine.vaultDir;
+    process.env.AGENTSYNC_KEY_PATH = machine.keyPath;
+    process.env.AGENTSYNC_MACHINE = machine.machineName;
+
+    seedVaultRepo({
+      machine,
+      bareRepoPath,
+      agents: { claude: true, copilot: false },
+    });
+
+    fakeLogs.success.length = 0;
+    fakeLogs.info.length = 0;
+    fakeLogs.warn.length = 0;
+    fakeLogs.error.length = 0;
+    process.exitCode = 0;
+  });
+
+  afterEach(async () => {
+    for (const key of RUNTIME_ENV_KEYS) {
+      const value = savedEnv[key];
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
+    if (savedClaude.claudeMd !== undefined) {
+      mutableClaudePaths.claudeMd = savedClaude.claudeMd;
+      // biome-ignore lint/style/noNonNullAssertion: snapshot written in beforeEach
+      mutableClaudePaths.settingsJson = savedClaude.settingsJson!;
+      // biome-ignore lint/style/noNonNullAssertion: snapshot written in beforeEach
+      mutableClaudePaths.commandsDir = savedClaude.commandsDir!;
+      // biome-ignore lint/style/noNonNullAssertion: snapshot written in beforeEach
+      mutableClaudePaths.agentsDir = savedClaude.agentsDir!;
+      // biome-ignore lint/style/noNonNullAssertion: snapshot written in beforeEach
+      mutableClaudePaths.mcpJson = savedClaude.mcpJson!;
+      // biome-ignore lint/style/noNonNullAssertion: snapshot written in beforeEach
+      mutableClaudePaths.credentials = savedClaude.credentials!;
+      // biome-ignore lint/style/noNonNullAssertion: snapshot written in beforeEach
+      mutableClaudePaths.skillsDir = savedClaude.skillsDir!;
+    }
+    await rm(tmpDir, { recursive: true, force: true });
+  });
+
+  // FR-013 — pull-side no-delete guarantee.
+  //
+  // This test proves that deleting a skill artifact from the vault (as the
+  // `skill remove` verb does) followed by a `pull` on another machine DOES
+  // NOT delete the local skill directory. The `applyXxxVault` functions are
+  // additive-only by construction — they only call `extractArchive`, never
+  // `unlink` — so any future regression that adds a local-delete sweep will
+  // fail this test.
+
+  test("FR-013 — applyClaudeVault does not delete a local skill when the vault artifact is gone", async () => {
+    const { mkdir: mkdirAsync, writeFile: writeFileAsync } = await import("node:fs/promises");
+    const { archiveDirectory } = await import("../../core/tar");
+    const { encryptString, generateIdentity, identityToRecipient } = await import(
+      "../../core/encryptor"
+    );
+    const claude = await import("../../agents/claude");
+
+    const identity = await generateIdentity();
+    const recipient = await identityToRecipient(identity);
+
+    // Build a real skill and encrypt it into the vault.
+    const srcSkill = join(tmpDir, "src", "my-skill");
+    mkdirSync(srcSkill, { recursive: true });
+    writeFileSync(join(srcSkill, "SKILL.md"), "# my skill body", "utf8");
+    writeFileSync(join(srcSkill, "notes.md"), "# notes", "utf8");
+
+    const tarBuffer = await archiveDirectory(srcSkill);
+    const base64 = tarBuffer.toString("base64");
+    const encrypted = await encryptString(base64, [recipient]);
+
+    const skillsVaultDir = join(machine.vaultDir, "claude", "skills");
+    await mkdirAsync(skillsVaultDir, { recursive: true });
+    const vaultFile = join(skillsVaultDir, "my-skill.tar.age");
+    await writeFileAsync(vaultFile, encrypted, "utf8");
+
+    // First pull: populates the local ~/.claude/skills/my-skill/ directory.
+    await claude.applyClaudeVault(machine.vaultDir, identity, false);
+
+    const localSkillDir = join(mutableClaudePaths.skillsDir, "my-skill");
+    expect(existsSync(join(localSkillDir, "SKILL.md"))).toBe(true);
+    expect(existsSync(join(localSkillDir, "notes.md"))).toBe(true);
+
+    // Simulate a post-`skill remove` vault — the artifact is gone from disk.
+    const { unlink: unlinkAsync } = await import("node:fs/promises");
+    await unlinkAsync(vaultFile);
+
+    // Second pull against the now-empty vault. FR-013 says the local skill
+    // directory MUST remain intact — no file is added, no file is removed.
+    await claude.applyClaudeVault(machine.vaultDir, identity, false);
+
+    expect(existsSync(join(localSkillDir, "SKILL.md"))).toBe(true);
+    expect(existsSync(join(localSkillDir, "notes.md"))).toBe(true);
+    // And the content must be byte-equal to the original — no overwrite either.
+    const { readFile: readFileAsync } = await import("node:fs/promises");
+    const skillBody = await readFileAsync(join(localSkillDir, "SKILL.md"), "utf8");
+    expect(skillBody).toBe("# my skill body");
+  });
+
+  // SC-009 — negative-space vault content check.
+  //
+  // Builds a real ~/.claude/skills/ containing one valid skill plus a
+  // top-level symlink that points into a vendored-pool directory containing
+  // a secret marker. Runs the REAL `performPush` (registry reset to the real
+  // Agents) and decrypts every written artifact to verify that no entry
+  // contains the vendored path OR the secret marker content. This is the
+  // walker's outermost safety guarantee — SC-009 fails iff FR-016's
+  // root-symlink rejection rule is bypassed.
+
+  test("SC-009 — vault never contains vendored-pool content reached through a symlinked skill root", async () => {
+    // Build the vendored pool outside the skills directory.
+    const vendoredPool = join(tmpDir, "vendored-pool", "sensitive-skill");
+    mkdirSync(vendoredPool, { recursive: true });
+    writeFileSync(join(vendoredPool, "SKILL.md"), "# vendored vendor", "utf8");
+    writeFileSync(join(vendoredPool, "secret-marker.md"), "THIS_MUST_NOT_LEAK", "utf8");
+
+    // Build the local skills directory with:
+    //   - one real skill (must be archived normally)
+    //   - one top-level symlink pointing at the vendored pool (must be dropped)
+    mkdirSync(mutableClaudePaths.skillsDir, { recursive: true });
+    const realSkill = join(mutableClaudePaths.skillsDir, "my-skill");
+    mkdirSync(realSkill, { recursive: true });
+    writeFileSync(join(realSkill, "SKILL.md"), "# real skill", "utf8");
+
+    const { symlinkSync } = await import("node:fs");
+    symlinkSync(vendoredPool, join(mutableClaudePaths.skillsDir, "vendored"));
+
+    // Ensure the push registry is the REAL Agents so we exercise the real
+    // Claude adapter + walker path.
+    pushMod.__setPushAgentsForTesting(null);
+
+    const result = await pushMod.performPush({ agent: "claude" });
+    expect(result.fatal).toBe(false);
+    // At least one artifact should have been written — the real `my-skill`.
+    expect(result.pushed).toBeGreaterThanOrEqual(1);
+
+    // Assertion 1: no vendored.tar.age artifact was written.
+    const skillsVaultDir = join(machine.vaultDir, "claude", "skills");
+    expect(existsSync(join(skillsVaultDir, "vendored.tar.age"))).toBe(false);
+
+    // Assertion 2: decrypt every .tar.age in claude/skills/, extract it to a
+    // tmp dir, and walk every file entry. Nothing may mention the vendored
+    // path or contain the secret marker string.
+    const { readdir: readdirAsync, readFile: readFileAsync } = await import("node:fs/promises");
+    const { decryptString } = await import("../../core/encryptor");
+    const { extractArchive } = await import("../../core/tar");
+
+    const vaultEntries = await readdirAsync(skillsVaultDir);
+    const tarAgeEntries = vaultEntries.filter((n) => n.endsWith(".tar.age"));
+    expect(tarAgeEntries.length).toBeGreaterThanOrEqual(1);
+
+    for (const entry of tarAgeEntries) {
+      const encrypted = await readFileAsync(join(skillsVaultDir, entry), "utf8");
+      const base64 = await decryptString(encrypted, machine.identity);
+      const tarBuf = Buffer.from(base64, "base64");
+
+      const extractRoot = join(tmpDir, `extract-${entry}`);
+      mkdirSync(extractRoot, { recursive: true });
+      await extractArchive(tarBuf, extractRoot);
+
+      // Recursively walk the extracted tree and collect file paths + contents.
+      async function walk(dir: string): Promise<{ path: string; content: string }[]> {
+        const out: { path: string; content: string }[] = [];
+        for (const name of await readdirAsync(dir)) {
+          const full = join(dir, name);
+          const { stat: statAsync } = await import("node:fs/promises");
+          const info = await statAsync(full);
+          if (info.isDirectory()) {
+            out.push(...(await walk(full)));
+          } else if (info.isFile()) {
+            out.push({ path: full, content: await readFileAsync(full, "utf8") });
+          }
+        }
+        return out;
+      }
+
+      const files = await walk(extractRoot);
+      for (const file of files) {
+        expect(file.path).not.toContain("vendored");
+        expect(file.path).not.toContain("sensitive-skill");
+        expect(file.path).not.toContain("secret-marker");
+        expect(file.content).not.toContain("THIS_MUST_NOT_LEAK");
+      }
+    }
+  });
+});

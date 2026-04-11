@@ -1,9 +1,10 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, mock, test } from "bun:test";
-import { mkdirSync, writeFileSync } from "node:fs";
-import { mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdirSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdir, readdir, rm, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { join } from "node:path";
 import { AgentPaths } from "../../config/paths";
+import { archiveDirectory, extractArchive } from "../../core/tar";
 import { createAgeIdentity, createTmpDir } from "../../test-helpers/fixtures";
 
 {
@@ -16,6 +17,7 @@ type MutableCursorPaths = {
   mcpGlobal: string;
   commandsDir: string;
   settingsJson: string;
+  skillsDir: string;
 };
 
 const testCursorPaths = AgentPaths.cursor as MutableCursorPaths;
@@ -37,6 +39,7 @@ describe("snapshotCursor", () => {
     testCursorPaths.settingsJson = join(tmpDir, "settings.json");
     testCursorPaths.mcpGlobal = join(tmpDir, "mcp.json");
     testCursorPaths.commandsDir = join(tmpDir, "commands");
+    testCursorPaths.skillsDir = join(tmpDir, "skills");
   });
 
   afterEach(async () => {
@@ -116,6 +119,96 @@ describe("snapshotCursor", () => {
     expect(commands.some((a) => a.vaultPath === "cursor/commands/fix.md.age")).toBe(true);
     expect(commands.some((a) => a.vaultPath === "cursor/commands/explain.md.age")).toBe(true);
   });
+
+  // T020(1) — US3 Cursor skill round-trip happy path (FR-001, FR-003, FR-004)
+
+  test("snapshots a real Cursor skill directory as a base64 tar artifact", async () => {
+    const { snapshotCursor } = cursorModule;
+    const skillDir = join(testCursorPaths.skillsDir, "my-skill");
+    mkdirSync(skillDir, { recursive: true });
+    writeFileSync(join(skillDir, "SKILL.md"), "# my cursor skill", "utf8");
+    writeFileSync(join(skillDir, "notes.md"), "# notes", "utf8");
+
+    const result = await snapshotCursor();
+    const art = result.artifacts.find((a) => a.vaultPath === "cursor/skills/my-skill.tar.age");
+    expect(art).toBeDefined();
+    expect(art?.sourcePath).toBe(skillDir);
+    // biome-ignore lint/style/noNonNullAssertion: asserted by toBeDefined above
+    expect(() => Buffer.from(art!.plaintext, "base64")).not.toThrow();
+    // biome-ignore lint/style/noNonNullAssertion: asserted by toBeDefined above
+    expect(art!.plaintext.length).toBeGreaterThan(0);
+  });
+
+  // T020(5) — FR-009 missing-dir case at the agent layer
+
+  test("snapshotCursor does not throw when the skills directory is missing (FR-009)", async () => {
+    const { snapshotCursor } = cursorModule;
+    testCursorPaths.skillsDir = join(tmpDir, "skills-does-not-exist");
+
+    const result = await snapshotCursor();
+    const skillArts = result.artifacts.filter((a) => a.vaultPath.startsWith("cursor/skills/"));
+    expect(skillArts).toHaveLength(0);
+    expect(result.warnings.filter((w) => w.startsWith("never-sync"))).toHaveLength(0);
+  });
+
+  // T020(6) — FR-016 interior-symlink defense-in-depth at the agent layer
+
+  test("snapshotCursor omits interior symlink helper files from the tar (FR-016 inner)", async () => {
+    const { snapshotCursor } = cursorModule;
+    const helperTargetParent = join(tmpDir, "vendored-helpers");
+    mkdirSync(helperTargetParent, { recursive: true });
+    const helperTarget = join(helperTargetParent, "shared.md");
+    writeFileSync(helperTarget, "# vendored helper", "utf8");
+
+    const skillDir = join(testCursorPaths.skillsDir, "skill-with-helper");
+    mkdirSync(skillDir, { recursive: true });
+    writeFileSync(join(skillDir, "SKILL.md"), "# real", "utf8");
+    writeFileSync(join(skillDir, "real-note.md"), "# real note", "utf8");
+    symlinkSync(helperTarget, join(skillDir, "helper.md"));
+
+    const result = await snapshotCursor();
+    const art = result.artifacts.find(
+      (a) => a.vaultPath === "cursor/skills/skill-with-helper.tar.age",
+    );
+    expect(art).toBeDefined();
+
+    // biome-ignore lint/style/noNonNullAssertion: asserted by toBeDefined above
+    const tarBuf = Buffer.from(art!.plaintext, "base64");
+    const extractDir = join(tmpDir, "extract-cursor-helper");
+    mkdirSync(extractDir, { recursive: true });
+    await extractArchive(tarBuf, extractDir);
+
+    const entries = await readdir(extractDir);
+    expect(entries).toContain("SKILL.md");
+    expect(entries).toContain("real-note.md");
+    expect(entries).not.toContain("helper.md");
+  });
+
+  // T021 — FR-010 negative assertion: ~/.cursor/skills-cursor/ is never read.
+  // This is the load-bearing test for US3 because it is the only direct
+  // evidence that the Cursor adapter is pointed at the canonical "skills"
+  // path and never touches the bundled "skills-cursor" directory.
+
+  test("snapshotCursor never touches ~/.cursor/skills-cursor/ (FR-010)", async () => {
+    const { snapshotCursor } = cursorModule;
+    // Real skill at the canonical path.
+    const realSkill = join(testCursorPaths.skillsDir, "my-skill");
+    mkdirSync(realSkill, { recursive: true });
+    writeFileSync(join(realSkill, "SKILL.md"), "# real", "utf8");
+
+    // Decoy bundled directory at the path the spec says must be ignored.
+    const bundledSkill = join(tmpDir, "skills-cursor", "other-skill");
+    mkdirSync(bundledSkill, { recursive: true });
+    writeFileSync(join(bundledSkill, "SKILL.md"), "# bundled vendor", "utf8");
+
+    const result = await snapshotCursor();
+    const skillArts = result.artifacts.filter((a) => a.vaultPath.startsWith("cursor/skills/"));
+    expect(skillArts).toHaveLength(1);
+    expect(skillArts[0]?.vaultPath).toBe("cursor/skills/my-skill.tar.age");
+    // Negative-space assertion: nothing under skills-cursor can have leaked
+    // into the vault namespace, regardless of sub-path.
+    expect(result.artifacts.every((a) => !a.vaultPath.includes("skills-cursor"))).toBe(true);
+  });
 });
 
 // ── T027 — cursor apply functions ─────────────────────────────────────────────
@@ -128,6 +221,7 @@ describe("cursor apply functions", () => {
     testCursorPaths.settingsJson = join(tmpDir, "settings.json");
     testCursorPaths.mcpGlobal = join(tmpDir, "mcp.json");
     testCursorPaths.commandsDir = join(tmpDir, "commands");
+    testCursorPaths.skillsDir = join(tmpDir, "skills");
   });
 
   afterEach(async () => {
@@ -178,6 +272,27 @@ describe("cursor apply functions", () => {
     const target = join(testCursorPaths.commandsDir, "my-cmd.md");
     expect(await Bun.file(target).text()).toBe("# My Cmd\nDo things.");
   });
+
+  // T020(2) — applyCursorSkill direct extraction test
+
+  test("applyCursorSkill extracts a tar archive into the local skills dir", async () => {
+    const { applyCursorSkill } = cursorModule;
+    const srcSkill = join(tmpDir, "src-skill");
+    mkdirSync(srcSkill, { recursive: true });
+    writeFileSync(join(srcSkill, "SKILL.md"), "# cursor skill body", "utf8");
+    writeFileSync(join(srcSkill, "extra.md"), "# extra", "utf8");
+
+    const tarBuffer = await archiveDirectory(srcSkill);
+    const base64 = tarBuffer.toString("base64");
+
+    await applyCursorSkill("my-skill", base64);
+
+    const targetSkillDir = join(testCursorPaths.skillsDir, "my-skill");
+    const skillMd = await Bun.file(join(targetSkillDir, "SKILL.md")).text();
+    const extra = await Bun.file(join(targetSkillDir, "extra.md")).text();
+    expect(skillMd).toBe("# cursor skill body");
+    expect(extra).toBe("# extra");
+  });
 });
 
 // ── T028 — dryRun vault apply ─────────────────────────────────────────────────
@@ -190,6 +305,7 @@ describe("applyCursorVault dryRun", () => {
     testCursorPaths.settingsJson = join(tmpDir, "settings.json");
     testCursorPaths.mcpGlobal = join(tmpDir, "mcp.json");
     testCursorPaths.commandsDir = join(tmpDir, "commands");
+    testCursorPaths.skillsDir = join(tmpDir, "skills");
   });
 
   afterEach(async () => {
@@ -212,6 +328,63 @@ describe("applyCursorVault dryRun", () => {
 
     // settings.json must NOT be created on dryRun
     expect(await Bun.file(testCursorPaths.settingsJson).exists()).toBe(false);
+  });
+
+  // T020(3) — applyCursorVault restores a Cursor skill from an encrypted artifact
+
+  test("applyCursorVault restores a Cursor skill from an encrypted vault artifact", async () => {
+    const { applyCursorVault } = cursorModule;
+    const { encryptString } = await import("../../core/encryptor");
+    const { identity, recipient } = await createAgeIdentity();
+
+    const srcSkill = join(tmpDir, "src", "round-trip-skill");
+    mkdirSync(srcSkill, { recursive: true });
+    writeFileSync(join(srcSkill, "SKILL.md"), "# cursor round trip", "utf8");
+    writeFileSync(join(srcSkill, "guide.md"), "# guide", "utf8");
+
+    const tarBuffer = await archiveDirectory(srcSkill);
+    const base64 = tarBuffer.toString("base64");
+    const encrypted = await encryptString(base64, [recipient]);
+
+    const vaultDir = join(tmpDir, "vault-skill-roundtrip");
+    const skillsVaultDir = join(vaultDir, "cursor", "skills");
+    await mkdir(skillsVaultDir, { recursive: true });
+    await writeFile(join(skillsVaultDir, "round-trip-skill.tar.age"), encrypted, "utf8");
+
+    await applyCursorVault(vaultDir, identity, false);
+
+    const restoredSkillDir = join(testCursorPaths.skillsDir, "round-trip-skill");
+    const restoredSkill = await Bun.file(join(restoredSkillDir, "SKILL.md")).text();
+    const restoredGuide = await Bun.file(join(restoredSkillDir, "guide.md")).text();
+    expect(restoredSkill).toBe("# cursor round trip");
+    expect(restoredGuide).toBe("# guide");
+  });
+
+  // T020(4) — applyCursorVault dryRun=true must NOT touch the local skills dir
+
+  test("applyCursorVault dryRun=true does not extract skill artifacts", async () => {
+    const { applyCursorVault } = cursorModule;
+    const { encryptString } = await import("../../core/encryptor");
+    const { identity, recipient } = await createAgeIdentity();
+
+    const srcSkill = join(tmpDir, "src", "dry-run-skill");
+    mkdirSync(srcSkill, { recursive: true });
+    writeFileSync(join(srcSkill, "SKILL.md"), "# cursor dry run skill", "utf8");
+
+    const tarBuffer = await archiveDirectory(srcSkill);
+    const base64 = tarBuffer.toString("base64");
+    const encrypted = await encryptString(base64, [recipient]);
+
+    const vaultDir = join(tmpDir, "vault-skill-dryrun");
+    const skillsVaultDir = join(vaultDir, "cursor", "skills");
+    await mkdir(skillsVaultDir, { recursive: true });
+    await writeFile(join(skillsVaultDir, "dry-run-skill.tar.age"), encrypted, "utf8");
+
+    await applyCursorVault(vaultDir, identity, true);
+
+    const restoredSkillDir = join(testCursorPaths.skillsDir, "dry-run-skill");
+    const exists = await Bun.file(join(restoredSkillDir, "SKILL.md")).exists();
+    expect(exists).toBeFalse();
   });
 });
 

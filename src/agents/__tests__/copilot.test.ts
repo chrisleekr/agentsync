@@ -1,9 +1,10 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, mock, test } from "bun:test";
-import { mkdirSync, writeFileSync } from "node:fs";
-import { rm } from "node:fs/promises";
+import { mkdirSync, symlinkSync, writeFileSync } from "node:fs";
+import { readdir, rm } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { join } from "node:path";
 import { AgentPaths } from "../../config/paths";
+import { extractArchive } from "../../core/tar";
 import { createTmpDir } from "../../test-helpers/fixtures";
 
 {
@@ -132,6 +133,66 @@ describe("snapshotCopilot", () => {
     expect(art).toBeDefined();
     // biome-ignore lint/style/noNonNullAssertion: asserted by toBeDefined above
     expect(() => Buffer.from(art!.plaintext, "base64")).not.toThrow();
+  });
+
+  // T010 — walker retrofit regression: the new snapshotCopilot must inherit
+  // the FR-016 (symlink) and FR-017 (dot-skip) rules from the shared walker.
+
+  test("retrofit: top-level symlinked skill root produces zero artifacts (FR-016)", async () => {
+    // Build a "vendored pool" outside the skills root and symlink it in.
+    const vendoredTarget = join(tmpDir, "vendored-pool", "vendor-skill");
+    mkdirSync(vendoredTarget, { recursive: true });
+    writeFileSync(join(vendoredTarget, "SKILL.md"), "# vendored", "utf8");
+
+    mkdirSync(testCopilotPaths.skillsDir, { recursive: true });
+    symlinkSync(vendoredTarget, join(testCopilotPaths.skillsDir, "vendored-skill"));
+
+    const result = await copilotModule.snapshotCopilot();
+    const skillArts = result.artifacts.filter((a) => a.vaultPath.startsWith("copilot/skills/"));
+    expect(skillArts).toHaveLength(0);
+  });
+
+  test("retrofit: top-level .system directory is skipped (FR-017)", async () => {
+    const systemSkill = join(testCopilotPaths.skillsDir, ".system", "vendor");
+    mkdirSync(systemSkill, { recursive: true });
+    writeFileSync(join(systemSkill, "SKILL.md"), "# vendor", "utf8");
+
+    const result = await copilotModule.snapshotCopilot();
+    const skillArts = result.artifacts.filter((a) => a.vaultPath.startsWith("copilot/skills/"));
+    expect(skillArts).toHaveLength(0);
+  });
+
+  test("retrofit: real skill with interior symlink helper omits the helper (FR-016 inner)", async () => {
+    // Vendored helper file outside the skills root.
+    const helperTargetDir = join(tmpDir, "vendored-helpers");
+    mkdirSync(helperTargetDir, { recursive: true });
+    const helperTarget = join(helperTargetDir, "shared.md");
+    writeFileSync(helperTarget, "# vendored helper", "utf8");
+
+    // Real skill directory with one real file plus the symlink.
+    const skillDir = join(testCopilotPaths.skillsDir, "skill-with-helper");
+    mkdirSync(skillDir, { recursive: true });
+    writeFileSync(join(skillDir, "SKILL.md"), "# real", "utf8");
+    writeFileSync(join(skillDir, "real-note.md"), "# real note", "utf8");
+    symlinkSync(helperTarget, join(skillDir, "helper.md"));
+
+    const result = await copilotModule.snapshotCopilot();
+    const art = result.artifacts.find(
+      (a) => a.vaultPath === "copilot/skills/skill-with-helper.tar.age",
+    );
+    expect(art).toBeDefined();
+
+    // Decrypt-ish: base64 → tar bytes → extract → list entries.
+    // biome-ignore lint/style/noNonNullAssertion: asserted by toBeDefined above
+    const tarBuf = Buffer.from(art!.plaintext, "base64");
+    const extractDir = join(tmpDir, "extract-retrofit");
+    mkdirSync(extractDir, { recursive: true });
+    await extractArchive(tarBuf, extractDir);
+
+    const entries = await readdir(extractDir);
+    expect(entries).toContain("SKILL.md");
+    expect(entries).toContain("real-note.md");
+    expect(entries).not.toContain("helper.md");
   });
 });
 

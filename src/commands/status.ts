@@ -5,7 +5,7 @@ import { join, relative } from "node:path";
 import { log } from "@clack/prompts";
 import { defineCommand } from "citty";
 import pc from "picocolors";
-import type { SnapshotArtifact } from "../agents/registry";
+import type { AgentDefinition, SnapshotArtifact } from "../agents/registry";
 import { Agents } from "../agents/registry";
 import { loadConfig, resolveConfigPath } from "../config/loader";
 import { decryptString } from "../core/encryptor";
@@ -16,6 +16,21 @@ type SyncStatus = "synced" | "local-changed" | "vault-only" | "local-only" | "er
 
 function sha256(content: string): string {
   return createHash("sha256").update(content).digest("hex").slice(0, 12);
+}
+
+let agentDefinitionsForStatus: AgentDefinition[] = Agents;
+
+/**
+ * Test hook: substitute the agent registry used by `statusCommand`.
+ *
+ * Pass an array to inject custom agents (e.g. a single test agent that emits
+ * a synthetic skill artifact). Pass `null` to restore the real registry.
+ *
+ * Mirrors the same hook on `performPush` so foundational tests can drive the
+ * status command without depending on the rest of the agent ecosystem.
+ */
+export function __setStatusAgentsForTesting(agents: AgentDefinition[] | null): void {
+  agentDefinitionsForStatus = agents ?? Agents;
 }
 
 /** Recursively collect encrypted vault files so vault-only entries can be surfaced. */
@@ -72,7 +87,9 @@ export const statusCommand = defineCommand({
     log.info(`Remote: ${config.remote.url} (${config.remote.branch})`);
     log.info(``);
 
-    const enabledAgents = Agents.filter((a) => config.agents[a.name as keyof typeof config.agents]);
+    const enabledAgents = agentDefinitionsForStatus.filter(
+      (a) => config.agents[a.name as keyof typeof config.agents],
+    );
 
     let key: string | null = null;
     try {

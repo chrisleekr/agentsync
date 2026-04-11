@@ -11,10 +11,48 @@ import { AgentPaths } from "../config/paths";
 import { resolveRuntimeContext } from "./shared";
 
 /** Single diagnostic check row rendered by the doctor command. */
-interface Check {
+export interface Check {
   name: string;
   status: "pass" | "warn" | "fail";
   detail: string;
+}
+
+/**
+ * Build the readability check rows for the per-agent skills directories
+ * introduced by the agent-skills-sync feature (FR-008). Extracted into its
+ * own helper so the rule can be unit-tested without mocking the rest of the
+ * doctor pipeline.
+ *
+ * Each agent gets exactly one row:
+ *   - `pass` when the directory exists and is readable
+ *   - `warn` when the directory does not exist or is unreadable
+ *
+ * Copilot is intentionally excluded — its skill directory was wired through
+ * the original Copilot integration and is therefore covered by the broader
+ * Copilot setup, not this feature's new doctor rows.
+ */
+export async function buildSkillsDirChecks(): Promise<Check[]> {
+  const checks: Check[] = [];
+  const targets: ReadonlyArray<readonly [string, string]> = [
+    ["Claude skills directory", AgentPaths.claude.skillsDir],
+    ["Codex skills directory", AgentPaths.codex.skillsDir],
+    ["Cursor skills directory", AgentPaths.cursor.skillsDir],
+  ];
+
+  for (const [name, dir] of targets) {
+    try {
+      await access(dir, constants.R_OK);
+      checks.push({ name, status: "pass", detail: dir });
+    } catch {
+      checks.push({
+        name,
+        status: "warn",
+        detail: `Not found or unreadable: ${dir}`,
+      });
+    }
+  }
+
+  return checks;
 }
 
 /** Inspect local prerequisites, vault health, and service wiring without changing state. */
@@ -83,6 +121,10 @@ export const doctorCommand = defineCommand({
         detail: "Not found or unreadable. Claude hook/MCP sync may be partial.",
       });
     }
+
+    // 3a. Per-agent skills directories (agent-skills-sync feature, FR-008).
+    // Delegated to a testable helper so the rule has its own unit test.
+    checks.push(...(await buildSkillsDirChecks()));
 
     // 4. Vault config parses correctly against schema
     try {

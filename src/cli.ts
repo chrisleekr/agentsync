@@ -7,6 +7,7 @@ import { keyCommand } from "./commands/key";
 import { migrateCommand } from "./commands/migrate";
 import { pullCommand } from "./commands/pull";
 import { pushCommand } from "./commands/push";
+import { skillCommand } from "./commands/skill";
 import { statusCommand } from "./commands/status";
 
 /** Root CLI command that wires every user-facing subcommand into a single entry point. */
@@ -25,6 +26,7 @@ const main = defineCommand({
     daemon: daemonCommand,
     key: keyCommand,
     migrate: migrateCommand,
+    skill: skillCommand,
   },
 });
 

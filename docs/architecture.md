@@ -73,6 +73,90 @@ If the local vault diverged from the remote, the command flow stops before any a
 - `status` compares local snapshot content with decrypted vault files to show drift.
 - `doctor` checks key presence, config validity, remote reachability, vault hygiene, and daemon installation state.
 
+## Skills sync flow
+
+AgentSync treats per-user *skills* — directories under `~/.claude/skills/`, `~/.codex/skills/`, `~/.cursor/skills/`, and `~/.copilot/skills/` — as first-class artifacts. They ride the vault through a single shared module: the skills walker at `src/agents/skills-walker.ts`.
+
+Every skill-bearing agent adapter calls `collectSkillArtifacts(agent, skillsDir)` and inherits the same five gates in the same order. Each gate is a safety rule that maps back to a specific requirement:
+
+1. **Dot-skip** — any entry name starting with `.` is skipped silently. Protects vendor bundles like Codex's `.system/` directory (FR-017).
+2. **Root-symlink rejection** — if the skills root itself is a symlink, the walker returns an empty result with no warnings. Protects against a vendored-pool tree being pointed at the skills directory by accident (FR-016 outer tier).
+3. **Sentinel verification** — a skill directory must contain a *real* `SKILL.md` file. `lstat` is used so a symlinked sentinel fails naturally without a special case (FR-002 + FR-016 sentinel).
+4. **Never-sync interior scan** — every file inside the skill is run through `shouldNeverSync` from `src/core/sanitizer.ts`. Any hit emits a `never-sync inside skill: <path>` warning which `src/commands/push.ts` escalates to a fatal abort, so the entire push fails before any encryption work begins (FR-006).
+5. **Symlink-filtered tar** — the surviving skill tree is archived through `archiveDirectory(dir, { skipSymlinks: true })`. Symlinked files inside the skill are filtered out of the tar; the real files around them are archived normally (FR-016 inner tier).
+
+The filter's opt-in flag keeps the pre-existing Copilot agent-tarball code path bit-for-bit unchanged.
+
+```mermaid
+flowchart TD
+	LocalDir["Local skills dir<br/>~/.agent/skills"]:::action
+	RootCheck{"Root is a<br/>real directory"}:::decision
+	DotCheck{"Entry name<br/>starts with dot"}:::decision
+	Sentinel{"Real SKILL.md<br/>sentinel present"}:::decision
+	NeverSync{"Interior matches<br/>never-sync pattern"}:::decision
+	TarStep["archiveDirectory<br/>skipSymlinks true"]:::keep
+	EncStep["encryptString<br/>age recipients"]:::keep
+	VaultEntry["Vault namespace<br/>agent/skills/name.tar.age"]:::vault
+	Pull["pull command<br/>decrypts artifact"]:::keep
+	Restore["extractArchive<br/>into ~/.agent/skills/name"]:::keep
+	SkipSilent["Skipped silently<br/>FR-016 outer or FR-017"]:::skip
+	SkipSentinel["Skipped silently<br/>FR-002 sentinel missing"]:::skip
+	Abort["Fatal abort<br/>push gate escalates"]:::fail
+
+	LocalDir --> RootCheck
+	RootCheck -- no --> SkipSilent
+	RootCheck -- yes --> DotCheck
+	DotCheck -- yes --> SkipSilent
+	DotCheck -- no --> Sentinel
+	Sentinel -- no --> SkipSentinel
+	Sentinel -- yes --> NeverSync
+	NeverSync -- yes --> Abort
+	NeverSync -- no --> TarStep --> EncStep --> VaultEntry --> Pull --> Restore
+
+	classDef action fill:#dbeafe,color:#1e3a8a,stroke:#1e3a8a,stroke-width:1.5px;
+	classDef decision fill:#fef3c7,color:#78350f,stroke:#78350f,stroke-width:1.5px;
+	classDef keep fill:#dcfce7,color:#14532d,stroke:#14532d,stroke-width:1.5px;
+	classDef vault fill:#e0e7ff,color:#3730a3,stroke:#3730a3,stroke-width:1.5px;
+	classDef skip fill:#fde68a,color:#78350f,stroke:#78350f,stroke-width:1.5px;
+	classDef fail fill:#7f1d1d,color:#ffffff,stroke:#7f1d1d,stroke-width:1.5px;
+```
+
+### Vault-removal flow
+
+Skills are **additive-by-default** across the whole pipeline. A local delete never removes the vault entry — the only way to take a skill out of the vault is the explicit `agentsync skill remove <agent> <name>` verb at `src/commands/skill.ts`. That verb enforces two invariants: it only touches the vault file, never any local skill directory (FR-012); and any subsequent `pull` on another machine leaves that machine's local skill directory untouched because `applyXxxVault` is extract-only (FR-013).
+
+```mermaid
+flowchart TD
+	UserReq["User runs<br/>agentsync skill remove agent name"]:::action
+	ValidateAgent{"Agent is<br/>claude cursor codex copilot"}:::decision
+	Reconcile["GitClient<br/>reconcileWithRemote"]:::vault
+	StatFile{"Vault file<br/>agent/skills/name.tar.age exists"}:::decision
+	Unlink["unlink vault file<br/>commit with skill remove message"]:::vault
+	Push["git push origin branch"]:::vault
+	LocalA["Local skills on machine A<br/>untouched FR-012"]:::local
+	MachineB["Machine B runs<br/>agentsync pull"]:::action
+	ApplyExtract["applyXxxVault<br/>extract-only no unlink"]:::vault
+	LocalB["Local skill on machine B<br/>still present FR-013"]:::local
+	NotFound["Exit code 1<br/>Skill not found"]:::fail
+	UnknownAgent["Exit code 1<br/>Unknown agent rejected"]:::fail
+
+	UserReq --> ValidateAgent
+	ValidateAgent -- no --> UnknownAgent
+	ValidateAgent -- yes --> Reconcile --> StatFile
+	StatFile -- no --> NotFound
+	StatFile -- yes --> Unlink --> Push
+	Push --> LocalA
+	Push --> MachineB --> ApplyExtract --> LocalB
+
+	classDef action fill:#dbeafe,color:#1e3a8a,stroke:#1e3a8a,stroke-width:1.5px;
+	classDef decision fill:#fef3c7,color:#78350f,stroke:#78350f,stroke-width:1.5px;
+	classDef vault fill:#e0e7ff,color:#3730a3,stroke:#3730a3,stroke-width:1.5px;
+	classDef local fill:#dcfce7,color:#14532d,stroke:#14532d,stroke-width:1.5px;
+	classDef fail fill:#7f1d1d,color:#ffffff,stroke:#7f1d1d,stroke-width:1.5px;
+```
+
+This two-flow model is why AgentSync can add and remove skills independently on different machines without any central coordination — every removal is an intentional user action, and every pull is extract-only.
+
 ## Security boundaries
 
 - `src/core/encryptor.ts` is the boundary for age identity generation, recipient derivation, and string/file encryption.

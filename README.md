@@ -71,7 +71,9 @@ Start here:
 
 ## What a vault means here
 
-The vault is a normal Git repository that stores encrypted artifacts such as `claude/CLAUDE.md.age` or `copilot/skills/<name>.tar.age`. AgentSync never pushes plaintext configs. Files that match hard never-sync patterns or contain literal secrets abort the push before encryption.
+The vault is a normal Git repository that stores encrypted artifacts such as `claude/CLAUDE.md.age`, `claude/skills/<name>.tar.age`, `codex/skills/<name>.tar.age`, `cursor/skills/<name>.tar.age`, and `copilot/skills/<name>.tar.age`. AgentSync never pushes plaintext configs. Files that match hard never-sync patterns or contain literal secrets abort the push before encryption.
+
+AgentSync never silently removes vault skills — removal is always an explicit user action via `agentsync skill remove <agent> <name>`. Local deletes, pulls, and status checks are all additive by construction, so no background operation can take a skill out of the vault.
 
 When you point a second machine at an existing vault, `init` now joins the remote history before writing machine-specific config. Sync commands also use one explicit fast-forward-only reconciliation rule, so divergent local history stops with recovery guidance instead of silently merging or printing a success-style footer.
 

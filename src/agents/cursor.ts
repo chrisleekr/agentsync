@@ -3,6 +3,7 @@ import { basename, join } from "node:path";
 import { log } from "@clack/prompts";
 import { AgentPaths } from "../config/paths";
 import { redactSecretLiterals, shouldNeverSync } from "../core/sanitizer";
+import { extractArchive } from "../core/tar";
 import {
   atomicWrite,
   collect,
@@ -10,6 +11,7 @@ import {
   type SnapshotArtifact,
   type SnapshotResult,
 } from "./_utils";
+import { collectSkillArtifacts } from "./skills-walker";
 
 /** Snapshot payload for the Cursor adapter. */
 export type CursorSnapshotResult = SnapshotResult;
@@ -88,6 +90,16 @@ export async function snapshotCursor(): Promise<SnapshotResult> {
     // commands dir may not exist yet.
   }
 
+  // Skills — delegated to the shared walker. The walker is pointed at
+  // `AgentPaths.cursor.skillsDir` which resolves to `~/.cursor/skills/` —
+  // the FR-010 canonical path. The bundled `~/.cursor/skills-cursor/`
+  // directory is NEVER read because `paths.ts` does not expose it and the
+  // walker is not given a pointer to it, so there is no code path through
+  // which vendor bundles can leak into the vault.
+  const cursorSkills = await collectSkillArtifacts("cursor", AgentPaths.cursor.skillsDir);
+  artifacts.push(...cursorSkills.artifacts);
+  warnings.push(...cursorSkills.warnings);
+
   return { artifacts, warnings };
 }
 
@@ -115,6 +127,25 @@ export async function applyCursorCommand(commandName: string, content: string): 
   const target = join(AgentPaths.cursor.commandsDir, commandName);
   await mkdir(AgentPaths.cursor.commandsDir, { recursive: true });
   await atomicWrite(target, content);
+}
+
+/**
+ * Restore one Cursor skill directory from the vault by extracting its
+ * encrypted tar archive into `~/.cursor/skills/<name>/` — NEVER into the
+ * bundled `~/.cursor/skills-cursor/` path (FR-010).
+ *
+ * Mirrors {@link applyClaudeSkill}: parents are created on demand and the
+ * tar's interior layout is preserved bit-for-bit.
+ *
+ * @param skillName  Basename of the skill (no extension).
+ * @param base64Tar  Base64-encoded `.tar.gz` payload that the walker
+ *                   produced on the source machine.
+ */
+export async function applyCursorSkill(skillName: string, base64Tar: string): Promise<void> {
+  const targetDir = join(AgentPaths.cursor.skillsDir, skillName);
+  await mkdir(targetDir, { recursive: true });
+  const tarBuffer = Buffer.from(base64Tar, "base64");
+  await extractArchive(tarBuffer, targetDir);
 }
 
 // ─── Apply (pull side) ────────────────────────────────────────────────────────
@@ -178,5 +209,23 @@ export async function applyCursorVault(
     } else {
       await applyCursorCommand(commandName, decrypted);
     }
+  }
+
+  // Skills sub-directory — stored as <name>.tar.age (FR-005). Mirrors the
+  // Claude/Codex/Copilot apply path: each entry is decrypted, then the inner
+  // base64 tar is extracted into ~/.cursor/skills/<name>/ via applyCursorSkill.
+  // The top-level unrecognised-file warning above is inspecting only top-level
+  // cursor/*.age files, so cursor/skills/*.tar.age never triggers it.
+  const skillFiles = await readAgeFiles(join(cursorDir, "skills"));
+  for (const { name, fullPath } of skillFiles) {
+    if (!name.endsWith(".tar.age")) continue;
+    const encrypted = await readFile(fullPath, "utf8");
+    const decrypted = await decryptString(encrypted, key);
+    const skillName = basename(name, ".tar.age");
+    if (dryRun) {
+      log.info(`[dry-run] [cursor] would extract skill: ${skillName}`);
+      continue;
+    }
+    await applyCursorSkill(skillName, decrypted);
   }
 }
