@@ -2,7 +2,7 @@
 
 **Branch**: `20260411-143905-fix-feature-researcher` | **Date**: 2026-04-11 | **Spec**: [`spec.md`](./spec.md)
 **Input**: Feature specification from `specs/20260411-143905-fix-feature-researcher/spec.md`
-**Research**: [`research.md`](./research.md) (one `TODO(human)` open on R-1 Decision)
+**Research**: [`research.md`](./research.md) (R-1 resolved as Option A: `copilot-cli v1.0.21` pin via `gh-aw v0.68.1`; follow-up: Tavily removal + strict-mode sandbox fix layered on top after T025 validation showed Option A alone was insufficient)
 
 ## Summary
 
@@ -233,7 +233,7 @@ Color palette contrasts (dark-mode-first, verified against WCAG 2 AA):
 specs/20260411-143905-fix-feature-researcher/
 ├── spec.md                # feature spec (already authored)
 ├── plan.md                # this file
-├── research.md            # Phase 0 research (one TODO(human) open)
+├── research.md            # Phase 0 research (R-1 resolved: Option A pin + post-T025 follow-up: Tavily removal, strict-mode sandbox fix)
 ├── data-model.md          # Phase 1 — workflow-run entities
 ├── contracts/
 │   ├── safe-outputs.md    # preserved safe-outputs shape contract

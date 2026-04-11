@@ -45,7 +45,7 @@ The authoritative GitHub Actions run instance created by a
 | Rule | Enforced by |
 |------|------------|
 | `conclusion == "success"` → `create_issue_count >= 1` OR `noop_count >= 1` | R-3 `post-steps:` assertion injected into agent job |
-| `MCP blocked by policy` log line MUST NOT appear for `tavily`, `github`, `safeoutputs` | R-1 workaround (mechanism per TODO(human) decision) |
+| `MCP blocked by policy` log line MUST NOT appear for `github`, `safeoutputs` | R-1 Option A: `copilot-cli v1.0.21` pin inherited via `gh-aw v0.68.1`. Post-T025 follow-up removed `tavily` MCP entirely (Copilot CLI 1.0.21 still hallucinated it as missing) — the only MCP servers left to enforce this rule for are `github` and `safeoutputs` |
 
 No rule writes to a database; all validations are ephemeral shell
 assertions running inside the runner.

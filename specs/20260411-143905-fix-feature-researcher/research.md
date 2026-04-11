@@ -2,7 +2,7 @@
 
 **Feature**: `20260411-143905-fix-feature-researcher`
 **Date**: 2026-04-11
-**Status**: DRAFT — one `TODO(human)` decision open (see R-1 Decision)
+**Status**: RESOLVED — R-1 decision = Option A (`copilot-cli` pinned to `v1.0.21` via `gh-aw v0.68.1` PR `#25689`; compiled into `.github/workflows/feature-research.lock.yml` at commit `ea312ad`). Post-compile validation run `24280821490` surfaced that Option A alone was **insufficient**: Copilot CLI 1.0.21 still hallucinated the `tavily` MCP tool as missing even though the gateway logged `✓ tavily: connected`. The follow-up fix (this branch's working-tree commit) therefore combines **three** changes: the v1.0.21 pin inherited from the compile, a full `tavily-mcp` removal in favour of `web-fetch` + `github` MCP (no third-party secret, no personal-account allowlist bug surface), and a strict-mode-compliant `sandbox:` block removal with `network.allowed` expanded to the vendor sites the prompt actually needs.
 
 This document consolidates the evidence gathered for the plan phase. Every
 claim is traceable to an upstream URL or a line in the failing run log
@@ -313,11 +313,28 @@ Captured for task-phase version-bump references. Verified via
 
 ---
 
-## Open questions — none blocking
+## Open questions — none
 
 All four NEEDS CLARIFICATION items from spec-review are resolved. The
-only remaining input is the R-1 Decision (`TODO(human)`). The plan phase
-will fill in the rest once that decision lands.
+R-1 Decision was taken as **Option A**: pin `copilot-cli` to `v1.0.21` by
+inheriting `gh-aw v0.68.1` (PR `#25689`, "0-byte output" root cause).
+The pin is compiled into `.github/workflows/feature-research.lock.yml`
+at commit `ea312ad`.
+
+**Post-compile follow-up (added after T025 validation run `24280821490`)**:
+the Option A pin fixes the 0-byte output failure mode but does NOT fix
+Copilot CLI 1.0.21's separate regression where a working, connected
+`tavily` MCP server is hallucinated as a missing tool. Rather than wait
+for a downstream CLI fix, this branch removes the `tavily-mcp` dependency
+entirely and substitutes `web-fetch` (built-in, zero-secret) plus the
+`github` MCP `repos` toolset for structured release data. That change
+also removes the `TAVILY_API_KEY` secret surface and narrows the
+`network.allowed` egress list to the specific vendor sites the prompt
+needs. The original `sandbox.agent: false` escape hatch that went along
+with Tavily removal is **also** gone — strict-mode compilation
+(`gh aw compile --strict`) forbids it, and the curated allowlist plus
+the `github` MCP cover the same research surface without bypassing the
+AWF firewall.
 
 ---
 
