@@ -12,7 +12,7 @@ import {
   type SnapshotArtifact,
   type SnapshotResult,
 } from "./_utils";
-import { collectSkillArtifacts } from "./skills-walker";
+import { collectSkillArtifacts, InvalidSkillNameError, validateSkillName } from "./skills-walker";
 
 /** Snapshot payload for the Codex adapter. */
 export type CodexSnapshotResult = SnapshotResult;
@@ -146,6 +146,7 @@ export async function applyCodexRule(ruleName: string, content: string): Promise
  *                   produced on the source machine.
  */
 export async function applyCodexSkill(skillName: string, base64Tar: string): Promise<void> {
+  validateSkillName(skillName);
   const targetDir = join(AgentPaths.codex.skillsDir, skillName);
   await mkdir(targetDir, { recursive: true });
   const tarBuffer = Buffer.from(base64Tar, "base64");
@@ -219,9 +220,18 @@ export async function applyCodexVault(
   const skillFiles = await readAgeFiles(join(codexDir, "skills"));
   for (const { name, fullPath } of skillFiles) {
     if (!name.endsWith(".tar.age")) continue;
+    const skillName = basename(name, ".tar.age");
+    try {
+      validateSkillName(skillName);
+    } catch (err) {
+      if (err instanceof InvalidSkillNameError) {
+        log.warn(`[codex] Skipping vault skill with invalid name '${name}': ${err.reason}`);
+        continue;
+      }
+      throw err;
+    }
     const encrypted = await readFile(fullPath, "utf8");
     const decrypted = await decryptString(encrypted, key);
-    const skillName = basename(name, ".tar.age");
     if (dryRun) {
       log.info(`[dry-run] [codex] would extract skill: ${skillName}`);
       continue;

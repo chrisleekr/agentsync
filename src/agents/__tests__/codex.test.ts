@@ -341,4 +341,42 @@ describe("applyCodexVault dryRun", () => {
     const exists = await Bun.file(join(restoredSkillDir, "SKILL.md")).exists();
     expect(exists).toBeFalse();
   });
+
+  // Phase 8 M6 — adversarial filename regression for Codex.
+
+  test("applyCodexSkill rejects traversal and hidden skill names", async () => {
+    const { InvalidSkillNameError } = await import("../skills-walker");
+    const badNames = ["", ".", "..", "../foo", "foo/bar", "foo\\bar", ".hidden", "foo\x00bar"];
+    for (const bad of badNames) {
+      await expect(codexModule.applyCodexSkill(bad, "")).rejects.toBeInstanceOf(
+        InvalidSkillNameError,
+      );
+    }
+  });
+
+  test("applyCodexVault skips adversarial vault filenames without traversal", async () => {
+    const { generateIdentity, identityToRecipient, encryptString } = await import(
+      "../../core/encryptor"
+    );
+    const identity = await generateIdentity();
+    const recipient = await identityToRecipient(identity);
+
+    const payloadSrc = join(tmpDir, "payload-src");
+    mkdirSync(payloadSrc, { recursive: true });
+    writeFileSync(join(payloadSrc, "AGENTS.md"), "LEAKED_PAYLOAD", "utf8");
+    const tarBuffer = await archiveDirectory(payloadSrc);
+    const base64 = tarBuffer.toString("base64");
+    const encrypted = await encryptString(base64, [recipient]);
+
+    const vaultDir = join(tmpDir, "vault-adversarial");
+    const skillsVaultDir = join(vaultDir, "codex", "skills");
+    await mkdir(skillsVaultDir, { recursive: true });
+    await writeFile(join(skillsVaultDir, "...tar.age"), encrypted, "utf8");
+
+    await codexModule.applyCodexVault(vaultDir, identity, false);
+
+    const escapedPayload = join(testCodexPaths.skillsDir, "..", "AGENTS.md");
+    const leakedExists = await Bun.file(escapedPayload).exists();
+    expect(leakedExists).toBeFalse();
+  });
 });

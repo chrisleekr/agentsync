@@ -22,9 +22,10 @@
  *   5. The tar.gz archive produced for the entry omits every interior
  *      symlink while keeping every real file and real sub-directory    (FR-016 inner)
  *
- * @param agent        The agent namespace to write artifacts under. Only
- *                     skill-bearing agents are meaningful here; callers
- *                     that pass "vscode" get back an empty result.
+ * @param agent        The skill-bearing agent namespace to write artifacts
+ *                     under (`claude`, `cursor`, `codex`, `copilot`). The
+ *                     parameter type `SkillBearingAgent` excludes `vscode`
+ *                     at compile time, so no runtime no-op branch is needed.
  * @param skillsDir    Absolute path to the agent's skills root on disk.
  *                     A missing directory is NOT an error — the walker
  *                     returns { artifacts: [], warnings: [] }.
@@ -34,7 +35,7 @@
  *                     warnings for skills rejected at gate 4.
  */
 export async function collectSkillArtifacts(
-  agent: AgentName,
+  agent: SkillBearingAgent,
   skillsDir: string,
 ): Promise<SkillsWalkerResult>;
 ```

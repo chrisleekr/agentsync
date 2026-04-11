@@ -5,7 +5,7 @@ import { AgentPaths } from "../config/paths";
 import { shouldNeverSync } from "../core/sanitizer";
 import { archiveDirectory, extractArchive } from "../core/tar";
 import { atomicWrite, readIfExists, type SnapshotArtifact, type SnapshotResult } from "./_utils";
-import { collectSkillArtifacts } from "./skills-walker";
+import { collectSkillArtifacts, InvalidSkillNameError, validateSkillName } from "./skills-walker";
 
 /** Snapshot payload for the Copilot adapter. */
 export type CopilotSnapshotResult = SnapshotResult;
@@ -123,6 +123,7 @@ export async function applyCopilotPrompt(fileName: string, content: string): Pro
 
 /** Extract one archived Copilot skill directory into the local skills folder. */
 export async function applyCopilotSkill(skillName: string, base64Tar: string): Promise<void> {
+  validateSkillName(skillName);
   const targetDir = join(AgentPaths.copilot.skillsDir, skillName);
   await mkdir(targetDir, { recursive: true });
   const tarBuffer = Buffer.from(base64Tar, "base64");
@@ -211,9 +212,18 @@ export async function applyCopilotVault(
   const skillFiles = await readAgeFiles(join(copilotDir, "skills"));
   for (const { name, fullPath } of skillFiles) {
     if (!name.endsWith(".tar.age")) continue;
+    const skillName = basename(name, ".tar.age");
+    try {
+      validateSkillName(skillName);
+    } catch (err) {
+      if (err instanceof InvalidSkillNameError) {
+        log.warn(`[copilot] Skipping vault skill with invalid name '${name}': ${err.reason}`);
+        continue;
+      }
+      throw err;
+    }
     const encrypted = await readFile(fullPath, "utf8");
     const decrypted = await decryptString(encrypted, key);
-    const skillName = basename(name, ".tar.age");
     if (dryRun) {
       log.info(`[dry-run] [copilot] would extract skill: ${skillName}`);
       continue;

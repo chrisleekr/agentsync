@@ -426,4 +426,53 @@ describe("applyClaudeVault dryRun", () => {
     const exists = await Bun.file(join(restoredSkillDir, "SKILL.md")).exists();
     expect(exists).toBeFalse();
   });
+
+  // Phase 8 M6 — adversarial filename regression. Locks the H1 path-traversal
+  // fix: a crafted vault file named `...tar.age` basenames to `..`, which must
+  // be rejected by validateSkillName before any filesystem write occurs.
+
+  test("applyClaudeSkill rejects traversal and hidden skill names", async () => {
+    const { InvalidSkillNameError } = await import("../skills-walker");
+    const badNames = ["", ".", "..", "../foo", "foo/bar", "foo\\bar", ".hidden", "foo\x00bar"];
+    for (const bad of badNames) {
+      await expect(claudeModule.applyClaudeSkill(bad, "")).rejects.toBeInstanceOf(
+        InvalidSkillNameError,
+      );
+    }
+  });
+
+  test("applyClaudeVault skips adversarial vault filenames without traversal", async () => {
+    const { generateIdentity, identityToRecipient, encryptString } = await import(
+      "../../core/encryptor"
+    );
+    const identity = await generateIdentity();
+    const recipient = await identityToRecipient(identity);
+
+    // Build a tar whose first entry is a payload that WOULD overwrite the
+    // Claude config root if extraction escaped skillsDir.
+    const payloadSrc = join(tmpDir, "payload-src");
+    mkdirSync(payloadSrc, { recursive: true });
+    writeFileSync(join(payloadSrc, "CLAUDE.md"), "LEAKED_PAYLOAD", "utf8");
+    const tarBuffer = await archiveDirectory(payloadSrc);
+    const base64 = tarBuffer.toString("base64");
+    const encrypted = await encryptString(base64, [recipient]);
+
+    const vaultDir = join(tmpDir, "vault-adversarial");
+    const skillsVaultDir = join(vaultDir, "claude", "skills");
+    await mkdir(skillsVaultDir, { recursive: true });
+    // `...tar.age` → basename strips `.tar.age` → skillName is `..`
+    await writeFile(join(skillsVaultDir, "...tar.age"), encrypted, "utf8");
+
+    // Must not throw — the bad entry is caught and logged, loop continues.
+    await claudeModule.applyClaudeVault(vaultDir, identity, false /* dryRun */);
+
+    // The skillsDir parent must NOT have a leaked payload file.
+    const escapedPayload = join(testClaudePaths.skillsDir, "..", "CLAUDE.md");
+    const leakedExists = await Bun.file(escapedPayload).exists();
+    // In this tmp layout the parent of skillsDir is `<tmpDir>/apply`, which
+    // is the same directory that holds `CLAUDE.md` for the dry-run test above
+    // (testClaudePaths.claudeMd). If the validator were bypassed, the payload
+    // would land exactly on top of it.
+    expect(leakedExists).toBeFalse();
+  });
 });

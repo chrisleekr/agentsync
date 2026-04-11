@@ -170,10 +170,14 @@ describe("collectSkillArtifacts", () => {
 
     const result = await collectSkillArtifacts("claude", tmpDir);
     expect(result.artifacts).toHaveLength(0);
-    expect(result.warnings.length).toBeGreaterThanOrEqual(1);
-    const offending = result.warnings.find((w) => w.startsWith("never-sync inside skill: "));
+    // Exactly one warning — the contract promises one entry per offending path,
+    // and this fixture seeds exactly one. A looser assertion would silently
+    // accept a walker regression that duplicated warnings.
+    expect(result.warnings).toHaveLength(1);
+    const offending = result.warnings[0];
     expect(offending).toBeDefined();
     expect(offending).toContain("auth.json");
+    expect(offending?.startsWith("never-sync inside skill: ")).toBe(true);
   });
 
   // Row 12 — two skills, one clean + one dirty → walker collects clean, warns dirty (R3)
@@ -190,8 +194,9 @@ describe("collectSkillArtifacts", () => {
     const result = await collectSkillArtifacts("claude", tmpDir);
     expect(result.artifacts).toHaveLength(1);
     expect(result.artifacts[0]?.vaultPath).toBe("claude/skills/clean-skill.tar.age");
-    expect(result.warnings.length).toBeGreaterThanOrEqual(1);
-    expect(result.warnings.some((w) => w.startsWith("never-sync inside skill: "))).toBe(true);
+    // One dirty skill with one offending file → exactly one warning.
+    expect(result.warnings).toHaveLength(1);
+    expect(result.warnings[0]?.startsWith("never-sync inside skill: ")).toBe(true);
   });
 
   // Row 13 — the skills root path itself is a symlink (NC-1 from PR review).

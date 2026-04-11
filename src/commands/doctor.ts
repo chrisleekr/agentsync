@@ -24,8 +24,10 @@ export interface Check {
  * doctor pipeline.
  *
  * Each agent gets exactly one row:
- *   - `pass` when the directory exists and is readable
- *   - `warn` when the directory does not exist or is unreadable
+ *   - `pass` when the path exists, is a real directory, and is readable
+ *   - `warn` when the path does not exist, is unreadable, or is not a
+ *     directory (e.g. the user accidentally created `~/.claude/skills` as
+ *     a regular file instead of a directory)
  *
  * Copilot is intentionally excluded — its skill directory was wired through
  * the original Copilot integration and is therefore covered by the broader
@@ -42,6 +44,15 @@ export async function buildSkillsDirChecks(): Promise<Check[]> {
   for (const [name, dir] of targets) {
     try {
       await access(dir, constants.R_OK);
+      const info = await stat(dir);
+      if (!info.isDirectory()) {
+        checks.push({
+          name,
+          status: "warn",
+          detail: `Exists but is not a directory: ${dir}`,
+        });
+        continue;
+      }
       checks.push({ name, status: "pass", detail: dir });
     } catch {
       checks.push({

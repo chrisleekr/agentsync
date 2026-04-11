@@ -6,7 +6,7 @@
  * key, git remote, vault scan, etc.).
  */
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { join } from "node:path";
 import { AgentPaths } from "../../config/paths";
@@ -90,5 +90,21 @@ describe("buildSkillsDirChecks (FR-008)", () => {
 
     const rows = await buildSkillsDirChecks();
     expect(rows.find((r) => r.name.toLowerCase().includes("copilot"))).toBeUndefined();
+  });
+
+  // Phase 8 L1 — guard against a misconfigured skillsDir that is a regular
+  // file, not a directory. `access(R_OK)` alone passes in that case, so a
+  // bare readability check would produce a false-positive `pass` row.
+  test("reports `warn` when a skills path exists but is not a directory", async () => {
+    const claudeFile = join(tmpDir, "claude-skills-is-a-file");
+    writeFileSync(claudeFile, "oops — this should be a directory", "utf8");
+    mutablePaths.claude.skillsDir = claudeFile;
+    mutablePaths.codex.skillsDir = join(tmpDir, "missing-codex");
+    mutablePaths.cursor.skillsDir = join(tmpDir, "missing-cursor");
+
+    const rows = await buildSkillsDirChecks();
+    const claudeRow = rows.find((r) => r.name === "Claude skills directory");
+    expect(claudeRow?.status).toBe("warn");
+    expect(claudeRow?.detail).toContain("not a directory");
   });
 });

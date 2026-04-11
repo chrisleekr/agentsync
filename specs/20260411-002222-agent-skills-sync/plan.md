@@ -108,3 +108,97 @@ docs/
 > **Fill ONLY if Constitution Check has violations that must be justified**
 
 No violations. This table is intentionally left empty.
+
+## Phase 8 — PR #26 Review Fixes (2026-04-11)
+
+This phase lands **after** the original feature PR (commit `47c6773`) and addresses 8 unresolved CodeRabbit review threads plus 3 missed issues identified during review validation. It ships as a single fix-up commit on the same branch (`20260411-002222-agent-skills-sync`) — no new spec, no new branch. Reasoning: every item is a localized bug fix or doc drift, none of them change the feature's surface area, and splitting them into per-item commits would make the review history noisier than the fix itself.
+
+Grouping is **by severity** so a reader can stop at the High tier and still be confident the merge-blocking issues are addressed. The Needs-Clarification item is deliberately NOT a code change — it is a design question that belongs in the PR thread.
+
+### Re-check of Constitution gates for this phase
+
+| Principle | Impact of fixes | Verdict |
+| --------- | --------------- | ------- |
+| I. Security-First Credential Handling | **New validation layer added** for vault-derived skill names (see High tier below). This tightens the existing surface; it does not weaken any gate. `NEVER_SYNC_PATTERNS` and `encryptString` are not touched | **Pass — strengthened** |
+| II. Test Coverage (NON-NEGOTIABLE) | Adds ≥ 4 new adversarial-filename tests (one per agent) + tightens 2 existing walker assertions. Coverage on `claude.ts` / `codex.ts` / `cursor.ts` / `copilot.ts` stays ≥ 70%; security-critical files unchanged | **Pass** |
+| III. Cross-Platform Daemon Reliability | No daemon changes. `doctor.ts` fix is a `stat()` add — same syscall shape as the rest of `doctor` | **Pass** |
+| IV. Code Quality with Biome | The new `validateSkillName` helper is a ~10-line pure function with no `any`, no new deps | **Pass** |
+| V. Documentation Standards | 4 doc-only fixes (command-reference, walker-interface, data-model, README-untouched). All keep the existing JSDoc / Mermaid standards | **Pass** |
+
+**Net verdict**: No new complexity entries. The security validator is new code but it narrows an existing attack surface, it does not create a new one.
+
+### High (merge-blocking) — 1 fix covering 4 files
+
+**H1. Validate vault-derived skill names before filesystem writes** — addresses CodeRabbit comment on `src/agents/codex.ts:148-153` + missed-issue expansion to the 3 sibling agents.
+
+- **Bug**: `applyXxxSkill` functions in `claude.ts`, `codex.ts`, `cursor.ts`, `copilot.ts` all derive `skillName` from a vault filename via `basename(name, ".tar.age")` and pass it directly to `join(skillsRoot, skillName)`. A vault file literally named `...tar.age` yields `skillName === ".."` → `join(skillsRoot, "..")` = parent of skillsRoot. `mkdir({recursive: true})` is a no-op (parent exists) and `extractArchive` then writes tar entries into the agent's config root (e.g. `~/.codex/AGENTS.md`). The existing tar-slip filter in `src/core/tar.ts:92-98` defends against traversing entry paths but does **not** sanitize the `cwd` argument — so a compromised vault can overwrite the user's real agent config.
+- **Root cause**: No validation at the trust boundary between `readdir` results (attacker-controlled-ish in a compromised vault) and filesystem writes.
+- **Fix**: Add a new `validateSkillName(name)` helper in `src/agents/skills-walker.ts` (same module that already owns the walker gates, so skill-name policy lives in one place). Call it from all 4 `applyXxxSkill` functions. Also add a resolved-path `startsWith(skillsRoot + sep)` boundary check so a future bug in `validateSkillName` can't escape the root.
+- **Files**:
+  - `src/agents/skills-walker.ts` — export new helper (kept narrow so `applyXxxSkill` doesn't pull walker transitive deps)
+  - `src/agents/claude.ts`, `codex.ts`, `cursor.ts`, `copilot.ts` — one call-site each
+- **Tests**: See M6 below for the regression tests that lock this down.
+
+### Medium — 6 fixes
+
+**M1. `docs/command-reference.md:108` — drop the "everywhere" promise** (CodeRabbit comment r3067300721)
+
+The `pull` caveat currently says "The only way to remove a skill **everywhere** is the explicit `skill remove` verb." This directly contradicts the section 60 lines below (lines 169-173) which says the command "never touches any local skill directory on any machine" and that pulls are "extract-only". Rewrite to clarify that `skill remove` removes the vault artifact only; to finish removal on another machine the user must manually `rm -rf` the local directory.
+
+**M2. `docs/command-reference.md:167` — split reconcile vs git-error exit-code rows** (CodeRabbit comment r3067300722)
+
+The exit-code table has one row labeled "Reconcile or git push failed | Removal staged but not pushed: <git error>". Reading `src/commands/skill.ts:184-196` shows these two branches produce **different** messages:
+- `reconcile-error` → `log.error(result.error)` (no "staged" prefix — nothing has been unlinked yet)
+- `git-error` → `log.error("Removal staged but not pushed: ${result.error}")` + retry hint
+
+Split into two rows. The authoritative source is already correct at `specs/.../contracts/skill-remove-cli.md:35-36`; only the user-facing doc drifted.
+
+**M3. `specs/.../contracts/walker-interface.md:37` — narrow `agent` param type** (CodeRabbit comment r3067300724)
+
+Contract documents `agent: AgentName` with a runtime no-op clause for `"vscode"`, but `src/agents/skills-walker.ts:71` actually exports `collectSkillArtifacts(agent: SkillBearingAgent, ...)` which excludes `vscode` at the type level. Update the doc block to match.
+
+**M4. `specs/.../data-model.md:141-145` — rename `kind` → `status` and add missing variants** (CodeRabbit comment r3067300725 + missed-issue expansion)
+
+Spec defines `RemovalOutcome` with a 3-variant `kind` discriminated union (`removed` / `not-found` / `git-error`). Implementation at `src/commands/skill.ts:21-26` uses a 5-variant `status` union (`success` / `unknown-agent` / `not-found` / `reconcile-error` / `git-error`). Rename and add the missing variants. Sibling contract `skill-remove-cli.md` already has all 5 cases — add a cross-reference so the two spec files point at the same source of truth.
+
+**M5. `src/agents/__tests__/skills-walker.test.ts:173,193` — tighten warning-count assertions** (CodeRabbit comment r3067300726)
+
+Rows 11 and 12 of the behavioral matrix each seed exactly one offending file. The tests assert `warnings.length >= 1`, which would still pass if the walker started duplicating warnings. The contract at `walker-interface.md:57-60` promises "exactly one entry in warnings… per offending path". Replace with `toHaveLength(1)`.
+
+**M6. New adversarial-filename regression tests** (missed-issue expansion of H1)
+
+Add one test per agent in `claude.test.ts`, `codex.test.ts`, `cursor.test.ts`, `copilot.test.ts` that seeds a vault dir with files literally named `.tar.age`, `..tar.age`, `...tar.age` and asserts `applyXxxVault` rejects them (throws or skips) and no file is written outside the agent's skills root. This locks down the H1 fix against regression.
+
+### Low — 1 fix
+
+**L1. `src/commands/doctor.ts:42-51` — verify skillsDir is a directory** (CodeRabbit comment r3067300729)
+
+`buildSkillsDirChecks` uses `access(dir, R_OK)` which passes for any readable file, not just directories. A user who `touch`ed `~/.claude/skills` (instead of `mkdir`) would get a green "pass" row even though `snapshotClaude` would return empty. Replace with `stat()` + `isDirectory()` check; treat "exists but not a directory" as warn with a distinct `detail` message.
+
+### Needs Clarification — 1 design decision, 0 code changes
+
+**NC1. `applyXxxSkill` overlay vs replacement semantics** (CodeRabbit comment r3067300728, cursor.ts only but applies to all 4)
+
+Reviewer flagged that extracting a skill tar on top of an existing local directory leaves stale files (files present locally but not in the tar). Proposed fix: `rm -rf` the target before `mkdir`+extract.
+
+**Why this is a design question, not a bug**:
+- The reviewer's fix directly conflicts with FR-011 "additive by default" and the broader spirit of FR-013 "extract-only on pull". If a user has edits to `helper.md` locally that haven't been pushed yet, `rm -rf` + extract would silently destroy them.
+- The current overlay behavior preserves local edits at the cost of drift between vault tar contents and local directory contents when the upstream author deletes a file from a skill.
+- Neither "preserve drift" nor "destroy local edits to get consistency" is unambiguously correct. The spec does not currently decide this case.
+
+**What this phase does**: Leave code unchanged. Post a reply on the CodeRabbit thread explaining the FR-011/FR-013 tension and asking for direction. If a decision lands ("we want full replacement; drift is worse than lost edits"), open a follow-up issue for the change — it is a behavior change to a stable feature and deserves its own commit.
+
+### Implementation order (enforced by task dependencies)
+
+1. **H1 (validator + wiring)** first, because M6 tests depend on it.
+2. **M6 (adversarial tests)** next, to lock down H1 before any other change touches the same files.
+3. **M1–M5 + L1** in any order — they are independent.
+4. **Doc items (M1, M2, M3, M4)** plus **M5 (walker test tightening)** and **L1 (doctor)** land in the same commit as H1+M6.
+5. **NC1** reply happens after the commit, on the PR thread itself. No code change.
+
+### Test strategy for this phase
+
+- `bun run check` must stay green (393 → ≥397 pass, 0 fail, 850+ expect calls).
+- New adversarial-filename tests for M6 must each assert a concrete negative: no file written outside `skillsRoot`, no `mkdir` performed at a traversal target.
+- M5 tightening converts 2 `toBeGreaterThanOrEqual(1)` calls to `toHaveLength(1)` — no new tests, just tightened assertions.
+- `bun run check` after every file-group change, not only at the end, so a regression is bisectable to the edit that caused it.

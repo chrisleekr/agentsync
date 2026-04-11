@@ -105,7 +105,7 @@ bunx --package @chrisleekr/agentsync agentsync pull --agent cursor
 - Pull uses the same fast-forward-only reconciliation rule as `push`, `key`, and daemon sync.
 - If local and remote vault history diverged, `pull` exits with a recovery message and no success footer.
 - If the private key is missing, the command cannot decrypt anything.
-- Pull is extract-only and never deletes an existing local skill directory, even when the matching vault artifact is gone (FR-013). The only way to remove a skill everywhere is the explicit `skill remove` verb.
+- Pull is extract-only and never deletes an existing local skill directory, even when the matching vault artifact is gone (FR-013). `skill remove` only removes the vault artifact; to complete the removal on this machine or any other machine, delete the local skill directory by hand (`rm -rf ~/.<agent>/skills/<name>`).
 
 ## status
 
@@ -164,7 +164,10 @@ bunx --package @chrisleekr/agentsync agentsync skill remove copilot debug-flow
 | `0` | File removed, commit landed, push succeeded | `Removed <agent>/<name> from vault (commit <sha7>)` |
 | `1` | Skill not found in vault | `Skill not found: <agent>/<name>` + `Looked for: <resolved path>` |
 | `1` | Unknown agent name | `Unknown agent: <provided>. Supported: claude, cursor, codex, copilot` |
-| `1` | Reconcile or git push failed | `Removal staged but not pushed: <git error>` with retry hint |
+| `1` | Reconcile with remote failed **before** the vault file was touched | `<upstream reconcile error>` — the vault working tree is unchanged; resolve the remote divergence and retry |
+| `1` | Git commit or push failed **after** the vault file was unlinked locally | `Removal staged but not pushed: <git error>` + hint to re-run `agentsync push` or `agentsync skill remove <agent> <name>` to finish the removal |
+
+See `specs/20260411-002222-agent-skills-sync/contracts/skill-remove-cli.md` for the authoritative row-by-row mapping; the table above mirrors that contract.
 
 **Safety guarantees (critical)**:
 

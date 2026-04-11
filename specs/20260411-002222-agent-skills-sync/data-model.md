@@ -130,26 +130,34 @@ if (w.startsWith("Redacted literal secret") || w.startsWith("never-sync inside s
 
 ---
 
-## Entity 6: `RemovalOutcome` (new type for `skill remove`)
+## Entity 6: `SkillRemoveResult` (new type for `skill remove`)
 
 ```ts
 /**
- * Result shape for the `skill remove <agent> <name>` command.
- * Modelled as a tagged union so the CLI layer can decide exit code +
- * output format without re-parsing a message string.
+ * Result shape for the `skill remove <agent> <name>` command, as exported
+ * from `src/commands/skill.ts`. Modelled as a discriminated union on the
+ * `status` field so the CLI layer can decide exit code + output format
+ * without re-parsing a message string. The authoritative row-by-row
+ * mapping to exit codes and log calls lives in
+ * `contracts/skill-remove-cli.md`.
  */
-type RemovalOutcome =
-  | { kind: "removed"; agent: AgentName; name: string; vaultPath: string; commitSha: string }
-  | { kind: "not-found"; agent: AgentName; name: string; vaultPath: string }
-  | { kind: "git-error"; agent: AgentName; name: string; vaultPath: string; error: string };
+export type SkillRemoveResult =
+  | { status: "success"; path: string; commitSha: string | null }
+  | { status: "unknown-agent"; provided: string; supported: readonly string[] }
+  | { status: "not-found"; path: string }
+  | { status: "reconcile-error"; error: string }
+  | { status: "git-error"; path: string; error: string };
 ```
+
+> **Spec note**: an earlier draft of this document used a `kind`-discriminated type called `RemovalOutcome` with only three variants (`removed` / `not-found` / `git-error`). The implementation needed two additional states (`reconcile-error` before any unlink, `unknown-agent` before any runtime work) to drive distinct exit-code messages, and the discriminant was renamed to `status` to match the rest of the codebase's result conventions. `contracts/skill-remove-cli.md` already documented the five-variant surface; this entry is the data-model sibling that was previously drifting.
 
 ### Invariants
 
-- `kind: "removed"` MUST only be emitted after the commit has landed AND the push has succeeded (or the user passed `--dry-run`, which is the only case where `commitSha` may be the empty string — see contracts/skill-remove-cli.md for whether `--dry-run` is in scope).
-- `kind: "not-found"` MUST drive `process.exitCode = 1` and MUST print the vault path it looked for, so the user can verify they typed the right agent and skill name (FR-012).
-- `kind: "not-found"` MUST NOT cause any Git operation, file write, or file delete. The vault state is unchanged on this outcome.
-- `kind: "git-error"` is reserved for the narrow window between successful `unlink` of the vault file and a failed `git push`. In this state, the vault working tree has a staged deletion that the user can resolve by re-running `skill remove` or `push`. The error string MUST include the `git` exit code or message to help the user debug. FR-013's pull-side guarantee is unaffected because the vault HEAD has not advanced.
+- `status: "success"` MUST only be emitted after the commit has landed AND the push has succeeded. `commitSha` is `null` when the remote had already removed the file during the pre-unlink reconcile (nothing new to commit) — in that case the removal is idempotently considered a success.
+- `status: "not-found"` MUST drive `process.exitCode = 1` and MUST print the vault path it looked for, so the user can verify they typed the right agent and skill name (FR-012). It MUST NOT cause any Git operation, file write, or file delete.
+- `status: "unknown-agent"` MUST be returned BEFORE any runtime context resolution or config loading. This keeps the error path free of side effects even when the user types `vscode` or a typo.
+- `status: "reconcile-error"` is emitted when `GitClient.reconcileWithRemote` fails before the target file is touched. The vault working tree is unchanged; the user must resolve the remote divergence and retry. The CLI log line is the raw reconcile error message — there is NO `Removal staged but not pushed:` prefix because nothing has been staged.
+- `status: "git-error"` is reserved for the narrow window between successful `unlink` of the vault file and a failed `git commit` or `git push`. In this state, the vault working tree has a staged deletion that the user can resolve by re-running `skill remove` or `push`. The error string MUST include the `git` exit code or message to help the user debug. FR-013's pull-side guarantee is unaffected because the vault HEAD has not advanced.
 
 ### State machine (CLI command → RemovalOutcome)
 

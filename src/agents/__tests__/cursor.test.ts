@@ -386,6 +386,41 @@ describe("applyCursorVault dryRun", () => {
     const exists = await Bun.file(join(restoredSkillDir, "SKILL.md")).exists();
     expect(exists).toBeFalse();
   });
+
+  // Phase 8 M6 — adversarial filename regression for Cursor.
+
+  test("applyCursorSkill rejects traversal and hidden skill names", async () => {
+    const { applyCursorSkill } = cursorModule;
+    const { InvalidSkillNameError } = await import("../skills-walker");
+    const badNames = ["", ".", "..", "../foo", "foo/bar", "foo\\bar", ".hidden", "foo\x00bar"];
+    for (const bad of badNames) {
+      await expect(applyCursorSkill(bad, "")).rejects.toBeInstanceOf(InvalidSkillNameError);
+    }
+  });
+
+  test("applyCursorVault skips adversarial vault filenames without traversal", async () => {
+    const { applyCursorVault } = cursorModule;
+    const { encryptString } = await import("../../core/encryptor");
+    const { identity, recipient } = await createAgeIdentity();
+
+    const payloadSrc = join(tmpDir, "payload-src");
+    mkdirSync(payloadSrc, { recursive: true });
+    writeFileSync(join(payloadSrc, "user-rules.md"), "LEAKED_PAYLOAD", "utf8");
+    const tarBuffer = await archiveDirectory(payloadSrc);
+    const base64 = tarBuffer.toString("base64");
+    const encrypted = await encryptString(base64, [recipient]);
+
+    const vaultDir = join(tmpDir, "vault-adversarial");
+    const skillsVaultDir = join(vaultDir, "cursor", "skills");
+    await mkdir(skillsVaultDir, { recursive: true });
+    await writeFile(join(skillsVaultDir, "...tar.age"), encrypted, "utf8");
+
+    await applyCursorVault(vaultDir, identity, false);
+
+    const escapedPayload = join(testCursorPaths.skillsDir, "..", "user-rules.md");
+    const leakedExists = await Bun.file(escapedPayload).exists();
+    expect(leakedExists).toBeFalse();
+  });
 });
 
 // ── applyCursorVault unknown file warning ─────────────────────────────────────

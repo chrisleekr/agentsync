@@ -46,6 +46,71 @@ const NEVER_SYNC_WARNING_PREFIX = "never-sync inside skill: ";
 const ARCHIVE_FAILURE_WARNING_PREFIX = "skill archive failed: ";
 
 /**
+ * Thrown by {@link validateSkillName} when a skill name derived from a vault
+ * filename fails the allow-list. A dedicated subclass (rather than a generic
+ * `Error`) lets the `applyXxxVault` call sites catch this specific failure
+ * mode and log a targeted warning without swallowing unrelated I/O errors.
+ */
+export class InvalidSkillNameError extends Error {
+  constructor(
+    public readonly provided: string,
+    public readonly reason: string,
+  ) {
+    super(`Invalid skill name '${provided}': ${reason}`);
+    this.name = "InvalidSkillNameError";
+  }
+}
+
+/**
+ * Validate a skill name derived from a vault filename BEFORE it is joined onto
+ * the local skills root. This is the trust-boundary check for the pull-side
+ * symmetric to the walker's own gates on the push-side.
+ *
+ * **Why this exists**: `applyXxxSkill(skillName, base64Tar)` is called with
+ * `skillName = basename(vaultFile, ".tar.age")`. A compromised vault can
+ * contain a file literally named `...tar.age`, which `basename` strips down
+ * to `".."`, and `path.join(skillsRoot, "..")` resolves to the agent's
+ * config root (e.g. `~/.codex/`). `extractArchive` then writes tar entries
+ * into that config root and can overwrite legitimate files like
+ * `~/.codex/AGENTS.md` or `~/.codex/config.toml`. The existing tar-slip
+ * filter in `src/core/tar.ts::extractArchive` defends against traversing
+ * entry paths but does NOT sanitize the `cwd` argument — this validator
+ * closes that gap at the caller.
+ *
+ * Rules MUST reject every name that could:
+ *   - resolve to a different directory under `path.join` (`.`, `..`, empty)
+ *   - contain a path separator on any platform (`/` on POSIX, `\` on Windows)
+ *   - collide with hidden-file rules the walker applies on the push side
+ *     (dot-prefixed names are silently skipped during push, so pull should
+ *     not manufacture them either — see FR-017)
+ *   - smuggle control characters or NUL bytes that shell or filesystem
+ *     layers might interpret inconsistently
+ *
+ * @param name  The skill basename, typically from `basename(vaultFile, ".tar.age")`.
+ * @throws {InvalidSkillNameError} if the name fails any rule above.
+ */
+export function validateSkillName(name: string): void {
+  if (name.length === 0) {
+    throw new InvalidSkillNameError(name, "empty");
+  }
+  if (name === "." || name === "..") {
+    throw new InvalidSkillNameError(name, "reserved name");
+  }
+  if (name.startsWith(".")) {
+    throw new InvalidSkillNameError(name, "leading dot is reserved for hidden entries");
+  }
+  for (let i = 0; i < name.length; i++) {
+    const code = name.charCodeAt(i);
+    if (code < 0x20) {
+      throw new InvalidSkillNameError(name, "contains control character");
+    }
+    if (code === 0x2f || code === 0x5c) {
+      throw new InvalidSkillNameError(name, "contains path separator");
+    }
+  }
+}
+
+/**
  * Walk an agent's local skills root and collect encrypted-ready tar artifacts
  * for every directory that qualifies as a user-created skill.
  *
