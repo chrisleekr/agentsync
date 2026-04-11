@@ -7,7 +7,7 @@
  */
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdirSync, writeFileSync } from "node:fs";
-import { rm } from "node:fs/promises";
+import { rm, symlink } from "node:fs/promises";
 import { join } from "node:path";
 import { AgentPaths } from "../../config/paths";
 import { createTmpDir } from "../../test-helpers/fixtures";
@@ -106,5 +106,27 @@ describe("buildSkillsDirChecks (FR-008)", () => {
     const claudeRow = rows.find((r) => r.name === "Claude skills directory");
     expect(claudeRow?.status).toBe("warn");
     expect(claudeRow?.detail).toContain("not a directory");
+  });
+
+  // Thread 8 — parity with the walker's FR-016 rule. The walker refuses to
+  // enumerate a skills root that is itself a symlink, so doctor must not
+  // report `pass` for that same layout. Using `stat` alone would follow the
+  // link and see a real directory, hiding the walker's silent refusal from
+  // the user.
+  test("reports `warn` when a skills path is a symlink (FR-016 parity)", async () => {
+    const realRoot = join(tmpDir, "real-claude-skills");
+    mkdirSync(realRoot, { recursive: true });
+    const linkedRoot = join(tmpDir, "linked-claude-skills");
+    await symlink(realRoot, linkedRoot);
+
+    mutablePaths.claude.skillsDir = linkedRoot;
+    mutablePaths.codex.skillsDir = join(tmpDir, "missing-codex");
+    mutablePaths.cursor.skillsDir = join(tmpDir, "missing-cursor");
+
+    const rows = await buildSkillsDirChecks();
+    const claudeRow = rows.find((r) => r.name === "Claude skills directory");
+    expect(claudeRow?.status).toBe("warn");
+    expect(claudeRow?.detail).toContain("Symlinked skills root");
+    expect(claudeRow?.detail).toContain("FR-016");
   });
 });

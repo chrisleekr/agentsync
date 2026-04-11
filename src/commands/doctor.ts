@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { constants } from "node:fs";
-import { access, readdir, stat } from "node:fs/promises";
+import { access, lstat, readdir, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join, relative } from "node:path";
 import { promisify } from "node:util";
@@ -25,9 +25,16 @@ export interface Check {
  *
  * Each agent gets exactly one row:
  *   - `pass` when the path exists, is a real directory, and is readable
- *   - `warn` when the path does not exist, is unreadable, or is not a
- *     directory (e.g. the user accidentally created `~/.claude/skills` as
- *     a regular file instead of a directory)
+ *   - `warn` when the path does not exist, is unreadable, is a symbolic
+ *     link (walker refuses to enumerate symlinked roots per FR-016), or
+ *     exists but is not a directory (e.g. the user accidentally created
+ *     `~/.claude/skills` as a regular file instead of a directory)
+ *
+ * Using `lstat` instead of `stat` keeps this rule in lock-step with the
+ * walker at `src/agents/skills-walker.ts:150-151`, which rejects symlinked
+ * skills roots silently. Without `lstat`, the doctor would report `pass`
+ * for a user who has `~/.claude/skills -> /srv/team-pool`, and `push` would
+ * then sync nothing — the two checks must agree.
  *
  * Copilot is intentionally excluded — its skill directory was wired through
  * the original Copilot integration and is therefore covered by the broader
@@ -44,7 +51,15 @@ export async function buildSkillsDirChecks(): Promise<Check[]> {
   for (const [name, dir] of targets) {
     try {
       await access(dir, constants.R_OK);
-      const info = await stat(dir);
+      const info = await lstat(dir);
+      if (info.isSymbolicLink()) {
+        checks.push({
+          name,
+          status: "warn",
+          detail: `Symlinked skills root is not synced (FR-016): ${dir}`,
+        });
+        continue;
+      }
       if (!info.isDirectory()) {
         checks.push({
           name,
