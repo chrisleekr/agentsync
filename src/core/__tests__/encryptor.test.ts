@@ -1,5 +1,6 @@
-import { afterEach, beforeAll, describe, expect, test } from "bun:test";
+import { afterEach, beforeAll, describe, expect, mock, test } from "bun:test";
 import { writeFile } from "node:fs/promises";
+import { createRequire } from "node:module";
 import { join } from "node:path";
 import { createTmpDir } from "../../test-helpers/fixtures";
 import {
@@ -10,6 +11,14 @@ import {
   generateIdentity,
   identityToRecipient,
 } from "../encryptor";
+
+// Defensive re-install of the real node:fs/promises — see migrate.test.ts
+// for the full explanation of the bleed this guards against.
+{
+  const require = createRequire(import.meta.url);
+  const realFsPromises = require("node:fs/promises") as typeof import("node:fs/promises");
+  mock.module("node:fs/promises", () => realFsPromises);
+}
 
 describe("encryptor", () => {
   // T004 — generateIdentity + identityToRecipient

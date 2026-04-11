@@ -4,13 +4,28 @@
  * translation, secret detection, and write behaviour.
  */
 
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
 import { rm } from "node:fs/promises";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { AgentPaths } from "../../config/paths";
 import { performMigrate, readSourceArtefacts } from "../migrate";
+
+// Re-install the real node:fs/promises in bun's module cache. The daemon
+// installer test files (installer-linux/macos/windows) stub fs/promises at
+// top level and bun's `mock.restore()` is a no-op for `mock.module()`, so
+// their stubs leak into every later file in the same bun test run. This
+// block is the defensive undo — identical to the pattern in claude.test.ts,
+// packaging.test.ts, status.test.ts and friends. The bleed only surfaces in
+// CI because the Linux readdir order puts daemon/ before migrate/; on macOS
+// the order happens to be the reverse.
+{
+  const require = createRequire(import.meta.url);
+  const realFsPromises = require("node:fs/promises") as typeof import("node:fs/promises");
+  mock.module("node:fs/promises", () => realFsPromises);
+}
 
 // ── Mutable path references for testing ──────────────────────────────────────
 
