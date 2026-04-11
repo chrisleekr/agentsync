@@ -155,7 +155,7 @@ bunx --package @chrisleekr/agentsync agentsync skill remove copilot debug-flow
 
 **Signature**: `skill remove <agent> <name>` — both positional arguments are required. `<agent>` must be one of `claude`, `cursor`, `codex`, or `copilot`; `vscode` and any other value are rejected. `<name>` is the basename of the skill (no extension, no path separators).
 
-**Outcome on success**: the file `<vaultDir>/<agent>/skills/<name>.tar.age` is removed, a `skill remove(<agent>): <name>` commit is created, and the commit is pushed to the configured remote branch. The success log line includes the 7-character short SHA.
+**Outcome on success**: the file `<vaultDir>/<agent>/skills/<name>.tar.age` is removed, a `skill remove(<agent>): <name>` commit is created, and the commit is pushed to the configured remote branch. The success log line may include the 7-character short SHA as `(commit <sha7>)` when `readHeadShortSha` can invoke `git rev-parse` on the vault; it is omitted silently if git cannot be reached, because the SHA readout is a non-fatal UX helper.
 
 **Exit codes**:
 
