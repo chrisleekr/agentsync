@@ -98,8 +98,8 @@ The walker's test suite MUST cover at least these rows. Each row is an independe
 | 8 | Top-level `.DS_Store` regular file | 0 | `[]` |
 | 9 | Real skill `a/SKILL.md` + another real skill `b/SKILL.md` + symlinked root `c/` | 2 | `[]` |
 | 10 | Real skill whose interior contains a symlinked helper file | 1 | `[]` (the helper is omitted silently) |
-| 11 | Real skill containing a file whose path matches `NEVER_SYNC_PATTERNS` (e.g. `./credentials.json`) | 0 (the skill is not archived) | 1 warning with prefix `never-sync inside skill: ` |
-| 12 | Two real skills, one of which has a never-sync match | 0 for the matched skill, 1 for the clean one → `artifacts.length === 1` | 1 warning with prefix `never-sync inside skill: ` |
+| 11 | Real skill containing a file whose path matches `NEVER_SYNC_PATTERNS` (e.g. `./credentials.json`) | 0 (the skill is not archived) | 1 warning of the form `never-sync inside skill: <absolute path>` |
+| 12 | Two real skills, one of which has a never-sync match | 0 for the matched skill, 1 for the clean one → `artifacts.length === 1` | 1 warning of the form `never-sync inside skill: <absolute path>` |
 
 Row 12 is the important edge: the walker does not short-circuit on the first never-sync match, it collects the whole picture. The push gate then decides to escalate. This matches the "list every offender" UX from research R3.
 
