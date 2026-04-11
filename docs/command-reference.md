@@ -137,7 +137,7 @@ bunx --package @chrisleekr/agentsync agentsync doctor
 - age-encryption module availability
 - remote reachability
 - obvious unencrypted sensitive files in the vault
-- readability of the per-agent skills directories under `~/.claude/skills/`, `~/.codex/skills/`, and `~/.cursor/skills/` (warns if a directory is missing or unreadable)
+- readability of the per-agent skills directories under `~/.claude/skills/`, `~/.codex/skills/`, and `~/.cursor/skills/` (`buildSkillsDirChecks` warns if a directory is missing, unreadable, a symbolic link per FR-016, or exists but is not a directory)
 - daemon service installation state
 
 ## skill remove
