@@ -144,6 +144,27 @@ To finish removing the skill on the other laptop, delete the local skill directo
 rm -rf ~/.claude/skills/<name>   # or ~/.cursor/skills, ~/.codex/skills, ~/.copilot/skills
 ```
 
+## A single file I deleted inside a skill reappears after pull on another machine
+
+Symptom:
+
+- On machine A you deleted `helper.md` from a skill (not the whole skill), re-ran `push`, and the updated vault tar no longer contains it.
+- On machine B, after `pull`, `helper.md` is still present in the local skill directory.
+
+Cause: this is symmetric to the section above and comes from the same FR-013 rule. `applyXxxSkill` extracts the vault tar *on top of* the existing local skill directory instead of replacing it. Files that are in the local directory but no longer in the tar survive the extract unchanged. AgentSync makes this trade deliberately — the alternative (replace the directory on every pull) would silently destroy any local edits or in-progress files a user happened to have inside the skill between pulls.
+
+Next steps:
+
+1. On the affected machine, `rm` the stale file(s) manually inside the skill directory.
+
+   ```bash
+   rm ~/.claude/skills/<name>/helper.md   # or the equivalent path on cursor/codex/copilot
+   ```
+
+2. Run `agentsync status` to confirm the skill now matches the vault for that machine.
+
+Note: a future release may offer a `pull --replace-skills` flag for users who want vault-as-source-of-truth overwrite semantics, but the default will remain additive. Do not solve this by editing the vault directly or by running `git rm` inside the vault — both of those bypass the reconciliation logic.
+
 ## A vendored or symlinked skill did not sync
 
 Cause: FR-016's outer tier refuses to walk a skill root that is itself a symbolic link. This prevents a vendored pool outside the skills directory from being silently tar'd into the encrypted vault through a follow-the-link archival.
