@@ -93,7 +93,7 @@ interface SkillsWalkerResult {
 ### Invariants
 
 - `artifacts` contains one entry per **Skill on disk that passed all walker gates**. Symlinked roots, dot-prefixed entries, directories without a real `SKILL.md`, and directories whose interior walk found a never-sync match are all **absent** from `artifacts`.
-- `warnings` contains zero or more strings. Walker-produced warnings use the prefix `"never-sync inside skill: "` followed by the absolute path that matched and the pattern it matched. No other prefixes are produced by the walker — dot-skip and symlink-skip are silent (FR-017, R7).
+- `warnings` contains zero or more strings. Walker-produced warnings use the prefix `"never-sync inside skill: "` followed by the absolute path that matched. No other prefixes are produced by the walker — dot-skip and symlink-skip are silent (FR-017, R7).
 - `artifacts` and `warnings` are independent: a single push can produce both (for example, three valid skills get archived AND one skill is rejected for a never-sync hit; the push will still abort before encrypting the three valid skills because the push gate escalates any walker warning with the never-sync prefix to fatal — R3).
 
 ### Relationship to existing types
