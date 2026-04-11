@@ -1,5 +1,6 @@
-import { afterEach, beforeAll, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeAll, beforeEach, describe, expect, mock, test } from "bun:test";
 import { mkdir, rm, writeFile } from "node:fs/promises";
+import { createRequire } from "node:module";
 import { join } from "node:path";
 import {
   createBareRepo,
@@ -8,6 +9,14 @@ import {
   runGit,
 } from "../../test-helpers/fixtures";
 import { GitClient, type GitReconciliationError } from "../git";
+
+// Defensive re-install of the real node:fs/promises — see migrate.test.ts
+// for the full explanation of the bleed this guards against.
+{
+  const require = createRequire(import.meta.url);
+  const realFsPromises = require("node:fs/promises") as typeof import("node:fs/promises");
+  mock.module("node:fs/promises", () => realFsPromises);
+}
 
 // T036 — GitClient clone, init, commit, push, pull, currentBranch
 

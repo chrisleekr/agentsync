@@ -1,9 +1,10 @@
-import { afterEach, beforeAll, beforeEach, describe, expect, mock, test } from "bun:test";
-import { mkdirSync, writeFileSync } from "node:fs";
-import { rm } from "node:fs/promises";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, mock, test } from "bun:test";
+import { mkdirSync, symlinkSync, writeFileSync } from "node:fs";
+import { readdir, rm } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { join } from "node:path";
 import { AgentPaths } from "../../config/paths";
+import { extractArchive } from "../../core/tar";
 import { createTmpDir } from "../../test-helpers/fixtures";
 
 {
@@ -23,11 +24,20 @@ type MutableCopilotPaths = {
 
 const testCopilotPaths = AgentPaths.copilot as MutableCopilotPaths;
 
+// Capture the real paths once at module load so afterAll can put them back.
+// See claude.test.ts for the full explanation of the cross-file mutation
+// bleed this guards against.
+const originalCopilotPaths: MutableCopilotPaths = { ...testCopilotPaths };
+
 type CopilotModule = typeof import("../copilot");
 let copilotModule: CopilotModule;
 
 beforeAll(async () => {
   copilotModule = await import("../copilot");
+});
+
+afterAll(() => {
+  Object.assign(testCopilotPaths, originalCopilotPaths);
 });
 
 // T020 — snapshotCopilot
@@ -132,6 +142,66 @@ describe("snapshotCopilot", () => {
     expect(art).toBeDefined();
     // biome-ignore lint/style/noNonNullAssertion: asserted by toBeDefined above
     expect(() => Buffer.from(art!.plaintext, "base64")).not.toThrow();
+  });
+
+  // T010 — walker retrofit regression: the new snapshotCopilot must inherit
+  // the FR-016 (symlink) and FR-017 (dot-skip) rules from the shared walker.
+
+  test("retrofit: top-level symlinked skill root produces zero artifacts (FR-016)", async () => {
+    // Build a "vendored pool" outside the skills root and symlink it in.
+    const vendoredTarget = join(tmpDir, "vendored-pool", "vendor-skill");
+    mkdirSync(vendoredTarget, { recursive: true });
+    writeFileSync(join(vendoredTarget, "SKILL.md"), "# vendored", "utf8");
+
+    mkdirSync(testCopilotPaths.skillsDir, { recursive: true });
+    symlinkSync(vendoredTarget, join(testCopilotPaths.skillsDir, "vendored-skill"));
+
+    const result = await copilotModule.snapshotCopilot();
+    const skillArts = result.artifacts.filter((a) => a.vaultPath.startsWith("copilot/skills/"));
+    expect(skillArts).toHaveLength(0);
+  });
+
+  test("retrofit: top-level .system directory is skipped (FR-017)", async () => {
+    const systemSkill = join(testCopilotPaths.skillsDir, ".system", "vendor");
+    mkdirSync(systemSkill, { recursive: true });
+    writeFileSync(join(systemSkill, "SKILL.md"), "# vendor", "utf8");
+
+    const result = await copilotModule.snapshotCopilot();
+    const skillArts = result.artifacts.filter((a) => a.vaultPath.startsWith("copilot/skills/"));
+    expect(skillArts).toHaveLength(0);
+  });
+
+  test("retrofit: real skill with interior symlink helper omits the helper (FR-016 inner)", async () => {
+    // Vendored helper file outside the skills root.
+    const helperTargetDir = join(tmpDir, "vendored-helpers");
+    mkdirSync(helperTargetDir, { recursive: true });
+    const helperTarget = join(helperTargetDir, "shared.md");
+    writeFileSync(helperTarget, "# vendored helper", "utf8");
+
+    // Real skill directory with one real file plus the symlink.
+    const skillDir = join(testCopilotPaths.skillsDir, "skill-with-helper");
+    mkdirSync(skillDir, { recursive: true });
+    writeFileSync(join(skillDir, "SKILL.md"), "# real", "utf8");
+    writeFileSync(join(skillDir, "real-note.md"), "# real note", "utf8");
+    symlinkSync(helperTarget, join(skillDir, "helper.md"));
+
+    const result = await copilotModule.snapshotCopilot();
+    const art = result.artifacts.find(
+      (a) => a.vaultPath === "copilot/skills/skill-with-helper.tar.age",
+    );
+    expect(art).toBeDefined();
+
+    // Decrypt-ish: base64 → tar bytes → extract → list entries.
+    // biome-ignore lint/style/noNonNullAssertion: asserted by toBeDefined above
+    const tarBuf = Buffer.from(art!.plaintext, "base64");
+    const extractDir = join(tmpDir, "extract-retrofit");
+    mkdirSync(extractDir, { recursive: true });
+    await extractArchive(tarBuf, extractDir);
+
+    const entries = await readdir(extractDir);
+    expect(entries).toContain("SKILL.md");
+    expect(entries).toContain("real-note.md");
+    expect(entries).not.toContain("helper.md");
   });
 });
 
@@ -284,5 +354,89 @@ describe("applyCopilotVault dryRun", () => {
       join(testCopilotPaths.instructionsDir, "global.instructions.md"),
     ).text();
     expect(content).toBe("# instr file");
+  });
+
+  // Phase 8 M6 — adversarial filename regression for Copilot.
+
+  test("applyCopilotSkill rejects traversal and hidden skill names", async () => {
+    const { InvalidSkillNameError } = await import("../skills-walker");
+    const badNames = ["", ".", "..", "../foo", "foo/bar", "foo\\bar", ".hidden", "foo\x00bar"];
+    for (const bad of badNames) {
+      await expect(copilotModule.applyCopilotSkill(bad, "")).rejects.toBeInstanceOf(
+        InvalidSkillNameError,
+      );
+    }
+  });
+
+  // Thread 6 regression — the agents/ loop in applyCopilotVault mirrors the
+  // skills/ loop and was missed in the Phase 8 fix. Same basename-strip
+  // vector (`...tar.age` → `..`) would let a compromised vault overwrite
+  // files in the agent config root via path.join(agentsDir, "..").
+  test("applyCopilotAgent rejects traversal and hidden agent names", async () => {
+    const { InvalidSkillNameError } = await import("../skills-walker");
+    const badNames = ["", ".", "..", "../foo", "foo/bar", "foo\\bar", ".hidden", "foo\x00bar"];
+    for (const bad of badNames) {
+      await expect(copilotModule.applyCopilotAgent(bad, "")).rejects.toBeInstanceOf(
+        InvalidSkillNameError,
+      );
+    }
+  });
+
+  test("applyCopilotVault skips adversarial vault filenames without traversal", async () => {
+    const { generateIdentity, identityToRecipient, encryptString } = await import(
+      "../../core/encryptor"
+    );
+    const { archiveDirectory } = await import("../../core/tar");
+    const identity = await generateIdentity();
+    const recipient = await identityToRecipient(identity);
+
+    const payloadSrc = join(tmpDir, "payload-src");
+    mkdirSync(payloadSrc, { recursive: true });
+    writeFileSync(join(payloadSrc, "instructions.md"), "LEAKED_PAYLOAD", "utf8");
+    const tarBuffer = await archiveDirectory(payloadSrc);
+    const base64 = tarBuffer.toString("base64");
+    const encrypted = await encryptString(base64, [recipient]);
+
+    const vaultDir = join(tmpDir, "vault-adversarial");
+    const skillsVaultDir = join(vaultDir, "copilot", "skills");
+    mkdirSync(skillsVaultDir, { recursive: true });
+    writeFileSync(join(skillsVaultDir, "...tar.age"), encrypted, "utf8");
+
+    await copilotModule.applyCopilotVault(vaultDir, identity, false);
+
+    const escapedPayload = join(testCopilotPaths.skillsDir, "..", "instructions.md");
+    const leakedExists = await Bun.file(escapedPayload).exists();
+    expect(leakedExists).toBeFalse();
+  });
+
+  // Thread 6 regression end-to-end: an adversarial file in copilot/agents/
+  // must be rejected symmetrically with the skills/ loop above. Distinct
+  // payload filename (`AGENT_LEAKED.md`) so a false positive can't be
+  // mistaken for the skills-loop assertion's leakage.
+  test("applyCopilotVault skips adversarial agent filenames without traversal", async () => {
+    const { generateIdentity, identityToRecipient, encryptString } = await import(
+      "../../core/encryptor"
+    );
+    const { archiveDirectory } = await import("../../core/tar");
+    const identity = await generateIdentity();
+    const recipient = await identityToRecipient(identity);
+
+    const payloadSrc = join(tmpDir, "agent-payload-src");
+    mkdirSync(payloadSrc, { recursive: true });
+    writeFileSync(join(payloadSrc, "AGENT_LEAKED.md"), "LEAKED_AGENT_PAYLOAD", "utf8");
+    const tarBuffer = await archiveDirectory(payloadSrc);
+    const base64 = tarBuffer.toString("base64");
+    const encrypted = await encryptString(base64, [recipient]);
+
+    const vaultDir = join(tmpDir, "vault-adversarial-agent");
+    const agentsVaultDir = join(vaultDir, "copilot", "agents");
+    mkdirSync(agentsVaultDir, { recursive: true });
+    writeFileSync(join(agentsVaultDir, "...tar.age"), encrypted, "utf8");
+
+    await copilotModule.applyCopilotVault(vaultDir, identity, false);
+
+    const escapedPayload = join(testCopilotPaths.agentsDir, "..", "AGENT_LEAKED.md");
+    const leakedExists = await Bun.file(escapedPayload).exists();
+    expect(leakedExists).toBeFalse();
   });
 });

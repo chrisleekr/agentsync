@@ -44,6 +44,30 @@ describe("paths", () => {
     expect(AgentPaths.copilot.agentsDir).toContain("agents");
   });
 
+  // T003 — skillsDir entries for the three newly skill-bearing agents (FR-001, FR-010)
+
+  test("AgentPaths.claude.skillsDir is ~/.claude/skills/", () => {
+    expect(AgentPaths.claude.skillsDir).toBe(join(HOME, ".claude", "skills"));
+  });
+
+  test("AgentPaths.cursor.skillsDir is ~/.cursor/skills/ (FR-010 canonical path)", () => {
+    expect(AgentPaths.cursor.skillsDir).toBe(join(HOME, ".cursor", "skills"));
+    // FR-010 forbids reading ~/.cursor/skills-cursor/. The path entry must NOT
+    // resolve to that location regardless of platform.
+    expect(AgentPaths.cursor.skillsDir).not.toContain("skills-cursor");
+  });
+
+  test("AgentPaths.codex.skillsDir is under the Codex root", () => {
+    expect(AgentPaths.codex.skillsDir).toContain("skills");
+    expect(AgentPaths.codex.skillsDir.startsWith(AgentPaths.codex.root)).toBe(true);
+  });
+
+  test("AgentPaths.vscode does NOT have a skillsDir (regression)", () => {
+    // VS Code is not a skill-bearing agent for this feature. A future
+    // accidental addition would silently grow the surface — fail loudly.
+    expect((AgentPaths.vscode as Record<string, unknown>).skillsDir).toBeUndefined();
+  });
+
   test("AgentPaths.vscode.mcpJson is a non-empty string", () => {
     expect(typeof AgentPaths.vscode.mcpJson).toBe("string");
     expect(AgentPaths.vscode.mcpJson.length).toBeGreaterThan(0);

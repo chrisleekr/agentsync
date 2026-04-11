@@ -5,19 +5,10 @@ import { AgentPaths } from "../config/paths";
 import { shouldNeverSync } from "../core/sanitizer";
 import { archiveDirectory, extractArchive } from "../core/tar";
 import { atomicWrite, readIfExists, type SnapshotArtifact, type SnapshotResult } from "./_utils";
+import { collectSkillArtifacts, InvalidSkillNameError, validateSkillName } from "./skills-walker";
 
 /** Snapshot payload for the Copilot adapter. */
 export type CopilotSnapshotResult = SnapshotResult;
-
-/** Check whether an optional skill directory sentinel file exists. */
-async function fileExists(path: string): Promise<boolean> {
-  try {
-    await stat(path);
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 /** Collect Copilot instructions, prompts, skills, and agents into vault artifacts. */
 export async function snapshotCopilot(): Promise<SnapshotResult> {
@@ -77,28 +68,14 @@ export async function snapshotCopilot(): Promise<SnapshotResult> {
     // directory may not exist
   }
 
-  // Skills — each skill is a directory containing at minimum SKILL.md.
-  // Archive the whole directory as <name>.tar, then that tar content is what we encrypt.
-  try {
-    const names = await readdir(AgentPaths.copilot.skillsDir);
-    for (const name of names) {
-      const skillDir = join(AgentPaths.copilot.skillsDir, name);
-      const skillDirStat = await stat(skillDir).catch(() => null);
-      if (!skillDirStat?.isDirectory()) continue;
-      const skillMd = join(skillDir, "SKILL.md");
-      if (!(await fileExists(skillMd))) continue; // not a valid skill directory
-      const tarBuffer = await archiveDirectory(skillDir);
-      artifacts.push({
-        vaultPath: `copilot/skills/${name}.tar.age`,
-        sourcePath: skillDir,
-        // Store as base64 so it survives the UTF-8 string layer before encryption
-        plaintext: tarBuffer.toString("base64"),
-        warnings: [],
-      });
-    }
-  } catch {
-    // skills dir may not exist
-  }
+  // Skills — delegated to the shared walker so the FR-002, FR-006, FR-016,
+  // and FR-017 rules from the agent-skills-sync feature are enforced
+  // identically across every skill-bearing agent. The walker uses lstat
+  // throughout, so symlinked roots and symlinked SKILL.md sentinels (the
+  // vendored-pool patterns observed on real machines) are correctly skipped.
+  const copilotSkills = await collectSkillArtifacts("copilot", AgentPaths.copilot.skillsDir);
+  artifacts.push(...copilotSkills.artifacts);
+  warnings.push(...copilotSkills.warnings);
 
   // Agents directories (tar each one, similar to skills)
   try {
@@ -146,6 +123,7 @@ export async function applyCopilotPrompt(fileName: string, content: string): Pro
 
 /** Extract one archived Copilot skill directory into the local skills folder. */
 export async function applyCopilotSkill(skillName: string, base64Tar: string): Promise<void> {
+  validateSkillName(skillName);
   const targetDir = join(AgentPaths.copilot.skillsDir, skillName);
   await mkdir(targetDir, { recursive: true });
   const tarBuffer = Buffer.from(base64Tar, "base64");
@@ -154,6 +132,12 @@ export async function applyCopilotSkill(skillName: string, base64Tar: string): P
 
 /** Extract one archived Copilot agent directory into the local agents folder. */
 export async function applyCopilotAgent(agentName: string, base64Tar: string): Promise<void> {
+  // Symmetric path-traversal guard to the one in applyCopilotSkill: a vault
+  // file named `...tar.age` would basename-strip to `..` and resolve outside
+  // agentsDir, letting a compromised vault overwrite files in `~/.copilot/`
+  // or any parent directory. See validateSkillName in skills-walker.ts — the
+  // helper is named for skills but is the generic vault-basename check.
+  validateSkillName(agentName);
   const targetDir = join(AgentPaths.copilot.agentsDir, agentName);
   await mkdir(targetDir, { recursive: true });
   const tarBuffer = Buffer.from(base64Tar, "base64");
@@ -234,9 +218,18 @@ export async function applyCopilotVault(
   const skillFiles = await readAgeFiles(join(copilotDir, "skills"));
   for (const { name, fullPath } of skillFiles) {
     if (!name.endsWith(".tar.age")) continue;
+    const skillName = basename(name, ".tar.age");
+    try {
+      validateSkillName(skillName);
+    } catch (err) {
+      if (err instanceof InvalidSkillNameError) {
+        log.warn(`[copilot] Skipping vault skill with invalid name '${name}': ${err.reason}`);
+        continue;
+      }
+      throw err;
+    }
     const encrypted = await readFile(fullPath, "utf8");
     const decrypted = await decryptString(encrypted, key);
-    const skillName = basename(name, ".tar.age");
     if (dryRun) {
       log.info(`[dry-run] [copilot] would extract skill: ${skillName}`);
       continue;
@@ -248,9 +241,18 @@ export async function applyCopilotVault(
   const agentFiles = await readAgeFiles(join(copilotDir, "agents"));
   for (const { name, fullPath } of agentFiles) {
     if (!name.endsWith(".tar.age")) continue;
+    const agentName = basename(name, ".tar.age");
+    try {
+      validateSkillName(agentName);
+    } catch (err) {
+      if (err instanceof InvalidSkillNameError) {
+        log.warn(`[copilot] Skipping vault agent with invalid name '${name}': ${err.reason}`);
+        continue;
+      }
+      throw err;
+    }
     const encrypted = await readFile(fullPath, "utf8");
     const decrypted = await decryptString(encrypted, key);
-    const agentName = basename(name, ".tar.age");
     if (dryRun) {
       log.info(`[dry-run] [copilot] would extract agent: ${agentName}`);
       continue;

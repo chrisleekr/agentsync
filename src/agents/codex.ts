@@ -4,6 +4,7 @@ import { log } from "@clack/prompts";
 import * as TOML from "@iarna/toml";
 import { AgentPaths } from "../config/paths";
 import { type RedactionResult, redactSecretLiterals, shouldNeverSync } from "../core/sanitizer";
+import { extractArchive } from "../core/tar";
 import {
   atomicWrite,
   collect,
@@ -11,6 +12,7 @@ import {
   type SnapshotArtifact,
   type SnapshotResult,
 } from "./_utils";
+import { collectSkillArtifacts, InvalidSkillNameError, validateSkillName } from "./skills-walker";
 
 /** Snapshot payload for the Codex adapter. */
 export type CodexSnapshotResult = SnapshotResult;
@@ -84,6 +86,15 @@ export async function snapshotCodex(): Promise<SnapshotResult> {
     // rules dir may not exist yet
   }
 
+  // Skills — delegated to the shared walker (FR-001/FR-002/FR-006/FR-016/FR-017).
+  // The walker enforces dot-skip (which covers Codex's vendored `.system/`
+  // bundle — FR-017), symlink rejection at the root, sentinel verification,
+  // the never-sync interior scan, and the symlink-filtered tar archival in one
+  // place so every skill-bearing agent inherits identical rules.
+  const codexSkills = await collectSkillArtifacts("codex", AgentPaths.codex.skillsDir);
+  artifacts.push(...codexSkills.artifacts);
+  warnings.push(...codexSkills.warnings);
+
   return { artifacts, warnings };
 }
 
@@ -121,6 +132,25 @@ export async function applyCodexRule(ruleName: string, content: string): Promise
   const target = join(AgentPaths.codex.rulesDir, ruleName);
   await mkdir(AgentPaths.codex.rulesDir, { recursive: true });
   await atomicWrite(target, content);
+}
+
+/**
+ * Restore one Codex skill directory from the vault by extracting its
+ * encrypted tar archive into `~/.codex/skills/<name>/`.
+ *
+ * Mirrors {@link applyClaudeSkill}: parents are created on demand and the
+ * tar's interior layout is preserved bit-for-bit.
+ *
+ * @param skillName  Basename of the skill (no extension).
+ * @param base64Tar  Base64-encoded `.tar.gz` payload that the walker
+ *                   produced on the source machine.
+ */
+export async function applyCodexSkill(skillName: string, base64Tar: string): Promise<void> {
+  validateSkillName(skillName);
+  const targetDir = join(AgentPaths.codex.skillsDir, skillName);
+  await mkdir(targetDir, { recursive: true });
+  const tarBuffer = Buffer.from(base64Tar, "base64");
+  await extractArchive(tarBuffer, targetDir);
 }
 
 // ─── Apply (pull side) ────────────────────────────────────────────────────────
@@ -182,5 +212,30 @@ export async function applyCodexVault(
     } else {
       await applyCodexRule(ruleName, decrypted);
     }
+  }
+
+  // Skills sub-directory — stored as <name>.tar.age (FR-005). Mirrors the
+  // Claude/Copilot apply path: each entry is decrypted, then the inner base64
+  // tar is extracted into ~/.codex/skills/<name>/ via applyCodexSkill.
+  const skillFiles = await readAgeFiles(join(codexDir, "skills"));
+  for (const { name, fullPath } of skillFiles) {
+    if (!name.endsWith(".tar.age")) continue;
+    const skillName = basename(name, ".tar.age");
+    try {
+      validateSkillName(skillName);
+    } catch (err) {
+      if (err instanceof InvalidSkillNameError) {
+        log.warn(`[codex] Skipping vault skill with invalid name '${name}': ${err.reason}`);
+        continue;
+      }
+      throw err;
+    }
+    const encrypted = await readFile(fullPath, "utf8");
+    const decrypted = await decryptString(encrypted, key);
+    if (dryRun) {
+      log.info(`[dry-run] [codex] would extract skill: ${skillName}`);
+      continue;
+    }
+    await applyCodexSkill(skillName, decrypted);
   }
 }

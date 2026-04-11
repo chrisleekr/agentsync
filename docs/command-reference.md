@@ -72,7 +72,7 @@ bunx --package @chrisleekr/agentsync agentsync push --agent claude
 
 **Needs**: initialized vault, configured recipients, readable local agent config.
 
-**Outcome**: encrypted `.age` or `.tar.age` artifacts are committed and pushed to the configured branch.
+**Outcome**: encrypted `.age` or `.tar.age` artifacts are committed and pushed to the configured branch. Per-user *skills* under `~/.claude/skills/`, `~/.codex/skills/`, `~/.cursor/skills/`, and `~/.copilot/skills/` are packaged through the shared skills walker and land in the matching vault namespace (`claude/skills/<name>.tar.age`, `codex/skills/<name>.tar.age`, `cursor/skills/<name>.tar.age`, `copilot/skills/<name>.tar.age`).
 
 **Caveats**:
 
@@ -80,6 +80,9 @@ bunx --package @chrisleekr/agentsync agentsync push --agent claude
 - If the local vault and remote vault have diverged, `push` stops before writing or encrypting new artifact content.
 - Push aborts when literal secrets are detected in supported config content.
 - Files matching never-sync patterns are skipped even if an agent adapter sees them.
+- Push aborts fatally when a never-sync file is discovered *inside* a skill directory (FR-006). Remove the file and re-run before retrying.
+- A top-level symlinked skill root or a symlinked `SKILL.md` sentinel is skipped silently, and symlinked helper files *inside* a skill are filtered out of the archive (FR-016).
+- Push is additive-by-default: deleting a skill locally does NOT remove it from the vault on any machine. Use `skill remove` for explicit removal (FR-011 / FR-012).
 
 ## pull
 
@@ -94,7 +97,7 @@ bunx --package @chrisleekr/agentsync agentsync pull --agent cursor
 
 **Needs**: initialized vault, readable private key, reachable Git remote.
 
-**Outcome**: supported local agent files are updated from the vault.
+**Outcome**: supported local agent files are updated from the vault, including any per-agent skills stored under `claude/skills/`, `codex/skills/`, `cursor/skills/`, and `copilot/skills/`.
 
 **Caveats**:
 
@@ -102,6 +105,7 @@ bunx --package @chrisleekr/agentsync agentsync pull --agent cursor
 - Pull uses the same fast-forward-only reconciliation rule as `push`, `key`, and daemon sync.
 - If local and remote vault history diverged, `pull` exits with a recovery message and no success footer.
 - If the private key is missing, the command cannot decrypt anything.
+- Pull is extract-only and never deletes an existing local skill directory, even when the matching vault artifact is gone (FR-013). `skill remove` only removes the vault artifact; to complete the removal on this machine or any other machine, delete the local skill directory by hand (`rm -rf ~/.<agent>/skills/<name>`).
 
 ## status
 
@@ -114,7 +118,7 @@ bunx --package @chrisleekr/agentsync agentsync status
 bunx --package @chrisleekr/agentsync agentsync status --verbose
 ```
 
-**Outcome**: table of synced, local-only, vault-only, changed, or error states.
+**Outcome**: table of synced, local-only, vault-only, changed, or error states. Skill artifacts (`<agent>/skills/<name>.tar.age`) appear alongside other vault entries and report drift exactly the same way any other artifact does.
 
 ## doctor
 
@@ -133,7 +137,43 @@ bunx --package @chrisleekr/agentsync agentsync doctor
 - age-encryption module availability
 - remote reachability
 - obvious unencrypted sensitive files in the vault
+- readability of the per-agent skills directories under `~/.claude/skills/`, `~/.codex/skills/`, and `~/.cursor/skills/` (`buildSkillsDirChecks` warns if a directory is missing, unreadable, a symbolic link per FR-016, or exists but is not a directory)
 - daemon service installation state
+
+## skill remove
+
+**Why**: Remove one skill from the vault explicitly. This is the **only** operation that takes a skill out of the vault — every other AgentSync command is additive-by-default (FR-011 / FR-012).
+
+**Typical usage**:
+
+```bash
+bunx --package @chrisleekr/agentsync agentsync skill remove claude my-skill
+bunx --package @chrisleekr/agentsync agentsync skill remove codex review-helper
+bunx --package @chrisleekr/agentsync agentsync skill remove cursor polish-prompt
+bunx --package @chrisleekr/agentsync agentsync skill remove copilot debug-flow
+```
+
+**Signature**: `skill remove <agent> <name>` — both positional arguments are required. `<agent>` must be one of `claude`, `cursor`, `codex`, or `copilot`; `vscode` and any other value are rejected. `<name>` is the basename of the skill (no extension, no path separators).
+
+**Outcome on success**: the file `<vaultDir>/<agent>/skills/<name>.tar.age` is removed, a `skill remove(<agent>): <name>` commit is created, and the commit is pushed to the configured remote branch. The success log line may include the 7-character short SHA as `(commit <sha7>)` when `readHeadShortSha` can invoke `git rev-parse` on the vault; it is omitted silently if git cannot be reached, because the SHA readout is a non-fatal UX helper.
+
+**Exit codes**:
+
+| Code | Scenario | Output |
+| ---- | -------- | ------ |
+| `0` | File removed, commit landed, push succeeded | `Removed <agent>/<name> from vault (commit <sha7>)` |
+| `1` | Skill not found in vault | `Skill not found: <agent>/<name>` + `Looked for: <resolved path>` |
+| `1` | Unknown agent name | `Unknown agent: <provided>. Supported: claude, cursor, codex, copilot` |
+| `1` | Reconcile with remote failed **before** the vault file was touched | `<upstream reconcile error>` — the vault working tree is unchanged; resolve the remote divergence and retry |
+| `1` | Git commit or push failed **after** the vault file was unlinked locally | `Removal staged but not pushed: <git error>` + hint to re-run `agentsync push` or `agentsync skill remove <agent> <name>` to finish the removal |
+
+See `specs/20260411-002222-agent-skills-sync/contracts/skill-remove-cli.md` for the authoritative row-by-row mapping; the table above mirrors that contract.
+
+**Safety guarantees (critical)**:
+
+- The command **never** touches any local skill directory on any machine, including the machine running the command (FR-012).
+- A subsequent `pull` on another machine leaves that machine's local skill directory **untouched** because `applyXxxVault` is extract-only (FR-013).
+- The command removes one skill at a time. `--all`, `--force`, and glob patterns are intentionally not supported.
 
 ## daemon
 

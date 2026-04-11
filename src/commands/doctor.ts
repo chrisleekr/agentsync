@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { constants } from "node:fs";
-import { access, readdir, stat } from "node:fs/promises";
+import { access, lstat, readdir, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join, relative } from "node:path";
 import { promisify } from "node:util";
@@ -11,10 +11,74 @@ import { AgentPaths } from "../config/paths";
 import { resolveRuntimeContext } from "./shared";
 
 /** Single diagnostic check row rendered by the doctor command. */
-interface Check {
+export interface Check {
   name: string;
   status: "pass" | "warn" | "fail";
   detail: string;
+}
+
+/**
+ * Build the readability check rows for the per-agent skills directories
+ * introduced by the agent-skills-sync feature (FR-008). Extracted into its
+ * own helper so the rule can be unit-tested without mocking the rest of the
+ * doctor pipeline.
+ *
+ * Each agent gets exactly one row:
+ *   - `pass` when the path exists, is a real directory, and is readable
+ *   - `warn` when the path does not exist, is unreadable, is a symbolic
+ *     link (walker refuses to enumerate symlinked roots per FR-016), or
+ *     exists but is not a directory (e.g. the user accidentally created
+ *     `~/.claude/skills` as a regular file instead of a directory)
+ *
+ * Using `lstat` instead of `stat` keeps this rule in lock-step with the
+ * walker at `src/agents/skills-walker.ts:150-151`, which rejects symlinked
+ * skills roots silently. Without `lstat`, the doctor would report `pass`
+ * for a user who has `~/.claude/skills -> /srv/team-pool`, and `push` would
+ * then sync nothing — the two checks must agree.
+ *
+ * Copilot is intentionally excluded — its skill directory was wired through
+ * the original Copilot integration and is therefore covered by the broader
+ * Copilot setup, not this feature's new doctor rows.
+ */
+export async function buildSkillsDirChecks(): Promise<Check[]> {
+  const checks: Check[] = [];
+  const targets: ReadonlyArray<readonly [string, string]> = [
+    ["Claude skills directory", AgentPaths.claude.skillsDir],
+    ["Codex skills directory", AgentPaths.codex.skillsDir],
+    ["Cursor skills directory", AgentPaths.cursor.skillsDir],
+  ];
+
+  for (const [name, dir] of targets) {
+    try {
+      await access(dir, constants.R_OK);
+      const info = await lstat(dir);
+      if (info.isSymbolicLink()) {
+        checks.push({
+          name,
+          status: "warn",
+          detail: `Symlinked skills root is not synced (FR-016): ${dir}`,
+        });
+        continue;
+      }
+      if (!info.isDirectory()) {
+        checks.push({
+          name,
+          status: "warn",
+          detail: `Exists but is not a directory: ${dir}`,
+        });
+        continue;
+      }
+      checks.push({ name, status: "pass", detail: dir });
+    } catch {
+      checks.push({
+        name,
+        status: "warn",
+        detail: `Not found or unreadable: ${dir}`,
+      });
+    }
+  }
+
+  return checks;
 }
 
 /** Inspect local prerequisites, vault health, and service wiring without changing state. */
@@ -83,6 +147,10 @@ export const doctorCommand = defineCommand({
         detail: "Not found or unreadable. Claude hook/MCP sync may be partial.",
       });
     }
+
+    // 3a. Per-agent skills directories (agent-skills-sync feature, FR-008).
+    // Delegated to a testable helper so the rule has its own unit test.
+    checks.push(...(await buildSkillsDirChecks()));
 
     // 4. Vault config parses correctly against schema
     try {

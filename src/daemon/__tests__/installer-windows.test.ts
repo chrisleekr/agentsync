@@ -52,7 +52,15 @@ const { promisify } = require("node:util") as typeof import("node:util");
     });
   });
 
+// Spread the real module so `spawnSync` and every other export survive the
+// mock — a bare `() => ({ execFile })` would replace the module in bun's
+// cache with a 1-key object, and later test files in the run that do
+// `import { spawnSync } from "node:child_process"` would fail to load with
+// `SyntaxError: Export named 'spawnSync' not found`. See PR #26 for the
+// cross-file bleed this guards against.
+const actualChildProcess = require("node:child_process") as typeof import("node:child_process");
 mock.module("node:child_process", () => ({
+  ...actualChildProcess,
   execFile: execFileMock,
 }));
 
