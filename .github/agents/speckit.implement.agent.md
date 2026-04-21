@@ -1,10 +1,5 @@
 ---
 description: Execute the implementation plan by processing and executing all tasks defined in tasks.md
-handoffs:
-  - label: Create PR Description
-    agent: speckit.pr
-    prompt: Generate PR description from spec artifacts and diff
-    send: true
 ---
 
 ## User Input
