@@ -1,6 +1,6 @@
 {
   "name": "@chrisleekr/agentsync",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "A CLI to snapshot, encrypt, and sync AI agent configs — Claude, Cursor, Codex, Copilot, VS Code — across machines via a Git vault.",
   "private": false,
   "type": "module",
