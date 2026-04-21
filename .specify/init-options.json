@@ -1,9 +1,11 @@
 {
-  "ai": "cursor-agent",
-  "branch_numbering": "timestamp",
+  "ai": "claude",
+  "ai_skills": true,
+  "branch_numbering": "sequential",
+  "context_file": "CLAUDE.md",
   "here": true,
-  "integration": "cursor-agent",
+  "integration": "claude",
   "preset": null,
   "script": "sh",
-  "speckit_version": "0.5.0"
+  "speckit_version": "0.7.3"
 }
