@@ -82,11 +82,23 @@ jobs:
             echo "area=$FOCUS_AREA_INPUT" >> "$GITHUB_OUTPUT"
             echo "Selected area from input: $FOCUS_AREA_INPUT"
           else
-            # TODO(human): choose the focus-area enum that best reflects AgentSync
-            # subsystems. Each entry becomes both a random-selection candidate and
-            # a GitHub label. Keep names short, kebab-case, and stable — they will
-            # appear in issue titles like "perf(<area>): ..." and as labels.
-            areas=()
+            # Focus-area enum — each entry doubles as a GitHub label and a
+            # conventional-commit scope. Keep alphabetical, kebab-case, and stable;
+            # renaming an entry orphans existing issue labels.
+            areas=(
+              "agents"
+              "commands"
+              "config"
+              "cross-platform"
+              "daemon"
+              "docs"
+              "encryption"
+              "migrations"
+              "packaging"
+              "sanitizer"
+              "vault-git"
+              "watcher"
+            )
             random_index=$((RANDOM % ${#areas[@]}))
             selected="${areas[$random_index]}"
             echo "area=$selected" >> "$GITHUB_OUTPUT"
