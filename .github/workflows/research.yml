@@ -1,0 +1,253 @@
+# Scheduled Research Workflow
+#
+# Runs daily (and on-demand via workflow_dispatch) to research improvements
+# for AgentSync — a Bun-based CLI + daemon that snapshots, encrypts (age),
+# and syncs AI agent configuration (Claude, Cursor, Codex, Copilot, VS Code)
+# via a Git-backed vault.
+#
+# Produces exactly ONE deeply researched GitHub issue per run.
+# No automated code changes — findings are issues for manual triage.
+#
+# Design decisions and workarounds:
+# - PAT instead of OIDC: Cron-triggered workflows fail OIDC token exchange
+#   with 401 Unauthorized. See https://github.com/anthropics/claude-code-action/issues/814
+# - allowed_bots: '*': The checkHumanActor function blocks scheduled workflows.
+#   Fixed in PR #916. See https://github.com/anthropics/claude-code-action/issues/900
+# - --disallowedTools "": WebSearch and WebFetch are disabled by default in the action.
+#   Must explicitly allow them and clear the disallowed list.
+#   See https://github.com/anthropics/claude-code-action/issues/690
+# - --max-turns 80: Allows Opus to do thorough deep research (~$8/run, daily).
+#   Previous attempts at 20 and 40 turns exhausted budget before completing.
+#   80 turns gives enough room for: architecture review, subsystem deep-dive,
+#   web search, Mermaid diagram creation, and issue creation.
+# - One issue per run: Enables deep analysis with proper Mermaid diagrams and
+#   thorough references, rather than many shallow findings.
+
+name: Scheduled Research
+
+on:
+  schedule:
+    - cron: "0 17 * * *" # 3 AM AEST
+  workflow_dispatch:
+    inputs:
+      focus_area:
+        description: "Area to focus research on (e.g., 'encryption', 'daemon', 'cli-ux')"
+        required: false
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+  issues: write
+  id-token: write # Required by claude-code-action even with PAT auth
+
+concurrency:
+  group: research-workflow
+  cancel-in-progress: false
+
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Validate required secrets
+        env:
+          HAS_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN != '' }}
+          HAS_PAT: ${{ secrets.PERSONAL_ACCESS_TOKEN != '' }}
+        run: |
+          missing=""
+          if [ "$HAS_OAUTH_TOKEN" != "true" ]; then
+            missing="${missing} CLAUDE_CODE_OAUTH_TOKEN"
+          fi
+          if [ "$HAS_PAT" != "true" ]; then
+            missing="${missing} PERSONAL_ACCESS_TOKEN"
+          fi
+          if [ -n "$missing" ]; then
+            echo "::error::Missing required secrets:${missing}. Add them at Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Pick random research area
+        id: area
+        env:
+          FOCUS_AREA_INPUT: ${{ github.event.inputs.focus_area || '' }}
+        run: |
+          if [ -n "$FOCUS_AREA_INPUT" ]; then
+            echo "area=$FOCUS_AREA_INPUT" >> "$GITHUB_OUTPUT"
+            echo "Selected area from input: $FOCUS_AREA_INPUT"
+          else
+            # TODO(human): choose the focus-area enum that best reflects AgentSync
+            # subsystems. Each entry becomes both a random-selection candidate and
+            # a GitHub label. Keep names short, kebab-case, and stable — they will
+            # appear in issue titles like "perf(<area>): ..." and as labels.
+            areas=()
+            random_index=$((RANDOM % ${#areas[@]}))
+            selected="${areas[$random_index]}"
+            echo "area=$selected" >> "$GITHUB_OUTPUT"
+            echo "Randomly selected area: $selected"
+          fi
+
+      - name: Run research with Claude Code
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+          allowed_bots: "*"
+          # track_progress: true — not supported for schedule/workflow_dispatch events
+          claude_args: |
+            --model opus
+            --max-turns 80
+            --allowedTools "WebSearch,WebFetch,Read,Glob,Grep,Bash(gh issue create:*),Bash(gh issue list:*),Bash(gh label create:*),Bash(git log:*),Bash(cat:*),Bash(date:*)"
+            --disallowedTools ""
+          prompt: |
+            REPO: ${{ github.repository }}
+            FOCUS_AREA: ${{ steps.area.outputs.area }}
+
+            ## Mission
+
+            You are a principal software engineer improving AgentSync — a Bun-based
+            CLI and background daemon that snapshots local AI agent configuration
+            (Claude, Cursor, Codex, Copilot, VS Code), encrypts it with age
+            recipients, and syncs it through a Git-backed vault. Your mission:
+            **find ONE concrete, evidence-based improvement to an existing
+            subsystem and create ONE GitHub issue.**
+
+            Improvements should make AgentSync more reliable, more secure, easier
+            to operate, or faster — without rewriting the architecture.
+
+            ## Quality Gate
+
+            Every finding MUST be: (1) Feasible — implementable in the current codebase,
+            (2) Extendable — builds on existing architecture, no rewrites, (3) 100% Accurate —
+            all file paths, function names verified by reading actual files. If a finding fails
+            any criterion, skip it.
+
+            ## STRICT Workflow — Follow These Steps In Order
+
+            You have a LIMITED turn budget. Do NOT read every file. Follow this exact sequence:
+
+            ### Step 1: Understand the architecture (2-3 turns max)
+            - Read `docs/architecture.md`, `CLAUDE.md`, and `README.md`
+            - Run `git log --oneline -20` to see recent changes
+            - This gives you the full system overview without reading every file
+
+            ### Step 2: Check for duplicates in the assigned area (1 turn)
+            - Your assigned area for this run is: FOCUS_AREA (set above, pre-selected randomly
+              for scheduled runs or from user input for manual runs)
+            - Check existing research issues to avoid duplicates:
+              ```
+              gh issue list --label research --state all --limit 500 --json title,state
+              ```
+            - If your finding is already covered by an existing issue, find a DIFFERENT
+              finding within the same area. Do NOT switch areas.
+            - Focus exclusively on the FOCUS_AREA subsystem
+
+            ### Step 3: Deep-dive into that subsystem
+            - Read the key files in your chosen subsystem thoroughly. Suggested
+              entry points (verify before citing — paths may have moved):
+              - cli-ux       → `src/cli.ts`, `src/commands/{init,push,pull,status,doctor}.ts`
+              - agents       → `src/agents/registry.ts`, `src/agents/{claude,cursor,codex,copilot,vscode}.ts`, `src/agents/skills-walker.ts`
+              - encryption   → `src/core/encryptor.ts` (age recipients, X25519 key handling)
+              - vault-git    → `src/core/git.ts` (reconciliation, fast-forward-only rule)
+              - sanitizer    → `src/core/sanitizer.ts` (never-sync patterns, secret redaction)
+              - sync-queue   → `src/core/sync-queue.ts`, `src/core/watcher.ts`
+              - tar          → `src/core/tar.ts` (skills archive packing)
+              - daemon       → `src/daemon/index.ts`, `src/daemon/installer-{macos,linux,windows}.ts`, `src/commands/daemon.ts`
+              - ipc          → `src/core/ipc.ts` (daemon ↔ CLI channel)
+              - skills       → `src/commands/skill.ts`, `src/agents/skills-walker.ts`
+              - migrate      → `src/commands/migrate.ts`, `src/migrate/`
+              - testing      → co-located `__tests__/` dirs under `src/`, `bun test` coverage
+              - docs         → `docs/architecture.md`, `docs/command-reference.md`, `docs/daemon.md`, `docs/troubleshooting.md`
+            - Understand how the feature currently works before proposing improvements
+
+            ### Step 4: Research improvements via WebSearch (3-5 turns max)
+            - Search for best practices specific to your chosen subsystem
+            - Example searches: "age encryption recipient rotation patterns 2026",
+              "fast-forward-only git workflow recovery UX",
+              "Bun daemon IPC unix socket patterns",
+              "tar streaming encryption Node.js", "TOML config validation zod"
+
+            ### Step 5: Create the issue (3-5 turns max)
+            1. Create labels:
+               ```
+               gh label create research --description "Automated research finding" --color 0e8a16 --force
+               gh label create [area] --color 1d76db --force
+               ```
+               Area labels: use ONLY the value of FOCUS_AREA for this run.
+            2. Write issue body to temp file and create:
+               ```
+               cat > /tmp/issue-body.md << 'ISSUE_EOF'
+               [issue body here]
+               ISSUE_EOF
+               gh issue create --title "[type]([area]): [summary]" --label "research,[area]" --body-file /tmp/issue-body.md
+               ```
+               Title uses Conventional Commits style — pick the type based on your finding:
+               fix, feat, perf, refactor, security, test, docs
+               Examples:
+               - fix(vault-git): pull aborts on detached HEAD with no recovery guidance
+               - feat(daemon): debounce coalesces duplicate snapshots within 200ms window
+               - perf(encryption): stream tar to age writer instead of buffering full archive
+               - security(sanitizer): never-sync pattern misses `.env.local` and `.env.*.local`
+               - test(agents): codex adapter has no fixture for unknown TOML keys
+               - docs(daemon): troubleshooting guide missing macOS LaunchAgent reload steps
+
+            ## Issue Body Template
+
+            Use this EXACT structure:
+
+            ## Finding
+            [What you discovered. Reference exact file paths and line numbers.
+            Explain current behavior and how it can be improved.]
+
+            ## Diagram
+
+            [MANDATORY Mermaid diagram. CRITICAL syntax rules for GitHub rendering:
+            - classDef: use SEMICOLONS between properties: `classDef foo fill:#196f3d;color:#ffffff`
+              NOT commas: `fill:#196f3d,color:#ffffff` ← THIS WILL BREAK
+            - Use <br/> for newlines, never \n
+            - No parentheses in node labels — use square brackets: `node["label"]`
+            - Use :::className inline: `nodeId["label"]:::styleName`
+            - Do NOT nest state blocks or use multiple subgraph blocks
+            - Node IDs must be 3+ characters
+            - Prefer simple `graph LR` or `graph TD` diagrams — they render most reliably
+            - WRAP the diagram in a proper fenced code block: triple backtick + mermaid
+            The diagram must EXPLAIN the finding, not decorate.]
+
+            ## Rationale
+            [Why this matters. Include metrics or estimates where possible.]
+
+            ## References
+            - **Internal**: [file paths, line numbers you verified]
+            - **External**: [URLs from WebSearch]
+
+            ## Suggested Next Steps
+            1. [Concrete action]
+            2. [Alternative if applicable]
+
+            ## Areas Evaluated
+            [What you looked at this run, including areas with no findings.]
+
+            ---
+            *Generated by scheduled research workflow on [run date +%Y-%m-%d to get date]*
+
+            ## If No Finding
+
+            If no improvement passes the quality gate, do NOT create an issue. Output a summary
+            of what you analyzed and why nothing qualified.
+
+            ## Rules
+            - DO NOT modify files or create branches/PRs
+            - ONLY create issues via `gh issue create`
+            - Exactly ONE issue per run
+            - NEVER create test/placeholder issues — no "test body", no dry runs. Only create
+              the final issue with the COMPLETE body using --body-file /tmp/issue-body.md
+            - Write the FULL issue body to /tmp/issue-body.md FIRST, then create the issue ONCE
+            - Start with architecture docs for context, then deep-dive into your chosen subsystem
+            - ALWAYS include a Mermaid diagram
+            - ALWAYS verify file paths by reading files before citing them

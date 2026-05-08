@@ -1,9 +1,9 @@
 # Implementation Plan: [FEATURE]
 
-**Branch**: `[YYYYMMDD-HHMMSS-feature-name]` | **Date**: [DATE] | **Spec**: [link]
-**Input**: Feature specification from `/specs/[YYYYMMDD-HHMMSS-feature-name]/spec.md`
+**Branch**: `[###-feature-name]` | **Date**: [DATE] | **Spec**: [link]
+**Input**: Feature specification from `/specs/[###-feature-name]/spec.md`
 
-**Note**: This template is filled in by the `/speckit.plan` command. See `.specify/templates/plan-template.md` for the execution workflow.
+**Note**: This template is filled in by the `/speckit-plan` command. See `.specify/templates/plan-template.md` for the execution workflow.
 
 ## Summary
 
@@ -33,35 +33,18 @@
 
 [Gates determined based on constitution file]
 
-- Test coverage impact: Default to automated test tasks for new feature
-  work. Only treat the feature as documentation-only when all changed
-  files are limited to repository-hosted documentation and
-  feature-planning artifacts and the change does not affect runtime
-  source files, exported symbols, configuration schemas, packaging
-  logic, CI automation, or generated workflow scripts.
-- Documentation impact: If the feature changes or adds explanatory docs,
-  identify whether a Mermaid diagram is required to explain workflow,
-  structure, lifecycle, or interaction behavior more clearly than prose.
-- Documentation-only validation impact: If the feature qualifies for the
-  documentation-only exception, record the manual walkthrough validation
-  steps and name the spec, plan, or quickstart artifact that will carry
-  them.
-- Diagram validation impact: If Mermaid is required, name the target doc
-  surfaces and include validation as part of the implementation and
-  review plan.
-
 ## Project Structure
 
 ### Documentation (this feature)
 
 ```text
-specs/[YYYYMMDD-HHMMSS-feature]/
-├── plan.md              # This file (/speckit.plan command output)
-├── research.md          # Phase 0 output (/speckit.plan command)
-├── data-model.md        # Phase 1 output (/speckit.plan command)
-├── quickstart.md        # Phase 1 output (/speckit.plan command)
-├── contracts/           # Phase 1 output (/speckit.plan command)
-└── tasks.md             # Phase 2 output (/speckit.tasks command - NOT created by /speckit.plan)
+specs/[###-feature]/
+├── plan.md              # This file (/speckit-plan command output)
+├── research.md          # Phase 0 output (/speckit-plan command)
+├── data-model.md        # Phase 1 output (/speckit-plan command)
+├── quickstart.md        # Phase 1 output (/speckit-plan command)
+├── contracts/           # Phase 1 output (/speckit-plan command)
+└── tasks.md             # Phase 2 output (/speckit-tasks command - NOT created by /speckit-plan)
 ```
 
 ### Source Code (repository root)
@@ -116,6 +99,6 @@ directories captured above]
 > **Fill ONLY if Constitution Check has violations that must be justified**
 
 | Violation | Why Needed | Simpler Alternative Rejected Because |
-| --------- | ---------- | ----------------------------------- |
+|-----------|------------|-------------------------------------|
 | [e.g., 4th project] | [current need] | [why 3 projects insufficient] |
 | [e.g., Repository pattern] | [specific problem] | [why direct DB access insufficient] |
