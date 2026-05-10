@@ -44,11 +44,9 @@ theme:
 
 plugins:
   - search
-  # social/privacy need Pillow + cairosvg, slow to install locally.
-  # Gated to CI=true (set automatically by GitHub Actions); local
-  # `bun run docs:serve` skips them by design.
-  - social:
-      enabled: !ENV [CI, false]
+  # Privacy plugin downloads external assets (fonts, images) into the build
+  # so the deployed site has zero third-party requests. CI-only because it
+  # adds a few seconds and needs network access at build time.
   - privacy:
       enabled: !ENV [CI, false]
 
