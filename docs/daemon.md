@@ -2,6 +2,8 @@
 
 The AgentSync background daemon manages file watchers, periodic pulls, and IPC communication. Below is the state diagram showing all lifecycle transitions.
 
+<div class="agentsync-darknodes" markdown>
+
 ```mermaid
 stateDiagram-v2
     classDef active fill:#0D6EFD,color:#FFFFFF
@@ -32,6 +34,8 @@ stateDiagram-v2
 
     ShuttingDown --> Stopped:::stopped : clearInterval<br/>ipc.close<br/>queue.whenIdle<br/>watcher.close<br/>unlink socket<br/>exit 0
 ```
+
+</div>
 
 ## Lifecycle Phases
 

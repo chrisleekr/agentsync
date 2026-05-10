@@ -49,6 +49,9 @@
     "test:coverage": "bun test --coverage",
     "check": "bun run typecheck && bun run lint && bun run test",
     "check:act": "act -W .github/workflows/ci.yml",
+    "docs:install": "pip install -r docs/requirements.txt",
+    "docs:serve": "mkdocs serve",
+    "docs:build": "mkdocs build --strict",
     "prepack": "bun run build:package",
     "prepare": "lefthook install"
   },
