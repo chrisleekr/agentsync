@@ -121,10 +121,9 @@ describe("MCP translators", () => {
 
 describe("VS Code MCP translators (official servers/inputs schema)", () => {
   test("vscode → vscode round-trip preserves all transport fields", () => {
-    // Run through claude as an intermediate to prove parse+serialize work
-    // without losing transport metadata.
+    // Round-trip vscode → codex → vscode to prove parse+serialize work
+    // without losing transport metadata across the model.
     const result = translateMcp.codexToVsCode(
-      // First convert vscode → codex → vscode through the model
       (translateMcp.vsCodeToCodex(FIXTURE_VSCODE_OFFICIAL) as { content: string }).content,
     );
     expect(result).not.toBeNull();
@@ -231,5 +230,65 @@ describe("VS Code MCP translators (official servers/inputs schema)", () => {
     expect(parsed.servers.github.type).toBe("stdio");
     expect(parsed.servers.github.command).toBe("gh-mcp");
     expect((parsed.servers.github.env as Record<string, string>).GITHUB_TOKEN).toBe("test");
+  });
+
+  test("vscode → codex → vscode does not re-nest extras over repeated cycles", () => {
+    // Regression: the codex serializer used to write extras as a nested
+    // `entry.extras` subtable, which the parser then re-captured under
+    // `extras` again, wrapping one level deeper on every round-trip.
+    const withCustom = JSON.stringify({
+      servers: {
+        github: { type: "stdio", command: "gh-mcp", customMeta: { tier: "gold" } },
+      },
+    });
+    let current = withCustom;
+    for (let i = 0; i < 3; i++) {
+      const toCodex = translateMcp.vsCodeToCodex(current) as { content: string };
+      current = (translateMcp.codexToVsCode(toCodex.content) as { content: string }).content;
+    }
+    const parsed = JSON.parse(current) as {
+      servers: Record<string, Record<string, unknown>>;
+    };
+    // Custom field is preserved at the top level of the server entry, not
+    // nested under any number of `extras` keys.
+    expect(parsed.servers.github.customMeta).toEqual({ tier: "gold" });
+    expect((parsed.servers.github as { extras?: unknown }).extras).toBeUndefined();
+  });
+
+  test("vscode → claude with only http servers returns skipWrite + warnings", () => {
+    // No stdio survives the projection, so the translator should surface
+    // the warning without writing `{"mcpServers":{}}` over a fresh target.
+    const allHttp = JSON.stringify({
+      servers: {
+        remote: { type: "http", url: "https://example.com/mcp" },
+      },
+    });
+    const result = translateMcp.vsCodeToClaude(allHttp);
+    expect(result).not.toBeNull();
+    expect(result?.skipWrite).toBe(true);
+    expect((result?.warnings ?? []).join("\n")).toContain("remote");
+  });
+
+  test("vscode → codex with only inputs returns skipWrite + warnings", () => {
+    const inputsOnly = JSON.stringify({
+      servers: {},
+      inputs: [{ id: "tok", type: "promptString" }],
+    });
+    const result = translateMcp.vsCodeToCodex(inputsOnly);
+    // Either `null` (no servers AND no inputs in model — but inputs survive
+    // parsing here) or a skipWrite envelope. Either way no file is written.
+    if (result !== null) {
+      expect(result.skipWrite).toBe(true);
+      expect(result.warnings ?? []).toHaveLength(1);
+    }
+  });
+
+  test("vscode → claude warns about dropped stdio-only metadata fields", () => {
+    const result = translateMcp.vsCodeToClaude(FIXTURE_VSCODE_OFFICIAL);
+    expect(result).not.toBeNull();
+    const w = (result?.warnings ?? []).join("\n");
+    // FIXTURE_VSCODE_OFFICIAL.servers.github sets envFile/sandbox/sandboxEnabled/dev
+    expect(w).toContain('Server "github"');
+    expect(w).toMatch(/envFile|sandbox|sandboxEnabled|dev/);
   });
 });

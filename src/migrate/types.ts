@@ -45,13 +45,20 @@ export interface MigrateResult {
  * @param sourceContent - Raw content read from the source agent's config file.
  * @param sourceName - Filename of the source artefact (used for file-based types like commands).
  * @returns Translated content, target filename, and optional warnings about lossy or
- *   partial transformations (e.g., dropped HTTP/SSE transport fields). null when the
- *   input is empty or untranslatable.
+ *   partial transformations (e.g., dropped HTTP/SSE transport fields). When `skipWrite`
+ *   is set the orchestrator surfaces `warnings` but does not write the file — used when
+ *   every server in the source was dropped by the target schema and writing an empty
+ *   stub would create misleading state. null when the input is empty or untranslatable.
  */
 export type Translator = (
   sourceContent: string,
   sourceName?: string,
-) => { content: string; targetName: string; warnings?: string[] } | null;
+) => {
+  content: string;
+  targetName: string;
+  warnings?: string[];
+  skipWrite?: boolean;
+} | null;
 
 // MigrateOptions is defined by the Zod schema in src/config/schema.ts
 // and re-exported here for convenience.

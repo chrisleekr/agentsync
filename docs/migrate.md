@@ -91,8 +91,8 @@ over `stdio`, `http`, and `sse` transports plus VS Code-specific metadata
 | Target | Schema | Supported transports | Lossy fields |
 |--------|--------|----------------------|--------------|
 | **VS Code** | top-level `servers` + `inputs` ([docs](https://code.visualstudio.com/docs/copilot/reference/mcp-configuration)) | stdio, http, sse | — |
-| **Claude** | top-level `mcpServers` (stdio-only) | stdio | non-stdio servers dropped with warning; `inputs` dropped with warning |
-| **Cursor** | top-level `mcpServers` (stdio-only) | stdio | non-stdio servers dropped with warning; `inputs` dropped with warning |
+| **Claude** | top-level `mcpServers` (stdio-only) | stdio | non-stdio servers dropped with warning; `inputs` dropped with warning; stdio-only `envFile`/`sandbox`/`sandboxEnabled`/`dev` named per-server in a warning |
+| **Cursor** | top-level `mcpServers` (stdio-only) | stdio | same as Claude |
 | **Codex** | TOML `[mcp.servers.<name>]` | stdio, plus structured `type`/`url`/`headers`/`auth` for future HTTP/SSE clients | `inputs` dropped with warning |
 
 When a target cannot represent a transport, AgentSync emits an **explicit
@@ -100,6 +100,12 @@ translator warning** that names the dropped server and the unsupported
 transport (e.g. `vscode → claude (mcp): Dropped server "remote": transport
 "http" is not representable…`). Warnings flow into `MigrateResult.warnings`
 so the CLI surfaces them — they are never dropped silently.
+
+If a source migrates to a stdio-only target where **every** server is
+unrepresentable (e.g. an all-HTTP VS Code config → Claude), the translator
+skips the write rather than creating a brand-new file containing only
+`{"mcpServers":{}}`. The warning still surfaces in `MigrateResult.warnings`
+so the operator hears about the dropped servers.
 
 ## Examples
 

@@ -332,6 +332,9 @@ function serializeVsCodeMcp(model: McpModel): string {
 /**
  * Serialise to Claude/Cursor `mcp.json` shape. These clients only support
  * stdio today, so any HTTP/SSE server is dropped and named in a warning.
+ * Stdio-only metadata that the schema does not represent (envFile, sandbox,
+ * sandboxEnabled, dev, preserved extras) is also named per-server so the
+ * operator hears about it instead of silently losing it on round-trip.
  */
 function serializeMcpServersJson(model: McpModel): { content: string; warnings: string[] } {
   const mcpServers: Record<string, unknown> = {};
@@ -342,6 +345,17 @@ function serializeMcpServersJson(model: McpModel): { content: string; warnings: 
         `Dropped server "${s.name}": transport "${s.transport}" is not representable in the target's stdio-only mcpServers schema (url/headers/auth dropped).`,
       );
       continue;
+    }
+    const dropped: string[] = [];
+    if (s.envFile !== undefined) dropped.push("envFile");
+    if (s.sandbox !== undefined) dropped.push("sandbox");
+    if (s.sandboxEnabled !== undefined) dropped.push("sandboxEnabled");
+    if (s.dev !== undefined) dropped.push("dev");
+    if (s.extras && Object.keys(s.extras).length > 0) dropped.push(...Object.keys(s.extras));
+    if (dropped.length > 0) {
+      warnings.push(
+        `Server "${s.name}": dropped fields not supported by mcpServers schema: ${dropped.join(", ")}.`,
+      );
     }
     mcpServers[s.name] = stripUndefined({
       command: s.command,
@@ -361,18 +375,18 @@ function serializeMcpServersJson(model: McpModel): { content: string; warnings: 
  * Serialise to Codex TOML. Codex supports the legacy stdio shape directly;
  * non-stdio metadata is written under the same `[mcp.servers.<name>]`
  * tables as structured TOML so a future Codex with Streamable HTTP support
- * can pick it up. Unknown extras are stashed under `[mcp.servers.<name>.extras]`.
+ * can pick it up. Cross-server merge with any existing config is performed
+ * by the orchestrator (`applyMigrated`), so this function always starts from
+ * an empty TOML root.
+ *
+ * Unknown extras are spread inline at the same level as the typed fields
+ * (mirroring the VS Code serializer). Stuffing them into a nested `extras`
+ * subtable would re-capture the literal key "extras" on the next parse via
+ * `pickExtras`, nesting one level deeper on every round-trip.
  */
-function serializeCodexMcp(model: McpModel, existingToml?: string): string {
-  let base: TOML.JsonMap = {};
-  if (existingToml) {
-    try {
-      base = TOML.parse(existingToml);
-    } catch {
-      /* corrupt existing TOML — start fresh */
-    }
-  }
-  const mcp = (base.mcp ?? {}) as TOML.JsonMap;
+function serializeCodexMcp(model: McpModel): string {
+  const base: TOML.JsonMap = {};
+  const mcp: TOML.JsonMap = {};
   const serverMap: TOML.JsonMap = {};
   for (const s of model.servers) {
     const entry: TOML.JsonMap = {};
@@ -390,7 +404,11 @@ function serializeCodexMcp(model: McpModel, existingToml?: string): string {
     if (s.sandboxEnabled !== undefined) entry.sandboxEnabled = s.sandboxEnabled;
     if (s.sandbox !== undefined && s.sandbox !== null) entry.sandbox = s.sandbox as TOML.AnyJson;
     if (s.dev !== undefined && s.dev !== null) entry.dev = s.dev as TOML.AnyJson;
-    if (s.extras && Object.keys(s.extras).length > 0) entry.extras = s.extras as TOML.AnyJson;
+    if (s.extras) {
+      for (const [k, v] of Object.entries(s.extras)) {
+        if (!(k in entry) && v !== undefined && v !== null) entry[k] = v as TOML.AnyJson;
+      }
+    }
     serverMap[s.name] = entry;
   }
   mcp.servers = serverMap;
@@ -420,12 +438,12 @@ function mcpToMcpServers(parse: ParseFn): Translator {
       const model = parse(raw);
       if (model.servers.length === 0 && model.inputs.length === 0) return null;
       const { content, warnings } = serializeMcpServersJson(model);
-      // Even if every server was dropped, surface the warnings so the
-      // operator hears about it — but skip writing an empty mcpServers file.
-      const parsed = JSON.parse(content) as { mcpServers: Record<string, unknown> };
-      if (Object.keys(parsed.mcpServers).length === 0) {
+      const wouldWriteAnyServer = model.servers.some((s) => s.transport === "stdio");
+      if (!wouldWriteAnyServer) {
+        // Surface warnings about dropped non-stdio servers / inputs without
+        // creating a brand-new file containing only `{"mcpServers":{}}`.
         if (warnings.length === 0) return null;
-        return { content, targetName: "mcp.json", warnings };
+        return { content, targetName: "mcp.json", warnings, skipWrite: true };
       }
       return { content, targetName: "mcp.json", warnings };
     } catch {
@@ -445,8 +463,14 @@ function mcpToCodex(parse: ParseFn): Translator {
           `Dropped ${model.inputs.length} top-level "inputs" placeholder(s): Codex MCP TOML has no equivalent.`,
         );
       }
+      const content = serializeCodexMcp(model);
+      // Inputs-only sources would write an empty `[mcp]\nservers = { }` stub;
+      // surface the warning instead and let the orchestrator skip the write.
+      if (model.servers.length === 0) {
+        return { content, targetName: "config.toml", warnings, skipWrite: true };
+      }
       return {
-        content: serializeCodexMcp(model),
+        content,
         targetName: "config.toml",
         ...(warnings.length > 0 ? { warnings } : {}),
       };

@@ -201,9 +201,13 @@ export async function applyMigrated(
               ? incomingParsed.inputs
               : [];
             if (incomingInputs.length > 0) {
+              // Source wins on collision (mirrors the spread-based servers
+              // merge above and the documented "source value wins" rule in
+              // docs/migrate.md). Iterate incoming first so its entry is
+              // recorded under the dedupe key before the existing one.
               const seen = new Set<string>();
               const merged: unknown[] = [];
-              for (const list of [existingInputs, incomingInputs]) {
+              for (const list of [incomingInputs, existingInputs]) {
                 for (const entry of list) {
                   const id =
                     entry && typeof entry === "object"
@@ -321,6 +325,13 @@ export async function performMigrate(options: MigrateOptions): Promise<MigrateRe
           for (const w of translated.warnings) {
             result.warnings.push(`${options.from} → ${target} (${type}): ${w}`);
           }
+        }
+
+        // Translator opted out of writing (e.g. every server in the source
+        // was dropped by the target's schema). Warnings have already been
+        // captured above, so just move on without creating an empty stub.
+        if (translated.skipWrite) {
+          continue;
         }
 
         // Secret detection for MCP content — abort if secrets found
