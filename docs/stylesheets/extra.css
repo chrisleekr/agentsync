@@ -65,3 +65,58 @@
   --md-mermaid-label-fg-color: #ffffff;
   --md-mermaid-node-fg-color: #ffffff;
 }
+
+/* Per-node label-color override for deep-dive diagrams.
+
+   architecture.md, daemon.md, migrate.md use mixed palettes — most
+   classDefs are light fills with dark text (correct under Material's
+   default `--md-mermaid-label-fg-color` in light mode), but a handful
+   use dark fills with white text:
+
+     #7f1d1d  error / fail        #1e8449  process
+     #0D6EFD  active              #922b21  skip
+     #7d3c98  decision            #6C757D  stopped
+     #DC3545  error               #1a5276  input
+     #198754  idle                #b9770e  output
+
+   Scope the variable to `g.node`-level instead of selecting `.nodeLabel`
+   directly. The variable cascades to whichever element actually carries
+   the label text, so this works regardless of mermaid's emitted markup.
+   `:has()` matches by rect/path/polygon fill; class-name fallback
+   covers builds where mermaid emits the classDef name on the node. */
+.mermaid g.node:has(rect[fill="#7f1d1d"]),
+.mermaid g.node:has(rect[fill="#0D6EFD"]),
+.mermaid g.node:has(rect[fill="#7d3c98"]),
+.mermaid g.node:has(rect[fill="#DC3545"]),
+.mermaid g.node:has(rect[fill="#198754"]),
+.mermaid g.node:has(rect[fill="#1a5276"]),
+.mermaid g.node:has(rect[fill="#b9770e"]),
+.mermaid g.node:has(rect[fill="#1e8449"]),
+.mermaid g.node:has(rect[fill="#922b21"]),
+.mermaid g.node:has(rect[fill="#6C757D"]),
+.mermaid g.node:has(path[fill="#7f1d1d"]),
+.mermaid g.node:has(path[fill="#0D6EFD"]),
+.mermaid g.node:has(path[fill="#7d3c98"]),
+.mermaid g.node:has(path[fill="#DC3545"]),
+.mermaid g.node:has(path[fill="#198754"]),
+.mermaid g.node:has(polygon[fill="#7d3c98"]),
+.mermaid g.node:has(polygon[fill="#7f1d1d"]),
+.mermaid g.node:has(rect[style*="#7f1d1d"]),
+.mermaid g.node:has(rect[style*="#0D6EFD"]),
+.mermaid g.node:has(rect[style*="#7d3c98"]),
+.mermaid g.node:has(rect[style*="#DC3545"]),
+.mermaid g.node:has(rect[style*="#198754"]),
+.mermaid g.node:has(rect[style*="#1a5276"]),
+.mermaid g.node:has(rect[style*="#b9770e"]),
+.mermaid g.node:has(rect[style*="#1e8449"]),
+.mermaid g.node:has(rect[style*="#922b21"]),
+.mermaid g.node:has(rect[style*="#6C757D"]) {
+  --md-mermaid-label-fg-color: #ffffff;
+}
+
+/* Note: class-name fallback (g.node.error, g.node.skip etc) is
+   intentionally NOT used. Class names like `decision`, `error`, `skip`
+   are reused across files for BOTH light-fill and dark-fill classDefs
+   (e.g. architecture.md's `error` uses dark fill #7f1d1d, but its
+   `decision` uses light fill #fef3c7 with intended dark text).
+   Targeting by fill attribute is the only correct scope. */
