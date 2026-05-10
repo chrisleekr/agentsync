@@ -2,6 +2,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { log } from "@clack/prompts";
 import { defineCommand } from "citty";
+import { applyClaudeVault, type ClaudeSyncOptions, snapshotClaude } from "../agents/claude";
 import { type AgentDefinition, type AgentName, Agents } from "../agents/registry";
 import { loadConfig, resolveConfigPath } from "../config/loader";
 import { encryptString } from "../core/encryptor";
@@ -13,6 +14,20 @@ let agentDefinitions: AgentDefinition[] = Agents;
 
 export function __setPushAgentsForTesting(agents: AgentDefinition[] | null): void {
   agentDefinitions = agents ?? Agents;
+}
+
+/**
+ * Replace the registry's default Claude entry with one that knows about the
+ * Claude plugin/marketplace opt-in flag from agentsync.toml. All other agents
+ * pass through unchanged so the registry contract stays narrow.
+ */
+function withClaudeOptions(agent: AgentDefinition, claudeOpts: ClaudeSyncOptions): AgentDefinition {
+  if (agent.name !== "claude") return agent;
+  return {
+    ...agent,
+    snapshot: () => snapshotClaude(claudeOpts),
+    apply: (vaultDir, key, dryRun) => applyClaudeVault(vaultDir, key, dryRun, claudeOpts),
+  };
 }
 
 /**
@@ -37,10 +52,15 @@ export async function performPush(
   }
 
   const requestedAgent = options.agent as AgentName | undefined;
-  const agentsToSync = agentDefinitions.filter((a) => {
-    if (requestedAgent) return a.name === requestedAgent;
-    return config.agents[a.name] === true;
-  });
+  const claudeOpts: ClaudeSyncOptions = {
+    syncMarketplace: config.claudePlugins?.syncMarketplace ?? false,
+  };
+  const agentsToSync = agentDefinitions
+    .filter((a) => {
+      if (requestedAgent) return a.name === requestedAgent;
+      return config.agents[a.name] === true;
+    })
+    .map((a) => withClaudeOptions(a, claudeOpts));
 
   if (agentsToSync.length === 0) {
     return { pushed, errors, fatal };
@@ -194,10 +214,15 @@ export const pushCommand = defineCommand({
       // Collect dry-run output manually for display
       const runtime = await resolveRuntimeContext();
       const config = await loadConfig(resolveConfigPath(runtime.vaultDir));
-      const agentsToSync = agentDefinitions.filter((a) => {
-        if (requestedAgent) return a.name === requestedAgent;
-        return config.agents[a.name] === true;
-      });
+      const claudeOpts: ClaudeSyncOptions = {
+        syncMarketplace: config.claudePlugins?.syncMarketplace ?? false,
+      };
+      const agentsToSync = agentDefinitions
+        .filter((a) => {
+          if (requestedAgent) return a.name === requestedAgent;
+          return config.agents[a.name] === true;
+        })
+        .map((a) => withClaudeOptions(a, claudeOpts));
       for (const agent of agentsToSync) {
         const snapshot = await agent.snapshot();
         for (const artifact of snapshot.artifacts) {
