@@ -34,6 +34,8 @@ agentsync migrate --from <agent> --to <agent|all> [--type <type>] [--name <file>
 
 ## Migration Flow
 
+<div class="agentsync-darknodes" markdown>
+
 ```mermaid
 flowchart TD
     classDef input fill:#1a5276,color:#ffffff
@@ -69,6 +71,8 @@ flowchart TD
     PREVIEW --> REPORT
     NO_TRANSLATOR --> LOOP
 ```
+
+</div>
 
 ## Key Behaviours
 

@@ -9,19 +9,11 @@
   max-width: 95rem;
 }
 
-/* Dark-mode contrast fix for mermaid diagrams.
-
-   Background: in slate (dark) mode, mermaid keeps its default theme so
-   diagrams using mermaid's pale defaults (`#ECECFF` rectangles,
-   `#fff5ad` decision diamonds) end up as light boxes on a dark page
-   with light text — invisible. The classDef colors in our own diagrams
-   already use dark fills + white text, but the inherited diagrams in
-   architecture.md / daemon.md / migrate.md use defaults.
-
-   The CSS below targets only those default pale fills and replaces
-   them with dark variants in slate mode. It also forces label text
-   white so text on every node remains readable regardless of fill. */
-
+/* Dark-mode label color. Forces all mermaid node labels to white when
+   the slate scheme is active. Safe site-wide because every diagram in
+   this repo uses dark fills (architecture-overview's classDef palette
+   + the inverted deep-dive palette in architecture.md / daemon.md /
+   migrate.md). */
 [data-md-color-scheme="slate"] .mermaid .nodeLabel,
 [data-md-color-scheme="slate"] .mermaid .nodeLabel p,
 [data-md-color-scheme="slate"] .mermaid .nodeLabel span,
@@ -31,60 +23,15 @@
   fill: #ffffff !important;
 }
 
-/* Swap each pale fill to its paired dark text color from the classDef
-   so the (now-white) label keeps semantic contrast in dark mode. The
-   first two pairs cover mermaid's built-in defaults; the remaining
-   pairs match deep-dive classDefs in architecture.md / daemon.md /
-   migrate.md. Both fill attribute and inline style forms covered. */
+/* Safety net for any future diagram that omits classDef and falls back
+   to mermaid's pale built-in fills. Swaps to dark slate so the white
+   label rule above stays readable. */
 [data-md-color-scheme="slate"] .mermaid .node rect[fill="#ECECFF"],
 [data-md-color-scheme="slate"] .mermaid .node polygon[fill="#ECECFF"],
 [data-md-color-scheme="slate"] .mermaid .node rect[fill="#fff5ad"],
-[data-md-color-scheme="slate"] .mermaid .node polygon[fill="#fff5ad"],
-[data-md-color-scheme="slate"] .mermaid .node rect[style*="#ECECFF"],
-[data-md-color-scheme="slate"] .mermaid .node polygon[style*="#ECECFF"],
-[data-md-color-scheme="slate"] .mermaid .node rect[style*="#fff5ad"],
-[data-md-color-scheme="slate"] .mermaid .node polygon[style*="#fff5ad"] {
+[data-md-color-scheme="slate"] .mermaid .node polygon[fill="#fff5ad"] {
   fill: #34495e !important;
   stroke: #1a252f !important;
-}
-[data-md-color-scheme="slate"] .mermaid .node rect[fill="#ecf0f1"],
-[data-md-color-scheme="slate"] .mermaid .node polygon[fill="#ecf0f1"],
-[data-md-color-scheme="slate"] .mermaid .node rect[style*="#ecf0f1"],
-[data-md-color-scheme="slate"] .mermaid .node polygon[style*="#ecf0f1"] {
-  fill: #2c3e50 !important;
-  stroke: #2c3e50 !important;
-}
-[data-md-color-scheme="slate"] .mermaid .node rect[fill="#fef3c7"],
-[data-md-color-scheme="slate"] .mermaid .node polygon[fill="#fef3c7"],
-[data-md-color-scheme="slate"] .mermaid .node rect[fill="#fde68a"],
-[data-md-color-scheme="slate"] .mermaid .node polygon[fill="#fde68a"],
-[data-md-color-scheme="slate"] .mermaid .node rect[style*="#fef3c7"],
-[data-md-color-scheme="slate"] .mermaid .node polygon[style*="#fef3c7"],
-[data-md-color-scheme="slate"] .mermaid .node rect[style*="#fde68a"],
-[data-md-color-scheme="slate"] .mermaid .node polygon[style*="#fde68a"] {
-  fill: #78350f !important;
-  stroke: #78350f !important;
-}
-[data-md-color-scheme="slate"] .mermaid .node rect[fill="#dbeafe"],
-[data-md-color-scheme="slate"] .mermaid .node polygon[fill="#dbeafe"],
-[data-md-color-scheme="slate"] .mermaid .node rect[style*="#dbeafe"],
-[data-md-color-scheme="slate"] .mermaid .node polygon[style*="#dbeafe"] {
-  fill: #1e3a8a !important;
-  stroke: #1e3a8a !important;
-}
-[data-md-color-scheme="slate"] .mermaid .node rect[fill="#dcfce7"],
-[data-md-color-scheme="slate"] .mermaid .node polygon[fill="#dcfce7"],
-[data-md-color-scheme="slate"] .mermaid .node rect[style*="#dcfce7"],
-[data-md-color-scheme="slate"] .mermaid .node polygon[style*="#dcfce7"] {
-  fill: #14532d !important;
-  stroke: #14532d !important;
-}
-[data-md-color-scheme="slate"] .mermaid .node rect[fill="#e0e7ff"],
-[data-md-color-scheme="slate"] .mermaid .node polygon[fill="#e0e7ff"],
-[data-md-color-scheme="slate"] .mermaid .node rect[style*="#e0e7ff"],
-[data-md-color-scheme="slate"] .mermaid .node polygon[style*="#e0e7ff"] {
-  fill: #3730a3 !important;
-  stroke: #3730a3 !important;
 }
 
 /* Edge labels need a background that matches the page in dark mode.
@@ -95,76 +42,15 @@
   fill: var(--md-default-bg-color) !important;
 }
 
-/* Light-mode contrast fix for architecture-overview's dark-fill diagrams.
+/* Light-mode label color for our dark-fill diagrams.
 
-   Background: mkdocs-material renders mermaid labels with
-   `color: var(--md-mermaid-label-fg-color)` and node fills with
-   `var(--md-mermaid-node-bg-color)`. In light mode the default
-   label-fg is dark, so labels on our dark `classDef fill:#xxx` nodes
-   are dark-on-dark — invisible. Earlier attempts via `.nodeLabel`
-   selectors all failed because Material's CSS-variable binding wins.
-
-   Override the variables on the scoping wrapper around each diagram
-   in architecture-overview.md so labels stay white in both schemes.
-   The wrapper limits the override to that page's diagrams; inherited
-   pale-fill diagrams in architecture.md / daemon.md / migrate.md are
-   unaffected and keep their dark-on-light defaults in light mode. */
+   mkdocs-material renders mermaid labels with
+   `color: var(--md-mermaid-label-fg-color)` which defaults to a dark
+   value in light mode — invisible on our dark fills. Override the
+   variable on the scoping wrapper around each diagram so the label
+   resolves to white regardless of which element actually carries the
+   text. The wrapper limits the override to wrapped diagrams only. */
 .agentsync-darknodes {
   --md-mermaid-label-fg-color: #ffffff;
   --md-mermaid-node-fg-color: #ffffff;
 }
-
-/* Per-node label-color override for deep-dive diagrams.
-
-   architecture.md, daemon.md, migrate.md use mixed palettes — most
-   classDefs are light fills with dark text (correct under Material's
-   default `--md-mermaid-label-fg-color` in light mode), but a handful
-   use dark fills with white text:
-
-     #7f1d1d  error / fail        #1e8449  process
-     #0D6EFD  active              #922b21  skip
-     #7d3c98  decision            #6C757D  stopped
-     #DC3545  error               #1a5276  input
-     #198754  idle                #b9770e  output
-
-   Scope the variable to `g.node`-level instead of selecting `.nodeLabel`
-   directly. The variable cascades to whichever element actually carries
-   the label text, so this works regardless of mermaid's emitted markup.
-   `:has()` matches by rect/path/polygon fill; class-name fallback
-   covers builds where mermaid emits the classDef name on the node. */
-.mermaid g.node:has(rect[fill="#7f1d1d"]),
-.mermaid g.node:has(rect[fill="#0D6EFD"]),
-.mermaid g.node:has(rect[fill="#7d3c98"]),
-.mermaid g.node:has(rect[fill="#DC3545"]),
-.mermaid g.node:has(rect[fill="#198754"]),
-.mermaid g.node:has(rect[fill="#1a5276"]),
-.mermaid g.node:has(rect[fill="#b9770e"]),
-.mermaid g.node:has(rect[fill="#1e8449"]),
-.mermaid g.node:has(rect[fill="#922b21"]),
-.mermaid g.node:has(rect[fill="#6C757D"]),
-.mermaid g.node:has(path[fill="#7f1d1d"]),
-.mermaid g.node:has(path[fill="#0D6EFD"]),
-.mermaid g.node:has(path[fill="#7d3c98"]),
-.mermaid g.node:has(path[fill="#DC3545"]),
-.mermaid g.node:has(path[fill="#198754"]),
-.mermaid g.node:has(polygon[fill="#7d3c98"]),
-.mermaid g.node:has(polygon[fill="#7f1d1d"]),
-.mermaid g.node:has(rect[style*="#7f1d1d"]),
-.mermaid g.node:has(rect[style*="#0D6EFD"]),
-.mermaid g.node:has(rect[style*="#7d3c98"]),
-.mermaid g.node:has(rect[style*="#DC3545"]),
-.mermaid g.node:has(rect[style*="#198754"]),
-.mermaid g.node:has(rect[style*="#1a5276"]),
-.mermaid g.node:has(rect[style*="#b9770e"]),
-.mermaid g.node:has(rect[style*="#1e8449"]),
-.mermaid g.node:has(rect[style*="#922b21"]),
-.mermaid g.node:has(rect[style*="#6C757D"]) {
-  --md-mermaid-label-fg-color: #ffffff;
-}
-
-/* Note: class-name fallback (g.node.error, g.node.skip etc) is
-   intentionally NOT used. Class names like `decision`, `error`, `skip`
-   are reused across files for BOTH light-fill and dark-fill classDefs
-   (e.g. architecture.md's `error` uses dark fill #7f1d1d, but its
-   `decision` uses light fill #fef3c7 with intended dark text).
-   Targeting by fill attribute is the only correct scope. */
