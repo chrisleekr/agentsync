@@ -289,6 +289,72 @@ describe("integration", () => {
     expect(hint).toContain("`agentsync pull` on this machine will fail");
   });
 
+  test("recipient handoff: init + key add (idempotent on same pubkey) re-encrypts vault for new machine", async () => {
+    const root = join(tmpDir, "recipient-handoff-end-to-end");
+    mkdirSync(root, { recursive: true });
+    const bareRepoPath = await createBareRepo(root);
+    const machineA = await createMachineFixture(root, "machine-alpha");
+    const machineB = await createMachineFixture(root, "machine-beta");
+
+    seedVaultRepo({ machine: machineA, bareRepoPath });
+
+    // machineA pushes a real .age artifact encrypted ONLY for itself, so the
+    // resulting file is the exact thing machineB cannot read post-init.
+    const { encryptString, decryptString } = await import("../../core/encryptor");
+    const {
+      mkdir: mkdirAsync,
+      writeFile: writeFileAsync,
+      readFile: readFileAsync,
+    } = await import("node:fs/promises");
+
+    const machineAClaudeDir = join(machineA.vaultDir, "claude");
+    await mkdirAsync(machineAClaudeDir, { recursive: true });
+    const plaintext = "# handoff-secret\nbody\n";
+    const onlyAlphaCiphertext = await encryptString(plaintext, [machineA.recipient]);
+    await writeFileAsync(join(machineAClaudeDir, "HANDOFF.age"), onlyAlphaCiphertext, "utf8");
+    runGit(["add", "claude/HANDOFF.age"], machineA.vaultDir);
+    runGit(["commit", "-m", "seed: artifact for machine-alpha only"], machineA.vaultDir);
+    runGit(["push", "origin", "main"], machineA.vaultDir);
+
+    // machineB joins. init writes its pubkey into recipients and pushes.
+    await withMachineEnv(machineB, async () => {
+      await initMod.initCommand.run?.({
+        args: { remote: bareRepoPath, branch: "main" },
+        rawArgs: [],
+        cmd: {} as never,
+      } as never);
+    });
+
+    // machineA runs the exact command the onboarding hint suggests. After
+    // init, recipients["machine-beta"] already equals machineB.recipient, so
+    // a non-idempotent `key add` would fail with "already exists" here.
+    // The vault re-encryption is the whole point of this step.
+    runGit(["pull", "--ff-only", "origin", "main"], machineA.vaultDir);
+    fakeLogs.error.length = 0;
+    process.exitCode = 0;
+
+    await withMachineEnv(machineA, async () => {
+      await (keyMod.keyCommand.subCommands as unknown as Record<string, CommandDef>).add.run?.({
+        args: { name: "machine-beta", pubkey: machineB.recipient },
+        rawArgs: [],
+        cmd: {} as never,
+      } as never);
+    });
+
+    expect(process.exitCode).toBe(0);
+    expect(fakeLogs.error).toHaveLength(0);
+
+    // The artifact must now be decryptable by machineB's identity. Push the
+    // re-encrypted commit through, fetch on machineB, and decrypt directly.
+    runGit(["pull", "--ff-only", "origin", "main"], machineB.vaultDir);
+    const reEncrypted = await readFileAsync(
+      join(machineB.vaultDir, "claude", "HANDOFF.age"),
+      "utf8",
+    );
+    const decrypted = await decryptString(reEncrypted, machineB.identity);
+    expect(decrypted).toBe(plaintext);
+  });
+
   test("init does NOT print the recipient-onboarding hint on a fresh first-machine bootstrap", async () => {
     const root = join(tmpDir, "first-machine-no-hint");
     mkdirSync(root, { recursive: true });
