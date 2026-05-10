@@ -24,6 +24,8 @@ AgentSync has three main layers:
 
 ## Reconciliation flow
 
+<div class="agentsync-darknodes" markdown>
+
 ```mermaid
 flowchart TD
 	InitNode[Command resolves runtime and vault repo]:::step
@@ -40,10 +42,12 @@ flowchart TD
 	SafeNode -- yes --> WorkNode
 	SafeNode -- no --> StopNode
 
-	classDef step fill:#ecf0f1,color:#2c3e50,stroke:#2c3e50,stroke-width:1.5px;
-	classDef decision fill:#fef3c7,color:#78350f,stroke:#78350f,stroke-width:1.5px;
+	classDef step fill:#2c3e50,color:#ffffff,stroke:#1a252f,stroke-width:1.5px;
+	classDef decision fill:#78350f,color:#ffffff,stroke:#451a03,stroke-width:1.5px;
 	classDef error fill:#7f1d1d,color:#ffffff,stroke:#7f1d1d,stroke-width:1.5px;
 ```
+
+</div>
 
 `init` uses this flow to distinguish first-machine bootstrap from second-machine join behavior.
 `pull`, `push`, `key add`, `key rotate`, and daemon-triggered sync all reuse the same reconciliation check before they apply, encrypt, or rewrite vault content.
@@ -87,6 +91,8 @@ Every skill-bearing agent adapter calls `collectSkillArtifacts(agent, skillsDir)
 
 The filter's opt-in flag keeps the pre-existing Copilot agent-tarball code path bit-for-bit unchanged.
 
+<div class="agentsync-darknodes" markdown>
+
 ```mermaid
 flowchart TD
 	LocalDir["Local skills dir<br/>~/.agent/skills"]:::action
@@ -113,17 +119,21 @@ flowchart TD
 	NeverSync -- yes --> Abort
 	NeverSync -- no --> TarStep --> EncStep --> VaultEntry --> Pull --> Restore
 
-	classDef action fill:#dbeafe,color:#1e3a8a,stroke:#1e3a8a,stroke-width:1.5px;
-	classDef decision fill:#fef3c7,color:#78350f,stroke:#78350f,stroke-width:1.5px;
-	classDef keep fill:#dcfce7,color:#14532d,stroke:#14532d,stroke-width:1.5px;
-	classDef vault fill:#e0e7ff,color:#3730a3,stroke:#3730a3,stroke-width:1.5px;
-	classDef skip fill:#fde68a,color:#78350f,stroke:#78350f,stroke-width:1.5px;
+	classDef action fill:#1e3a8a,color:#ffffff,stroke:#0f1f4d,stroke-width:1.5px;
+	classDef decision fill:#78350f,color:#ffffff,stroke:#451a03,stroke-width:1.5px;
+	classDef keep fill:#14532d,color:#ffffff,stroke:#0a2d18,stroke-width:1.5px;
+	classDef vault fill:#3730a3,color:#ffffff,stroke:#1e1b6e,stroke-width:1.5px;
+	classDef skip fill:#78350f,color:#ffffff,stroke:#451a03,stroke-width:1.5px;
 	classDef fail fill:#7f1d1d,color:#ffffff,stroke:#7f1d1d,stroke-width:1.5px;
 ```
+
+</div>
 
 ### Vault-removal flow
 
 Skills are **additive-by-default** across the whole pipeline. A local delete never removes the vault entry — the only way to take a skill out of the vault is the explicit `agentsync skill remove <agent> <name>` verb at `src/commands/skill.ts`. That verb enforces two invariants: it only touches the vault file, never any local skill directory (FR-012); and any subsequent `pull` on another machine leaves that machine's local skill directory untouched because `applyXxxVault` is extract-only (FR-013).
+
+<div class="agentsync-darknodes" markdown>
 
 ```mermaid
 flowchart TD
@@ -148,14 +158,72 @@ flowchart TD
 	Push --> LocalA
 	Push --> MachineB --> ApplyExtract --> LocalB
 
-	classDef action fill:#dbeafe,color:#1e3a8a,stroke:#1e3a8a,stroke-width:1.5px;
-	classDef decision fill:#fef3c7,color:#78350f,stroke:#78350f,stroke-width:1.5px;
-	classDef vault fill:#e0e7ff,color:#3730a3,stroke:#3730a3,stroke-width:1.5px;
-	classDef local fill:#dcfce7,color:#14532d,stroke:#14532d,stroke-width:1.5px;
+	classDef action fill:#1e3a8a,color:#ffffff,stroke:#0f1f4d,stroke-width:1.5px;
+	classDef decision fill:#78350f,color:#ffffff,stroke:#451a03,stroke-width:1.5px;
+	classDef vault fill:#3730a3,color:#ffffff,stroke:#1e1b6e,stroke-width:1.5px;
+	classDef local fill:#14532d,color:#ffffff,stroke:#0a2d18,stroke-width:1.5px;
 	classDef fail fill:#7f1d1d,color:#ffffff,stroke:#7f1d1d,stroke-width:1.5px;
 ```
 
+</div>
+
 This two-flow model is why AgentSync can add and remove skills independently on different machines without any central coordination — every removal is an intentional user action, and every pull is extract-only.
+
+## Claude plugin sync flow
+
+Claude Code organises optional capabilities — commands, sub-agents, hooks, MCP servers, and bundled skills — under `~/.claude/plugins/<name>/`. AgentSync rides each plugin through the vault as a self-contained subtree at `claude/plugins/<name>/`, so installing a plugin on one machine and pulling on another reproduces every artifact under the same plugin namespace.
+
+The plugin walker `collectClaudePlugins` at `src/agents/claude-plugins.ts` mirrors the skills-walker contract: it skips the plugins root if it is missing or a symlink, skips dot-prefixed entries silently, and rejects any entry whose name fails `validatePluginName` (the same defence that guards skill names against `..`, separators, control characters, and the `.`/`..` reserved names). A plugin must contain a real `.claude-plugin/plugin.json` file (lstat-checked so symlinked manifests are rejected) before any of its assets are emitted.
+
+Once a plugin is admitted, `snapshotClaude` emits per-artifact entries:
+
+- `plugin.json.age` — sanitised through `sanitizeClaudePluginManifest` (full-tree secret redaction, structure preserved).
+- `commands/<file>.md.age` and `agents/<file>.md.age` — markdown bundles with sanitiser warnings surfacing redacted secrets.
+- `hooks/<file>.json.age` — sanitised through the existing hooks-only allowlist.
+- `mcp.json.age` — sanitised through `sanitizeClaudePluginMcp` (full structure preserved, secret literals redacted, walker warnings escalated to push aborts).
+- `skills/<name>.tar.age` — tar bundles produced by reusing `collectSkillArtifacts` against the plugin's own `skills/` dir, then re-namespaced into the plugin path.
+
+The opt-in `claudePlugins.syncMarketplace` flag in `agentsync.toml` adds `marketplace.json.age` (sanitised manifest of the global `~/.claude/.claude-plugin/marketplace.json`). The flag is off by default because the catalog can pin third-party sources — teams must opt in explicitly.
+
+On `pull`, `applyClaudePluginsDir` walks `claude/plugins/` in the decrypted vault, validates every directory name *before* any `path.join`, and routes each artifact back to its disk equivalent. Vault entries with names like `..` are rejected with a warning and never reach the filesystem.
+
+<div class="agentsync-darknodes" markdown>
+
+```mermaid
+flowchart TD
+	LocalPlugins["Local plugins<br/>~/.claude/plugins/<name>"]:::action
+	WalkerGate{"Real dir + valid name<br/>+ real plugin.json"}:::decision
+	Manifest["plugin.json<br/>sanitizeClaudePluginManifest"]:::keep
+	Surfaces["commands agents hooks mcp<br/>per-file sanitisers"]:::keep
+	PluginSkills["plugin-local skills<br/>collectSkillArtifacts reused"]:::keep
+	Marketplace{"claudePlugins<br/>syncMarketplace true"}:::decision
+	MarketArt["marketplace.json.age<br/>opt-in only"]:::keep
+	Vault["Vault namespace<br/>claude/plugins/<name>/..."]:::vault
+	Pull["pull command<br/>applyClaudePluginsDir"]:::keep
+	NameGate{"validatePluginName<br/>before any path.join"}:::decision
+	Apply["restore manifest commands agents<br/>hooks mcp skills"]:::keep
+	SkipSilent["Skipped silently<br/>missing root or invalid"]:::skip
+	Reject["Warning emitted<br/>traversal name rejected"]:::fail
+
+	LocalPlugins --> WalkerGate
+	WalkerGate -- no --> SkipSilent
+	WalkerGate -- yes --> Manifest --> Vault
+	WalkerGate --> Surfaces --> Vault
+	WalkerGate --> PluginSkills --> Vault
+	Marketplace -- yes --> MarketArt --> Vault
+	Vault --> Pull --> NameGate
+	NameGate -- no --> Reject
+	NameGate -- yes --> Apply
+
+	classDef action fill:#1e3a8a,color:#ffffff,stroke:#0f1f4d,stroke-width:1.5px;
+	classDef decision fill:#78350f,color:#ffffff,stroke:#451a03,stroke-width:1.5px;
+	classDef keep fill:#14532d,color:#ffffff,stroke:#0a2d18,stroke-width:1.5px;
+	classDef vault fill:#3730a3,color:#ffffff,stroke:#1e1b6e,stroke-width:1.5px;
+	classDef skip fill:#78350f,color:#ffffff,stroke:#451a03,stroke-width:1.5px;
+	classDef fail fill:#7f1d1d,color:#ffffff,stroke:#7f1d1d,stroke-width:1.5px;
+```
+
+</div>
 
 ## Security boundaries
 

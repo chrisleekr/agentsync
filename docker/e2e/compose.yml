@@ -1,0 +1,43 @@
+services:
+  vault-init:
+    image: alpine/git:latest
+    volumes:
+      - vault-data:/vault
+    user: "0:0"
+    entrypoint: ["sh", "-c"]
+    command:
+      - |
+        set -e
+        if [ ! -d /vault/repo.git ]; then
+          git init --bare /vault/repo.git
+          git -C /vault/repo.git symbolic-ref HEAD refs/heads/main
+        fi
+        chown -R 1001:1001 /vault
+        echo "vault-init: ready at /vault/repo.git"
+
+  machine:
+    build:
+      context: ../..
+      dockerfile: docker/e2e/Dockerfile.machine
+    depends_on:
+      vault-init:
+        condition: service_completed_successfully
+    volumes:
+      - vault-data:/vault
+    environment:
+      VAULT_URL: "file:///vault/repo.git"
+      HOME: /home/agent
+    command:
+      - bash
+      - -c
+      - |
+        set -e
+        /home/agent/scenarios/smoke.sh
+        /home/agent/scenarios/02-multi-machine.sh
+        /home/agent/scenarios/03-diverged-history.sh
+        /home/agent/scenarios/04-sanitizer-aborts.sh
+        /home/agent/scenarios/05-key-rotate.sh
+        /home/agent/scenarios/06-skill-additive.sh
+
+volumes:
+  vault-data:

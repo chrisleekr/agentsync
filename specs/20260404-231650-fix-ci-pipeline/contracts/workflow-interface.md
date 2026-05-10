@@ -34,7 +34,7 @@ lint
 
 | Input                | Source                                       | Used by  |
 | -------------------- | -------------------------------------------- | -------- |
-| Source code          | `actions/checkout@v4`                        | all jobs |
+| Source code          | `actions/checkout@v6`                        | all jobs |
 | Bun version          | `bun-version: "1.3.9"` (hardcoded)           | all jobs |
 | Bun dependency cache | `~/.bun/install/cache` (restored from cache) | all jobs |
 | Lockfile hash        | `bun.lock` (for cache key)                   | all jobs |

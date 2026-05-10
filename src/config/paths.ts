@@ -28,6 +28,13 @@ export const AgentPaths = {
     mcpJson: join(HOME, ".claude.json"),
     credentials: join(HOME, ".claude", ".credentials.json"),
     skillsDir: join(HOME, ".claude", "skills"),
+    // Claude Code plugin layout (upstream: anthropics/claude-code).
+    // Plugins live under ~/.claude/plugins/<name>/ and each carries a
+    // .claude-plugin/plugin.json manifest plus optional commands/, agents/,
+    // hooks/, skills/, and .mcp.json siblings. The marketplace catalog at
+    // ~/.claude/.claude-plugin/marketplace.json is opt-in via config.
+    pluginsDir: join(HOME, ".claude", "plugins"),
+    marketplaceJson: join(HOME, ".claude", ".claude-plugin", "marketplace.json"),
   },
   codex: {
     root: process.env.CODEX_HOME ?? join(HOME, ".codex"),
@@ -65,6 +72,33 @@ export const AgentPaths = {
     })(),
   },
 } as const;
+
+/**
+ * Resolve the canonical sub-paths for a single Claude Code plugin given its root
+ * directory (typically `<pluginsDir>/<plugin-name>`). The shape mirrors the
+ * primary surfaces a plugin can expose: a `.claude-plugin/plugin.json`
+ * manifest plus optional `commands/`, `agents/`, `hooks/`, `skills/`, and
+ * `.mcp.json` siblings.
+ */
+export function resolveClaudePluginPaths(pluginRoot: string): {
+  root: string;
+  manifest: string;
+  commandsDir: string;
+  agentsDir: string;
+  hooksDir: string;
+  mcpJson: string;
+  skillsDir: string;
+} {
+  return {
+    root: pluginRoot,
+    manifest: join(pluginRoot, ".claude-plugin", "plugin.json"),
+    commandsDir: join(pluginRoot, "commands"),
+    agentsDir: join(pluginRoot, "agents"),
+    hooksDir: join(pluginRoot, "hooks"),
+    mcpJson: join(pluginRoot, ".mcp.json"),
+    skillsDir: join(pluginRoot, "skills"),
+  };
+}
 
 /** Resolve the OS-specific base directory used for AgentSync state. */
 export function resolveAgentSyncHome(): string {

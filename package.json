@@ -49,6 +49,9 @@
     "test:coverage": "bun test --coverage",
     "check": "bun run typecheck && bun run lint && bun run test",
     "check:act": "act -W .github/workflows/ci.yml",
+    "docs:install": "pip install -r docs/requirements.txt",
+    "docs:serve": "mkdocs serve",
+    "docs:build": "mkdocs build --strict",
     "prepack": "bun run build:package",
     "prepare": "lefthook install"
   },
@@ -64,8 +67,8 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.0.0",
-    "@types/node": "^22.15.3",
-    "bun-types": "1.3.9",
+    "@types/node": "^25.6.2",
+    "bun-types": "1.3.13",
     "lefthook": "^2.1.4",
     "typescript": "^6.0.0"
   },

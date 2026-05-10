@@ -8,8 +8,6 @@ Use this guide when a change affects user-facing behavior, exported symbols, syn
 
 - `README.md` is the entry point, not the full manual.
 - `docs/development.md` owns contributor setup and local workflow.
-- `docs/speckit.md` owns contributor-facing spec-kit workflow order, command usage, artifact expectations, and Mermaid-backed stage flow.
-- `docs/speckit-local-development.md` owns prompt-file locations, active-feature detection, timestamp branch mapping, repo-local recovery guidance, and speckit upkeep triggers.
 - `docs/architecture.md` owns system structure, flow, and security boundaries.
 - `docs/command-reference.md` owns command contracts and support-state notes.
 - `docs/troubleshooting.md` owns failure cases and next diagnostic steps.
@@ -39,7 +37,6 @@ Before merging a release-surface change, verify:
 
 Update repository docs in the same change when you:
 
-- change prompt files, agent files, `.specify/` scripts, or other repo-local spec-kit workflow assets
 - add or remove a CLI command or subcommand
 - change required inputs, defaults, or outcomes for an existing workflow
 - change how the released CLI is installed or how release notes are surfaced
@@ -83,18 +80,17 @@ Update repository docs in the same change when you:
 Before merging, verify:
 
 1. README still routes readers to the right guide within one screenful.
-2. Spec-kit workflow changes are reflected in `docs/speckit.md` and, when local workflow behavior changed, in `docs/speckit-local-development.md`.
-3. Command changes are reflected in `docs/command-reference.md`.
-4. Setup or recovery changes are reflected in `docs/development.md`, `docs/speckit-local-development.md`, or `docs/troubleshooting.md`.
-5. Architecture-sensitive changes are reflected in `docs/architecture.md`.
-6. Exported production symbols changed by the PR have updated JSDoc.
-7. Any required Mermaid diagrams were added or updated and validated successfully.
-8. Documentation-only PRs that skip automated test additions record why
+2. Command changes are reflected in `docs/command-reference.md`.
+3. Setup or recovery changes are reflected in `docs/development.md` or `docs/troubleshooting.md`.
+4. Architecture-sensitive changes are reflected in `docs/architecture.md`.
+5. Exported production symbols changed by the PR have updated JSDoc.
+6. Any required Mermaid diagrams were added or updated and validated successfully.
+7. Documentation-only PRs that skip automated test additions record why
   the exception applies and include manual walkthrough validation steps.
-9. Support-state wording is explicit where behavior is partial, planned, or unsupported.
-10. `README.md` and `docs/command-reference.md` still point to the canonical GitHub Release record for release notes.
-11. `bun run check` still passes.
-12. `README.md`, `docs/command-reference.md`, `docs/development.md`, `docs/maintenance.md`, and `docs/troubleshooting.md` still agree on when to use the released CLI path versus contributor-from-source commands.
+8. Support-state wording is explicit where behavior is partial, planned, or unsupported.
+9. `README.md` and `docs/command-reference.md` still point to the canonical GitHub Release record for release notes.
+10. `bun run check` still passes.
+11. `README.md`, `docs/command-reference.md`, `docs/development.md`, `docs/maintenance.md`, and `docs/troubleshooting.md` still agree on when to use the released CLI path versus contributor-from-source commands.
 
 ## Terminology guardrails
 
@@ -112,8 +108,6 @@ Before merging, verify:
 
 ## Related docs
 
-- [speckit.md](speckit.md)
-- [speckit-local-development.md](speckit-local-development.md)
 - [architecture.md](architecture.md)
 - [development.md](development.md)
 - [command-reference.md](command-reference.md)

@@ -5,7 +5,7 @@
 Use this guide when you need to run AgentSync locally, verify a change, or understand the contributor workflow without reading the source tree first.
 
 This guide is for contributor-from-source work from a local clone.
-If you want to run a published release, start in [../README.md](../README.md) and [command-reference.md](command-reference.md) instead.
+If you want to run a published release, start in [the project README](https://github.com/chrisleekr/agentsync#readme) and [command-reference.md](command-reference.md) instead.
 
 ## Prerequisites
 
@@ -18,7 +18,7 @@ If you use `nvm`, run `nvm use` at the repo root.
 
 If you use Volta, the project pin in `package.json` should switch you to the expected Node version automatically.
 
-This guide is for contributor-from-source work. Do not use `bun run src/cli.ts ...` as the default command path for a published release. The published CLI path is documented separately in [../README.md](../README.md) and [command-reference.md](command-reference.md).
+This guide is for contributor-from-source work. Do not use `bun run src/cli.ts ...` as the default command path for a published release. The published CLI path is documented separately in [the project README](https://github.com/chrisleekr/agentsync#readme) and [command-reference.md](command-reference.md).
 
 ## Install and verify
 
@@ -43,15 +43,6 @@ bun run pack:dry-run
 3. Pull vault configs with `bun run src/cli.ts pull`.
 4. Inspect drift with `bun run src/cli.ts status`.
 5. Run diagnostics with `bun run src/cli.ts doctor` when setup looks wrong.
-
-## Speckit workflow
-
-Use [speckit.md](speckit.md) when the change starts as feature planning or documentation through
-the spec-kit workflow rather than as direct source edits.
-
-Use [speckit-local-development.md](speckit-local-development.md) when you need the local details
-behind prompt files, agent files, `.specify/` scripts, active-feature detection, or timestamp
-branch naming.
 
 ## Common contributor loop
 
@@ -84,8 +75,6 @@ The exact resolved paths live in `src/config/paths.ts`. Use that module as the s
 
 ## When to branch into deeper docs
 
-- Use [speckit.md](speckit.md) when you need the command order, artifact map, or next-step logic for a spec-kit feature.
-- Use [speckit-local-development.md](speckit-local-development.md) when you need repo-local speckit behavior, maintenance rules, or recovery guidance.
 - Use [architecture.md](architecture.md) when a code change touches sync flow, daemon behavior, or security boundaries.
 - Use [command-reference.md](command-reference.md) when a released command contract or install path changes.
 - Use [troubleshooting.md](troubleshooting.md) when reproducing setup, key, or remote failures.

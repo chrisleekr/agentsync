@@ -1,7 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { AgentPaths, resolveAgentSyncHome, resolveDaemonSocketPath } from "../paths";
+import {
+  AgentPaths,
+  resolveAgentSyncHome,
+  resolveClaudePluginPaths,
+  resolveDaemonSocketPath,
+} from "../paths";
 
 // T015 — AgentPaths shape validation (non-mutable, import-time baked paths)
 
@@ -71,6 +76,30 @@ describe("paths", () => {
   test("AgentPaths.vscode.mcpJson is a non-empty string", () => {
     expect(typeof AgentPaths.vscode.mcpJson).toBe("string");
     expect(AgentPaths.vscode.mcpJson.length).toBeGreaterThan(0);
+  });
+
+  // Claude plugin path entries (issue #31)
+
+  test("AgentPaths.claude.pluginsDir is ~/.claude/plugins/", () => {
+    expect(AgentPaths.claude.pluginsDir).toBe(join(HOME, ".claude", "plugins"));
+  });
+
+  test("AgentPaths.claude.marketplaceJson is ~/.claude/.claude-plugin/marketplace.json", () => {
+    expect(AgentPaths.claude.marketplaceJson).toBe(
+      join(HOME, ".claude", ".claude-plugin", "marketplace.json"),
+    );
+  });
+
+  test("resolveClaudePluginPaths returns the canonical plugin sub-paths", () => {
+    const root = join(HOME, ".claude", "plugins", "my-plugin");
+    const paths = resolveClaudePluginPaths(root);
+    expect(paths.root).toBe(root);
+    expect(paths.manifest).toBe(join(root, ".claude-plugin", "plugin.json"));
+    expect(paths.commandsDir).toBe(join(root, "commands"));
+    expect(paths.agentsDir).toBe(join(root, "agents"));
+    expect(paths.hooksDir).toBe(join(root, "hooks"));
+    expect(paths.mcpJson).toBe(join(root, ".mcp.json"));
+    expect(paths.skillsDir).toBe(join(root, "skills"));
   });
 
   // T016 — resolveAgentSyncHome / resolveDaemonSocketPath

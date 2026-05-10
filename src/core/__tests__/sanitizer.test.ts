@@ -5,6 +5,8 @@ import {
   redactSecretLiterals,
   sanitizeClaudeHooks,
   sanitizeClaudeMcp,
+  sanitizeClaudePluginManifest,
+  sanitizeClaudePluginMcp,
   shouldNeverSync,
 } from "../sanitizer";
 
@@ -144,5 +146,52 @@ describe("sanitizer", () => {
     expect(redactSecretLiterals(null).warnings).toHaveLength(0);
     expect(redactSecretLiterals(42).warnings).toHaveLength(0);
     expect(redactSecretLiterals(true).warnings).toHaveLength(0);
+  });
+
+  // Claude plugin sanitizers (issue #31)
+
+  test("sanitizeClaudePluginManifest preserves manifest metadata", () => {
+    const manifest = JSON.stringify({
+      name: "acme-toolkit",
+      version: "1.2.3",
+      description: "Acme tools",
+      author: "Acme",
+      commands: [{ name: "review" }],
+    });
+    const out = sanitizeClaudePluginManifest(manifest);
+    const parsed = JSON.parse(out.value) as Record<string, unknown>;
+    expect(parsed.name).toBe("acme-toolkit");
+    expect(parsed.version).toBe("1.2.3");
+    expect(parsed.description).toBe("Acme tools");
+    expect((parsed.commands as { name: string }[])[0]?.name).toBe("review");
+  });
+
+  test("sanitizeClaudePluginManifest redacts literal secrets", () => {
+    const manifest = JSON.stringify({
+      name: "acme",
+      env: { token: `sk-${"x".repeat(30)}` },
+    });
+    const out = sanitizeClaudePluginManifest(manifest);
+    const parsed = JSON.parse(out.value) as { env: { token: string } };
+    expect(parsed.env.token.startsWith("$AGENTSYNC_REDACTED")).toBeTrue();
+    expect(out.warnings.length).toBe(1);
+  });
+
+  test("sanitizeClaudePluginMcp preserves the bare server descriptor", () => {
+    const mcp = JSON.stringify({
+      mcpServers: { acme: { command: "node", args: ["server.js"] } },
+    });
+    const out = sanitizeClaudePluginMcp(mcp);
+    const parsed = JSON.parse(out.value) as Record<string, unknown>;
+    expect(parsed.mcpServers).toBeDefined();
+  });
+
+  test("sanitizeClaudePluginMcp redacts literal secrets inside server config", () => {
+    const mcp = JSON.stringify({
+      mcpServers: { acme: { env: { API_KEY: `sk-${"y".repeat(30)}` } } },
+    });
+    const out = sanitizeClaudePluginMcp(mcp);
+    expect(out.warnings.length).toBe(1);
+    expect(out.value).toContain("$AGENTSYNC_REDACTED");
   });
 });
