@@ -1,0 +1,47 @@
+name: E2E
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    name: Docker E2E Smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build images and run smoke scenario
+        run: |
+          docker compose -f docker/e2e/compose.yml up \
+            --build \
+            --abort-on-container-exit \
+            --exit-code-from machine
+
+      - name: Capture container logs on failure
+        if: failure()
+        run: |
+          docker compose -f docker/e2e/compose.yml logs --no-color > docker-e2e-logs.txt || true
+
+      - name: Upload logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-e2e-logs
+          path: docker-e2e-logs.txt
+          retention-days: 7
+
+      - name: Tear down
+        if: always()
+        run: docker compose -f docker/e2e/compose.yml down -v
