@@ -49,30 +49,60 @@
 
 /* Light-mode contrast fix for our dark-fill classDef nodes.
 
-   Background: classDef sets `color:#ffffff` on the node, but Material's
-   `.md-typeset` rule for `.nodeLabel` wins on specificity and forces
-   text back to dark. The result is dark text on dark fills — invisible.
-   Targeting the rendered fill attribute is mermaid-version-stable and
-   does not require knowing mermaid's emitted class names. Colors below
-   match the classDef palette in architecture-overview.md. */
-.mermaid g.node:has(rect[fill="#2c3e50"]) .nodeLabel,
-.mermaid g.node:has(rect[fill="#2c3e50"]) .nodeLabel p,
-.mermaid g.node:has(rect[fill="#2c3e50"]) .nodeLabel span,
-.mermaid g.node:has(rect[fill="#8e44ad"]) .nodeLabel,
-.mermaid g.node:has(rect[fill="#8e44ad"]) .nodeLabel p,
-.mermaid g.node:has(rect[fill="#8e44ad"]) .nodeLabel span,
-.mermaid g.node:has(rect[fill="#c0392b"]) .nodeLabel,
-.mermaid g.node:has(rect[fill="#c0392b"]) .nodeLabel p,
-.mermaid g.node:has(rect[fill="#c0392b"]) .nodeLabel span,
-.mermaid g.node:has(rect[fill="#27ae60"]) .nodeLabel,
-.mermaid g.node:has(rect[fill="#27ae60"]) .nodeLabel p,
-.mermaid g.node:has(rect[fill="#27ae60"]) .nodeLabel span,
-.mermaid g.node:has(path[fill="#27ae60"]) .nodeLabel,
-.mermaid g.node:has(path[fill="#27ae60"]) .nodeLabel p,
-.mermaid g.node:has(path[fill="#27ae60"]) .nodeLabel span,
-.mermaid g.node:has(rect[fill="#d35400"]) .nodeLabel,
-.mermaid g.node:has(rect[fill="#d35400"]) .nodeLabel p,
-.mermaid g.node:has(rect[fill="#d35400"]) .nodeLabel span {
+   Background: classDef sets `color:#ffffff` but Material's `.md-typeset`
+   rule for `.nodeLabel` wins on specificity and forces text back to
+   dark — invisible on our dark fills. We match two ways for resilience
+   across mermaid versions:
+
+   1. By classDef-derived class on `g.node` (mermaid emits e.g. `.local`
+      from `classDef local ...`). Cleanest, semantic, no fill coupling.
+   2. By rect/path fill via general-sibling selector `~`. Works when the
+      label-g is a sibling of the shape-rect inside `g.node`. Guards
+      against any mermaid build where the classDef class name is dropped.
+
+   Colors mirror the classDef palette in architecture-overview.md. */
+.mermaid g.node.local .nodeLabel,
+.mermaid g.node.key .nodeLabel,
+.mermaid g.node.gate .nodeLabel,
+.mermaid g.node.remote .nodeLabel,
+.mermaid g.node.step .nodeLabel,
+.mermaid g.node.abort .nodeLabel,
+.mermaid g.node.local .nodeLabel p,
+.mermaid g.node.key .nodeLabel p,
+.mermaid g.node.gate .nodeLabel p,
+.mermaid g.node.remote .nodeLabel p,
+.mermaid g.node.step .nodeLabel p,
+.mermaid g.node.abort .nodeLabel p,
+.mermaid g.node.local .nodeLabel span,
+.mermaid g.node.key .nodeLabel span,
+.mermaid g.node.gate .nodeLabel span,
+.mermaid g.node.remote .nodeLabel span,
+.mermaid g.node.step .nodeLabel span,
+.mermaid g.node.abort .nodeLabel span,
+.mermaid g.node rect[fill="#2c3e50"] ~ g .nodeLabel,
+.mermaid g.node rect[fill="#8e44ad"] ~ g .nodeLabel,
+.mermaid g.node rect[fill="#c0392b"] ~ g .nodeLabel,
+.mermaid g.node rect[fill="#27ae60"] ~ g .nodeLabel,
+.mermaid g.node path[fill="#27ae60"] ~ g .nodeLabel,
+.mermaid g.node rect[fill="#d35400"] ~ g .nodeLabel,
+.mermaid g.node rect[fill="#2c3e50"] ~ g .nodeLabel p,
+.mermaid g.node rect[fill="#8e44ad"] ~ g .nodeLabel p,
+.mermaid g.node rect[fill="#c0392b"] ~ g .nodeLabel p,
+.mermaid g.node rect[fill="#27ae60"] ~ g .nodeLabel p,
+.mermaid g.node path[fill="#27ae60"] ~ g .nodeLabel p,
+.mermaid g.node rect[fill="#d35400"] ~ g .nodeLabel p,
+.mermaid g.node rect[style*="#2c3e50"] ~ g .nodeLabel,
+.mermaid g.node rect[style*="#8e44ad"] ~ g .nodeLabel,
+.mermaid g.node rect[style*="#c0392b"] ~ g .nodeLabel,
+.mermaid g.node rect[style*="#27ae60"] ~ g .nodeLabel,
+.mermaid g.node path[style*="#27ae60"] ~ g .nodeLabel,
+.mermaid g.node rect[style*="#d35400"] ~ g .nodeLabel,
+.mermaid g.node rect[style*="#2c3e50"] ~ g .nodeLabel p,
+.mermaid g.node rect[style*="#8e44ad"] ~ g .nodeLabel p,
+.mermaid g.node rect[style*="#c0392b"] ~ g .nodeLabel p,
+.mermaid g.node rect[style*="#27ae60"] ~ g .nodeLabel p,
+.mermaid g.node path[style*="#27ae60"] ~ g .nodeLabel p,
+.mermaid g.node rect[style*="#d35400"] ~ g .nodeLabel p {
   color: #ffffff !important;
   fill: #ffffff !important;
 }
