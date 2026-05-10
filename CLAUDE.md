@@ -77,6 +77,12 @@ bun run check:act     # run CI workflow locally via nektos/act
 - **Imports**: ES modules only (`"type": "module"`). Use Node-style
   imports with explicit `.ts` paths where Bun requires them; let Biome
   organise import order.
+- **No spec-tracker refs in code**: never embed `FR-###`, `SC-###`,
+  `US#`, `T###`, `NC-#`, or `(research R#)`-style references in
+  comments, test names, JSDoc, or string literals. Future readers will
+  not have spec context. Write the WHY directly: name the rule, name
+  the failure mode the check prevents, or describe the invariant. Spec
+  IDs belong in commit messages and PR descriptions, not source.
 
 ## Speckit
 

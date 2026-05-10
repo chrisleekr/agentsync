@@ -107,7 +107,7 @@ export async function snapshotClaude(options: ClaudeSyncOptions = {}): Promise<S
     // agents dir may not exist yet.
   }
 
-  // Skills — delegated to the shared walker (FR-001/FR-002/FR-006/FR-016/FR-017).
+  // Skills — delegated to the shared walker.
   // The walker handles dot-skip, symlink rejection, sentinel verification, the
   // never-sync interior scan, and the symlink-filtered tar archival in one
   // place so every skill-bearing agent inherits identical rules.
@@ -546,7 +546,7 @@ export async function applyClaudeVault(
     }
   }
 
-  // Skills sub-directory — stored as <name>.tar.age (FR-005). Mirrors the
+  // Skills sub-directory — stored as <name>.tar.age. Mirrors the
   // Copilot apply path: each entry is decrypted, then the inner base64 tar
   // is extracted into ~/.claude/skills/<name>/ via applyClaudeSkill.
   const skillFiles = await readAgeFiles(join(claudeDir, "skills"));

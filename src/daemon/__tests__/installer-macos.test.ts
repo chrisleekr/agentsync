@@ -119,9 +119,9 @@ beforeEach(() => {
   lastExecFileOpts = undefined;
 });
 
-// ── T029: buildPlist emits separate <string> elements ─────────────────────────
+// ── buildPlist emits separate <string> elements ─────────────────────────
 describe("buildPlist", () => {
-  test("emits separate <string> elements for each arg (T029)", () => {
+  test("emits separate <string> elements for each arg", () => {
     const plist = m.buildPlist(["bun", "/path/cli.js"], "/var/log");
     // Must have individual entries, not a space-joined single string
     expect(plist).toContain("<string>bun</string>");
@@ -139,8 +139,8 @@ describe("buildPlist", () => {
     expect(plist).toContain("<string>_run</string>");
   });
 
-  // T064: XML special characters in args are escaped
-  test("escapes & and < in arg values (T064)", () => {
+  // XML special characters in args are escaped
+  test("escapes & and < in arg values", () => {
     const plist = m.buildPlist(["/path/with&amp", "/path/<special>"], "/var/log");
     expect(plist).toContain("<string>/path/with&amp;amp</string>");
     expect(plist).toContain("<string>/path/&lt;special&gt;</string>");
@@ -149,9 +149,9 @@ describe("buildPlist", () => {
   });
 });
 
-// ── T030: installMacOs calls bootout before bootstrap ─────────────────────────
+// ── installMacOs calls bootout before bootstrap ─────────────────────────
 describe("installMacOs", () => {
-  test("calls launchctl bootout before launchctl bootstrap (T030)", async () => {
+  test("calls launchctl bootout before launchctl bootstrap", async () => {
     await m.installMacOs(["bun", "/path/cli.js"]);
 
     const bootoutIdx = execFileCalls.findIndex(
@@ -191,8 +191,8 @@ describe("installMacOs", () => {
     expect(await m.isInstalledMacOs()).toBe(true);
   });
 
-  // T031: bootstrap failure surfaces stderr, not stack trace
-  test("throws with service manager stderr (not stack trace) when bootstrap fails (T031)", async () => {
+  // bootstrap failure surfaces stderr, not stack trace
+  test("throws with service manager stderr (not stack trace) when bootstrap fails", async () => {
     launchctlShouldFail = true;
     launchctlFailStderr = "Bootstrap failed: 5: Input/output error";
 
@@ -229,9 +229,9 @@ describe("uninstallMacOs", () => {
   });
 });
 
-// ── T032: startMacOs throws immediately when not registered ───────────────────
+// ── startMacOs throws immediately when not registered ───────────────────
 describe("startMacOs / stopMacOs", () => {
-  test("startMacOs throws 'Service not bootstrapped' when isRegisteredMacOs returns false (T032)", async () => {
+  test("startMacOs throws 'Service not bootstrapped' when isRegisteredMacOs returns false", async () => {
     // launchctl print will fail (not registered), no kickstart call expected
     await expect(m.startMacOs()).rejects.toThrow("Service not bootstrapped");
 
@@ -241,8 +241,8 @@ describe("startMacOs / stopMacOs", () => {
     expect(kickstartCall).toBeUndefined();
   });
 
-  // T069: startMacOs passes AbortSignal to execFileAsync
-  test("startMacOs passes signal option to execFileAsync for kickstart (T069)", async () => {
+  // startMacOs passes AbortSignal to execFileAsync
+  test("startMacOs passes signal option to execFileAsync for kickstart", async () => {
     launchctlPrintShouldFail = false; // registered
     await m.startMacOs();
 

@@ -92,7 +92,7 @@ export async function snapshotCursor(): Promise<SnapshotResult> {
 
   // Skills — delegated to the shared walker. The walker is pointed at
   // `AgentPaths.cursor.skillsDir` which resolves to `~/.cursor/skills/` —
-  // the FR-010 canonical path. The bundled `~/.cursor/skills-cursor/`
+  // the canonical user-skills path. The bundled `~/.cursor/skills-cursor/`
   // directory is NEVER read because `paths.ts` does not expose it and the
   // walker is not given a pointer to it, so there is no code path through
   // which vendor bundles can leak into the vault.
@@ -132,7 +132,7 @@ export async function applyCursorCommand(commandName: string, content: string): 
 /**
  * Restore one Cursor skill directory from the vault by extracting its
  * encrypted tar archive into `~/.cursor/skills/<name>/` — NEVER into the
- * bundled `~/.cursor/skills-cursor/` path (FR-010).
+ * bundled `~/.cursor/skills-cursor/` path.
  *
  * Mirrors {@link applyClaudeSkill}: parents are created on demand and the
  * tar's interior layout is preserved bit-for-bit.
@@ -212,7 +212,7 @@ export async function applyCursorVault(
     }
   }
 
-  // Skills sub-directory — stored as <name>.tar.age (FR-005). Mirrors the
+  // Skills sub-directory — stored as <name>.tar.age. Mirrors the
   // Claude/Codex/Copilot apply path: each entry is decrypted, then the inner
   // base64 tar is extracted into ~/.cursor/skills/<name>/ via applyCursorSkill.
   // The top-level unrecognised-file warning above is inspecting only top-level

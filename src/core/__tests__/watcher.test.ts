@@ -13,7 +13,7 @@ import { Watcher } from "../watcher";
   mock.module("node:fs/promises", () => realFsPromises);
 }
 
-// T033-T035 — Watcher debounce and lifecycle
+// Watcher debounce and lifecycle
 
 describe("Watcher", () => {
   let tmpDir: string;
@@ -26,7 +26,7 @@ describe("Watcher", () => {
     await rm(tmpDir, { recursive: true, force: true });
   });
 
-  // T033 — debounce collapses rapid writes into one callback
+  // debounce collapses rapid writes into one callback
   test("callback fires exactly once for rapid writes within the debounce window", async () => {
     const watcher = new Watcher();
     const fired: string[] = [];
@@ -47,7 +47,7 @@ describe("Watcher", () => {
     expect(fired.length).toBe(1);
   });
 
-  // T034 — remove stops callbacks for that path
+  // remove stops callbacks for that path
   test("Watcher.remove stops callbacks; subsequent writes do not fire", async () => {
     const watcher = new Watcher();
     let fireCount = 0;
@@ -71,7 +71,7 @@ describe("Watcher", () => {
     expect(fireCount).toBe(beforeRemove); // no new events
   });
 
-  // T035 — close stops all watchers
+  // close stops all watchers
   test("Watcher.close stops all watchers; writes after close invoke no callbacks", async () => {
     const watcher = new Watcher();
     let fireCount = 0;

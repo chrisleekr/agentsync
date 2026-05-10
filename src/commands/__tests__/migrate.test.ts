@@ -49,7 +49,7 @@ describe("MigrateOptionsSchema", () => {
     expect(result.success).toBe(false);
   });
 
-  test("rejects same source and target (FR-009)", () => {
+  test("rejects same source and target", () => {
     const result = MigrateOptionsSchema.safeParse({
       from: "claude",
       to: "claude",

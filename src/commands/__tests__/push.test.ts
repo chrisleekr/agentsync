@@ -83,7 +83,7 @@ afterAll(() => {
   mock.restore();
 });
 
-describe("performPush — never-sync inside skill (FR-006)", () => {
+describe("performPush — never-sync inside skill", () => {
   let tmpDir: string;
   let machine: TestMachineFixture;
   const savedEnv: Record<string, string | undefined> = {};
@@ -183,8 +183,8 @@ describe("performPush — never-sync inside skill (FR-006)", () => {
   });
 });
 
-describe("performPush — additive default for local deletes (FR-011 / SC-006)", () => {
-  // T036 — closes the analysis-flagged automated-coverage gap for FR-011.
+describe("performPush — additive default for local deletes", () => {
+  // closes the analysis-flagged automated-coverage gap.
   // Uses the same Copilot fixture pattern as the never-sync test above.
 
   let tmpDir: string;
@@ -250,7 +250,7 @@ describe("performPush — additive default for local deletes (FR-011 / SC-006)",
     await rm(tmpDir, { recursive: true, force: true });
   });
 
-  test("local skill deletion does NOT mutate the vault artifact (FR-011)", async () => {
+  test("local skill deletion does NOT mutate the vault artifact", async () => {
     // First push: create one Copilot skill and push it to the vault.
     const skillDir = join(mutableCopilotPaths.skillsDir, "long-lived-skill");
     mkdirSync(skillDir, { recursive: true });
@@ -267,7 +267,7 @@ describe("performPush — additive default for local deletes (FR-011 / SC-006)",
     expect(firstBytes.length).toBeGreaterThan(0);
 
     // Now delete the local skill directory and push again. The additive
-    // default (FR-011) demands that the vault artifact stays exactly as it
+    // default demands that the vault artifact stays exactly as it
     // was — a stray local `rm -rf` must not propagate to other machines.
     await rm(skillDir, { recursive: true, force: true });
 

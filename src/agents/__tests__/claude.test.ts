@@ -47,7 +47,7 @@ afterAll(() => {
   Object.assign(testClaudePaths, originalClaudePaths);
 });
 
-// T018 — snapshotClaude
+// snapshotClaude
 
 describe("snapshotClaude", () => {
   let tmpDir: string;
@@ -144,7 +144,7 @@ describe("snapshotClaude", () => {
     expect(result.warnings.length).toBeGreaterThanOrEqual(0);
   });
 
-  // T014 — US1 Claude skill round-trip happy path (FR-001, FR-003, FR-004)
+  // Claude skill round-trip happy path
 
   test("snapshots a real Claude skill directory as a base64 tar artifact", async () => {
     const skillDir = join(testClaudePaths.skillsDir, "my-skill");
@@ -162,9 +162,9 @@ describe("snapshotClaude", () => {
     expect(art!.plaintext.length).toBeGreaterThan(0);
   });
 
-  // T014(5) — FR-009 missing-dir case at the agent layer
+  // missing-dir case at the agent layer
 
-  test("snapshotClaude does not throw when the skills directory is missing (FR-009)", async () => {
+  test("snapshotClaude does not throw when the skills directory is missing", async () => {
     testClaudePaths.skillsDir = join(tmpDir, "skills-does-not-exist");
 
     const result = await claudeModule.snapshotClaude();
@@ -173,9 +173,9 @@ describe("snapshotClaude", () => {
     expect(result.warnings.filter((w) => w.startsWith("never-sync"))).toHaveLength(0);
   });
 
-  // T014(6) — FR-016 interior-symlink defense-in-depth at the agent layer
+  // interior-symlink defense-in-depth at the agent layer
 
-  test("snapshotClaude omits interior symlink helper files from the tar (FR-016 inner)", async () => {
+  test("snapshotClaude omits interior symlink helper files from the tar", async () => {
     // Vendored helper outside the skills root.
     const helperTargetParent = join(tmpDir, "vendored-helpers");
     mkdirSync(helperTargetParent, { recursive: true });
@@ -207,10 +207,10 @@ describe("snapshotClaude", () => {
     expect(entries).not.toContain("helper.md");
   });
 
-  // T015 — Claude-specific edge cases that prove the walker is correctly
+  // Claude-specific edge cases that prove the walker is correctly
   // wired into snapshotClaude (not just the walker module in isolation).
 
-  test("snapshotClaude skips a top-level symlinked skill root (FR-016 outer)", async () => {
+  test("snapshotClaude skips a top-level symlinked skill root", async () => {
     const vendoredTarget = join(tmpDir, "vendored-pool", "vendor-skill");
     mkdirSync(vendoredTarget, { recursive: true });
     writeFileSync(join(vendoredTarget, "SKILL.md"), "# vendored", "utf8");
@@ -223,7 +223,7 @@ describe("snapshotClaude", () => {
     expect(skillArts).toHaveLength(0);
   });
 
-  test("snapshotClaude skips a top-level .system directory (FR-017 dot-skip)", async () => {
+  test("snapshotClaude skips a top-level .system directory", async () => {
     const systemSkill = join(testClaudePaths.skillsDir, ".system", "vendor");
     mkdirSync(systemSkill, { recursive: true });
     writeFileSync(join(systemSkill, "SKILL.md"), "# vendor", "utf8");
@@ -233,7 +233,7 @@ describe("snapshotClaude", () => {
     expect(skillArts).toHaveLength(0);
   });
 
-  test("snapshotClaude skips a skill whose SKILL.md sentinel is a symlink (FR-016 sentinel)", async () => {
+  test("snapshotClaude skips a skill whose SKILL.md sentinel is a symlink", async () => {
     const realSentinel = join(tmpDir, "vendored-sentinel.md");
     writeFileSync(realSentinel, "# vendored", "utf8");
 
@@ -247,7 +247,7 @@ describe("snapshotClaude", () => {
   });
 });
 
-// T024 — applyClaudeMd / applyClaudeHooks / applyClaudeMcp / applyClaudeCommand / applyClaudeAgent
+// applyClaudeMd / applyClaudeHooks / applyClaudeMcp / applyClaudeCommand / applyClaudeAgent
 
 describe("apply* functions", () => {
   let tmpDir: string;
@@ -318,7 +318,7 @@ describe("apply* functions", () => {
     expect(content).toBe("# Agent content");
   });
 
-  // T014(2) — applyClaudeSkill direct extraction test
+  // applyClaudeSkill direct extraction test
 
   test("applyClaudeSkill extracts a tar archive into the local skills dir", async () => {
     // Build a source skill, archive it via the same helper the walker uses,
@@ -341,7 +341,7 @@ describe("apply* functions", () => {
   });
 });
 
-// T028 — dryRun (applyClaudeVault)
+// dryRun (applyClaudeVault)
 
 describe("applyClaudeVault dryRun", () => {
   let tmpDir: string;
@@ -384,7 +384,7 @@ describe("applyClaudeVault dryRun", () => {
     expect(exists).toBeFalse();
   });
 
-  // T014(3) — applyClaudeVault round-trip restores skill from encrypted vault
+  // applyClaudeVault round-trip restores skill from encrypted vault
 
   test("applyClaudeVault restores a Claude skill from an encrypted vault artifact", async () => {
     const { generateIdentity, identityToRecipient, encryptString } = await import(
@@ -418,7 +418,7 @@ describe("applyClaudeVault dryRun", () => {
     expect(restoredGuide).toBe("# guide");
   });
 
-  // T014(4) — applyClaudeVault dryRun=true must NOT touch the local skills dir
+  // applyClaudeVault dryRun=true must NOT touch the local skills dir
 
   test("applyClaudeVault dryRun=true does not extract skill artifacts", async () => {
     const { generateIdentity, identityToRecipient, encryptString } = await import(

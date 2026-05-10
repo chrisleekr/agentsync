@@ -24,7 +24,7 @@ describe("tar", () => {
     await rm(tmpDir, { recursive: true, force: true });
   });
 
-  // T008 — archiveDirectory returns non-empty Buffer
+  // archiveDirectory returns non-empty Buffer
 
   test("archiveDirectory returns a non-empty Buffer", async () => {
     const srcDir = join(tmpDir, "src");
@@ -36,7 +36,7 @@ describe("tar", () => {
     expect(buf.length).toBeGreaterThan(0);
   });
 
-  // T009 — round-trip: archive then extract preserves files
+  // round-trip: archive then extract preserves files
 
   test("archiveDirectory + extractArchive round-trips file contents", async () => {
     const srcDir = join(tmpDir, "src");
@@ -70,7 +70,7 @@ describe("tar", () => {
     await expect(extractArchive(buf, destDir)).resolves.toBeUndefined();
   });
 
-  // T010 — zip-slip protection: absolute path entries are dropped
+  // zip-slip protection: absolute path entries are dropped
 
   test("extractArchive drops absolute-path entries (zip-slip protection)", async () => {
     // Build a normal archive first, then we verify absolute-path filtering logic
@@ -91,7 +91,7 @@ describe("tar", () => {
     expect(text).toBe("ok");
   });
 
-  // T011 — multiple files with unicode names preserved
+  // multiple files with unicode names preserved
 
   test("preserves unicode and hyphenated filenames", async () => {
     const srcDir = join(tmpDir, "src-uni");
@@ -107,7 +107,7 @@ describe("tar", () => {
     expect(text).toBe('key = "value"');
   });
 
-  // T004 — skipSymlinks filter (FR-016 inner tier)
+  // skipSymlinks filter
 
   test("archiveDirectory({ skipSymlinks: true }) omits symlink entries", async () => {
     const srcDir = join(tmpDir, "src-symlink-skip");
@@ -156,10 +156,10 @@ describe("tar", () => {
     // back without throwing on the symlink entry.
   });
 
-  // T004(3) — tar determinism for status hash stability (research R9 caveat)
+  // tar determinism for status hash stability
 
   test("archiveDirectory({ skipSymlinks: true }) is deterministic across calls", async () => {
-    // SC-003 depends on `archiveDirectory` producing identical bytes for the
+    // depends on `archiveDirectory` producing identical bytes for the
     // same directory tree so the status command's SHA-256 comparison is
     // stable. If this test fails, the fix is to set `gzip: { mtime: 0 }` (or
     // equivalent) on the underlying tar.create options so the gzip header

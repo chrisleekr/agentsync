@@ -1,5 +1,5 @@
 /**
- * T049 — debug module: isDebug flag and debug() function
+ * debug module: isDebug flag and debug() function
  *
  * isDebug is a module-level constant evaluated at import time.
  * In this test file AGENTSYNC_DEBUG is either unset or "0", so isDebug is false

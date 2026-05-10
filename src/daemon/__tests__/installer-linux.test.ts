@@ -107,9 +107,9 @@ beforeEach(() => {
   lastExecFileOpts = undefined;
 });
 
-// T034: buildUnit emits correct ExecStart
+// buildUnit emits correct ExecStart
 describe("buildUnit", () => {
-  test("produces ExecStart with each arg quoted plus daemon _run (T034)", () => {
+  test("produces ExecStart with each arg quoted plus daemon _run", () => {
     const unit = m.buildUnit(["bun", "/path/cli.js"]);
     expect(unit).toContain('ExecStart="bun" "/path/cli.js" "daemon" "_run"');
   });
@@ -119,8 +119,8 @@ describe("buildUnit", () => {
     expect(unit).toContain('ExecStart="/usr/local/bin/agentsync" "daemon" "_run"');
   });
 
-  // T063: args containing spaces are quoted per systemd.syntax(7)
-  test("args containing spaces are quoted for systemd (T063)", () => {
+  // args containing spaces are quoted per systemd.syntax(7)
+  test("args containing spaces are quoted for systemd", () => {
     const unit = m.buildUnit(["bun", "/home/user/My Program/cli.js"]);
     expect(unit).toContain('"bun"');
     expect(unit).toContain('"/home/user/My Program/cli.js"');
@@ -128,7 +128,7 @@ describe("buildUnit", () => {
     expect(unit).toContain('"_run"');
   });
 
-  test("args containing backslashes and quotes are C-style escaped (T063)", () => {
+  test("args containing backslashes and quotes are C-style escaped", () => {
     const unit = m.buildUnit(['/path/with"quote', "/path/with\\backslash"]);
     expect(unit).toContain('"/path/with\\"quote"');
     expect(unit).toContain('"/path/with\\\\backslash"');
@@ -192,8 +192,8 @@ describe("startLinux / stopLinux", () => {
     await expect(m.startLinux()).rejects.toThrow("Service not bootstrapped");
   });
 
-  // T070: startLinux passes AbortSignal to execFileAsync
-  test("startLinux passes signal option to execFileAsync for start (T070)", async () => {
+  // startLinux passes AbortSignal to execFileAsync
+  test("startLinux passes signal option to execFileAsync for start", async () => {
     isEnabledStdout = "enabled\n";
     await m.startLinux();
 

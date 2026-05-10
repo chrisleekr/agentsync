@@ -30,8 +30,8 @@ describe("collectSkillArtifacts", () => {
     expect(result.warnings).toHaveLength(0);
   });
 
-  // Row 2 — missing skills root (FR-009)
-  test("returns empty result when skills root does not exist (FR-009)", async () => {
+  // Row 2 — missing skills root
+  test("returns empty result when skills root does not exist", async () => {
     const result = await collectSkillArtifacts("claude", join(tmpDir, "does-not-exist"));
     expect(result.artifacts).toHaveLength(0);
     expect(result.warnings).toHaveLength(0);
@@ -54,7 +54,7 @@ describe("collectSkillArtifacts", () => {
   });
 
   // Row 4 — directory missing SKILL.md sentinel
-  test("skips a directory that has no SKILL.md sentinel (FR-002)", async () => {
+  test("skips a directory that has no SKILL.md sentinel", async () => {
     const skillDir = join(tmpDir, "no-sentinel");
     await mkdir(skillDir, { recursive: true });
     await writeFile(join(skillDir, "README.md"), "# notes", "utf8");
@@ -64,8 +64,8 @@ describe("collectSkillArtifacts", () => {
     expect(result.warnings).toHaveLength(0);
   });
 
-  // Row 5 — SKILL.md is itself a symlink (FR-016 sentinel back-door)
-  test("skips a skill whose SKILL.md is itself a symlink (FR-016 sentinel guard)", async () => {
+  // Row 5 — SKILL.md is itself a symlink
+  test("skips a skill whose SKILL.md is itself a symlink", async () => {
     const realSentinel = join(tmpDir, ".vendored-sentinel.md");
     await writeFile(realSentinel, "# vendored", "utf8");
 
@@ -78,8 +78,8 @@ describe("collectSkillArtifacts", () => {
     expect(result.warnings).toHaveLength(0);
   });
 
-  // Row 6 — top-level symlink root pointing into a vendored pool (FR-016 outer)
-  test("skips a top-level symlinked skill root (FR-016 outer tier)", async () => {
+  // Row 6 — top-level symlink root pointing into a vendored pool
+  test("skips a top-level symlinked skill root", async () => {
     const targetSkill = join(tmpDir, ".vendored-pool", "real-target");
     await mkdir(targetSkill, { recursive: true });
     await writeFile(join(targetSkill, "SKILL.md"), "# vendored skill", "utf8");
@@ -91,8 +91,8 @@ describe("collectSkillArtifacts", () => {
     expect(result.warnings).toHaveLength(0);
   });
 
-  // Row 7 — top-level .system directory containing a real skill (FR-017)
-  test("skips a top-level .system directory (FR-017 dot-skip)", async () => {
+  // Row 7 — top-level .system directory containing a real skill
+  test("skips a top-level .system directory", async () => {
     const systemSkill = join(tmpDir, ".system", "vendor-skill");
     await mkdir(systemSkill, { recursive: true });
     await writeFile(join(systemSkill, "SKILL.md"), "# vendor", "utf8");
@@ -102,8 +102,8 @@ describe("collectSkillArtifacts", () => {
     expect(result.warnings).toHaveLength(0);
   });
 
-  // Row 8 — top-level .DS_Store regular file (FR-017)
-  test("skips a top-level .DS_Store file (FR-017 dot-skip)", async () => {
+  // Row 8 — top-level .DS_Store regular file
+  test("skips a top-level .DS_Store file", async () => {
     await writeFile(join(tmpDir, ".DS_Store"), "binary", "utf8");
     const result = await collectSkillArtifacts("claude", tmpDir);
     expect(result.artifacts).toHaveLength(0);
@@ -132,8 +132,8 @@ describe("collectSkillArtifacts", () => {
     expect(result.warnings).toHaveLength(0);
   });
 
-  // Row 10 — real skill with interior symlink helper file (FR-016 inner)
-  test("archives a real skill while omitting interior symlink helper files (FR-016 inner tier)", async () => {
+  // Row 10 — real skill with interior symlink helper file
+  test("archives a real skill while omitting interior symlink helper files", async () => {
     const helperTargetParent = join(tmpDir, ".helper-pool");
     await mkdir(helperTargetParent, { recursive: true });
     const helperTarget = join(helperTargetParent, "shared.md");
@@ -161,8 +161,8 @@ describe("collectSkillArtifacts", () => {
     expect(entries).not.toContain("helper.md");
   });
 
-  // Row 11 — skill containing a never-sync file (FR-006)
-  test("rejects a skill that contains a never-sync file (FR-006)", async () => {
+  // Row 11 — skill containing a never-sync file
+  test("rejects a skill that contains a never-sync file", async () => {
     const skillDir = join(tmpDir, "dirty-skill");
     await mkdir(skillDir, { recursive: true });
     await writeFile(join(skillDir, "SKILL.md"), "# dirty", "utf8");
@@ -199,13 +199,13 @@ describe("collectSkillArtifacts", () => {
     expect(result.warnings[0]?.startsWith("never-sync inside skill: ")).toBe(true);
   });
 
-  // Row 13 — the skills root path itself is a symlink (NC-1 from PR review).
-  // Resolves the spec ambiguity toward the conservative "skills I created"
-  // intent: if the entire root is a symlink (e.g., a power user has done
+  // Row 13 — the skills root path itself is a symlink. Resolves the spec
+  // ambiguity toward the conservative "skills I created" intent: if the
+  // entire root is a symlink (e.g., a power user has done
   // `ln -s /srv/team-pool ~/.claude/skills`), the walker MUST refuse to
-  // enumerate it. The same anti-vendoring rule that FR-016 applies to
-  // individual entries extends to the root by consistency.
-  test("returns empty when the skills root path is itself a symlink (NC-1)", async () => {
+  // enumerate it. The anti-vendoring rule that rejects symlinked entries
+  // extends to the root by consistency.
+  test("returns empty when the skills root path is itself a symlink", async () => {
     const realRoot = join(tmpDir, "real-pool");
     await mkdir(realRoot, { recursive: true });
     // Populate it with a real skill so we can prove the walker WOULD have

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { Agents } from "../registry";
 
-// T023 — Agents registry
+// Agents registry
 
 describe("Agents registry", () => {
   test("contains exactly 5 agents", () => {

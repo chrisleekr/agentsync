@@ -136,7 +136,7 @@ describe("readSourceArtefacts", () => {
     expect(result[0].name).toBe("review.md");
   });
 
-  test("returns empty for missing source files (FR-013)", async () => {
+  test("returns empty for missing source files", async () => {
     const result = await readSourceArtefacts("claude", "global-rules");
     expect(result).toHaveLength(0);
   });
@@ -242,7 +242,7 @@ describe("performMigrate", () => {
     expect(vsSkip).toBeDefined();
   });
 
-  test("aborts on detected secret in MCP content (FR-011)", async () => {
+  test("aborts on detected secret in MCP content", async () => {
     writeFixture(
       testClaude.mcpJson,
       JSON.stringify({
@@ -329,7 +329,7 @@ describe("performMigrate", () => {
     expect(written).toContain("slack");
   });
 
-  test("reports skip for missing source files (FR-013)", async () => {
+  test("reports skip for missing source files", async () => {
     const result = await performMigrate({
       from: "claude",
       to: "cursor",

@@ -8,7 +8,7 @@ import {
   resolveDaemonSocketPath,
 } from "../paths";
 
-// T015 — AgentPaths shape validation (non-mutable, import-time baked paths)
+// AgentPaths shape validation (non-mutable, import-time baked paths)
 
 describe("paths", () => {
   const HOME = homedir();
@@ -49,15 +49,15 @@ describe("paths", () => {
     expect(AgentPaths.copilot.agentsDir).toContain("agents");
   });
 
-  // T003 — skillsDir entries for the three newly skill-bearing agents (FR-001, FR-010)
+  // skillsDir entries for the three newly skill-bearing agents
 
   test("AgentPaths.claude.skillsDir is ~/.claude/skills/", () => {
     expect(AgentPaths.claude.skillsDir).toBe(join(HOME, ".claude", "skills"));
   });
 
-  test("AgentPaths.cursor.skillsDir is ~/.cursor/skills/ (FR-010 canonical path)", () => {
+  test("AgentPaths.cursor.skillsDir is ~/.cursor/skills/", () => {
     expect(AgentPaths.cursor.skillsDir).toBe(join(HOME, ".cursor", "skills"));
-    // FR-010 forbids reading ~/.cursor/skills-cursor/. The path entry must NOT
+    // forbids reading ~/.cursor/skills-cursor/. The path entry must NOT
     // resolve to that location regardless of platform.
     expect(AgentPaths.cursor.skillsDir).not.toContain("skills-cursor");
   });
@@ -102,7 +102,7 @@ describe("paths", () => {
     expect(paths.skillsDir).toBe(join(root, "skills"));
   });
 
-  // T016 — resolveAgentSyncHome / resolveDaemonSocketPath
+  // resolveAgentSyncHome / resolveDaemonSocketPath
 
   test("resolveAgentSyncHome returns a non-empty string", () => {
     const result = resolveAgentSyncHome();
