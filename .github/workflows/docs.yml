@@ -16,7 +16,9 @@ permissions:
 
 concurrency:
   group: docs-${{ github.ref }}
-  cancel-in-progress: false
+  # PR builds can be cancelled when a newer commit lands; deploy runs
+  # on main must not be cancelled mid-flight to avoid a half-published site.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build:
