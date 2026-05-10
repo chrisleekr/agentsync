@@ -100,8 +100,6 @@ nav:
       - Troubleshooting: troubleshooting.md
   - Contributing:
       - Development: development.md
-      - Speckit: speckit.md
-      - Speckit Local Dev: speckit-local-development.md
 
 extra:
   social:
