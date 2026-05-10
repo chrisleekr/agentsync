@@ -15,7 +15,7 @@ MACHINE=/tmp/sanitizer-machine
 FAKE_SECRET="sk-FAKEFAKEFAKEFAKEFAKEFAKEFAKEFAKE"
 
 step "Initialize fresh bare vault"
-rm -rf "$MACHINE"
+rm -rf "$MACHINE" "$VAULT_PATH"
 git init --bare "$VAULT_PATH" >/dev/null
 git -C "$VAULT_PATH" symbolic-ref HEAD refs/heads/main
 
@@ -70,7 +70,7 @@ pass "vault HEAD intact at ${post_head:0:10}"
 
 step "CRITICAL: literal secret NEVER appears in any vault blob (proves abort happened pre-encryption)"
 leak=$(git --git-dir="$VAULT_PATH" rev-list --objects --all | awk '{print $1}' | sort -u | \
-       while read sha; do
+       while read -r sha; do
          if git --git-dir="$VAULT_PATH" cat-file -p "$sha" 2>/dev/null | grep -qF "$FAKE_SECRET"; then
            echo "LEAK:$sha"
          fi

@@ -11,10 +11,11 @@ VAULT_PATH=/vault/multi.git
 VAULT_URL_MULTI="file://${VAULT_PATH}"
 
 step "Initialize fresh bare vault for multi-machine scenario"
-if [ ! -d "${VAULT_PATH}" ]; then
-  git init --bare "${VAULT_PATH}" >/dev/null
-  git -C "${VAULT_PATH}" symbolic-ref HEAD refs/heads/main
-fi
+# Always wipe — state from a previous run would corrupt this scenario's
+# assumptions (e.g., vault HEAD ancestry across multiple runs in one container).
+rm -rf "${VAULT_PATH}"
+git init --bare "${VAULT_PATH}" >/dev/null
+git -C "${VAULT_PATH}" symbolic-ref HEAD refs/heads/main
 pass "vault ready at ${VAULT_PATH}"
 
 # ─── Machine A ────────────────────────────────────────────────────────────────

@@ -72,7 +72,7 @@ step "CRITICAL: vault must NOT contain plaintext of the stub credential"
 # Walk every blob in the vault and grep for the stub key. Even one match = leak.
 stub_key="${OPENAI_API_KEY:-sk-stub-for-bootstrap}"
 leak=$(git --git-dir=/vault/repo.git rev-list --objects --all | awk '{print $1}' | sort -u | \
-       while read sha; do
+       while read -r sha; do
          git --git-dir=/vault/repo.git cat-file -p "$sha" 2>/dev/null | grep -lF "$stub_key" && echo "LEAK_IN:$sha"
        done | grep '^LEAK_IN:' || true)
 if [ -n "$leak" ]; then

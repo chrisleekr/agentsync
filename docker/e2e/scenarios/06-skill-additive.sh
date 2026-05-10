@@ -14,7 +14,7 @@ VAULT_URL="file://${VAULT_PATH}"
 MACHINE=/tmp/skill-machine
 
 step "Initialize fresh bare vault for skill scenario"
-rm -rf "$MACHINE"
+rm -rf "$MACHINE" "$VAULT_PATH"
 git init --bare "$VAULT_PATH" >/dev/null
 git -C "$VAULT_PATH" symbolic-ref HEAD refs/heads/main
 

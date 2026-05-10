@@ -15,7 +15,7 @@ MACHINE=/tmp/diverged-machine
 MANIPULATOR=/tmp/diverged-manipulator
 
 step "Initialize fresh bare vault"
-rm -rf "$MACHINE" "$MANIPULATOR"
+rm -rf "$MACHINE" "$MANIPULATOR" "$VAULT_PATH"
 git init --bare "$VAULT_PATH" >/dev/null
 git -C "$VAULT_PATH" symbolic-ref HEAD refs/heads/main
 pass "vault ready"

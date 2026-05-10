@@ -27,16 +27,32 @@ WATCHED=(
 
 SNAPSHOT="${SNAPSHOT_FILE:-/tmp/agentsync-canary.snapshot}"
 
+stat_one() {
+  local p="$1"
+  if stat -f "%m %z %N" "$p" >/dev/null 2>&1; then
+    stat -f "%m %z %N" "$p"
+  else
+    stat -c "%Y %s %n" "$p"
+  fi
+}
+
 stat_path() {
   local p="$1"
-  if [ -e "$p" ]; then
-    if stat -f "%m %z %N" "$p" >/dev/null 2>&1; then
-      stat -f "%m %z %N" "$p"
-    else
-      stat -c "%Y %s %n" "$p"
-    fi
-  else
+  if [ ! -e "$p" ]; then
     echo "MISSING $p"
+    return
+  fi
+  # Stat the entry itself, plus every contained file/dir up to depth 4.
+  # Without recursion an in-file mutation would not change the parent dir's
+  # mtime on macOS APFS or Linux ext4 in the relevant cases.
+  if [ -d "$p" ]; then
+    {
+      stat_one "$p"
+      find "$p" -maxdepth 4 -mindepth 1 -print0 2>/dev/null \
+        | while IFS= read -r -d '' entry; do stat_one "$entry"; done
+    } | sort
+  else
+    stat_one "$p"
   fi
 }
 
