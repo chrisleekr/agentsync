@@ -882,6 +882,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#mcp-transport-support" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MCP Transport Support
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#examples" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1166,6 +1177,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#mcp-transport-support" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MCP Transport Support
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#examples" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1406,10 +1428,61 @@
 <h2 id="key-behaviours">Key Behaviours<a class="headerlink" href="#key-behaviours" title="Permanent link">&para;</a></h2>
 <ul>
 <li><strong>Overwrite on collision</strong>: If the target already has a matching entry, the source value wins.</li>
-<li><strong>MCP per-server merge</strong>: Only colliding server names are overwritten; target-only servers are preserved.</li>
-<li><strong>Secret detection</strong>: If API keys or tokens are found in MCP <code>env</code> fields, migration aborts with a clear error. Remove literal secrets and retry.</li>
+<li><strong>MCP per-server merge</strong>: Only colliding server names are overwritten; target-only servers are preserved. The merge key is target-specific: VS Code uses top-level <code>servers</code> + <code>inputs</code>, Claude/Cursor use <code>mcpServers</code>, Codex uses <code>[mcp.servers.*]</code> TOML tables.</li>
+<li><strong>Secret detection</strong>: If API keys or tokens are found in MCP content (including HTTP-transport <code>headers.Authorization</code>), migration aborts with a clear error. Remove literal secrets and retry.</li>
 <li><strong>Graceful skipping</strong>: Missing source files and unsupported pairs produce skip messages, not errors.</li>
 </ul>
+<h2 id="mcp-transport-support">MCP Transport Support<a class="headerlink" href="#mcp-transport-support" title="Permanent link">&para;</a></h2>
+<p>AgentSync parses each source MCP config into a transport-aware intermediate
+model before writing the target. The model represents a discriminated union
+over <code>stdio</code>, <code>http</code>, and <code>sse</code> transports plus VS Code-specific metadata
+(<code>inputs</code>, <code>sandbox</code>, <code>sandboxEnabled</code>, <code>dev</code>, <code>envFile</code>).</p>
+<table>
+<thead>
+<tr>
+<th>Target</th>
+<th>Schema</th>
+<th>Supported transports</th>
+<th>Lossy fields</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>VS Code</strong></td>
+<td>top-level <code>servers</code> + <code>inputs</code> (<a href="https://code.visualstudio.com/docs/copilot/reference/mcp-configuration">docs</a>)</td>
+<td>stdio, http, sse</td>
+<td>—</td>
+</tr>
+<tr>
+<td><strong>Claude</strong></td>
+<td>top-level <code>mcpServers</code> (stdio-only)</td>
+<td>stdio</td>
+<td>non-stdio servers dropped with warning; <code>inputs</code> dropped with warning; stdio-only <code>envFile</code>/<code>sandbox</code>/<code>sandboxEnabled</code>/<code>dev</code> named per-server in a warning</td>
+</tr>
+<tr>
+<td><strong>Cursor</strong></td>
+<td>top-level <code>mcpServers</code> (stdio-only)</td>
+<td>stdio</td>
+<td>same as Claude</td>
+</tr>
+<tr>
+<td><strong>Codex</strong></td>
+<td>TOML <code>[mcp.servers.&lt;name&gt;]</code></td>
+<td>stdio, plus structured <code>type</code>/<code>url</code>/<code>headers</code>/<code>auth</code> for future HTTP/SSE clients</td>
+<td><code>inputs</code> dropped with warning</td>
+</tr>
+</tbody>
+</table>
+<p>When a target cannot represent a transport, AgentSync emits an <strong>explicit
+translator warning</strong> that names the dropped server and the unsupported
+transport (e.g. <code>vscode → claude (mcp): Dropped server "remote": transport
+"http" is not representable…</code>). Warnings flow into <code>MigrateResult.warnings</code>
+so the CLI surfaces them — they are never dropped silently.</p>
+<p>If a source migrates to a stdio-only target where <strong>every</strong> server is
+unrepresentable (e.g. an all-HTTP VS Code config → Claude), the translator
+skips the write rather than creating a brand-new file containing only
+<code>{"mcpServers":{}}</code>. The warning still surfaces in <code>MigrateResult.warnings</code>
+so the operator hears about the dropped servers.</p>
 <h2 id="examples">Examples<a class="headerlink" href="#examples" title="Permanent link">&para;</a></h2>
 <h3 id="migrate-everything-from-claude-to-cursor">Migrate everything from Claude to Cursor<a class="headerlink" href="#migrate-everything-from-claude-to-cursor" title="Permanent link">&para;</a></h3>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>agentsync<span class="w"> </span>migrate<span class="w"> </span>--from<span class="w"> </span>claude<span class="w"> </span>--to<span class="w"> </span>cursor<span class="w"> </span>--dry-run<span class="w">   </span><span class="c1"># preview</span>
