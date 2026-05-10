@@ -359,6 +359,129 @@ describe("performMigrate", () => {
     expect(result.migrated[0].targetPath).toContain("review.md");
   });
 
+  test("vscode → claude writes under mcpServers (not servers)", async () => {
+    writeFixture(
+      testVscode.mcpJson,
+      JSON.stringify({
+        servers: {
+          gh: { type: "stdio", command: "gh-mcp", args: [], env: {} },
+        },
+      }),
+    );
+
+    const result = await performMigrate({
+      from: "vscode",
+      to: "claude",
+      type: "mcp",
+      dryRun: false,
+    });
+
+    expect(result.errors).toHaveLength(0);
+    expect(result.migrated).toHaveLength(1);
+    const { readIfExists } = await import("../../agents/_utils");
+    const written = await readIfExists(testClaude.mcpJson);
+    expect(written).not.toBeNull();
+    const parsed = JSON.parse(written as string) as Record<string, unknown>;
+    expect(parsed.mcpServers).toBeDefined();
+    expect(parsed.servers).toBeUndefined();
+    expect((parsed.mcpServers as Record<string, unknown>).gh).toBeDefined();
+  });
+
+  test("claude → vscode writes under top-level servers (no nested mcpServers.servers)", async () => {
+    writeFixture(
+      testClaude.mcpJson,
+      JSON.stringify({
+        mcpServers: { gh: { command: "gh-mcp", args: [], env: {} } },
+      }),
+    );
+
+    const result = await performMigrate({
+      from: "claude",
+      to: "vscode",
+      type: "mcp",
+      dryRun: false,
+    });
+
+    expect(result.errors).toHaveLength(0);
+    expect(result.migrated).toHaveLength(1);
+    const { readIfExists } = await import("../../agents/_utils");
+    const written = await readIfExists(testVscode.mcpJson);
+    expect(written).not.toBeNull();
+    const parsed = JSON.parse(written as string) as Record<string, unknown>;
+    expect(parsed.servers).toBeDefined();
+    // Critically, the legacy mcpServers key must NOT appear on the VS Code target.
+    expect(parsed.mcpServers).toBeUndefined();
+    const servers = parsed.servers as Record<string, Record<string, unknown>>;
+    expect(servers.gh.type).toBe("stdio");
+    expect(servers.gh.command).toBe("gh-mcp");
+    // And there must be no double-nesting like servers.gh.servers or
+    // mcpServers.servers anywhere.
+    expect((servers.gh as { servers?: unknown }).servers).toBeUndefined();
+  });
+
+  test("vscode → claude HTTP transport produces translator warnings on result", async () => {
+    writeFixture(
+      testVscode.mcpJson,
+      JSON.stringify({
+        servers: {
+          remote: {
+            type: "http",
+            url: "https://example.com/mcp",
+            headers: { "X-Trace": "on" },
+          },
+          gh: { type: "stdio", command: "gh-mcp" },
+        },
+      }),
+    );
+
+    const result = await performMigrate({
+      from: "vscode",
+      to: "claude",
+      type: "mcp",
+      dryRun: false,
+    });
+
+    expect(result.errors).toHaveLength(0);
+    // Translator warnings about dropped HTTP transport should surface
+    expect(result.warnings.length).toBeGreaterThan(0);
+    const joined = result.warnings.join("\n");
+    expect(joined).toContain("remote");
+    expect(joined).toContain("http");
+  });
+
+  test("vscode existing inputs preserved during vscode-target merge", async () => {
+    // Existing VS Code file with both servers and inputs
+    writeFixture(
+      testVscode.mcpJson,
+      JSON.stringify({
+        servers: { existing: { type: "stdio", command: "old" } },
+        inputs: [{ id: "existing_token", type: "promptString", password: true }],
+      }),
+    );
+    writeFixture(testClaude.mcpJson, JSON.stringify({ mcpServers: { gh: { command: "gh-mcp" } } }));
+
+    const result = await performMigrate({
+      from: "claude",
+      to: "vscode",
+      type: "mcp",
+      dryRun: false,
+    });
+
+    expect(result.errors).toHaveLength(0);
+    const { readIfExists } = await import("../../agents/_utils");
+    const written = await readIfExists(testVscode.mcpJson);
+    const parsed = JSON.parse(written as string) as {
+      servers: Record<string, unknown>;
+      inputs?: unknown[];
+    };
+    // Incoming server merged, existing server preserved
+    expect(parsed.servers.gh).toBeDefined();
+    expect(parsed.servers.existing).toBeDefined();
+    // Existing inputs preserved
+    expect(Array.isArray(parsed.inputs)).toBe(true);
+    expect((parsed.inputs as Array<{ id: string }>)[0].id).toBe("existing_token");
+  });
+
   test("partial write failure continues remaining artefacts", async () => {
     mkdirSync(testClaude.commandsDir, { recursive: true });
     writeFileSync(join(testClaude.commandsDir, "review.md"), "# Review");

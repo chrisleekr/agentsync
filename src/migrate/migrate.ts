@@ -170,12 +170,15 @@ export async function applyMigrated(
     if (!targetPath) return null;
 
     if (!dryRun) {
-      // Per-server merge: read existing target, merge source servers in
+      // Per-server merge: read existing target, merge source servers in.
+      // The merge key is target-specific because each target uses a different
+      // top-level layout (Codex: TOML `[mcp.servers.*]`; VS Code: `servers` +
+      // `inputs`; Claude/Cursor: `mcpServers`). Using the wrong key would
+      // either write to a section the target ignores or duplicate state.
       const existing = await readIfExists(targetPath);
       if (existing) {
         try {
           if (to === "codex") {
-            // TOML merge: preserve non-MCP sections in config.toml
             const existingParsed = TOML.parse(existing);
             const incomingParsed = TOML.parse(content);
             const existingMcp = (existingParsed.mcp ?? {}) as TOML.JsonMap;
@@ -185,8 +188,38 @@ export async function applyMigrated(
             existingMcp.servers = { ...existingServers, ...incomingServers };
             existingParsed.mcp = existingMcp;
             content = TOML.stringify(existingParsed);
+          } else if (to === "vscode") {
+            const existingParsed = JSON.parse(existing) as Record<string, unknown>;
+            const incomingParsed = JSON.parse(content) as Record<string, unknown>;
+            const existingServers = (existingParsed.servers ?? {}) as Record<string, unknown>;
+            const incomingServers = (incomingParsed.servers ?? {}) as Record<string, unknown>;
+            existingParsed.servers = { ...existingServers, ...incomingServers };
+            const existingInputs = Array.isArray(existingParsed.inputs)
+              ? existingParsed.inputs
+              : [];
+            const incomingInputs = Array.isArray(incomingParsed.inputs)
+              ? incomingParsed.inputs
+              : [];
+            if (incomingInputs.length > 0) {
+              const seen = new Set<string>();
+              const merged: unknown[] = [];
+              for (const list of [existingInputs, incomingInputs]) {
+                for (const entry of list) {
+                  const id =
+                    entry && typeof entry === "object"
+                      ? ((entry as { id?: unknown }).id as string | undefined)
+                      : undefined;
+                  const dedupeKey = typeof id === "string" ? id : JSON.stringify(entry);
+                  if (seen.has(dedupeKey)) continue;
+                  seen.add(dedupeKey);
+                  merged.push(entry);
+                }
+              }
+              existingParsed.inputs = merged;
+            }
+            content = `${JSON.stringify(existingParsed, null, 2)}\n`;
           } else {
-            // JSON merge: Claude, Cursor, VS Code
+            // Claude and Cursor: mcpServers merge
             const existingParsed = JSON.parse(existing) as Record<string, unknown>;
             const incomingParsed = JSON.parse(content) as Record<string, unknown>;
             const existingServers = (existingParsed.mcpServers ?? {}) as Record<string, unknown>;
@@ -282,6 +315,12 @@ export async function performMigrate(options: MigrateOptions): Promise<MigrateRe
             pair: { from: options.from, to: target, type },
           });
           continue;
+        }
+
+        if (translated.warnings && translated.warnings.length > 0) {
+          for (const w of translated.warnings) {
+            result.warnings.push(`${options.from} → ${target} (${type}): ${w}`);
+          }
         }
 
         // Secret detection for MCP content — abort if secrets found

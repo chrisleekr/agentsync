@@ -77,9 +77,29 @@ flowchart TD
 ## Key Behaviours
 
 - **Overwrite on collision**: If the target already has a matching entry, the source value wins.
-- **MCP per-server merge**: Only colliding server names are overwritten; target-only servers are preserved.
-- **Secret detection**: If API keys or tokens are found in MCP `env` fields, migration aborts with a clear error. Remove literal secrets and retry.
+- **MCP per-server merge**: Only colliding server names are overwritten; target-only servers are preserved. The merge key is target-specific: VS Code uses top-level `servers` + `inputs`, Claude/Cursor use `mcpServers`, Codex uses `[mcp.servers.*]` TOML tables.
+- **Secret detection**: If API keys or tokens are found in MCP content (including HTTP-transport `headers.Authorization`), migration aborts with a clear error. Remove literal secrets and retry.
 - **Graceful skipping**: Missing source files and unsupported pairs produce skip messages, not errors.
+
+## MCP Transport Support
+
+AgentSync parses each source MCP config into a transport-aware intermediate
+model before writing the target. The model represents a discriminated union
+over `stdio`, `http`, and `sse` transports plus VS Code-specific metadata
+(`inputs`, `sandbox`, `sandboxEnabled`, `dev`, `envFile`).
+
+| Target | Schema | Supported transports | Lossy fields |
+|--------|--------|----------------------|--------------|
+| **VS Code** | top-level `servers` + `inputs` ([docs](https://code.visualstudio.com/docs/copilot/reference/mcp-configuration)) | stdio, http, sse | — |
+| **Claude** | top-level `mcpServers` (stdio-only) | stdio | non-stdio servers dropped with warning; `inputs` dropped with warning |
+| **Cursor** | top-level `mcpServers` (stdio-only) | stdio | non-stdio servers dropped with warning; `inputs` dropped with warning |
+| **Codex** | TOML `[mcp.servers.<name>]` | stdio, plus structured `type`/`url`/`headers`/`auth` for future HTTP/SSE clients | `inputs` dropped with warning |
+
+When a target cannot represent a transport, AgentSync emits an **explicit
+translator warning** that names the dropped server and the unsupported
+transport (e.g. `vscode → claude (mcp): Dropped server "remote": transport
+"http" is not representable…`). Warnings flow into `MigrateResult.warnings`
+so the CLI surfaces them — they are never dropped silently.
 
 ## Examples
 
