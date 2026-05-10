@@ -32,13 +32,13 @@ flowchart LR
     CLI_B -->|write configs| AgentsB
 
     classDef local fill:#2c3e50,color:#ffffff,stroke:#1a252f
-    classDef key fill:#ecf0f1,color:#2c3e50,stroke:#7f8c8d
+    classDef key fill:#8e44ad,color:#ffffff,stroke:#5b2c6f
     classDef gate fill:#c0392b,color:#ffffff,stroke:#7b241c
     classDef remote fill:#27ae60,color:#ffffff,stroke:#196f3d
 ```
 
 The dark slate nodes (Machine A and Machine B) live inside their
-respective trust boundaries — plaintext never crosses out. The pale
+respective trust boundaries — plaintext never crosses out. The purple
 key nodes sit alongside their machine because the age private key is
 local-only. The two red **gates** are where every push and pull is
 forced through sanitize/encrypt and fast-forward/decrypt; bypassing
@@ -69,7 +69,7 @@ flowchart LR
     classDef step fill:#2c3e50,color:#ffffff,stroke:#1a252f
     classDef gate fill:#c0392b,color:#ffffff,stroke:#7b241c
     classDef remote fill:#27ae60,color:#ffffff,stroke:#196f3d
-    classDef abort fill:#ecf0f1,color:#2c3e50,stroke:#7f8c8d
+    classDef abort fill:#d35400,color:#ffffff,stroke:#a04000
 ```
 
 ## Why these specific gates?
@@ -104,7 +104,7 @@ flowchart LR
     classDef step fill:#2c3e50,color:#ffffff,stroke:#1a252f
     classDef gate fill:#c0392b,color:#ffffff,stroke:#7b241c
     classDef remote fill:#27ae60,color:#ffffff,stroke:#196f3d
-    classDef abort fill:#ecf0f1,color:#2c3e50,stroke:#7f8c8d
+    classDef abort fill:#d35400,color:#ffffff,stroke:#a04000
 ```
 
 ## Where to look in the source

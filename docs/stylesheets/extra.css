@@ -9,13 +9,40 @@
   max-width: 95rem;
 }
 
-/* Center mermaid diagrams and let them use the full column width.
-   Without this, narrow diagrams sit left-aligned with a lot of whitespace. */
-.md-typeset .mermaid {
-  text-align: center;
+/* Dark-mode contrast fix for mermaid diagrams.
+
+   Background: in slate (dark) mode, mermaid keeps its default theme so
+   diagrams using mermaid's pale defaults (`#ECECFF` rectangles,
+   `#fff5ad` decision diamonds) end up as light boxes on a dark page
+   with light text — invisible. The classDef colors in our own diagrams
+   already use dark fills + white text, but the inherited diagrams in
+   architecture.md / daemon.md / migrate.md use defaults.
+
+   The CSS below targets only those default pale fills and replaces
+   them with dark variants in slate mode. It also forces label text
+   white so text on every node remains readable regardless of fill. */
+
+[data-md-color-scheme="slate"] .mermaid .nodeLabel,
+[data-md-color-scheme="slate"] .mermaid .nodeLabel p,
+[data-md-color-scheme="slate"] .mermaid .nodeLabel span,
+[data-md-color-scheme="slate"] .mermaid foreignObject p,
+[data-md-color-scheme="slate"] .mermaid foreignObject span {
+  color: #ffffff !important;
+  fill: #ffffff !important;
 }
 
-.md-typeset .mermaid svg {
-  max-width: 100%;
-  height: auto;
+[data-md-color-scheme="slate"] .mermaid .node rect[fill="#ECECFF"],
+[data-md-color-scheme="slate"] .mermaid .node polygon[fill="#ECECFF"],
+[data-md-color-scheme="slate"] .mermaid .node rect[fill="#fff5ad"],
+[data-md-color-scheme="slate"] .mermaid .node polygon[fill="#fff5ad"] {
+  fill: #34495e !important;
+  stroke: #1a252f !important;
+}
+
+/* Edge labels need a background that matches the page in dark mode.
+   Without this they sit on a white pill that breaks the dark theme. */
+[data-md-color-scheme="slate"] .mermaid .edgeLabel,
+[data-md-color-scheme="slate"] .mermaid .edgeLabel rect {
+  background-color: var(--md-default-bg-color) !important;
+  fill: var(--md-default-bg-color) !important;
 }
