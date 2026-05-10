@@ -64,6 +64,36 @@ describe("snapshotVsCode", () => {
     );
   });
 
+  test("redacts HTTP transport Authorization header value in vscode-shape mcp.json", async () => {
+    const { snapshotVsCode } = vsCodeModule;
+    // VS Code official shape: top-level `servers` with `type: "http"` and
+    // `headers.Authorization`. The header value carries a github-style PAT
+    // so the redaction pattern fires deterministically.
+    const mcp = {
+      servers: {
+        remote: {
+          type: "http",
+          url: "https://example.com/mcp",
+          headers: { Authorization: "ghp_abcdefghijklmnopqrstuvwxyz1234567890" },
+        },
+      },
+    };
+    await writeFile(testVsCodePaths.mcpJson, JSON.stringify(mcp), "utf8");
+
+    const result = await snapshotVsCode();
+    const artifact = result.artifacts[0];
+    const parsed = JSON.parse(artifact.plaintext.trim()) as {
+      servers: { remote: { headers: Record<string, string> } };
+    };
+    const authVal = parsed.servers.remote.headers.Authorization;
+    // The literal secret must be replaced by the redaction placeholder
+    expect(authVal).not.toContain("ghp_abcdefghij");
+    expect(authVal).toContain("REDACTED");
+    expect(result.warnings.some((w) => w.includes("Redacted"))).toBe(true);
+    // Shape is preserved (top-level servers, not re-shaped to mcpServers)
+    expect((parsed as Record<string, unknown>).mcpServers).toBeUndefined();
+  });
+
   test("redacts embedded API key in mcp.json and emits warning", async () => {
     const { snapshotVsCode } = vsCodeModule;
     const mcp = {
