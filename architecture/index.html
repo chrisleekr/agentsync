@@ -719,6 +719,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#claude-plugin-sync-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Claude plugin sync flow
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#security-boundaries" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1283,6 +1294,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#claude-plugin-sync-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Claude plugin sync flow
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#security-boundaries" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1504,6 +1526,52 @@
     classDef fail fill:#7f1d1d,color:#ffffff,stroke:#7f1d1d,stroke-width:1.5px;</code></pre>
 </div>
 <p>This two-flow model is why AgentSync can add and remove skills independently on different machines without any central coordination — every removal is an intentional user action, and every pull is extract-only.</p>
+<h2 id="claude-plugin-sync-flow">Claude plugin sync flow<a class="headerlink" href="#claude-plugin-sync-flow" title="Permanent link">&para;</a></h2>
+<p>Claude Code organises optional capabilities — commands, sub-agents, hooks, MCP servers, and bundled skills — under <code>~/.claude/plugins/&lt;name&gt;/</code>. AgentSync rides each plugin through the vault as a self-contained subtree at <code>claude/plugins/&lt;name&gt;/</code>, so installing a plugin on one machine and pulling on another reproduces every artifact under the same plugin namespace.</p>
+<p>The plugin walker <code>collectClaudePlugins</code> at <code>src/agents/claude-plugins.ts</code> mirrors the skills-walker contract: it skips the plugins root if it is missing or a symlink, skips dot-prefixed entries silently, and rejects any entry whose name fails <code>validatePluginName</code> (the same defence that guards skill names against <code>..</code>, separators, control characters, and the <code>.</code>/<code>..</code> reserved names). A plugin must contain a real <code>.claude-plugin/plugin.json</code> file (lstat-checked so symlinked manifests are rejected) before any of its assets are emitted.</p>
+<p>Once a plugin is admitted, <code>snapshotClaude</code> emits per-artifact entries:</p>
+<ul>
+<li><code>plugin.json.age</code> — sanitised through <code>sanitizeClaudePluginManifest</code> (full-tree secret redaction, structure preserved).</li>
+<li><code>commands/&lt;file&gt;.md.age</code> and <code>agents/&lt;file&gt;.md.age</code> — markdown bundles with sanitiser warnings surfacing redacted secrets.</li>
+<li><code>hooks/&lt;file&gt;.json.age</code> — sanitised through the existing hooks-only allowlist.</li>
+<li><code>mcp.json.age</code> — sanitised through <code>sanitizeClaudePluginMcp</code> (full structure preserved, secret literals redacted, walker warnings escalated to push aborts).</li>
+<li><code>skills/&lt;name&gt;.tar.age</code> — tar bundles produced by reusing <code>collectSkillArtifacts</code> against the plugin's own <code>skills/</code> dir, then re-namespaced into the plugin path.</li>
+</ul>
+<p>The opt-in <code>claudePlugins.syncMarketplace</code> flag in <code>agentsync.toml</code> adds <code>marketplace.json.age</code> (sanitised manifest of the global <code>~/.claude/.claude-plugin/marketplace.json</code>). The flag is off by default because the catalog can pin third-party sources — teams must opt in explicitly.</p>
+<p>On <code>pull</code>, <code>applyClaudePluginsDir</code> walks <code>claude/plugins/</code> in the decrypted vault, validates every directory name <em>before</em> any <code>path.join</code>, and routes each artifact back to its disk equivalent. Vault entries with names like <code>..</code> are rejected with a warning and never reach the filesystem.</p>
+<div class="agentsync-darknodes">
+<pre class="mermaid"><code>flowchart TD
+    LocalPlugins["Local plugins&lt;br/&gt;~/.claude/plugins/&lt;name&gt;"]:::action
+    WalkerGate{"Real dir + valid name&lt;br/&gt;+ real plugin.json"}:::decision
+    Manifest["plugin.json&lt;br/&gt;sanitizeClaudePluginManifest"]:::keep
+    Surfaces["commands agents hooks mcp&lt;br/&gt;per-file sanitisers"]:::keep
+    PluginSkills["plugin-local skills&lt;br/&gt;collectSkillArtifacts reused"]:::keep
+    Marketplace{"claudePlugins&lt;br/&gt;syncMarketplace true"}:::decision
+    MarketArt["marketplace.json.age&lt;br/&gt;opt-in only"]:::keep
+    Vault["Vault namespace&lt;br/&gt;claude/plugins/&lt;name&gt;/..."]:::vault
+    Pull["pull command&lt;br/&gt;applyClaudePluginsDir"]:::keep
+    NameGate{"validatePluginName&lt;br/&gt;before any path.join"}:::decision
+    Apply["restore manifest commands agents&lt;br/&gt;hooks mcp skills"]:::keep
+    SkipSilent["Skipped silently&lt;br/&gt;missing root or invalid"]:::skip
+    Reject["Warning emitted&lt;br/&gt;traversal name rejected"]:::fail
+
+    LocalPlugins --&gt; WalkerGate
+    WalkerGate -- no --&gt; SkipSilent
+    WalkerGate -- yes --&gt; Manifest --&gt; Vault
+    WalkerGate --&gt; Surfaces --&gt; Vault
+    WalkerGate --&gt; PluginSkills --&gt; Vault
+    Marketplace -- yes --&gt; MarketArt --&gt; Vault
+    Vault --&gt; Pull --&gt; NameGate
+    NameGate -- no --&gt; Reject
+    NameGate -- yes --&gt; Apply
+
+    classDef action fill:#1e3a8a,color:#ffffff,stroke:#0f1f4d,stroke-width:1.5px;
+    classDef decision fill:#78350f,color:#ffffff,stroke:#451a03,stroke-width:1.5px;
+    classDef keep fill:#14532d,color:#ffffff,stroke:#0a2d18,stroke-width:1.5px;
+    classDef vault fill:#3730a3,color:#ffffff,stroke:#1e1b6e,stroke-width:1.5px;
+    classDef skip fill:#78350f,color:#ffffff,stroke:#451a03,stroke-width:1.5px;
+    classDef fail fill:#7f1d1d,color:#ffffff,stroke:#7f1d1d,stroke-width:1.5px;</code></pre>
+</div>
 <h2 id="security-boundaries">Security boundaries<a class="headerlink" href="#security-boundaries" title="Permanent link">&para;</a></h2>
 <ul>
 <li><code>src/core/encryptor.ts</code> is the boundary for age identity generation, recipient derivation, and string/file encryption.</li>
