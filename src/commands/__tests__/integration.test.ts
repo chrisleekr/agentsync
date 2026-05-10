@@ -290,6 +290,7 @@ describe("integration", () => {
         autoPull: true,
         pullIntervalMs: 300_000,
       },
+      claudePlugins: { syncMarketplace: false },
     });
     writeFileSync(join(machineB.vaultDir, ".gitignore"), "*.tmp\n", "utf8");
     runGit(["init"], machineB.vaultDir);

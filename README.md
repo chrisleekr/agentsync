@@ -71,7 +71,7 @@ Start here:
 
 ## What a vault means here
 
-The vault is a normal Git repository that stores encrypted artifacts such as `claude/CLAUDE.md.age`, `claude/skills/<name>.tar.age`, `codex/skills/<name>.tar.age`, `cursor/skills/<name>.tar.age`, and `copilot/skills/<name>.tar.age`. AgentSync never pushes plaintext configs. Files that match hard never-sync patterns or contain literal secrets abort the push before encryption.
+The vault is a normal Git repository that stores encrypted artifacts such as `claude/CLAUDE.md.age`, `claude/skills/<name>.tar.age`, `codex/skills/<name>.tar.age`, `cursor/skills/<name>.tar.age`, and `copilot/skills/<name>.tar.age`. Claude Code plugins under `~/.claude/plugins/<name>/` round-trip as self-contained subtrees at `claude/plugins/<name>/` (manifest, commands, agents, hooks, MCP servers, and plugin-local skills). AgentSync never pushes plaintext configs. Files that match hard never-sync patterns or contain literal secrets abort the push before encryption.
 
 AgentSync never silently removes vault skills — removal is always an explicit user action via `agentsync skill remove <agent> <name>`. Local deletes, pulls, and status checks are all additive by construction, so no background operation can take a skill out of the vault.
 

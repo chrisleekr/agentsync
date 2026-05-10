@@ -140,6 +140,42 @@ export function sanitizeClaudeMcp(rawClaudeJson: string): RedactionResult<string
   };
 }
 
+/**
+ * Sanitize a Claude Code plugin manifest (`.claude-plugin/plugin.json`).
+ *
+ * Unlike `sanitizeClaudeHooks` / `sanitizeClaudeMcp` — which discard everything
+ * outside one allow-listed key — plugin manifests need their full metadata
+ * preserved (name, version, description, author, command/agent/hook lists,
+ * etc.) so that the apply side can restore an equivalent manifest. The only
+ * transformation is `redactSecretLiterals` over the entire object, which
+ * replaces obvious credential strings with the standard placeholder while
+ * leaving structural fields untouched.
+ */
+export function sanitizeClaudePluginManifest(rawJson: string): RedactionResult<string> {
+  const parsed = JSON.parse(rawJson) as unknown;
+  const redacted = redactSecretLiterals(parsed, "plugin");
+  return {
+    value: `${JSON.stringify(redacted.value, null, 2)}\n`,
+    warnings: redacted.warnings,
+  };
+}
+
+/**
+ * Sanitize a plugin-scoped `.mcp.json`. Mirrors {@link sanitizeClaudeMcp} but
+ * preserves the file's full top-level shape because plugin MCP files do not
+ * follow the user-level `.claude.json` schema — they are a bare server
+ * descriptor that the plugin owner controls. Literal secret redaction still
+ * runs over every value.
+ */
+export function sanitizeClaudePluginMcp(rawJson: string): RedactionResult<string> {
+  const parsed = JSON.parse(rawJson) as unknown;
+  const redacted = redactSecretLiterals(parsed, "pluginMcp");
+  return {
+    value: `${JSON.stringify(redacted.value, null, 2)}\n`,
+    warnings: redacted.warnings,
+  };
+}
+
 /** Derive a stable redaction placeholder name from the original file name. */
 export function redactionEnvNameForPath(path: string): string {
   const file = basename(path).replace(/[^a-zA-Z0-9]+/g, "_");

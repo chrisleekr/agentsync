@@ -119,6 +119,7 @@ export const initCommand = defineCommand({
           branch: args.branch,
         },
         sync: existing?.sync ?? DEFAULT_SYNC,
+        claudePlugins: existing?.claudePlugins ?? { syncMarketplace: false },
       };
 
       await writeConfig(configPath, config);
