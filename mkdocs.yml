@@ -7,6 +7,9 @@ repo_name: chrisleekr/agentsync
 edit_uri: edit/main/docs/
 strict: true
 
+extra_css:
+  - stylesheets/extra.css
+
 theme:
   name: material
   logo: agentsync-logo.png

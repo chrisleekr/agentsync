@@ -1,0 +1,21 @@
+/* Wider content column so mermaid diagrams render at readable scale.
+   Material 9.x hardcodes .md-grid { max-width: 61rem } (~976px). On a
+   1440p+ display that squeezes 9-node LR flowcharts into ~700px, which
+   shrinks SVG text below 10px. Material does not expose a CSS variable
+   for this, so we override the rule directly. 95rem ≈ 1520px keeps
+   prose line-length comfortable while letting diagrams render at native
+   size. */
+.md-grid {
+  max-width: 95rem;
+}
+
+/* Center mermaid diagrams and let them use the full column width.
+   Without this, narrow diagrams sit left-aligned with a lot of whitespace. */
+.md-typeset .mermaid {
+  text-align: center;
+}
+
+.md-typeset .mermaid svg {
+  max-width: 100%;
+  height: auto;
+}
