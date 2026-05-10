@@ -169,6 +169,62 @@ flowchart TD
 
 This two-flow model is why AgentSync can add and remove skills independently on different machines without any central coordination — every removal is an intentional user action, and every pull is extract-only.
 
+## Claude plugin sync flow
+
+Claude Code organises optional capabilities — commands, sub-agents, hooks, MCP servers, and bundled skills — under `~/.claude/plugins/<name>/`. AgentSync rides each plugin through the vault as a self-contained subtree at `claude/plugins/<name>/`, so installing a plugin on one machine and pulling on another reproduces every artifact under the same plugin namespace.
+
+The plugin walker `collectClaudePlugins` at `src/agents/claude-plugins.ts` mirrors the skills-walker contract: it skips the plugins root if it is missing or a symlink, skips dot-prefixed entries silently, and rejects any entry whose name fails `validatePluginName` (the same defence that guards skill names against `..`, separators, control characters, and the `.`/`..` reserved names). A plugin must contain a real `.claude-plugin/plugin.json` file (lstat-checked so symlinked manifests are rejected) before any of its assets are emitted.
+
+Once a plugin is admitted, `snapshotClaude` emits per-artifact entries:
+
+- `plugin.json.age` — sanitised through `sanitizeClaudePluginManifest` (full-tree secret redaction, structure preserved).
+- `commands/<file>.md.age` and `agents/<file>.md.age` — markdown bundles with sanitiser warnings surfacing redacted secrets.
+- `hooks/<file>.json.age` — sanitised through the existing hooks-only allowlist.
+- `mcp.json.age` — sanitised through `sanitizeClaudePluginMcp` (full structure preserved, secret literals redacted, walker warnings escalated to push aborts).
+- `skills/<name>.tar.age` — tar bundles produced by reusing `collectSkillArtifacts` against the plugin's own `skills/` dir, then re-namespaced into the plugin path.
+
+The opt-in `claudePlugins.syncMarketplace` flag in `agentsync.toml` adds `marketplace.json.age` (sanitised manifest of the global `~/.claude/.claude-plugin/marketplace.json`). The flag is off by default because the catalog can pin third-party sources — teams must opt in explicitly.
+
+On `pull`, `applyClaudePluginsDir` walks `claude/plugins/` in the decrypted vault, validates every directory name *before* any `path.join`, and routes each artifact back to its disk equivalent. Vault entries with names like `..` are rejected with a warning and never reach the filesystem.
+
+<div class="agentsync-darknodes" markdown>
+
+```mermaid
+flowchart TD
+	LocalPlugins["Local plugins<br/>~/.claude/plugins/<name>"]:::action
+	WalkerGate{"Real dir + valid name<br/>+ real plugin.json"}:::decision
+	Manifest["plugin.json<br/>sanitizeClaudePluginManifest"]:::keep
+	Surfaces["commands agents hooks mcp<br/>per-file sanitisers"]:::keep
+	PluginSkills["plugin-local skills<br/>collectSkillArtifacts reused"]:::keep
+	Marketplace{"claudePlugins<br/>syncMarketplace true"}:::decision
+	MarketArt["marketplace.json.age<br/>opt-in only"]:::keep
+	Vault["Vault namespace<br/>claude/plugins/<name>/..."]:::vault
+	Pull["pull command<br/>applyClaudePluginsDir"]:::keep
+	NameGate{"validatePluginName<br/>before any path.join"]}:::decision
+	Apply["restore manifest commands agents<br/>hooks mcp skills"]:::keep
+	SkipSilent["Skipped silently<br/>missing root or invalid"]:::skip
+	Reject["Warning emitted<br/>traversal name rejected"]:::fail
+
+	LocalPlugins --> WalkerGate
+	WalkerGate -- no --> SkipSilent
+	WalkerGate -- yes --> Manifest --> Vault
+	WalkerGate --> Surfaces --> Vault
+	WalkerGate --> PluginSkills --> Vault
+	Marketplace -- yes --> MarketArt --> Vault
+	Vault --> Pull --> NameGate
+	NameGate -- no --> Reject
+	NameGate -- yes --> Apply
+
+	classDef action fill:#1e3a8a,color:#ffffff,stroke:#0f1f4d,stroke-width:1.5px;
+	classDef decision fill:#78350f,color:#ffffff,stroke:#451a03,stroke-width:1.5px;
+	classDef keep fill:#14532d,color:#ffffff,stroke:#0a2d18,stroke-width:1.5px;
+	classDef vault fill:#3730a3,color:#ffffff,stroke:#1e1b6e,stroke-width:1.5px;
+	classDef skip fill:#78350f,color:#ffffff,stroke:#451a03,stroke-width:1.5px;
+	classDef fail fill:#7f1d1d,color:#ffffff,stroke:#7f1d1d,stroke-width:1.5px;
+```
+
+</div>
+
 ## Security boundaries
 
 - `src/core/encryptor.ts` is the boundary for age identity generation, recipient derivation, and string/file encryption.
