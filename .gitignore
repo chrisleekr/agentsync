@@ -16,5 +16,7 @@ coverage/
 
 # Docs build + QA artifacts
 site/
+.cache/
 .playwright-mcp/
 /docs-*.png
+/debug-*.png
