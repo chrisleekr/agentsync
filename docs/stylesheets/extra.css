@@ -49,43 +49,19 @@
 
 /* Light-mode contrast fix for architecture-overview's dark-fill diagrams.
 
-   Background: classDef sets `color:#ffffff` but Material's `.md-typeset`
-   rule for `.nodeLabel` wins on specificity, leaving dark text on dark
-   fills — invisible. Earlier attempts (`:has()`, classDef class names,
-   fill-attribute selectors) matched some node colors but not slate
-   `#2c3e50`, because mermaid's emitted markup varies by node shape.
+   Background: mkdocs-material renders mermaid labels with
+   `color: var(--md-mermaid-label-fg-color)` and node fills with
+   `var(--md-mermaid-node-bg-color)`. In light mode the default
+   label-fg is dark, so labels on our dark `classDef fill:#xxx` nodes
+   are dark-on-dark — invisible. Earlier attempts via `.nodeLabel`
+   selectors all failed because Material's CSS-variable binding wins.
 
-   Scope: each mermaid block in architecture-overview.md is wrapped in
-   `<div class="agentsync-darknodes" markdown>` so the override applies
-   ONLY to those diagrams (which use dark fills universally). Inherited
+   Override the variables on the scoping wrapper around each diagram
+   in architecture-overview.md so labels stay white in both schemes.
+   The wrapper limits the override to that page's diagrams; inherited
    pale-fill diagrams in architecture.md / daemon.md / migrate.md are
    unaffected and keep their dark-on-light defaults in light mode. */
-.agentsync-darknodes .mermaid .nodeLabel,
-.agentsync-darknodes .mermaid .nodeLabel p,
-.agentsync-darknodes .mermaid .nodeLabel span,
-.agentsync-darknodes .mermaid foreignObject p,
-.agentsync-darknodes .mermaid foreignObject span {
-  color: #ffffff !important;
-  fill: #ffffff !important;
-}
-
-/* Fallback: target nodes by classDef-derived class names. Mermaid 11
-   emits class names from `classDef foo ...` onto `g.node`. The wrapper
-   rule above is the primary path; this catches the case where a stale
-   mkdocs serve has not picked up the markdown wrapper yet. Listed
-   colors mirror architecture-overview.md's classDef palette. */
-.mermaid g.node.local .nodeLabel,
-.mermaid g.node.key .nodeLabel,
-.mermaid g.node.gate .nodeLabel,
-.mermaid g.node.remote .nodeLabel,
-.mermaid g.node.step .nodeLabel,
-.mermaid g.node.abort .nodeLabel,
-.mermaid g.node.local .nodeLabel p,
-.mermaid g.node.key .nodeLabel p,
-.mermaid g.node.gate .nodeLabel p,
-.mermaid g.node.remote .nodeLabel p,
-.mermaid g.node.step .nodeLabel p,
-.mermaid g.node.abort .nodeLabel p {
-  color: #ffffff !important;
-  fill: #ffffff !important;
+.agentsync-darknodes {
+  --md-mermaid-label-fg-color: #ffffff;
+  --md-mermaid-node-fg-color: #ffffff;
 }
