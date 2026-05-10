@@ -2,7 +2,14 @@ import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { log } from "@clack/prompts";
 import { AgentPaths } from "../config/paths";
-import { sanitizeClaudeHooks, sanitizeClaudeMcp, shouldNeverSync } from "../core/sanitizer";
+import {
+  redactSecretLiterals,
+  sanitizeClaudeHooks,
+  sanitizeClaudeMcp,
+  sanitizeClaudePluginManifest,
+  sanitizeClaudePluginMcp,
+  shouldNeverSync,
+} from "../core/sanitizer";
 import { extractArchive } from "../core/tar";
 import {
   atomicWrite,
@@ -11,13 +18,20 @@ import {
   type SnapshotArtifact,
   type SnapshotResult,
 } from "./_utils";
+import { collectClaudePlugins, InvalidPluginNameError, validatePluginName } from "./claude-plugins";
 import { collectSkillArtifacts, InvalidSkillNameError, validateSkillName } from "./skills-walker";
+
+/** Options that gate optional Claude surfaces (the marketplace catalog today). */
+export interface ClaudeSyncOptions {
+  /** Sync `~/.claude/.claude-plugin/marketplace.json` when the user opts in. */
+  syncMarketplace?: boolean;
+}
 
 /** Snapshot payload for the Claude adapter. */
 export type ClaudeSnapshotResult = SnapshotResult;
 
 /** Collect Claude files that are safe to store in the encrypted vault. */
-export async function snapshotClaude(): Promise<SnapshotResult> {
+export async function snapshotClaude(options: ClaudeSyncOptions = {}): Promise<SnapshotResult> {
   const artifacts: SnapshotArtifact[] = [];
   const warnings: string[] = [];
 
@@ -101,7 +115,174 @@ export async function snapshotClaude(): Promise<SnapshotResult> {
   artifacts.push(...claudeSkills.artifacts);
   warnings.push(...claudeSkills.warnings);
 
+  // Claude Code plugin bundles (issue #31). Each discovered plugin contributes
+  // a manifest plus optional commands/agents/hooks/.mcp.json/skills artifacts
+  // under the `claude/plugins/<plugin-name>/...` vault namespace. Discovery
+  // gates (manifest sentinel, dot-skip, symlink rejection) live in
+  // `collectClaudePlugins`; everything below is purely additive collection
+  // that reuses the existing encryption pipeline.
+  const plugins = await collectClaudePlugins(AgentPaths.claude.pluginsDir);
+  for (const plugin of plugins) {
+    const ns = `claude/plugins/${plugin.name}`;
+
+    const manifestRaw = await readIfExists(plugin.paths.manifest);
+    if (manifestRaw !== null && !shouldNeverSync(plugin.paths.manifest)) {
+      try {
+        const manifest = sanitizeClaudePluginManifest(manifestRaw);
+        artifacts.push(collect(manifest, plugin.paths.manifest, `${ns}/plugin.json.age`));
+        warnings.push(...manifest.warnings);
+      } catch (err) {
+        warnings.push(
+          `[claude] Skipping plugin '${plugin.name}' manifest — invalid JSON: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+      }
+    }
+
+    await collectPluginMarkdownDir(plugin.paths.commandsDir, `${ns}/commands`, artifacts);
+    await collectPluginMarkdownDir(plugin.paths.agentsDir, `${ns}/agents`, artifacts);
+    await collectPluginHooksDir(plugin.paths.hooksDir, `${ns}/hooks`, artifacts, warnings);
+
+    const pluginMcpRaw = await readIfExists(plugin.paths.mcpJson);
+    if (pluginMcpRaw !== null && !shouldNeverSync(plugin.paths.mcpJson)) {
+      try {
+        const pluginMcp = sanitizeClaudePluginMcp(pluginMcpRaw);
+        artifacts.push(collect(pluginMcp, plugin.paths.mcpJson, `${ns}/mcp.json.age`));
+        warnings.push(...pluginMcp.warnings);
+      } catch (err) {
+        warnings.push(
+          `[claude] Skipping plugin '${plugin.name}' .mcp.json — invalid JSON: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+      }
+    }
+
+    // Plugin-local skills inherit every gate the shared walker enforces. The
+    // namespace mirrors the per-plugin layout so a vault's plugin tree is
+    // self-contained and removable as a unit.
+    const pluginSkills = await collectSkillArtifacts("claude", plugin.paths.skillsDir);
+    for (const art of pluginSkills.artifacts) {
+      // Re-namespace under the plugin so the artifact lives at
+      // claude/plugins/<plugin>/skills/<skill>.tar.age instead of the global
+      // claude/skills/<skill>.tar.age slot.
+      const skillBase = art.vaultPath.replace(/^claude\/skills\//, "");
+      artifacts.push({ ...art, vaultPath: `${ns}/skills/${skillBase}` });
+    }
+    warnings.push(...pluginSkills.warnings);
+  }
+
+  // Optional marketplace catalog (`~/.claude/.claude-plugin/marketplace.json`).
+  // Off by default — teams have to opt in via `claudePlugins.syncMarketplace`
+  // because the catalog can pin third-party sources that not every team wants
+  // to standardize on through the vault.
+  if (options.syncMarketplace === true) {
+    const marketplaceRaw = await readIfExists(AgentPaths.claude.marketplaceJson);
+    if (marketplaceRaw !== null && !shouldNeverSync(AgentPaths.claude.marketplaceJson)) {
+      try {
+        const parsed = JSON.parse(marketplaceRaw) as unknown;
+        const redacted = redactSecretLiterals(parsed, "marketplace");
+        artifacts.push({
+          vaultPath: "claude/marketplace.json.age",
+          sourcePath: AgentPaths.claude.marketplaceJson,
+          plaintext: `${JSON.stringify(redacted.value, null, 2)}\n`,
+          warnings: redacted.warnings,
+        });
+        warnings.push(...redacted.warnings);
+      } catch (err) {
+        warnings.push(
+          `[claude] Skipping marketplace.json — invalid JSON: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+      }
+    }
+  }
+
   return { artifacts, warnings };
+}
+
+/**
+ * Collect markdown files (commands or agents) from a plugin sub-directory.
+ * Mirrors the top-level Claude collection loop: non-recursive, `*.md` only,
+ * never-sync paths skipped, unreadable entries silently dropped.
+ */
+async function collectPluginMarkdownDir(
+  dir: string,
+  vaultPrefix: string,
+  artifacts: SnapshotArtifact[],
+): Promise<void> {
+  let names: string[];
+  try {
+    names = await readdir(dir);
+  } catch {
+    return;
+  }
+  for (const name of names) {
+    if (!name.endsWith(".md")) continue;
+    const sourcePath = join(dir, name);
+    if (shouldNeverSync(sourcePath)) continue;
+    let content: string;
+    try {
+      content = await readFile(sourcePath, "utf8");
+    } catch {
+      continue;
+    }
+    artifacts.push({
+      vaultPath: `${vaultPrefix}/${name}.age`,
+      sourcePath,
+      plaintext: content,
+      warnings: [],
+    });
+  }
+}
+
+/**
+ * Collect `*.json` hook bundles from a plugin sub-directory. Each hook bundle
+ * is sanitized with `redactSecretLiterals` while preserving its full shape —
+ * unlike the user-level `settings.json` flow which keeps only `{ hooks }`.
+ */
+async function collectPluginHooksDir(
+  dir: string,
+  vaultPrefix: string,
+  artifacts: SnapshotArtifact[],
+  warnings: string[],
+): Promise<void> {
+  let names: string[];
+  try {
+    names = await readdir(dir);
+  } catch {
+    return;
+  }
+  for (const name of names) {
+    if (!name.endsWith(".json")) continue;
+    const sourcePath = join(dir, name);
+    if (shouldNeverSync(sourcePath)) continue;
+    let raw: string;
+    try {
+      raw = await readFile(sourcePath, "utf8");
+    } catch {
+      continue;
+    }
+    try {
+      const parsed = JSON.parse(raw) as unknown;
+      const redacted = redactSecretLiterals(parsed, "pluginHook");
+      artifacts.push({
+        vaultPath: `${vaultPrefix}/${name}.age`,
+        sourcePath,
+        plaintext: `${JSON.stringify(redacted.value, null, 2)}\n`,
+        warnings: redacted.warnings,
+      });
+      warnings.push(...redacted.warnings);
+    } catch (err) {
+      warnings.push(
+        `[claude] Skipping plugin hook ${sourcePath} — invalid JSON: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+    }
+  }
 }
 
 /**
@@ -172,16 +353,112 @@ export async function applyClaudeAgent(agentName: string, content: string): Prom
   await atomicWrite(target, content);
 }
 
+// ─── Claude plugin apply helpers (issue #31) ─────────────────────────────────
+
+/**
+ * Build the absolute plugin root path after validating the plugin name.
+ * Centralised so every plugin apply helper goes through the same trust check
+ * before any filesystem write.
+ */
+function pluginRootFor(pluginName: string): string {
+  validatePluginName(pluginName);
+  return join(AgentPaths.claude.pluginsDir, pluginName);
+}
+
+/** Restore one plugin's `.claude-plugin/plugin.json` manifest. */
+export async function applyClaudePluginManifest(
+  pluginName: string,
+  content: string,
+): Promise<void> {
+  const root = pluginRootFor(pluginName);
+  const target = join(root, ".claude-plugin", "plugin.json");
+  await mkdir(join(root, ".claude-plugin"), { recursive: true });
+  await ensureCommandBackup(target);
+  await atomicWrite(target, content);
+}
+
+/** Restore one plugin-local command markdown file. */
+export async function applyClaudePluginCommand(
+  pluginName: string,
+  fileName: string,
+  content: string,
+): Promise<void> {
+  const root = pluginRootFor(pluginName);
+  const dir = join(root, "commands");
+  const target = join(dir, fileName);
+  await mkdir(dir, { recursive: true });
+  await ensureCommandBackup(target);
+  await atomicWrite(target, content);
+}
+
+/** Restore one plugin-local agent markdown file. */
+export async function applyClaudePluginAgent(
+  pluginName: string,
+  fileName: string,
+  content: string,
+): Promise<void> {
+  const root = pluginRootFor(pluginName);
+  const dir = join(root, "agents");
+  const target = join(dir, fileName);
+  await mkdir(dir, { recursive: true });
+  await ensureCommandBackup(target);
+  await atomicWrite(target, content);
+}
+
+/** Restore one plugin-local hook bundle JSON file. */
+export async function applyClaudePluginHook(
+  pluginName: string,
+  fileName: string,
+  content: string,
+): Promise<void> {
+  const root = pluginRootFor(pluginName);
+  const dir = join(root, "hooks");
+  const target = join(dir, fileName);
+  await mkdir(dir, { recursive: true });
+  await ensureCommandBackup(target);
+  await atomicWrite(target, content);
+}
+
+/** Restore one plugin's `.mcp.json`. */
+export async function applyClaudePluginMcp(pluginName: string, content: string): Promise<void> {
+  const root = pluginRootFor(pluginName);
+  const target = join(root, ".mcp.json");
+  await mkdir(root, { recursive: true });
+  await ensureCommandBackup(target);
+  await atomicWrite(target, content);
+}
+
+/** Restore one plugin-local skill tar archive into the plugin's skills dir. */
+export async function applyClaudePluginSkill(
+  pluginName: string,
+  skillName: string,
+  base64Tar: string,
+): Promise<void> {
+  const root = pluginRootFor(pluginName);
+  validateSkillName(skillName);
+  const targetDir = join(root, "skills", skillName);
+  await mkdir(targetDir, { recursive: true });
+  const tarBuffer = Buffer.from(base64Tar, "base64");
+  await extractArchive(tarBuffer, targetDir);
+}
+
+/** Restore the optional Claude marketplace catalog. */
+export async function applyClaudeMarketplace(content: string): Promise<void> {
+  const target = AgentPaths.claude.marketplaceJson;
+  await mkdir(join(target, ".."), { recursive: true });
+  await ensureCommandBackup(target);
+  await atomicWrite(target, content);
+}
+
 // ─── Apply (pull side) ────────────────────────────────────────────────────────
 
-import { readdir as _readdir } from "node:fs/promises";
 import { basename } from "node:path";
 import { decryptString } from "../core/encryptor";
 
 /** Read encrypted files from a vault subdirectory, ignoring missing directories. */
 async function readAgeFiles(dir: string): Promise<{ name: string; fullPath: string }[]> {
   try {
-    const names = await _readdir(dir);
+    const names = await readdir(dir);
     return names
       .filter((name) => name.endsWith(".age"))
       .map((name) => ({
@@ -198,6 +475,7 @@ export async function applyClaudeVault(
   vaultDir: string,
   key: string,
   dryRun: boolean,
+  options: ClaudeSyncOptions = {},
 ): Promise<void> {
   const claudeDir = join(vaultDir, "claude");
   const files = await readAgeFiles(claudeDir);
@@ -224,6 +502,19 @@ export async function applyClaudeVault(
         continue;
       }
       await applyClaudeMcp(decrypted);
+    } else if (name === "marketplace.json.age") {
+      // Symmetric to the snapshot side: only apply when the user has opted in.
+      // A vault that contains a marketplace.json.age is silently ignored on
+      // any machine where syncMarketplace is not set, so opting out is the
+      // safe default and never blocks pulls.
+      if (options.syncMarketplace !== true) {
+        continue;
+      }
+      if (dryRun) {
+        log.info("[dry-run] [claude] would apply ~/.claude/.claude-plugin/marketplace.json");
+        continue;
+      }
+      await applyClaudeMarketplace(decrypted);
     }
   }
 
@@ -278,5 +569,136 @@ export async function applyClaudeVault(
       continue;
     }
     await applyClaudeSkill(skillName, decrypted);
+  }
+
+  // Plugins sub-tree (issue #31). Vault layout:
+  //   claude/plugins/<plugin>/plugin.json.age
+  //   claude/plugins/<plugin>/commands/<file>.md.age
+  //   claude/plugins/<plugin>/agents/<file>.md.age
+  //   claude/plugins/<plugin>/hooks/<file>.json.age
+  //   claude/plugins/<plugin>/mcp.json.age
+  //   claude/plugins/<plugin>/skills/<skill>.tar.age
+  await applyClaudePluginsDir(join(claudeDir, "plugins"), key, dryRun);
+}
+
+/**
+ * Walk the `claude/plugins/` vault sub-tree and route each artifact to the
+ * matching apply helper. Plugin names from the vault are validated via
+ * {@link validatePluginName} before any filesystem write so a crafted vault
+ * cannot escape `~/.claude/plugins/`.
+ */
+async function applyClaudePluginsDir(
+  pluginsVaultDir: string,
+  key: string,
+  dryRun: boolean,
+): Promise<void> {
+  let pluginEntries: string[];
+  try {
+    pluginEntries = await readdir(pluginsVaultDir);
+  } catch {
+    return;
+  }
+
+  for (const pluginName of pluginEntries) {
+    // Symmetric with the push-side walker (claude-plugins.ts): dot-prefixed
+    // entries are ignorable noise (.gitkeep, .DS_Store), not adversarial. Skip
+    // silently before validation so the warning channel stays reserved for
+    // genuinely hostile names like `..`.
+    if (pluginName.startsWith(".")) continue;
+    try {
+      validatePluginName(pluginName);
+    } catch (err) {
+      if (err instanceof InvalidPluginNameError) {
+        log.warn(`[claude] Skipping vault plugin with invalid name '${pluginName}': ${err.reason}`);
+        continue;
+      }
+      throw err;
+    }
+
+    const pluginVaultRoot = join(pluginsVaultDir, pluginName);
+
+    // Top-level plugin artifacts (manifest, mcp.json).
+    const topFiles = await readAgeFiles(pluginVaultRoot);
+    for (const { name, fullPath } of topFiles) {
+      const encrypted = await readFile(fullPath, "utf8");
+      const decrypted = await decryptString(encrypted, key);
+
+      if (name === "plugin.json.age") {
+        if (dryRun) {
+          log.info(`[dry-run] [claude] would apply plugin manifest: ${pluginName}`);
+        } else {
+          await applyClaudePluginManifest(pluginName, decrypted);
+        }
+      } else if (name === "mcp.json.age") {
+        if (dryRun) {
+          log.info(`[dry-run] [claude] would apply plugin .mcp.json: ${pluginName}`);
+        } else {
+          await applyClaudePluginMcp(pluginName, decrypted);
+        }
+      }
+    }
+
+    // commands/*.md.age
+    for (const { name, fullPath } of await readAgeFiles(join(pluginVaultRoot, "commands"))) {
+      if (!name.endsWith(".md.age")) continue;
+      const encrypted = await readFile(fullPath, "utf8");
+      const decrypted = await decryptString(encrypted, key);
+      const fileName = basename(name, ".age");
+      if (dryRun) {
+        log.info(`[dry-run] [claude] would write plugin command: ${pluginName}/${fileName}`);
+      } else {
+        await applyClaudePluginCommand(pluginName, fileName, decrypted);
+      }
+    }
+
+    // agents/*.md.age
+    for (const { name, fullPath } of await readAgeFiles(join(pluginVaultRoot, "agents"))) {
+      if (!name.endsWith(".md.age")) continue;
+      const encrypted = await readFile(fullPath, "utf8");
+      const decrypted = await decryptString(encrypted, key);
+      const fileName = basename(name, ".age");
+      if (dryRun) {
+        log.info(`[dry-run] [claude] would write plugin agent: ${pluginName}/${fileName}`);
+      } else {
+        await applyClaudePluginAgent(pluginName, fileName, decrypted);
+      }
+    }
+
+    // hooks/*.json.age
+    for (const { name, fullPath } of await readAgeFiles(join(pluginVaultRoot, "hooks"))) {
+      if (!name.endsWith(".json.age")) continue;
+      const encrypted = await readFile(fullPath, "utf8");
+      const decrypted = await decryptString(encrypted, key);
+      const fileName = basename(name, ".age");
+      if (dryRun) {
+        log.info(`[dry-run] [claude] would write plugin hook: ${pluginName}/${fileName}`);
+      } else {
+        await applyClaudePluginHook(pluginName, fileName, decrypted);
+      }
+    }
+
+    // skills/<skill>.tar.age
+    for (const { name, fullPath } of await readAgeFiles(join(pluginVaultRoot, "skills"))) {
+      if (!name.endsWith(".tar.age")) continue;
+      const skillName = basename(name, ".tar.age");
+      try {
+        validateSkillName(skillName);
+      } catch (err) {
+        if (err instanceof InvalidSkillNameError) {
+          log.warn(
+            `[claude] Skipping plugin '${pluginName}' skill with invalid name '${name}': ${err.reason}`,
+          );
+          continue;
+        }
+        throw err;
+      }
+      const encrypted = await readFile(fullPath, "utf8");
+      const decrypted = await decryptString(encrypted, key);
+      if (dryRun) {
+        log.info(`[dry-run] [claude] would extract plugin skill: ${pluginName}/${skillName}`);
+        continue;
+      }
+      await applyClaudePluginSkill(pluginName, skillName, decrypted);
+    }
   }
 }

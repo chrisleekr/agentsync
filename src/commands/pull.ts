@@ -1,5 +1,6 @@
 import { log } from "@clack/prompts";
 import { defineCommand } from "citty";
+import { applyClaudeVault, type ClaudeSyncOptions, snapshotClaude } from "../agents/claude";
 import { type AgentDefinition, type AgentName, Agents } from "../agents/registry";
 import { loadConfig, resolveConfigPath } from "../config/loader";
 import { GitClient } from "../core/git";
@@ -9,6 +10,22 @@ let agentDefinitions: AgentDefinition[] = Agents;
 
 export function __setPullAgentsForTesting(agents: AgentDefinition[] | null): void {
   agentDefinitions = agents ?? Agents;
+}
+
+const REGISTRY_CLAUDE = Agents.find((a) => a.name === "claude");
+
+/**
+ * Inject the Claude plugin/marketplace opt-in flag into the registry's claude
+ * entry. Test fakes installed via `__setPullAgentsForTesting` are different
+ * object references and pass through unchanged.
+ */
+function withClaudeOptions(agent: AgentDefinition, claudeOpts: ClaudeSyncOptions): AgentDefinition {
+  if (agent !== REGISTRY_CLAUDE) return agent;
+  return {
+    ...agent,
+    snapshot: () => snapshotClaude(claudeOpts),
+    apply: (vaultDir, key, dryRun) => applyClaudeVault(vaultDir, key, dryRun, claudeOpts),
+  };
 }
 
 /**
@@ -35,10 +52,15 @@ export async function performPull(
     });
 
     const requestedAgent = options.agent as AgentName | undefined;
-    const agentsToSync = agentDefinitions.filter((a) => {
-      if (requestedAgent) return a.name === requestedAgent;
-      return config.agents[a.name as keyof typeof config.agents] === true;
-    });
+    const claudeOpts: ClaudeSyncOptions = {
+      syncMarketplace: config.claudePlugins?.syncMarketplace ?? false,
+    };
+    const agentsToSync = agentDefinitions
+      .filter((a) => {
+        if (requestedAgent) return a.name === requestedAgent;
+        return config.agents[a.name as keyof typeof config.agents] === true;
+      })
+      .map((a) => withClaudeOptions(a, claudeOpts));
 
     for (const agent of agentsToSync) {
       await agent.apply(runtime.vaultDir, key, options.dryRun ?? false);

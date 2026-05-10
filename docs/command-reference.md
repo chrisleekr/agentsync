@@ -72,7 +72,7 @@ bunx --package @chrisleekr/agentsync agentsync push --agent claude
 
 **Needs**: initialized vault, configured recipients, readable local agent config.
 
-**Outcome**: encrypted `.age` or `.tar.age` artifacts are committed and pushed to the configured branch. Per-user *skills* under `~/.claude/skills/`, `~/.codex/skills/`, `~/.cursor/skills/`, and `~/.copilot/skills/` are packaged through the shared skills walker and land in the matching vault namespace (`claude/skills/<name>.tar.age`, `codex/skills/<name>.tar.age`, `cursor/skills/<name>.tar.age`, `copilot/skills/<name>.tar.age`).
+**Outcome**: encrypted `.age` or `.tar.age` artifacts are committed and pushed to the configured branch. Per-user *skills* under `~/.claude/skills/`, `~/.codex/skills/`, `~/.cursor/skills/`, and `~/.copilot/skills/` are packaged through the shared skills walker and land in the matching vault namespace (`claude/skills/<name>.tar.age`, `codex/skills/<name>.tar.age`, `cursor/skills/<name>.tar.age`, `copilot/skills/<name>.tar.age`). Claude Code plugins under `~/.claude/plugins/<name>/` are bundled per-plugin into `claude/plugins/<name>/` (manifest, commands, agents, hooks, MCP servers, and plugin-local skills). Set `claudePlugins.syncMarketplace = true` in `agentsync.toml` to also sync `~/.claude/.claude-plugin/marketplace.json` (off by default — opt in only when teams trust the catalog's third-party sources).
 
 **Caveats**:
 
@@ -97,7 +97,7 @@ bunx --package @chrisleekr/agentsync agentsync pull --agent cursor
 
 **Needs**: initialized vault, readable private key, reachable Git remote.
 
-**Outcome**: supported local agent files are updated from the vault, including any per-agent skills stored under `claude/skills/`, `codex/skills/`, `cursor/skills/`, and `copilot/skills/`.
+**Outcome**: supported local agent files are updated from the vault, including any per-agent skills stored under `claude/skills/`, `codex/skills/`, `cursor/skills/`, and `copilot/skills/`. Claude Code plugins under `claude/plugins/<name>/` round-trip back to `~/.claude/plugins/<name>/` with all their surfaces restored. `marketplace.json.age` is only applied when `claudePlugins.syncMarketplace = true` is set locally.
 
 **Caveats**:
 

@@ -21,6 +21,16 @@ export const AgentSyncConfigSchema = z.object({
     autoPull: z.boolean().default(true),
     pullIntervalMs: z.number().int().min(1_000).default(300_000),
   }),
+  // Per-agent plugin opt-ins (issue #31). Optional with safe defaults so
+  // existing agentsync.toml files continue to validate without changes.
+  claudePlugins: z
+    .object({
+      // Sync `~/.claude/.claude-plugin/marketplace.json` through the vault.
+      // Off by default — the catalog can pin third-party sources, so teams
+      // opt in explicitly.
+      syncMarketplace: z.boolean().default(false),
+    })
+    .default({ syncMarketplace: false }),
 });
 
 /** Normalized runtime shape derived from the validated config schema. */
