@@ -46,3 +46,33 @@
   background-color: var(--md-default-bg-color) !important;
   fill: var(--md-default-bg-color) !important;
 }
+
+/* Light-mode contrast fix for our dark-fill classDef nodes.
+
+   Background: classDef sets `color:#ffffff` on the node, but Material's
+   `.md-typeset` rule for `.nodeLabel` wins on specificity and forces
+   text back to dark. The result is dark text on dark fills — invisible.
+   Targeting the rendered fill attribute is mermaid-version-stable and
+   does not require knowing mermaid's emitted class names. Colors below
+   match the classDef palette in architecture-overview.md. */
+.mermaid g.node:has(rect[fill="#2c3e50"]) .nodeLabel,
+.mermaid g.node:has(rect[fill="#2c3e50"]) .nodeLabel p,
+.mermaid g.node:has(rect[fill="#2c3e50"]) .nodeLabel span,
+.mermaid g.node:has(rect[fill="#8e44ad"]) .nodeLabel,
+.mermaid g.node:has(rect[fill="#8e44ad"]) .nodeLabel p,
+.mermaid g.node:has(rect[fill="#8e44ad"]) .nodeLabel span,
+.mermaid g.node:has(rect[fill="#c0392b"]) .nodeLabel,
+.mermaid g.node:has(rect[fill="#c0392b"]) .nodeLabel p,
+.mermaid g.node:has(rect[fill="#c0392b"]) .nodeLabel span,
+.mermaid g.node:has(rect[fill="#27ae60"]) .nodeLabel,
+.mermaid g.node:has(rect[fill="#27ae60"]) .nodeLabel p,
+.mermaid g.node:has(rect[fill="#27ae60"]) .nodeLabel span,
+.mermaid g.node:has(path[fill="#27ae60"]) .nodeLabel,
+.mermaid g.node:has(path[fill="#27ae60"]) .nodeLabel p,
+.mermaid g.node:has(path[fill="#27ae60"]) .nodeLabel span,
+.mermaid g.node:has(rect[fill="#d35400"]) .nodeLabel,
+.mermaid g.node:has(rect[fill="#d35400"]) .nodeLabel p,
+.mermaid g.node:has(rect[fill="#d35400"]) .nodeLabel span {
+  color: #ffffff !important;
+  fill: #ffffff !important;
+}
