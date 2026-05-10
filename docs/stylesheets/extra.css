@@ -68,3 +68,24 @@
   color: #ffffff !important;
   fill: #ffffff !important;
 }
+
+/* Fallback: target nodes by classDef-derived class names. Mermaid 11
+   emits class names from `classDef foo ...` onto `g.node`. The wrapper
+   rule above is the primary path; this catches the case where a stale
+   mkdocs serve has not picked up the markdown wrapper yet. Listed
+   colors mirror architecture-overview.md's classDef palette. */
+.mermaid g.node.local .nodeLabel,
+.mermaid g.node.key .nodeLabel,
+.mermaid g.node.gate .nodeLabel,
+.mermaid g.node.remote .nodeLabel,
+.mermaid g.node.step .nodeLabel,
+.mermaid g.node.abort .nodeLabel,
+.mermaid g.node.local .nodeLabel p,
+.mermaid g.node.key .nodeLabel p,
+.mermaid g.node.gate .nodeLabel p,
+.mermaid g.node.remote .nodeLabel p,
+.mermaid g.node.step .nodeLabel p,
+.mermaid g.node.abort .nodeLabel p {
+  color: #ffffff !important;
+  fill: #ffffff !important;
+}
