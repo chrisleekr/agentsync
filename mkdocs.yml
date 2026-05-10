@@ -1,0 +1,108 @@
+site_name: AgentSync
+site_description: Snapshot, encrypt, and sync AI agent configs across machines via a Git vault.
+site_url: https://chrisleekr.github.io/agentsync/
+site_author: Chris Lee
+repo_url: https://github.com/chrisleekr/agentsync
+repo_name: chrisleekr/agentsync
+edit_uri: edit/main/docs/
+strict: true
+
+theme:
+  name: material
+  logo: agentsync-logo.png
+  favicon: agentsync-logo.png
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.instant
+    - navigation.instant.progress
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - navigation.footer
+    - toc.follow
+    - search.suggest
+    - search.highlight
+    - search.share
+    - content.code.copy
+    - content.code.select
+    - content.code.annotate
+    - content.action.edit
+
+plugins:
+  - search
+  # social/privacy need Pillow + cairosvg, slow to install locally.
+  # Gated to CI=true (set automatically by GitHub Actions); local
+  # `bun run docs:serve` skips them by design.
+  - social:
+      enabled: !ENV [CI, false]
+  - privacy:
+      enabled: !ENV [CI, false]
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - footnotes
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.snippets:
+      base_path:
+        - .
+        - docs
+      check_paths: true
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+
+nav:
+  - Home: index.md
+  - Getting Started: getting-started.md
+  - Architecture:
+      - Overview: architecture-overview.md
+      - Deep Dive: architecture.md
+  - Usage:
+      - Command Reference: command-reference.md
+      - Daemon: daemon.md
+  - Operations:
+      - Maintenance: maintenance.md
+      - Migrations: migrate.md
+      - Troubleshooting: troubleshooting.md
+  - Contributing:
+      - Development: development.md
+      - Speckit: speckit.md
+      - Speckit Local Dev: speckit-local-development.md
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/chrisleekr/agentsync

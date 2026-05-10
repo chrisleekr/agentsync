@@ -1,0 +1,10 @@
+# Pinned for reproducible local + CI docs builds.
+# Bump intentionally — Material occasionally renames features between minors.
+mkdocs==1.6.1
+mkdocs-material==9.7.6
+pymdown-extensions==10.21.2
+
+# Optional: social cards + privacy plugin (CI-only, see mkdocs.yml).
+# Uncomment locally only if you want to preview them — adds Pillow + cairosvg.
+# Pillow==11.0.0
+# cairosvg==2.7.1

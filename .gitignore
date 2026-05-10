@@ -13,3 +13,8 @@ coverage/
 .specify/extensions/.cache/
 .specify/extensions/.backup/
 .specify/extensions/*/local-config.yml
+
+# Docs build + QA artifacts
+site/
+.playwright-mcp/
+/docs-*.png
