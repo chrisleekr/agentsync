@@ -1,0 +1,1721 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Snapshot, encrypt, and sync AI agent configs across machines via a Git vault.">
+      
+      
+        <meta name="author" content="Chris Lee">
+      
+      
+        <link rel="canonical" href="https://chrisleekr.github.io/agentsync/troubleshooting/">
+      
+      
+        <link rel="prev" href="../migrate/">
+      
+      
+        <link rel="next" href="../development/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../agentsync-logo.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Troubleshooting - AgentSync</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        
+        <link rel="stylesheet" href="../assets/external/fonts.googleapis.com/css.49ea35f2.css">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#troubleshooting-guide" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="AgentSync" class="md-header__button md-logo" aria-label="AgentSync" data-md-component="logo">
+      
+  <img src="../agentsync-logo.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            AgentSync
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Troubleshooting
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+          <a href="javascript:void(0)" class="md-search__icon md-icon" title="Share" aria-label="Share" data-clipboard data-clipboard-text="" data-md-component="search-share" tabindex="-1">
+            
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9a3 3 0 0 0-3 3 3 3 0 0 0 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.15c-.05.21-.08.43-.08.66 0 1.61 1.31 2.91 2.92 2.91s2.92-1.3 2.92-2.91A2.92 2.92 0 0 0 18 16.08"/></svg>
+          </a>
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/chrisleekr/agentsync" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    chrisleekr/agentsync
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href=".." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../getting-started/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Getting Started
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../architecture-overview/" class="md-tabs__link">
+          
+  
+  
+  Architecture
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../command-reference/" class="md-tabs__link">
+          
+  
+  
+  Usage
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../maintenance/" class="md-tabs__link">
+          
+  
+  
+  Operations
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../development/" class="md-tabs__link">
+          
+  
+  
+  Contributing
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="AgentSync" class="md-nav__button md-logo" aria-label="AgentSync" data-md-component="logo">
+      
+  <img src="../agentsync-logo.png" alt="logo">
+
+    </a>
+    AgentSync
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/chrisleekr/agentsync" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    chrisleekr/agentsync
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Architecture
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture-overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Deep Dive
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Usage
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Usage
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../command-reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Command Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../daemon/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Daemon
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operations
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Operations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../maintenance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Maintenance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../migrate/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#purpose" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Purpose
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#init-failed-or-the-vault-did-not-push" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        init failed or the vault did not push
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#local-and-remote-vault-history-diverged" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Local and remote vault history diverged
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#push-aborts-because-secrets-were-detected" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Push aborts because secrets were detected
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#private-key-missing-or-unreadable" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Private key missing or unreadable
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#remote-is-unreachable" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Remote is unreachable
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#a-file-is-skipped-during-push" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A file is skipped during push
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#my-skill-directory-did-not-push" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        My skill directory did not push
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#push-aborted-because-of-a-never-sync-file-inside-a-skill" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Push aborted because of a never-sync file inside a skill
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#i-deleted-a-skill-locally-and-it-came-back-after-pull" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        I deleted a skill locally and it came back after pull
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#i-removed-a-skill-from-the-vault-but-it-is-still-on-my-other-laptop" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        I removed a skill from the vault but it is still on my other laptop
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#a-single-file-i-deleted-inside-a-skill-reappears-after-pull-on-another-machine" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A single file I deleted inside a skill reappears after pull on another machine
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#a-vendored-or-symlinked-skill-did-not-sync" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A vendored or symlinked skill did not sync
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#a-helper-file-inside-my-skill-is-missing-on-the-other-machine-after-pull" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A helper file inside my skill is missing on the other machine after pull
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#status-shows-local-only-or-vault-only-entries" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        status shows local-only or vault-only entries
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#daemon-is-not-running" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Daemon is not running
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#platform-specific-path-confusion" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Platform-specific path confusion
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#unsupported-or-future-facing-expectations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Unsupported or future-facing expectations
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#related-docs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Related docs
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Contributing
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../development/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Development
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#purpose" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Purpose
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#init-failed-or-the-vault-did-not-push" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        init failed or the vault did not push
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#local-and-remote-vault-history-diverged" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Local and remote vault history diverged
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#push-aborts-because-secrets-were-detected" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Push aborts because secrets were detected
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#private-key-missing-or-unreadable" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Private key missing or unreadable
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#remote-is-unreachable" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Remote is unreachable
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#a-file-is-skipped-during-push" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A file is skipped during push
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#my-skill-directory-did-not-push" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        My skill directory did not push
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#push-aborted-because-of-a-never-sync-file-inside-a-skill" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Push aborted because of a never-sync file inside a skill
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#i-deleted-a-skill-locally-and-it-came-back-after-pull" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        I deleted a skill locally and it came back after pull
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#i-removed-a-skill-from-the-vault-but-it-is-still-on-my-other-laptop" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        I removed a skill from the vault but it is still on my other laptop
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#a-single-file-i-deleted-inside-a-skill-reappears-after-pull-on-another-machine" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A single file I deleted inside a skill reappears after pull on another machine
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#a-vendored-or-symlinked-skill-did-not-sync" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A vendored or symlinked skill did not sync
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#a-helper-file-inside-my-skill-is-missing-on-the-other-machine-after-pull" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A helper file inside my skill is missing on the other machine after pull
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#status-shows-local-only-or-vault-only-entries" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        status shows local-only or vault-only entries
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#daemon-is-not-running" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Daemon is not running
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#platform-specific-path-confusion" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Platform-specific path confusion
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#unsupported-or-future-facing-expectations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Unsupported or future-facing expectations
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#related-docs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Related docs
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+    <a href="https://github.com/chrisleekr/agentsync/edit/main/docs/troubleshooting.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"/></svg>
+    </a>
+  
+  
+
+
+<h1 id="troubleshooting-guide">Troubleshooting Guide<a class="headerlink" href="#troubleshooting-guide" title="Permanent link">&para;</a></h1>
+<h2 id="purpose">Purpose<a class="headerlink" href="#purpose" title="Permanent link">&para;</a></h2>
+<p>Use this guide when AgentSync setup or sync behavior fails and you need the next diagnostic step quickly, not a long theory dump.</p>
+<p>This guide primarily assumes contributor-from-source execution from a local clone.
+If you are using a published release, start in <a href="https://github.com/chrisleekr/agentsync#readme">the project README</a> and <a href="../command-reference/">command-reference.md</a>, then translate any <code>bun run src/cli.ts &lt;command&gt;</code> example here to <code>bunx --package @chrisleekr/agentsync agentsync &lt;command&gt;</code>.</p>
+<h2 id="init-failed-or-the-vault-did-not-push"><code>init</code> failed or the vault did not push<a class="headerlink" href="#init-failed-or-the-vault-did-not-push" title="Permanent link">&para;</a></h2>
+<p>Check:</p>
+<ul>
+<li>the remote URL is valid and reachable</li>
+<li>your Git transport is configured for that remote</li>
+<li>the vault directory is writable</li>
+</ul>
+<p>Interpret the failure first:</p>
+<ul>
+<li>If the remote branch is empty, AgentSync should create the first vault commit locally and push it upstream.</li>
+<li>If the remote branch already exists, AgentSync should join that history before it writes this machine's config.</li>
+<li>If you see a fast-forward-only divergence error, the local vault already contains history that does not match the remote and must be recovered before <code>init</code> can finish.</li>
+</ul>
+<p>Next step:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>bun<span class="w"> </span>run<span class="w"> </span>src/cli.ts<span class="w"> </span>doctor
+</span></code></pre></div>
+<p>If the failure happened on the first remote pull, that can be normal for an empty remote.</p>
+<h2 id="local-and-remote-vault-history-diverged">Local and remote vault history diverged<a class="headerlink" href="#local-and-remote-vault-history-diverged" title="Permanent link">&para;</a></h2>
+<p>Symptoms:</p>
+<ul>
+<li><code>pull</code>, <code>push</code>, <code>key add</code>, <code>key rotate</code>, or <code>init</code> reports that AgentSync only supports fast-forward sync</li>
+<li>the command tells you to reset or reclone the vault to <code>origin/&lt;branch&gt;</code> before retrying</li>
+<li><code>pull</code> stops without printing <code>Pull completed: ...</code></li>
+</ul>
+<p>Next steps:</p>
+<ol>
+<li>Back up any local-only vault changes you still need.</li>
+<li>Inspect the local vault repo and confirm the configured remote branch is the intended source of truth.</li>
+<li>Reset the local vault to the remote branch or remove the local vault directory and run <code>init</code> again against the same remote.</li>
+<li>Re-run the original command only after the local vault matches the remote history.</li>
+</ol>
+<p>Do not resolve this by relying on Git merge or rebase defaults. AgentSync intentionally fails closed here so every machine uses the same reconciliation model.</p>
+<h2 id="push-aborts-because-secrets-were-detected">Push aborts because secrets were detected<a class="headerlink" href="#push-aborts-because-secrets-were-detected" title="Permanent link">&para;</a></h2>
+<p>Cause: AgentSync found literal tokens or credentials in content that would otherwise be encrypted and committed.</p>
+<p>Next steps:</p>
+<ol>
+<li>Remove the literal secret from the local config.</li>
+<li>Replace it with the agent’s supported secret reference or login flow.</li>
+<li>Run <code>push</code> again.</li>
+</ol>
+<p>Do not bypass this by editing the vault manually.</p>
+<h2 id="private-key-missing-or-unreadable">Private key missing or unreadable<a class="headerlink" href="#private-key-missing-or-unreadable" title="Permanent link">&para;</a></h2>
+<p>Symptoms:</p>
+<ul>
+<li><code>pull</code> fails to decrypt</li>
+<li><code>doctor</code> reports a missing key</li>
+</ul>
+<p>Next steps:</p>
+<ol>
+<li>Check the expected key path in the runtime context.</li>
+<li>Restore the backed-up private key file.</li>
+<li>Ensure permissions are restrictive on Unix-like systems.</li>
+</ol>
+<p>If the key is gone and not backed up, the vault cannot be recovered for that machine.</p>
+<h2 id="remote-is-unreachable">Remote is unreachable<a class="headerlink" href="#remote-is-unreachable" title="Permanent link">&para;</a></h2>
+<p>Symptoms:</p>
+<ul>
+<li><code>push</code> or <code>pull</code> reports Git remote failure</li>
+<li><code>doctor</code> warns that the remote cannot be reached</li>
+</ul>
+<p>Next steps:</p>
+<ol>
+<li>Verify network connectivity.</li>
+<li>Verify Git credentials or SSH keys for the remote.</li>
+<li>Confirm <code>remote.url</code> and <code>remote.branch</code> in <code>agentsync.toml</code>.</li>
+</ol>
+<h2 id="a-file-is-skipped-during-push">A file is skipped during push<a class="headerlink" href="#a-file-is-skipped-during-push" title="Permanent link">&para;</a></h2>
+<p>Likely cause: the source path matches a never-sync pattern such as credentials, sessions, or auth state.</p>
+<p>Next step:</p>
+<ul>
+<li>Treat the skip as intentional unless the file is clearly safe and the policy should change in <code>src/core/sanitizer.ts</code>.</li>
+</ul>
+<h2 id="my-skill-directory-did-not-push">My skill directory did not push<a class="headerlink" href="#my-skill-directory-did-not-push" title="Permanent link">&para;</a></h2>
+<p>Likely causes, in order of frequency:</p>
+<ol>
+<li>The directory is missing a <code>SKILL.md</code> sentinel file. AgentSync treats the presence of a real <code>SKILL.md</code> as the "this is a skill" marker — a directory without one is silently ignored (FR-002). Add the sentinel and re-run <code>push</code>.</li>
+<li>The <code>SKILL.md</code> file is a symbolic link. The walker uses <code>lstat</code> so a symlinked sentinel fails the "is a real file" check and the skill is skipped (FR-016 sentinel rule). Replace the symlink with a real file or move the directory so the sentinel can be a real file.</li>
+<li>The skill root itself is a symbolic link into a vendored pool. AgentSync refuses to follow the link because the outer tier of FR-016 forbids it. Make the skill root a real directory.</li>
+<li>The directory name starts with a dot. Top-level <code>.something</code> entries under the skills root are skipped silently to protect vendor bundles like Codex's <code>.system/</code> directory (FR-017). Rename the directory so its name does not start with a dot.</li>
+</ol>
+<h2 id="push-aborted-because-of-a-never-sync-file-inside-a-skill">Push aborted because of a never-sync file inside a skill<a class="headerlink" href="#push-aborted-because-of-a-never-sync-file-inside-a-skill" title="Permanent link">&para;</a></h2>
+<p>Symptom:</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>Push aborted: 1 security issue(s) detected.
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>[&lt;agent&gt;] never-sync inside skill: /Users/&lt;you&gt;/.&lt;agent&gt;/skills/&lt;name&gt;/auth.json
+</span></code></pre></div>
+<p>Cause: a file matching a never-sync pattern (e.g. <code>auth.json</code>, <code>credentials.json</code>, <code>.env*</code>) exists <em>inside</em> a skill directory. AgentSync escalates this to a fatal push abort rather than silently dropping the file, because the alternative would allow a crafted skill directory to smuggle credentials out of the never-sync safety net (FR-006).</p>
+<p>Next steps:</p>
+<ol>
+<li>Remove or rename the flagged file inside the skill directory.</li>
+<li>Verify the directory no longer contains anything matched by <code>NEVER_SYNC_PATTERNS</code> in <code>src/core/sanitizer.ts</code>.</li>
+<li>Re-run <code>push</code>.</li>
+</ol>
+<p>Do not bypass this by editing the vault manually.</p>
+<h2 id="i-deleted-a-skill-locally-and-it-came-back-after-pull">I deleted a skill locally and it came back after pull<a class="headerlink" href="#i-deleted-a-skill-locally-and-it-came-back-after-pull" title="Permanent link">&para;</a></h2>
+<p>This is working as designed. AgentSync is <strong>additive-by-default</strong>: a local delete never removes the vault entry, and the next <code>pull</code> will happily restore the skill from the vault (FR-011).</p>
+<p>If you want the skill gone for good on every machine, you must run the explicit removal verb:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>bun<span class="w"> </span>run<span class="w"> </span>src/cli.ts<span class="w"> </span>skill<span class="w"> </span>remove<span class="w"> </span>&lt;agent&gt;<span class="w"> </span>&lt;name&gt;
+</span></code></pre></div>
+<p>That verb is the only operation that mutates the vault's skills namespace in the delete direction (FR-012).</p>
+<h2 id="i-removed-a-skill-from-the-vault-but-it-is-still-on-my-other-laptop">I removed a skill from the vault but it is still on my other laptop<a class="headerlink" href="#i-removed-a-skill-from-the-vault-but-it-is-still-on-my-other-laptop" title="Permanent link">&para;</a></h2>
+<p>Also working as designed. <code>skill remove</code> removes the vault artifact, but <code>pull</code> is extract-only and never deletes a local skill directory — even when the matching vault file is gone (FR-013). The safety reasoning is that a concurrent edit to the same skill on machine B should not silently vanish after machine A decides to remove it.</p>
+<p>To finish removing the skill on the other laptop, delete the local skill directory manually on that machine:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>rm<span class="w"> </span>-rf<span class="w"> </span>~/.claude/skills/&lt;name&gt;<span class="w">   </span><span class="c1"># or ~/.cursor/skills, ~/.codex/skills, ~/.copilot/skills</span>
+</span></code></pre></div>
+<h2 id="a-single-file-i-deleted-inside-a-skill-reappears-after-pull-on-another-machine">A single file I deleted inside a skill reappears after pull on another machine<a class="headerlink" href="#a-single-file-i-deleted-inside-a-skill-reappears-after-pull-on-another-machine" title="Permanent link">&para;</a></h2>
+<p>Symptom:</p>
+<ul>
+<li>On machine A you deleted <code>helper.md</code> from a skill (not the whole skill), re-ran <code>push</code>, and the updated vault tar no longer contains it.</li>
+<li>On machine B, after <code>pull</code>, <code>helper.md</code> is still present in the local skill directory.</li>
+</ul>
+<p>Cause: this is symmetric to the section above and comes from the same FR-013 rule. <code>applyXxxSkill</code> extracts the vault tar <em>on top of</em> the existing local skill directory instead of replacing it. Files that are in the local directory but no longer in the tar survive the extract unchanged. AgentSync makes this trade deliberately — the alternative (replace the directory on every pull) would silently destroy any local edits or in-progress files a user happened to have inside the skill between pulls.</p>
+<p>Next steps:</p>
+<ol>
+<li>On the affected machine, <code>rm</code> the stale file(s) manually inside the skill directory.</li>
+</ol>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>rm<span class="w"> </span>~/.claude/skills/&lt;name&gt;/helper.md<span class="w">   </span><span class="c1"># or the equivalent path on cursor/codex/copilot</span>
+</span></code></pre></div>
+<ol>
+<li>Run <code>agentsync status</code> to confirm the skill now matches the vault for that machine.</li>
+</ol>
+<p>Note: a future release may offer a <code>pull --replace-skills</code> flag for users who want vault-as-source-of-truth overwrite semantics, but the default will remain additive. Do not solve this by editing the vault directly or by running <code>git rm</code> inside the vault — both of those bypass the reconciliation logic.</p>
+<h2 id="a-vendored-or-symlinked-skill-did-not-sync">A vendored or symlinked skill did not sync<a class="headerlink" href="#a-vendored-or-symlinked-skill-did-not-sync" title="Permanent link">&para;</a></h2>
+<p>Cause: FR-016's outer tier refuses to walk a skill root that is itself a symbolic link. This prevents a vendored pool outside the skills directory from being silently tar'd into the encrypted vault through a follow-the-link archival.</p>
+<p>Next steps:</p>
+<ul>
+<li>If the vendored content really belongs to you and should sync, copy the tree into the skills directory as a real directory instead of linking to it.</li>
+<li>If you do not want the vendored content in the vault, leave the symlink in place — it is already silently ignored.</li>
+</ul>
+<h2 id="a-helper-file-inside-my-skill-is-missing-on-the-other-machine-after-pull">A helper file inside my skill is missing on the other machine after pull<a class="headerlink" href="#a-helper-file-inside-my-skill-is-missing-on-the-other-machine-after-pull" title="Permanent link">&para;</a></h2>
+<p>Cause: the helper file was a symbolic link <em>inside</em> the skill directory. FR-016's inner tier filters symlink entries out of the tar archive at <code>archiveDirectory</code> time, so only the real files around the link are sent to the vault. This is intentional — symlinks inside a skill typically point at per-machine vendored state that must not leak across machines.</p>
+<p>Next steps:</p>
+<ul>
+<li>If the helper file should sync, convert the symlink into a real file (<code>cp -L</code> is a convenient one-shot) and re-run <code>push</code>.</li>
+<li>If the helper file is machine-specific and should not sync, accept the omission and re-create the link manually on the other machine.</li>
+</ul>
+<h2 id="status-shows-local-only-or-vault-only-entries"><code>status</code> shows local-only or vault-only entries<a class="headerlink" href="#status-shows-local-only-or-vault-only-entries" title="Permanent link">&para;</a></h2>
+<ul>
+<li><code>local-only</code> means the machine has config that is not in the vault yet. Run <code>push</code> after reviewing the content.</li>
+<li><code>vault-only</code> means the vault has artifacts this machine did not snapshot locally. Run <code>pull</code> if that content should exist here.</li>
+</ul>
+<h2 id="daemon-is-not-running">Daemon is not running<a class="headerlink" href="#daemon-is-not-running" title="Permanent link">&para;</a></h2>
+<p>Check:</p>
+<ul>
+<li>the service is installed for the current platform</li>
+<li>the daemon status command can reach the local IPC endpoint</li>
+<li>the platform-specific service file exists</li>
+</ul>
+<p>Next steps:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>bun<span class="w"> </span>run<span class="w"> </span>src/cli.ts<span class="w"> </span>daemon<span class="w"> </span>install
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>bun<span class="w"> </span>run<span class="w"> </span>src/cli.ts<span class="w"> </span>daemon<span class="w"> </span>status
+</span></code></pre></div>
+<p>If the service is installed but not healthy, inspect platform logs:</p>
+<ul>
+<li>macOS: LaunchAgent plist and user logs</li>
+<li>Linux: <code>systemctl --user status agentsync</code></li>
+<li>Windows: Task Scheduler plus task history</li>
+</ul>
+<h2 id="platform-specific-path-confusion">Platform-specific path confusion<a class="headerlink" href="#platform-specific-path-confusion" title="Permanent link">&para;</a></h2>
+<p>Do not guess file paths. Use the values defined in <code>src/config/paths.ts</code> as the source of truth.</p>
+<h2 id="unsupported-or-future-facing-expectations">Unsupported or future-facing expectations<a class="headerlink" href="#unsupported-or-future-facing-expectations" title="Permanent link">&para;</a></h2>
+<p>If you expect a hosted admin surface, network API, or rich conflict-resolution UI, that is outside the current support surface. The supported model is the local CLI plus daemon workflow described in the command reference and architecture guide.</p>
+<h2 id="related-docs">Related docs<a class="headerlink" href="#related-docs" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="../command-reference/">command-reference.md</a></li>
+<li><a href="../development/">development.md</a></li>
+<li><a href="../architecture/">architecture.md</a></li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../migrate/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Migrations">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Migrations
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../development/" class="md-footer__link md-footer__link--next" aria-label="Next: Development">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Development
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://github.com/chrisleekr/agentsync" target="_blank" rel="noopener" title="github.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+      <div class="md-progress" data-md-component="progress" role="progressbar"></div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.instant", "navigation.instant.progress", "navigation.tabs", "navigation.sections", "navigation.top", "navigation.footer", "toc.follow", "search.suggest", "search.highlight", "search.share", "content.code.copy", "content.code.select", "content.code.annotate", "content.action.edit"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>

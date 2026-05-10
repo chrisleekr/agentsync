@@ -1,0 +1,56 @@
+/* Wider content column so mermaid diagrams render at readable scale.
+   Material 9.x hardcodes .md-grid { max-width: 61rem } (~976px). On a
+   1440p+ display that squeezes 9-node LR flowcharts into ~700px, which
+   shrinks SVG text below 10px. Material does not expose a CSS variable
+   for this, so we override the rule directly. 95rem ≈ 1520px keeps
+   prose line-length comfortable while letting diagrams render at native
+   size. */
+.md-grid {
+  max-width: 95rem;
+}
+
+/* Dark-mode label color. Forces all mermaid node labels to white when
+   the slate scheme is active. Safe site-wide because every diagram in
+   this repo uses dark fills (architecture-overview's classDef palette
+   + the inverted deep-dive palette in architecture.md / daemon.md /
+   migrate.md). */
+[data-md-color-scheme="slate"] .mermaid .nodeLabel,
+[data-md-color-scheme="slate"] .mermaid .nodeLabel p,
+[data-md-color-scheme="slate"] .mermaid .nodeLabel span,
+[data-md-color-scheme="slate"] .mermaid foreignObject p,
+[data-md-color-scheme="slate"] .mermaid foreignObject span {
+  color: #ffffff !important;
+  fill: #ffffff !important;
+}
+
+/* Safety net for any future diagram that omits classDef and falls back
+   to mermaid's pale built-in fills. Swaps to dark slate so the white
+   label rule above stays readable. */
+[data-md-color-scheme="slate"] .mermaid .node rect[fill="#ECECFF"],
+[data-md-color-scheme="slate"] .mermaid .node polygon[fill="#ECECFF"],
+[data-md-color-scheme="slate"] .mermaid .node rect[fill="#fff5ad"],
+[data-md-color-scheme="slate"] .mermaid .node polygon[fill="#fff5ad"] {
+  fill: #34495e !important;
+  stroke: #1a252f !important;
+}
+
+/* Edge labels need a background that matches the page in dark mode.
+   Without this they sit on a white pill that breaks the dark theme. */
+[data-md-color-scheme="slate"] .mermaid .edgeLabel,
+[data-md-color-scheme="slate"] .mermaid .edgeLabel rect {
+  background-color: var(--md-default-bg-color) !important;
+  fill: var(--md-default-bg-color) !important;
+}
+
+/* Light-mode label color for our dark-fill diagrams.
+
+   mkdocs-material renders mermaid labels with
+   `color: var(--md-mermaid-label-fg-color)` which defaults to a dark
+   value in light mode — invisible on our dark fills. Override the
+   variable on the scoping wrapper around each diagram so the label
+   resolves to white regardless of which element actually carries the
+   text. The wrapper limits the override to wrapped diagrams only. */
+.agentsync-darknodes {
+  --md-mermaid-label-fg-color: #ffffff;
+  --md-mermaid-node-fg-color: #ffffff;
+}
