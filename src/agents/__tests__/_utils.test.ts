@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { createTmpDir } from "../../test-helpers/fixtures";
 import { atomicWrite, collect, readIfExists } from "../_utils";
 
-// T017 — _utils helpers
+// _utils helpers
 
 describe("agents/_utils", () => {
   let tmpDir: string;

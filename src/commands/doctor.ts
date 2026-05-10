@@ -19,14 +19,14 @@ export interface Check {
 
 /**
  * Build the readability check rows for the per-agent skills directories
- * introduced by the agent-skills-sync feature (FR-008). Extracted into its
+ * introduced by the agent-skills-sync feature. Extracted into its
  * own helper so the rule can be unit-tested without mocking the rest of the
  * doctor pipeline.
  *
  * Each agent gets exactly one row:
  *   - `pass` when the path exists, is a real directory, and is readable
  *   - `warn` when the path does not exist, is unreadable, is a symbolic
- *     link (walker refuses to enumerate symlinked roots per FR-016), or
+ *     link (walker refuses to enumerate symlinked roots), or
  *     exists but is not a directory (e.g. the user accidentally created
  *     `~/.claude/skills` as a regular file instead of a directory)
  *
@@ -56,7 +56,7 @@ export async function buildSkillsDirChecks(): Promise<Check[]> {
         checks.push({
           name,
           status: "warn",
-          detail: `Symlinked skills root is not synced (FR-016): ${dir}`,
+          detail: `Symlinked skills root is not synced: ${dir}`,
         });
         continue;
       }
@@ -148,8 +148,8 @@ export const doctorCommand = defineCommand({
       });
     }
 
-    // 3a. Per-agent skills directories (agent-skills-sync feature, FR-008).
-    // Delegated to a testable helper so the rule has its own unit test.
+    // 3a. Per-agent skills directory readability checks. Delegated to a
+    // testable helper so the rule has its own unit test.
     checks.push(...(await buildSkillsDirChecks()));
 
     // 4. Vault config parses correctly against schema

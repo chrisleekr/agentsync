@@ -18,7 +18,7 @@ import { GitClient, type GitReconciliationError } from "../git";
   mock.module("node:fs/promises", () => realFsPromises);
 }
 
-// T036 — GitClient clone, init, commit, push, pull, currentBranch
+// GitClient clone, init, commit, push, pull, currentBranch
 
 // Ensure git is configured for test commits.
 // Only set if the user.email key is missing to avoid overwriting real config.

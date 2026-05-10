@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { SyncQueue } from "../sync-queue";
 
 describe("SyncQueue", () => {
-  // T013 — two enqueued operations run serially
+  // two enqueued operations run serially
   test("two enqueued operations run serially — second starts only after first resolves", async () => {
     const q = new SyncQueue();
     const order: number[] = [];
@@ -34,7 +34,7 @@ describe("SyncQueue", () => {
     expect(order).toEqual([1, 2]);
   });
 
-  // T013 — serialisation: second does not start while first is running
+  // serialisation: second does not start while first is running
   test("second operation does not start while first is in progress", async () => {
     const q = new SyncQueue();
     let secondStarted = false;
@@ -65,7 +65,7 @@ describe("SyncQueue", () => {
     expect(secondStarted).toBe(true);
   });
 
-  // T014 — whenIdle resolves only after all enqueued work settles
+  // whenIdle resolves only after all enqueued work settles
   test("whenIdle() resolves only after all enqueued work settles", async () => {
     const q = new SyncQueue();
     const results: number[] = [];
@@ -102,7 +102,7 @@ describe("SyncQueue", () => {
     expect(results).toEqual([1]);
   });
 
-  // T014 — whenIdle resolves immediately when queue is empty
+  // whenIdle resolves immediately when queue is empty
   test("whenIdle() resolves immediately when the queue is idle", async () => {
     const q = new SyncQueue();
     await expect(q.whenIdle()).resolves.toBeUndefined();
@@ -115,21 +115,21 @@ describe("SyncQueue", () => {
     expect(result).toBe(42);
   });
 
-  // T058 — close() rejects new enqueues
+  // close() rejects new enqueues
   test("close() causes subsequent enqueue() to reject", async () => {
     const q = new SyncQueue();
     q.close();
     await expect(q.enqueue(async () => 1)).rejects.toThrow("SyncQueue is closed");
   });
 
-  // T058 — whenIdle() still resolves after close()
+  // whenIdle() still resolves after close()
   test("whenIdle() resolves after close() when queue is idle", async () => {
     const q = new SyncQueue();
     q.close();
     await expect(q.whenIdle()).resolves.toBeUndefined();
   });
 
-  // T058 — close() does not abort in-flight work
+  // close() does not abort in-flight work
   test("close() does not abort already-enqueued work", async () => {
     const q = new SyncQueue();
     let ran = false;

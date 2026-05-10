@@ -86,9 +86,9 @@ export async function snapshotCodex(): Promise<SnapshotResult> {
     // rules dir may not exist yet
   }
 
-  // Skills — delegated to the shared walker (FR-001/FR-002/FR-006/FR-016/FR-017).
+  // Skills — delegated to the shared walker.
   // The walker enforces dot-skip (which covers Codex's vendored `.system/`
-  // bundle — FR-017), symlink rejection at the root, sentinel verification,
+  // bundle), symlink rejection at the root, sentinel verification,
   // the never-sync interior scan, and the symlink-filtered tar archival in one
   // place so every skill-bearing agent inherits identical rules.
   const codexSkills = await collectSkillArtifacts("codex", AgentPaths.codex.skillsDir);
@@ -214,7 +214,7 @@ export async function applyCodexVault(
     }
   }
 
-  // Skills sub-directory — stored as <name>.tar.age (FR-005). Mirrors the
+  // Skills sub-directory — stored as <name>.tar.age. Mirrors the
   // Claude/Copilot apply path: each entry is decrypted, then the inner base64
   // tar is extracted into ~/.codex/skills/<name>/ via applyCodexSkill.
   const skillFiles = await readAgeFiles(join(codexDir, "skills"));

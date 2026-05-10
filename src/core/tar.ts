@@ -12,9 +12,8 @@ export interface ArchiveDirectoryOptions {
    * still archived. Default `false` preserves the existing tar-everything
    * behavior used by Copilot agent-tarballs.
    *
-   * Set this to `true` for skill-directory archives so vendored helper files
-   * symlinked into a user skill never reach the encrypted vault (FR-016 inner
-   * tier of the agent-skills-sync feature).
+   * Set to `true` for skill-directory archives so vendored helper files
+   * symlinked into a user skill never reach the encrypted vault.
    */
   skipSymlinks?: boolean;
 }

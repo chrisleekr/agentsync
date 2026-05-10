@@ -27,7 +27,7 @@ export type SkillRemoveResult =
 
 /**
  * Remove a single skill from the vault, commit the deletion, and push. Leaves
- * every local skill directory on every machine untouched (FR-012 + FR-013).
+ * every local skill directory on every machine untouched.
  *
  * This function is the testable core — it returns a discriminated result
  * object instead of throwing or calling `process.exit()` so tests can assert

@@ -14,7 +14,7 @@ import { Watcher } from "../core/watcher";
 /** Format daemon log timestamps consistently across lifecycle events. */
 const ts = () => new Date().toISOString();
 
-// ── Failure tracking (US2) ─────────────────────────────────────────────────────
+// ── Failure tracking ─────────────────────────────────────────────────────
 let consecutiveFailures = 0;
 let lastError: string | null = null;
 
@@ -26,7 +26,7 @@ function recordSuccess(): void {
 
 /**
  * Increment the consecutive failure counter and capture the error message.
- * The operation type is always included in `lastError` for diagnostics per FR-004.
+ * The operation type is always included in `lastError` for diagnostics.
  * `lastError` MUST NOT include key file content — only paths and error codes.
  */
 function recordFailure(op: "push" | "pull", msg: string): void {
@@ -34,7 +34,7 @@ function recordFailure(op: "push" | "pull", msg: string): void {
   lastError = `[${op}] ${msg}`;
 }
 
-// ── Retry logic (US3) ──────────────────────────────────────────────────────────
+// ── Retry logic ──────────────────────────────────────────────────────────
 
 /**
  * Calls `fn` once; on failure retries exactly once.
@@ -53,13 +53,13 @@ async function withRetry<T>(fn: () => Promise<T>): Promise<T> {
  * @returns A promise that resolves once the daemon has bound its IPC socket and registered watchers.
  */
 export async function startDaemon(): Promise<void> {
-  // ── Startup validation (FR-006, FR-007, SC-006) ──────────────────────────
+  // ── Startup validation ──────────────────────────
   let runtime: Awaited<ReturnType<typeof resolveRuntimeContext>>;
   try {
     runtime = await resolveRuntimeContext();
     // Eagerly load config to validate vault accessibility
     await loadConfig(resolveConfigPath(runtime.vaultDir));
-    // Validate encryption key is readable (FR-007)
+    // Validate encryption key is readable
     await access(runtime.privateKeyPath);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -71,7 +71,7 @@ export async function startDaemon(): Promise<void> {
   const config = await loadConfig(resolveConfigPath(runtime.vaultDir));
   const socketPath = (await import("../config/paths")).resolveDaemonSocketPath();
 
-  // ── Second-instance detection (FR-009, SC-005) ───────────────────────────
+  // ── Second-instance detection ───────────────────────────
   const client = new IpcClient();
   try {
     const response = await client.send("status", {}, socketPath);
@@ -84,7 +84,7 @@ export async function startDaemon(): Promise<void> {
   } catch (err) {
     const code = (err as NodeJS.ErrnoException)?.code;
     if (code === "ECONNREFUSED") {
-      // Stale socket — unlink before proceeding (FR-003)
+      // Stale socket — unlink before proceeding
       try {
         await unlink(socketPath);
       } catch {
@@ -96,7 +96,7 @@ export async function startDaemon(): Promise<void> {
 
   const pullIntervalMs = config.sync.pullIntervalMs ?? 5 * 60 * 1000;
 
-  // ── SyncQueue (US1) ──────────────────────────────────────────────────────
+  // ── SyncQueue ──────────────────────────────────────────────────────
   const queue = new SyncQueue();
 
   const ipc = new IpcServer();
@@ -213,12 +213,12 @@ export async function startDaemon(): Promise<void> {
       });
   }, pullIntervalMs);
 
-  // ── Graceful shutdown (US1) ──────────────────────────────────────────────
+  // ── Graceful shutdown ──────────────────────────────────────────────
   const shutdown = async () => {
     clearInterval(pullTimer);
     ipc.close();
     queue.close();
-    // Drain in-flight sync operations with a hard timeout (FR-013)
+    // Drain in-flight sync operations with a hard timeout
     await Promise.race([queue.whenIdle(), delay(10_000)]);
     await watcher.close();
     try {

@@ -40,7 +40,7 @@ afterAll(() => {
   Object.assign(testCopilotPaths, originalCopilotPaths);
 });
 
-// T020 — snapshotCopilot
+// snapshotCopilot
 
 describe("snapshotCopilot", () => {
   let tmpDir: string;
@@ -144,10 +144,10 @@ describe("snapshotCopilot", () => {
     expect(() => Buffer.from(art!.plaintext, "base64")).not.toThrow();
   });
 
-  // T010 — walker retrofit regression: the new snapshotCopilot must inherit
-  // the FR-016 (symlink) and FR-017 (dot-skip) rules from the shared walker.
+  // walker retrofit regression: snapshotCopilot must inherit the
+  // symlink-rejection and dot-skip rules from the shared walker.
 
-  test("retrofit: top-level symlinked skill root produces zero artifacts (FR-016)", async () => {
+  test("retrofit: top-level symlinked skill root produces zero artifacts", async () => {
     // Build a "vendored pool" outside the skills root and symlink it in.
     const vendoredTarget = join(tmpDir, "vendored-pool", "vendor-skill");
     mkdirSync(vendoredTarget, { recursive: true });
@@ -161,7 +161,7 @@ describe("snapshotCopilot", () => {
     expect(skillArts).toHaveLength(0);
   });
 
-  test("retrofit: top-level .system directory is skipped (FR-017)", async () => {
+  test("retrofit: top-level .system directory is skipped", async () => {
     const systemSkill = join(testCopilotPaths.skillsDir, ".system", "vendor");
     mkdirSync(systemSkill, { recursive: true });
     writeFileSync(join(systemSkill, "SKILL.md"), "# vendor", "utf8");
@@ -171,7 +171,7 @@ describe("snapshotCopilot", () => {
     expect(skillArts).toHaveLength(0);
   });
 
-  test("retrofit: real skill with interior symlink helper omits the helper (FR-016 inner)", async () => {
+  test("retrofit: real skill with interior symlink helper omits the helper", async () => {
     // Vendored helper file outside the skills root.
     const helperTargetDir = join(tmpDir, "vendored-helpers");
     mkdirSync(helperTargetDir, { recursive: true });
@@ -205,7 +205,7 @@ describe("snapshotCopilot", () => {
   });
 });
 
-// T026 — applyCopilotInstructions / applyCopilotSkill / applyCopilotAgent
+// applyCopilotInstructions / applyCopilotSkill / applyCopilotAgent
 
 describe("apply* functions", () => {
   let tmpDir: string;
@@ -278,7 +278,7 @@ describe("apply* functions", () => {
   });
 });
 
-// T028 — dryRun (applyCopilotVault)
+// dryRun (applyCopilotVault)
 
 describe("applyCopilotVault dryRun", () => {
   let tmpDir: string;

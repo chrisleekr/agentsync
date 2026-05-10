@@ -40,7 +40,7 @@ afterAll(() => {
   Object.assign(testCodexPaths, originalCodexPaths);
 });
 
-// T019 — snapshotCodex
+// snapshotCodex
 
 describe("snapshotCodex", () => {
   let tmpDir: string;
@@ -100,7 +100,7 @@ describe("snapshotCodex", () => {
     expect(authArt).toBeUndefined();
   });
 
-  // T017(1) — US2 Codex skill round-trip happy path (FR-001, FR-003, FR-004)
+  // Codex skill round-trip happy path
 
   test("snapshots a real Codex skill directory as a base64 tar artifact", async () => {
     const skillDir = join(testCodexPaths.skillsDir, "my-skill");
@@ -118,9 +118,9 @@ describe("snapshotCodex", () => {
     expect(art!.plaintext.length).toBeGreaterThan(0);
   });
 
-  // T017(5) — FR-009 missing-dir case at the agent layer
+  // missing-dir case at the agent layer
 
-  test("snapshotCodex does not throw when the skills directory is missing (FR-009)", async () => {
+  test("snapshotCodex does not throw when the skills directory is missing", async () => {
     testCodexPaths.skillsDir = join(tmpDir, "skills-does-not-exist");
 
     const result = await codexModule.snapshotCodex();
@@ -129,9 +129,9 @@ describe("snapshotCodex", () => {
     expect(result.warnings.filter((w) => w.startsWith("never-sync"))).toHaveLength(0);
   });
 
-  // T017(6) — FR-016 interior-symlink defense-in-depth at the agent layer
+  // interior-symlink defense-in-depth at the agent layer
 
-  test("snapshotCodex omits interior symlink helper files from the tar (FR-016 inner)", async () => {
+  test("snapshotCodex omits interior symlink helper files from the tar", async () => {
     // Vendored helper outside the skills root.
     const helperTargetParent = join(tmpDir, "vendored-helpers");
     mkdirSync(helperTargetParent, { recursive: true });
@@ -163,9 +163,9 @@ describe("snapshotCodex", () => {
     expect(entries).not.toContain("helper.md");
   });
 
-  // T018 — FR-017 dot-skip regression specific to Codex (.system vendor bundle)
+  // dot-skip regression specific to Codex (.system vendor bundle)
 
-  test("snapshotCodex skips a top-level .system directory (FR-017 dot-skip)", async () => {
+  test("snapshotCodex skips a top-level .system directory", async () => {
     // Real skill alongside a .system/ directory which represents a vendor bundle
     // that Codex may ship with its installer. The dot-skip rule MUST filter this
     // out regardless of whether it contains a valid SKILL.md sentinel.
@@ -184,7 +184,7 @@ describe("snapshotCodex", () => {
   });
 });
 
-// T025 — applyCodexAgentsMd / applyCodexConfig / applyCodexRule
+// applyCodexAgentsMd / applyCodexConfig / applyCodexRule
 
 describe("apply* functions", () => {
   let tmpDir: string;
@@ -231,7 +231,7 @@ describe("apply* functions", () => {
     expect(content).toBe("## Testing rules");
   });
 
-  // T017(2) — applyCodexSkill direct extraction test
+  // applyCodexSkill direct extraction test
 
   test("applyCodexSkill extracts a tar archive into the local skills dir", async () => {
     const srcSkill = join(tmpDir, "src-skill");
@@ -252,7 +252,7 @@ describe("apply* functions", () => {
   });
 });
 
-// T028 — dryRun (applyCodexVault)
+// dryRun (applyCodexVault)
 
 describe("applyCodexVault dryRun", () => {
   let tmpDir: string;
@@ -290,7 +290,7 @@ describe("applyCodexVault dryRun", () => {
     expect(exists).toBeFalse();
   });
 
-  // T017(3) — applyCodexVault restores a Codex skill from an encrypted artifact
+  // applyCodexVault restores a Codex skill from an encrypted artifact
 
   test("applyCodexVault restores a Codex skill from an encrypted vault artifact", async () => {
     const { generateIdentity, identityToRecipient, encryptString } = await import(
@@ -322,7 +322,7 @@ describe("applyCodexVault dryRun", () => {
     expect(restoredGuide).toBe("# guide");
   });
 
-  // T017(4) — applyCodexVault dryRun=true must NOT touch the local skills dir
+  // applyCodexVault dryRun=true must NOT touch the local skills dir
 
   test("applyCodexVault dryRun=true does not extract skill artifacts", async () => {
     const { generateIdentity, identityToRecipient, encryptString } = await import(

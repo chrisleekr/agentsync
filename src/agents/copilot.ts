@@ -68,11 +68,11 @@ export async function snapshotCopilot(): Promise<SnapshotResult> {
     // directory may not exist
   }
 
-  // Skills — delegated to the shared walker so the FR-002, FR-006, FR-016,
-  // and FR-017 rules from the agent-skills-sync feature are enforced
-  // identically across every skill-bearing agent. The walker uses lstat
-  // throughout, so symlinked roots and symlinked SKILL.md sentinels (the
-  // vendored-pool patterns observed on real machines) are correctly skipped.
+  // Skills — delegated to the shared walker so dot-skip, symlink rejection,
+  // sentinel verification, never-sync interior scan, and symlink-filtered
+  // archival stay identical across every skill-bearing agent. The walker
+  // uses lstat throughout, so symlinked roots and symlinked SKILL.md
+  // sentinels (the vendored-pool pattern seen on real machines) are skipped.
   const copilotSkills = await collectSkillArtifacts("copilot", AgentPaths.copilot.skillsDir);
   artifacts.push(...copilotSkills.artifacts);
   warnings.push(...copilotSkills.warnings);

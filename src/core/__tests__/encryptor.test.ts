@@ -21,7 +21,7 @@ import {
 }
 
 describe("encryptor", () => {
-  // T004 — generateIdentity + identityToRecipient
+  // generateIdentity + identityToRecipient
 
   test("generateIdentity returns an AGE-SECRET-KEY-1 string", async () => {
     const identity = await generateIdentity();
@@ -41,7 +41,7 @@ describe("encryptor", () => {
     expect(a).not.toBe(b);
   });
 
-  // T005 — encryptString / decryptString round-trip
+  // encryptString / decryptString round-trip
 
   test("encryptString output starts with AGE armor header", async () => {
     const identity = await generateIdentity();
@@ -76,7 +76,7 @@ describe("encryptor", () => {
     );
   });
 
-  // T006 — wrong key
+  // wrong key
 
   test("decryptString throws when wrong identity is used", async () => {
     const id1 = await generateIdentity();
@@ -86,7 +86,7 @@ describe("encryptor", () => {
     await expect(decryptString(armored, id2)).rejects.toThrow();
   });
 
-  // T007 — encryptFile / decryptFile
+  // encryptFile / decryptFile
 
   let tmpDir: string;
 

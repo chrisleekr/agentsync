@@ -1,5 +1,5 @@
 /**
- * Integration tests (T038–T044, T052) — end-to-end command coverage.
+ * Integration tests — end-to-end command coverage.
  *
  * Strategy
  * --------
@@ -213,7 +213,7 @@ describe("integration", () => {
     process.exitCode = 0;
   });
 
-  test("T038 — init command writes agentsync.toml and key.txt in a fresh vault", async () => {
+  test("init command writes agentsync.toml and key.txt in a fresh vault", async () => {
     const initRoot = join(tmpDir, "init-empty-remote");
     mkdirSync(initRoot, { recursive: true });
     const initBare = await createBareRepo(initRoot);
@@ -318,7 +318,7 @@ describe("integration", () => {
     expect(fakeLogs.success.some((message) => message.includes("Initialized vault"))).toBe(false);
   });
 
-  test("T039 — performPush encrypts artifact and writes .age file to vault", async () => {
+  test("performPush encrypts artifact and writes .age file to vault", async () => {
     fakeArtifacts.push({
       vaultPath: "claude/CLAUDE.age",
       sourcePath: "/fake/.claude/CLAUDE.md",
@@ -339,7 +339,7 @@ describe("integration", () => {
     expect(content).toContain("BEGIN AGE ENCRYPTED FILE");
   });
 
-  test("T040 — performPull calls agent.apply for each enabled agent", async () => {
+  test("performPull calls agent.apply for each enabled agent", async () => {
     const result = await pullMod.performPull({ agent: "claude" });
 
     expect(result.fatal).toBe(false);
@@ -348,7 +348,7 @@ describe("integration", () => {
     expect(fakeApplyCalls).toContain(vaultDir);
   });
 
-  test("T052 — performPush aborts when an artifact warning contains 'Redacted literal secret'", async () => {
+  test("performPush aborts when an artifact warning contains 'Redacted literal secret'", async () => {
     fakeArtifacts.push({
       vaultPath: "claude/settings.age",
       sourcePath: "/fake/.claude/settings.json",
@@ -365,7 +365,7 @@ describe("integration", () => {
     expect(result.errors.some((message) => message.includes("Redacted literal secret"))).toBe(true);
   });
 
-  test("T041 — status command runs without throwing", async () => {
+  test("status command runs without throwing", async () => {
     const statusMod = await import("../../commands/status");
     await statusMod.statusCommand.run?.({
       args: { verbose: false },
@@ -374,7 +374,7 @@ describe("integration", () => {
     } as never);
   });
 
-  test("T042 — doctor command runs without throwing", async () => {
+  test("doctor command runs without throwing", async () => {
     const doctorMod = await import("../../commands/doctor");
     await doctorMod.doctorCommand.run?.({
       args: {},
@@ -383,7 +383,7 @@ describe("integration", () => {
     } as never);
   });
 
-  test("T043 — key add appends recipient to config and re-encrypts vault files", async () => {
+  test("key add appends recipient to config and re-encrypts vault files", async () => {
     fakeArtifacts.push({
       vaultPath: "claude/CLAUDE.age",
       sourcePath: "/fake/.claude/CLAUDE.md",
@@ -460,7 +460,7 @@ describe("integration", () => {
     expect(machineBConfig.recipients["work-laptop"]).toBe(remoteRecipient);
   });
 
-  test("T044 — key rotate replaces private key and updates config recipient", async () => {
+  test("key rotate replaces private key and updates config recipient", async () => {
     const oldKeyContent = await readFile(keyPath, "utf8");
 
     await (keyMod.keyCommand.subCommands as unknown as Record<string, CommandDef>).rotate.run?.({
@@ -600,14 +600,14 @@ describe("integration", () => {
   });
 });
 
-// ─── T026 — agent-skills-sync integration guarantees ─────────────────────────
+// ─── agent-skills-sync integration guarantees ─────────────────────────
 //
 // These tests run AFTER the main `describe("integration")` block above, so its
 // `afterAll` has already reset the push/pull agent registries to the real
 // `Agents` list. We therefore exercise the REAL Claude adapter (and its
 // walker wiring) rather than the mocked test-only fake used above.
 
-describe("T026 — skills sync integration guarantees", () => {
+describe("skills sync integration guarantees", () => {
   let tmpDir: string;
   let machine: TestMachineFixture;
   type MutableClaudePaths = {
@@ -696,7 +696,7 @@ describe("T026 — skills sync integration guarantees", () => {
     await rm(tmpDir, { recursive: true, force: true });
   });
 
-  // FR-013 — pull-side no-delete guarantee.
+  // pull-side no-delete guarantee.
   //
   // This test proves that deleting a skill artifact from the vault (as the
   // `skill remove` verb does) followed by a `pull` on another machine DOES
@@ -705,7 +705,7 @@ describe("T026 — skills sync integration guarantees", () => {
   // `unlink` — so any future regression that adds a local-delete sweep will
   // fail this test.
 
-  test("FR-013 — applyClaudeVault does not delete a local skill when the vault artifact is gone", async () => {
+  test("applyClaudeVault does not delete a local skill when the vault artifact is gone", async () => {
     const { mkdir: mkdirAsync, writeFile: writeFileAsync } = await import("node:fs/promises");
     const { archiveDirectory } = await import("../../core/tar");
     const { encryptString, generateIdentity, identityToRecipient } = await import(
@@ -742,8 +742,9 @@ describe("T026 — skills sync integration guarantees", () => {
     const { unlink: unlinkAsync } = await import("node:fs/promises");
     await unlinkAsync(vaultFile);
 
-    // Second pull against the now-empty vault. FR-013 says the local skill
-    // directory MUST remain intact — no file is added, no file is removed.
+    // Second pull against the now-empty vault. The local skill directory
+    // MUST remain intact, no file added, no file removed: vault delete is
+    // additive-only on the pull side.
     await claude.applyClaudeVault(machine.vaultDir, identity, false);
 
     expect(existsSync(join(localSkillDir, "SKILL.md"))).toBe(true);
@@ -754,17 +755,17 @@ describe("T026 — skills sync integration guarantees", () => {
     expect(skillBody).toBe("# my skill body");
   });
 
-  // SC-009 — negative-space vault content check.
+  // negative-space vault content check.
   //
   // Builds a real ~/.claude/skills/ containing one valid skill plus a
   // top-level symlink that points into a vendored-pool directory containing
   // a secret marker. Runs the REAL `performPush` (registry reset to the real
   // Agents) and decrypts every written artifact to verify that no entry
   // contains the vendored path OR the secret marker content. This is the
-  // walker's outermost safety guarantee — SC-009 fails iff FR-016's
-  // root-symlink rejection rule is bypassed.
+  // walker's outermost safety guarantee: if root-symlink rejection were
+  // bypassed, the secret marker would land in the encrypted vault.
 
-  test("SC-009 — vault never contains vendored-pool content reached through a symlinked skill root", async () => {
+  test("vault never contains vendored-pool content reached through a symlinked skill root", async () => {
     // Build the vendored pool outside the skills directory.
     const vendoredPool = join(tmpDir, "vendored-pool", "sensitive-skill");
     mkdirSync(vendoredPool, { recursive: true });

@@ -24,7 +24,7 @@ beforeAll(async () => {
   vsCodeModule = await import("../vscode");
 });
 
-// ── T022 — snapshotVsCode ─────────────────────────────────────────────────────
+// ── snapshotVsCode ─────────────────────────────────────────────────────
 
 describe("snapshotVsCode", () => {
   let tmpDir: string;
@@ -92,7 +92,7 @@ describe("snapshotVsCode", () => {
   });
 });
 
-// ── T027 — applyVsCodeMcp ─────────────────────────────────────────────────────
+// ── applyVsCodeMcp ─────────────────────────────────────────────────────
 
 describe("applyVsCodeMcp", () => {
   let tmpDir: string;
@@ -114,7 +114,7 @@ describe("applyVsCodeMcp", () => {
   });
 });
 
-// ── T028 — dryRun vault apply ─────────────────────────────────────────────────
+// ── dryRun vault apply ─────────────────────────────────────────────────
 
 describe("applyVsCodeVault dryRun", () => {
   let tmpDir: string;

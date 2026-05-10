@@ -38,7 +38,7 @@ afterAll(() => {
   Object.assign(testCursorPaths, originalCursorPaths);
 });
 
-// ── T021 — snapshotCursor ─────────────────────────────────────────────────────
+// ── snapshotCursor ─────────────────────────────────────────────────────
 
 describe("snapshotCursor", () => {
   let tmpDir: string;
@@ -129,7 +129,7 @@ describe("snapshotCursor", () => {
     expect(commands.some((a) => a.vaultPath === "cursor/commands/explain.md.age")).toBe(true);
   });
 
-  // T020(1) — US3 Cursor skill round-trip happy path (FR-001, FR-003, FR-004)
+  // Cursor skill round-trip happy path
 
   test("snapshots a real Cursor skill directory as a base64 tar artifact", async () => {
     const { snapshotCursor } = cursorModule;
@@ -148,9 +148,9 @@ describe("snapshotCursor", () => {
     expect(art!.plaintext.length).toBeGreaterThan(0);
   });
 
-  // T020(5) — FR-009 missing-dir case at the agent layer
+  // missing-dir case at the agent layer
 
-  test("snapshotCursor does not throw when the skills directory is missing (FR-009)", async () => {
+  test("snapshotCursor does not throw when the skills directory is missing", async () => {
     const { snapshotCursor } = cursorModule;
     testCursorPaths.skillsDir = join(tmpDir, "skills-does-not-exist");
 
@@ -160,9 +160,9 @@ describe("snapshotCursor", () => {
     expect(result.warnings.filter((w) => w.startsWith("never-sync"))).toHaveLength(0);
   });
 
-  // T020(6) — FR-016 interior-symlink defense-in-depth at the agent layer
+  // interior-symlink defense-in-depth at the agent layer
 
-  test("snapshotCursor omits interior symlink helper files from the tar (FR-016 inner)", async () => {
+  test("snapshotCursor omits interior symlink helper files from the tar", async () => {
     const { snapshotCursor } = cursorModule;
     const helperTargetParent = join(tmpDir, "vendored-helpers");
     mkdirSync(helperTargetParent, { recursive: true });
@@ -193,12 +193,12 @@ describe("snapshotCursor", () => {
     expect(entries).not.toContain("helper.md");
   });
 
-  // T021 — FR-010 negative assertion: ~/.cursor/skills-cursor/ is never read.
-  // This is the load-bearing test for US3 because it is the only direct
+  // negative assertion: ~/.cursor/skills-cursor/ is never read.
+  // This is the load-bearing test because it is the only direct
   // evidence that the Cursor adapter is pointed at the canonical "skills"
   // path and never touches the bundled "skills-cursor" directory.
 
-  test("snapshotCursor never touches ~/.cursor/skills-cursor/ (FR-010)", async () => {
+  test("snapshotCursor never touches ~/.cursor/skills-cursor/", async () => {
     const { snapshotCursor } = cursorModule;
     // Real skill at the canonical path.
     const realSkill = join(testCursorPaths.skillsDir, "my-skill");
@@ -220,7 +220,7 @@ describe("snapshotCursor", () => {
   });
 });
 
-// ── T027 — cursor apply functions ─────────────────────────────────────────────
+// ── cursor apply functions ─────────────────────────────────────────────
 
 describe("cursor apply functions", () => {
   let tmpDir: string;
@@ -282,7 +282,7 @@ describe("cursor apply functions", () => {
     expect(await Bun.file(target).text()).toBe("# My Cmd\nDo things.");
   });
 
-  // T020(2) — applyCursorSkill direct extraction test
+  // applyCursorSkill direct extraction test
 
   test("applyCursorSkill extracts a tar archive into the local skills dir", async () => {
     const { applyCursorSkill } = cursorModule;
@@ -304,7 +304,7 @@ describe("cursor apply functions", () => {
   });
 });
 
-// ── T028 — dryRun vault apply ─────────────────────────────────────────────────
+// ── dryRun vault apply ─────────────────────────────────────────────────
 
 describe("applyCursorVault dryRun", () => {
   let tmpDir: string;
@@ -339,7 +339,7 @@ describe("applyCursorVault dryRun", () => {
     expect(await Bun.file(testCursorPaths.settingsJson).exists()).toBe(false);
   });
 
-  // T020(3) — applyCursorVault restores a Cursor skill from an encrypted artifact
+  // applyCursorVault restores a Cursor skill from an encrypted artifact
 
   test("applyCursorVault restores a Cursor skill from an encrypted vault artifact", async () => {
     const { applyCursorVault } = cursorModule;
@@ -369,7 +369,7 @@ describe("applyCursorVault dryRun", () => {
     expect(restoredGuide).toBe("# guide");
   });
 
-  // T020(4) — applyCursorVault dryRun=true must NOT touch the local skills dir
+  // applyCursorVault dryRun=true must NOT touch the local skills dir
 
   test("applyCursorVault dryRun=true does not extract skill artifacts", async () => {
     const { applyCursorVault } = cursorModule;

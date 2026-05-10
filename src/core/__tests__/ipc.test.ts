@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { createTmpDir } from "../../test-helpers/fixtures";
 import { IpcClient, IpcServer } from "../ipc";
 
-// T029-T032 — IPC server/client communication
+// IPC server/client communication
 // NOTE: macOS has a 104-char hard limit on Unix socket paths.
 // os.tmpdir() returns /var/folders/... which is ~50 chars before the filename,
 // making the full path exceed 104 chars. We use /tmp directly (always short on macOS).
@@ -31,7 +31,7 @@ describe("IpcServer + IpcClient", () => {
     await rm(tmpDir, { recursive: true, force: true });
   });
 
-  // T029 — happy path roundtrip
+  // happy path roundtrip
   test("registered handler returns { ok: true, data } for a matching command", async () => {
     server.on("ping", async (args) => ({ pong: true, received: args }));
     await server.listen(socketPath);
@@ -46,7 +46,7 @@ describe("IpcServer + IpcClient", () => {
     });
   });
 
-  // T030 — unknown command
+  // unknown command
   test("unknown command returns { ok: false, error } without crashing the server", async () => {
     await server.listen(socketPath);
 
@@ -58,7 +58,7 @@ describe("IpcServer + IpcClient", () => {
     expect(resp.error).toContain("Unknown command");
   });
 
-  // T031 — no daemon listening
+  // no daemon listening
   test("IpcClient rejects promptly when no server is at the socket path", async () => {
     const client = new IpcClient();
     const nonexistent = join(tmpDir, "does-not-exist.sock");
@@ -66,7 +66,7 @@ describe("IpcServer + IpcClient", () => {
     await expect(client.send("ping", undefined, nonexistent)).rejects.toThrow();
   });
 
-  // T032 — stale socket recovery
+  // stale socket recovery
   test("IpcServer.listen removes a stale socket file and starts successfully", async () => {
     // Plant a stale file where the socket will be
     await Bun.write(socketPath, "stale-socket-data");

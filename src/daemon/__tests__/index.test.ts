@@ -268,9 +268,9 @@ describe("startDaemon", () => {
   });
 });
 
-// ── T010a: Second-instance detection (FR-009, SC-005) ─────────────────────────
+// ── Second-instance detection ─────────────────────────
 describe("second-instance detection", () => {
-  test("exits with code 1 and logs 'already running' when daemon responds to health ping (T010a)", async () => {
+  test("exits with code 1 and logs 'already running' when daemon responds to health ping", async () => {
     ipcClientSendSpy.mockResolvedValueOnce({
       id: "test",
       ok: true,
@@ -286,9 +286,9 @@ describe("second-instance detection", () => {
   });
 });
 
-// ── T011/T012/T017: Clean shutdown (US1) ──────────────────────────────────────
-describe("clean shutdown (US1)", () => {
-  test("SIGTERM calls ipc.close() before process.exit(0) (T011)", async () => {
+// ── Clean shutdown ──────────────────────────────────────────────────────
+describe("clean shutdown", () => {
+  test("SIGTERM calls ipc.close() before process.exit(0)", async () => {
     await daemonModule.startDaemon();
     await signalHandlers.get("SIGTERM")?.();
 
@@ -296,7 +296,7 @@ describe("clean shutdown (US1)", () => {
     expect(exitCode).toBe(0);
   });
 
-  test("SIGTERM unlinks the socket path before process.exit(0) (T012)", async () => {
+  test("SIGTERM unlinks the socket path before process.exit(0)", async () => {
     await daemonModule.startDaemon();
 
     // The shutdown function calls unlink(socketPath). Since the socket file doesn't
@@ -309,7 +309,7 @@ describe("clean shutdown (US1)", () => {
     expect(clearedIntervalToken).toBe("daemon-interval");
   });
 
-  test("shutdown sequence: clearInterval → ipc.close → watcher.close → exit(0) (T017)", async () => {
+  test("shutdown sequence: clearInterval → ipc.close → watcher.close → exit(0)", async () => {
     await daemonModule.startDaemon();
     await signalHandlers.get("SIGTERM")?.();
 
@@ -320,9 +320,9 @@ describe("clean shutdown (US1)", () => {
   });
 });
 
-// ── T018-T020: Failure tracking (US2) ─────────────────────────────────────────
-describe("failure tracking (US2)", () => {
-  test("after a failed pull, consecutiveFailures >= 1 and lastError is non-null (T018)", async () => {
+// ── Failure tracking ─────────────────────────────────────────
+describe("failure tracking", () => {
+  test("after a failed pull, consecutiveFailures >= 1 and lastError is non-null", async () => {
     await daemonModule.startDaemon();
 
     // Pull will fail because remote doesn't exist — withRetry calls it twice
@@ -337,7 +337,7 @@ describe("failure tracking (US2)", () => {
     expect(status.lastError).toContain("[pull]");
   });
 
-  test("status IPC handler returns an object matching DaemonStatusSchema shape (T020)", async () => {
+  test("status IPC handler returns an object matching DaemonStatusSchema shape", async () => {
     await daemonModule.startDaemon();
 
     const status = (await ipcHandlers.get("status")?.()) as Record<string, unknown>;
@@ -349,9 +349,9 @@ describe("failure tracking (US2)", () => {
   });
 });
 
-// ── T025-T026: Retry logic (US3) ─────────────────────────────────────────────
-describe("retry logic (US3)", () => {
-  test("when both attempts fail, consecutiveFailures increments to >= 1 and process.exit is NOT called (T026)", async () => {
+// ── Retry logic ─────────────────────────────────────────────
+describe("retry logic", () => {
+  test("when both attempts fail, consecutiveFailures increments to >= 1 and process.exit is NOT called", async () => {
     await daemonModule.startDaemon();
 
     // Push will fail (no remote) — retry also fails
@@ -361,14 +361,14 @@ describe("retry logic (US3)", () => {
       consecutiveFailures: number;
     };
     expect(status.consecutiveFailures).toBeGreaterThanOrEqual(1);
-    // Daemon must NOT exit — it stays alive for the next trigger (SC-004)
+    // Daemon must NOT exit — it stays alive for the next trigger
     expect(exitCode).toBeNull();
   });
 });
 
-// ── T034a/T034b: Startup validation (FR-006, FR-007, SC-006) ─────────────────
-describe("startup validation (US4)", () => {
-  test("exits with code 1 and log contains 'vault' when vault dir is missing (T034a)", async () => {
+// ── T034a/T034b: Startup validation ─────────────────
+describe("startup validation", () => {
+  test("exits with code 1 and log contains 'vault' when vault dir is missing", async () => {
     // Remove the vault directory so loadConfig fails
     process.env.AGENTSYNC_VAULT_DIR = join(tmpDir, "nonexistent-vault");
 
@@ -378,7 +378,7 @@ describe("startup validation (US4)", () => {
     expect(errorLogs.some((m) => m.toLowerCase().includes("startup failed"))).toBe(true);
   });
 
-  test("exits with code 1 when key file is missing (T034b)", async () => {
+  test("exits with code 1 when key file is missing", async () => {
     // Point to a non-existent key file
     process.env.AGENTSYNC_KEY_PATH = join(tmpDir, "nonexistent-key.txt");
 

@@ -111,7 +111,7 @@ export async function performPush(
     // emitted on the top-level snapshot.warnings array by the shared skills
     // walker (src/agents/skills-walker.ts), not on individual artifacts. They
     // must also escalate to a fatal abort so a never-sync file inside a skill
-    // directory never reaches encryption (FR-006).
+    // directory never reaches encryption.
     for (const w of snapshot.warnings) {
       if (w.startsWith("never-sync inside skill: ")) {
         secretErrors.push(`[${agent.name}] ${w}`);

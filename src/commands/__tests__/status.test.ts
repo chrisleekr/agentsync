@@ -52,7 +52,7 @@ describe("status colour mapping", () => {
   });
 });
 
-// T035 — FR-007 closes the analysis-flagged automated-coverage gap.
+// closes the analysis-flagged automated-coverage gap.
 // Proves the status command surfaces drift for skill .tar.age artifacts via
 // the existing collectAgeFiles walker, using the REAL Copilot agent path so
 // the proof carries to every other skill-bearing agent that calls the same
@@ -105,7 +105,7 @@ const mutableCopilotPaths = AgentPaths.copilot as MutableCopilotPaths;
 
 const RUNTIME_ENV_KEYS = ["AGENTSYNC_VAULT_DIR", "AGENTSYNC_KEY_PATH", "AGENTSYNC_MACHINE"];
 
-describe("status — FR-007 surfaces skill drift", () => {
+describe("status surfaces skill drift", () => {
   let tmpDir: string;
   let machine: TestMachineFixture;
   const savedEnv: Record<string, string | undefined> = {};

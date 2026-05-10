@@ -1,22 +1,21 @@
 /**
- * src/agents/skills-walker.ts
+ * Shared skill-collection helper for every skill-bearing agent (Claude,
+ * Cursor, Codex, Copilot). Lives in one place so adapters cannot drift
+ * apart on the gating rules. Gates applied in order:
  *
- * Shared skill-collection helper used by every skill-bearing agent adapter
- * (Claude, Cursor, Codex, Copilot). Encapsulates the five gates required by
- * the agent-skills-sync feature so the rules live in exactly one place:
+ *   1. Dot-prefixed top-level entries are skipped silently (hidden by convention).
+ *   2. Symlinked top-level entries are skipped silently so vendored or
+ *      shared-pool skills the user did not author cannot slip in.
+ *   3. Entries without a real, non-symlink `SKILL.md` sentinel are skipped
+ *      silently so only authored skills sync.
+ *   4. Interior paths matching `NEVER_SYNC_PATTERNS` emit a
+ *      `never-sync inside skill: ` warning that the push pipeline escalates
+ *      to a fatal abort, so secrets nested inside a skill cannot leak.
+ *   5. Interior symlinks are filtered from the tar archive so vendored
+ *      files cannot smuggle in through a symlinked child.
  *
- *   1. FR-017 — top-level dot-prefixed entries are skipped (silent).
- *   2. FR-016 — entries that are symlinks are skipped (silent).
- *   3. FR-002 — entries without a real (non-symlink) `SKILL.md` sentinel are
- *               skipped (silent).
- *   4. FR-006 — interior file paths matching `NEVER_SYNC_PATTERNS` cause the
- *               skill to be rejected with a `never-sync inside skill:`
- *               warning that the push pipeline escalates to a fatal error.
- *   5. FR-016 — interior symlink files and sub-directories are omitted from
- *               the archive while real surrounding content is still archived.
- *
- * The walker NEVER throws on filesystem read errors and NEVER emits log
- * output. Quiet by design — see contracts/walker-interface.md for the rules.
+ * Silent by design: never throws on filesystem errors, never logs. Errors
+ * travel back as warnings on the result so the caller decides how to surface.
  */
 
 import { lstat, readdir } from "node:fs/promises";
@@ -81,8 +80,8 @@ export class InvalidSkillNameError extends Error {
  *   - resolve to a different directory under `path.join` (`.`, `..`, empty)
  *   - contain a path separator on any platform (`/` on POSIX, `\` on Windows)
  *   - collide with hidden-file rules the walker applies on the push side
- *     (dot-prefixed names are silently skipped during push, so pull should
- *     not manufacture them either — see FR-017)
+ *     (dot-prefixed names are silently skipped during push, so pull must
+ *     not manufacture them or the next push would drop them)
  *   - smuggle control characters or NUL bytes that shell or filesystem
  *     layers might interpret inconsistently
  *
@@ -120,15 +119,15 @@ export function validateSkillName(name: string): void {
  * @param agent      Vault namespace this walker writes under (`claude`, `cursor`, `codex`, `copilot`).
  * @param skillsDir  Absolute path to the agent's skills root on disk. A
  *                   missing directory is NOT an error — the walker returns
- *                   an empty result (FR-009). A skills root that is itself a
+ *                   an empty result. A skills root that is itself a
  *                   symbolic link is also rejected (returns empty) under the
  *                   "skills I created" spec intent — the same anti-vendoring
- *                   rule that FR-016 applies to individual skill entries
+ *                   rule that rejects symlinked entries individually
  *                   extends to the root by consistency.
  * @returns          A {@link SkillsWalkerResult} with one artifact per
  *                   qualifying skill and zero or more warnings: each
  *                   `never-sync inside skill: ` warning is escalated to a
- *                   fatal abort by the push pipeline (FR-006), and each
+ *                   fatal abort by the push pipeline, and each
  *                   `skill archive failed: ` warning is surfaced as a soft
  *                   warning to the user without aborting the push.
  *                   The walker NEVER throws on filesystem read errors.
@@ -145,7 +144,7 @@ export async function collectSkillArtifacts(
   // `~/.claude/skills -> /srv/team-pool` would silently sync every team
   // skill as if it were their own. The check is intentionally `lstat` so a
   // missing path falls through to the catch block below and yields the same
-  // empty no-op as a missing directory (FR-009).
+  // empty no-op as a missing directory.
   try {
     const rootStat = await lstat(skillsDir);
     if (rootStat.isSymbolicLink()) return { artifacts, warnings };
@@ -157,12 +156,12 @@ export async function collectSkillArtifacts(
   try {
     entries = await readdir(skillsDir);
   } catch {
-    // FR-009: missing or unreadable skills root is a no-op, not an error.
+    // missing or unreadable skills root is a no-op, not an error.
     return { artifacts, warnings };
   }
 
   for (const entryName of entries) {
-    // Gate 1 (FR-017): skip dot-prefixed entries silently.
+    // Gate 1: skip dot-prefixed entries silently.
     if (entryName.startsWith(".")) continue;
 
     const entryPath = join(skillsDir, entryName);
@@ -174,12 +173,12 @@ export async function collectSkillArtifacts(
       continue;
     }
 
-    // Gate 2 (FR-016 outer): reject anything that is not a real directory.
+    // Gate 2: reject anything that is not a real directory.
     // A symlink (even one pointing at a directory) fails isDirectory() under
     // lstat — there is no separate symlink check needed.
     if (!entryStat.isDirectory()) continue;
 
-    // Gate 3 (FR-002 + FR-016 sentinel guard): require a REAL `SKILL.md` file.
+    // Gate 3: require a REAL `SKILL.md` file.
     // Using lstat means a symlinked SKILL.md fails the isFile() check, so
     // vendored skills cannot smuggle themselves in via a symlinked sentinel.
     const sentinelPath = join(entryPath, "SKILL.md");
@@ -191,7 +190,7 @@ export async function collectSkillArtifacts(
     }
     if (!sentinelStat.isFile()) continue;
 
-    // Gate 4 (FR-006): never-sync interior walk. The walker collects every
+    // Gate 4: never-sync interior walk. The walker collects every
     // matching path in the skill — not just the first — so the user sees
     // every offender in one push instead of fixing them one at a time.
     const neverSyncHits = await collectNeverSyncHits(entryPath);
@@ -204,12 +203,12 @@ export async function collectSkillArtifacts(
       continue;
     }
 
-    // Gate 5 (FR-016 inner): archive with interior symlinks filtered out.
+    // Gate 5: archive with interior symlinks filtered out.
     let tarBuffer: Buffer;
     try {
       tarBuffer = await archiveDirectory(entryPath, { skipSymlinks: true });
     } catch (err) {
-      // Distinct from the FR-017 / FR-016 silent skips: a tar failure here
+      // Distinct from the dot-skip and symlink silent skips: a tar failure here
       // means the user DID intend the skill to sync but the machine failed
       // (EACCES, EMFILE, transient I/O, etc.). Surfacing this as a warning
       // gives the user a fighting chance to notice and fix it. The push
@@ -239,7 +238,7 @@ export async function collectSkillArtifacts(
  * file whose path matches a {@link shouldNeverSync} rule.
  *
  * Symlinks (files OR sub-directories) are NOT followed and NOT inspected,
- * which is consistent with FR-016: vendored content reached via a symlink is
+ * which is consistent with the archive step: vendored content reached via a symlink is
  * out of scope for this feature and will not be archived in gate 5 either.
  */
 async function collectNeverSyncHits(rootDir: string): Promise<string[]> {
@@ -263,8 +262,8 @@ async function collectNeverSyncHits(rootDir: string): Promise<string[]> {
       }
 
       if (childStat.isSymbolicLink()) {
-        // Don't follow vendored content. The interior-symlink rule (FR-016
-        // inner) means it would be omitted from the tar in gate 5 anyway.
+        // Skip vendored content. The archive step filters interior symlinks
+        // out anyway, so inspecting them here would only produce noise.
         continue;
       }
 

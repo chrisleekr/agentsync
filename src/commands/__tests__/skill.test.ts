@@ -1,5 +1,5 @@
 /**
- * Tests for the `agentsync skill remove` CLI verb (T023).
+ * Tests for the `agentsync skill remove` CLI verb.
  *
  * These tests exercise the testable core `performSkillRemove` directly — they
  * do not mock git because `performSkillRemove` uses a real `GitClient` against
@@ -82,7 +82,7 @@ afterAll(() => {
   mock.restore();
 });
 
-describe("performSkillRemove — contract rows (T023)", () => {
+describe("performSkillRemove — contract rows", () => {
   let tmpDir: string;
   let machine: TestMachineFixture;
   const savedEnv: Record<string, string | undefined> = {};
@@ -173,7 +173,7 @@ describe("performSkillRemove — contract rows (T023)", () => {
     expect(result.status).toBe("success");
     // Vault file gone.
     expect(existsSync(join(skillsVaultDir, "my-skill.tar.age"))).toBe(false);
-    // Local file still present (FR-012 leave-local-alone guarantee).
+    // Local file still present.
     expect(existsSync(join(localSkill, "SKILL.md"))).toBe(true);
     // A commit sha should be attached to the success result.
     if (result.status === "success") {
@@ -221,7 +221,7 @@ describe("performSkillRemove — contract rows (T023)", () => {
   });
 });
 
-describe("skillCommand — citty wrapper (T023 exit codes)", () => {
+describe("skillCommand — citty wrapper", () => {
   let tmpDir: string;
   let machine: TestMachineFixture;
   const savedEnv: Record<string, string | undefined> = {};

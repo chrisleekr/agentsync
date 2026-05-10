@@ -1,5 +1,5 @@
 /**
- * Tests for the doctor command's skills-directory checks (FR-008).
+ * Tests for the doctor command's skills-directory checks.
  *
  * The check rows are produced by `buildSkillsDirChecks` so we can unit-test
  * the rule directly without mocking the rest of the doctor pipeline (private
@@ -20,7 +20,7 @@ type MutablePaths = {
 };
 const mutablePaths = AgentPaths as unknown as MutablePaths;
 
-describe("buildSkillsDirChecks (FR-008)", () => {
+describe("buildSkillsDirChecks", () => {
   let tmpDir: string;
   const saved = {
     claude: mutablePaths.claude.skillsDir,
@@ -108,12 +108,12 @@ describe("buildSkillsDirChecks (FR-008)", () => {
     expect(claudeRow?.detail).toContain("not a directory");
   });
 
-  // Thread 8 — parity with the walker's FR-016 rule. The walker refuses to
+  // Parity with the walker's symlink-rejection rule. The walker refuses to
   // enumerate a skills root that is itself a symlink, so doctor must not
   // report `pass` for that same layout. Using `stat` alone would follow the
   // link and see a real directory, hiding the walker's silent refusal from
   // the user.
-  test("reports `warn` when a skills path is a symlink (FR-016 parity)", async () => {
+  test("reports `warn` when a skills path is a symlink", async () => {
     const realRoot = join(tmpDir, "real-claude-skills");
     mkdirSync(realRoot, { recursive: true });
     const linkedRoot = join(tmpDir, "linked-claude-skills");
@@ -127,6 +127,5 @@ describe("buildSkillsDirChecks (FR-008)", () => {
     const claudeRow = rows.find((r) => r.name === "Claude skills directory");
     expect(claudeRow?.status).toBe("warn");
     expect(claudeRow?.detail).toContain("Symlinked skills root");
-    expect(claudeRow?.detail).toContain("FR-016");
   });
 });

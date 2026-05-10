@@ -3,7 +3,7 @@ import { rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { createTmpDir } from "../../test-helpers/fixtures";
 
-// T037 — resolveRuntimeContext + loadPrivateKey
+// resolveRuntimeContext + loadPrivateKey
 
 // Both functions read env vars / files at CALL TIME (not baked), so standard
 // import + env var injection works without module mocking.

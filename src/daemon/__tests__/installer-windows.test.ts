@@ -105,9 +105,9 @@ beforeEach(() => {
   lastExecFileOpts = undefined;
 });
 
-// T033: buildXml puts args[0] in <Command>, rest + daemon _run in <Arguments>
+// buildXml puts args[0] in <Command>, rest + daemon _run in <Arguments>
 describe("buildXml", () => {
-  test("<Command> holds only the binary, <Arguments> holds script + daemon _run (T033)", () => {
+  test("<Command> holds only the binary, <Arguments> holds script + daemon _run", () => {
     const xml = m.buildXml(["bun", "/path/cli.js"]);
     expect(xml).toContain("<Command>bun</Command>");
     expect(xml).toContain("<Arguments>/path/cli.js daemon _run</Arguments>");
@@ -120,8 +120,8 @@ describe("buildXml", () => {
     expect(xml).toContain("<Arguments>daemon _run</Arguments>");
   });
 
-  // T065: args with spaces are quoted for Windows command-line parsing
-  test("args containing spaces are double-quoted in <Arguments> (T065)", () => {
+  // args with spaces are quoted for Windows command-line parsing
+  test("args containing spaces are double-quoted in <Arguments>", () => {
     const xml = m.buildXml(["bun", "C:\\Program Files\\cli.js"]);
     expect(xml).toContain("<Command>bun</Command>");
     // The script path should be quoted because it contains a space
@@ -129,22 +129,22 @@ describe("buildXml", () => {
     expect(xml).toContain("daemon _run");
   });
 
-  test("args containing double quotes are escaped with backslash (T065)", () => {
+  test("args containing double quotes are escaped with backslash", () => {
     const xml = m.buildXml(["bun", '/path/with"quote']);
     const args = xml.match(/<Arguments>(.*?)<\/Arguments>/)?.[1] ?? "";
     expect(args).toContain('\\"');
   });
 
-  // T074a: trailing backslashes are doubled per CommandLineToArgvW
-  test("args with trailing backslash have it doubled inside quotes (T074a)", () => {
+  // trailing backslashes are doubled per CommandLineToArgvW
+  test("args with trailing backslash have it doubled inside quotes", () => {
     const xml = m.buildXml(["bun", "C:\\path\\"]);
     const args = xml.match(/<Arguments>(.*?)<\/Arguments>/)?.[1] ?? "";
     // Trailing \ before closing " must be doubled: "C:\path\\" → Windows sees C:\path\
     expect(args).toContain('"C:\\path\\\\"');
   });
 
-  // T074a: backslashes before quotes are doubled
-  test("backslashes immediately before a quote are doubled (T074a)", () => {
+  // backslashes before quotes are doubled
+  test("backslashes immediately before a quote are doubled", () => {
     const xml = m.buildXml(["bun", 'C:\\path\\"name']);
     const args = xml.match(/<Arguments>(.*?)<\/Arguments>/)?.[1] ?? "";
     // The \" sequence: backslash must be doubled so Windows sees literal \ + literal "
@@ -205,8 +205,8 @@ describe("startWindows / stopWindows", () => {
     await expect(m.startWindows()).rejects.toThrow("Service not bootstrapped");
   });
 
-  // T071: startWindows passes AbortSignal to execFileAsync
-  test("startWindows passes signal option to execFileAsync for /Run (T071)", async () => {
+  // startWindows passes AbortSignal to execFileAsync
+  test("startWindows passes signal option to execFileAsync for /Run", async () => {
     queryExitCode = 0; // installed
     await m.startWindows();
 

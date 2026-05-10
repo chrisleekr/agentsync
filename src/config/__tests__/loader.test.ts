@@ -50,7 +50,7 @@ describe("loader", () => {
     await rm(tmpDir, { recursive: true, force: true });
   });
 
-  // T012 — loadConfig happy path
+  // loadConfig happy path
 
   test("loadConfig parses a valid TOML file", async () => {
     await writeFile(configPath, MINIMAL_TOML, "utf8");
@@ -72,7 +72,7 @@ describe("loader", () => {
     await expect(loadConfig(configPath)).rejects.toThrow();
   });
 
-  // T013 — writeConfig round-trip
+  // writeConfig round-trip
 
   test("writeConfig + loadConfig round-trips a config object", async () => {
     await writeFile(configPath, MINIMAL_TOML, "utf8");
@@ -97,7 +97,7 @@ describe("loader", () => {
     expect(reloaded.version).toBe("1");
   });
 
-  // T014 — resolveConfigPath
+  // resolveConfigPath
 
   test("resolveConfigPath appends agentsync.toml to vaultDir", () => {
     const result = resolveConfigPath("/my/vault");
