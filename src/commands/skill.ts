@@ -2,9 +2,8 @@ import { stat, unlink } from "node:fs/promises";
 import { join } from "node:path";
 import { log } from "@clack/prompts";
 import { defineCommand } from "citty";
-import { loadConfig, resolveConfigPath } from "../config/loader";
 import { GitClient } from "../core/git";
-import { resolveRuntimeContext } from "./shared";
+import { loadVaultConfigOrExit, resolveRuntimeContext } from "./shared";
 
 /**
  * Agents that participate in the skill sync feature. `vscode` is intentionally
@@ -52,7 +51,7 @@ export async function performSkillRemove(options: {
   }
 
   const runtime = await resolveRuntimeContext();
-  const config = await loadConfig(resolveConfigPath(runtime.vaultDir));
+  const config = await loadVaultConfigOrExit(runtime.vaultDir);
   const targetPath = join(runtime.vaultDir, options.agent, "skills", `${options.name}.tar.age`);
 
   try {

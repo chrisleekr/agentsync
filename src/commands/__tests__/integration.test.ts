@@ -261,6 +261,51 @@ describe("integration", () => {
     );
   });
 
+  test("init prints the recipient-onboarding hint when joining a vault as a new machine", async () => {
+    const root = join(tmpDir, "recipient-handoff-hint");
+    mkdirSync(root, { recursive: true });
+    const bareRepoPath = await createBareRepo(root);
+    const machineA = await createMachineFixture(root, "machine-alpha");
+    const machineB = await createMachineFixture(root, "machine-beta");
+
+    seedVaultRepo({ machine: machineA, bareRepoPath });
+
+    await withMachineEnv(machineB, async () => {
+      await initMod.initCommand.run?.({
+        args: { remote: bareRepoPath, branch: "main" },
+        rawArgs: [],
+        cmd: {} as never,
+      } as never);
+    });
+
+    // The init flow should warn the new joiner that they cannot pull until an
+    // existing recipient runs `key add` for them. The message must include
+    // both the local machine name and its pubkey so it is copy-pasteable.
+    const hint = fakeLogs.warn.find((message) =>
+      message.includes("agentsync key add machine-beta"),
+    );
+    expect(hint).toBeDefined();
+    expect(hint).toContain(machineB.recipient);
+    expect(hint).toContain("`agentsync pull` on this machine will fail");
+  });
+
+  test("init does NOT print the recipient-onboarding hint on a fresh first-machine bootstrap", async () => {
+    const root = join(tmpDir, "first-machine-no-hint");
+    mkdirSync(root, { recursive: true });
+    const bareRepoPath = await createBareRepo(root);
+    const firstMachine = await createMachineFixture(root, "first-machine");
+
+    await withMachineEnv(firstMachine, async () => {
+      await initMod.initCommand.run?.({
+        args: { remote: bareRepoPath, branch: "main" },
+        rawArgs: [],
+        cmd: {} as never,
+      } as never);
+    });
+
+    expect(fakeLogs.warn.some((message) => message.includes("agentsync key add"))).toBe(false);
+  });
+
   test("init reports a controlled bootstrap failure when local history already diverged", async () => {
     const root = join(tmpDir, "init-divergence");
     mkdirSync(root, { recursive: true });

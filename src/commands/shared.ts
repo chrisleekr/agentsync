@@ -1,7 +1,10 @@
 import { mkdir, readFile } from "node:fs/promises";
 import { hostname } from "node:os";
 import { join } from "node:path";
+import { log } from "@clack/prompts";
+import { loadConfig, resolveConfigPath } from "../config/loader";
 import { resolveAgentSyncHome } from "../config/paths";
+import type { AgentSyncConfig } from "../config/schema";
 
 /** Runtime paths and machine identity resolved from the local environment. */
 export interface RuntimeContext {
@@ -28,4 +31,34 @@ export async function resolveRuntimeContext(): Promise<RuntimeContext> {
 export async function loadPrivateKey(path: string): Promise<string> {
   const key = await readFile(path, "utf8");
   return key.trim();
+}
+
+/**
+ * Load the vault config; if it is missing, print a friendly "vault not
+ * initialized" error and exit 1 instead of letting the raw ENOENT bubble up as
+ * a Node stack trace. Other errors (e.g. schema parse failures) are re-thrown
+ * unchanged so callers and test harnesses can still see them.
+ */
+export async function loadVaultConfigOrExit(vaultDir: string): Promise<AgentSyncConfig> {
+  const configPath = resolveConfigPath(vaultDir);
+  try {
+    return await loadConfig(configPath);
+  } catch (err) {
+    if (isFileNotFoundError(err)) {
+      log.error(
+        `Vault not initialized at ${vaultDir}. Run \`agentsync init --remote <git-url>\` first.`,
+      );
+      process.exit(1);
+    }
+    throw err;
+  }
+}
+
+function isFileNotFoundError(err: unknown): boolean {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    "code" in err &&
+    (err as { code?: string }).code === "ENOENT"
+  );
 }

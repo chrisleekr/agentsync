@@ -107,6 +107,9 @@ export const initCommand = defineCommand({
         existing = null;
       }
 
+      const joinedExistingVault =
+        existing !== null && existing.recipients[runtime.machineName] !== recipient;
+
       const config = {
         version: existing?.version ?? "1",
         recipients: {
@@ -135,6 +138,20 @@ export const initCommand = defineCommand({
       }
 
       log.success(`Initialized vault at ${runtime.vaultDir}`);
+
+      if (joinedExistingVault) {
+        // The new machine wrote its pubkey into the recipient set but cannot
+        // re-encrypt existing .age artifacts itself (no decryption key). An
+        // existing recipient must run `key add` to grant read access.
+        log.warn(
+          [
+            "This machine is registered but cannot decrypt the existing vault yet.",
+            "An existing recipient must run on a machine that can decrypt the vault:",
+            `  agentsync key add ${runtime.machineName} ${recipient}`,
+            "Until that runs, `agentsync pull` on this machine will fail.",
+          ].join("\n"),
+        );
+      }
     } catch (err) {
       log.error(err instanceof Error ? err.message : String(err));
       process.exitCode = 1;

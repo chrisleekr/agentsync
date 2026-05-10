@@ -10,7 +10,7 @@ import {
   identityToRecipient,
 } from "../core/encryptor";
 import { GitClient } from "../core/git";
-import { loadPrivateKey, resolveRuntimeContext } from "./shared";
+import { loadPrivateKey, loadVaultConfigOrExit, resolveRuntimeContext } from "./shared";
 
 /** Walk a directory recursively and return all paths ending in `.age`. */
 async function findAgeFiles(dir: string): Promise<string[]> {
@@ -70,7 +70,7 @@ export const keyCommand = defineCommand({
 
         const runtime = await resolveRuntimeContext();
         const configPath = resolveConfigPath(runtime.vaultDir);
-        const config = await loadConfig(configPath);
+        const config = await loadVaultConfigOrExit(runtime.vaultDir);
 
         if (config.recipients[name]) {
           log.error(`Recipient '${name}' already exists. Use a different name or remove it first.`);
@@ -134,11 +134,11 @@ export const keyCommand = defineCommand({
       async run() {
         const runtime = await resolveRuntimeContext();
         const configPath = resolveConfigPath(runtime.vaultDir);
+        const initialConfig = await loadVaultConfigOrExit(runtime.vaultDir);
         const oldKey = await loadPrivateKey(runtime.privateKeyPath);
 
         try {
           const git = new GitClient(runtime.vaultDir);
-          const initialConfig = await loadConfig(configPath);
           const reconciliation = await git.reconcileWithRemote({
             remote: "origin",
             branch: initialConfig.remote.branch,

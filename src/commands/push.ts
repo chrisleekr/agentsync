@@ -4,11 +4,10 @@ import { log } from "@clack/prompts";
 import { defineCommand } from "citty";
 import { applyClaudeVault, type ClaudeSyncOptions, snapshotClaude } from "../agents/claude";
 import { type AgentDefinition, type AgentName, Agents } from "../agents/registry";
-import { loadConfig, resolveConfigPath } from "../config/loader";
 import { encryptString } from "../core/encryptor";
 import { GitClient } from "../core/git";
 import { shouldNeverSync } from "../core/sanitizer";
-import { resolveRuntimeContext } from "./shared";
+import { loadVaultConfigOrExit, resolveRuntimeContext } from "./shared";
 
 let agentDefinitions: AgentDefinition[] = Agents;
 
@@ -46,7 +45,7 @@ export async function performPush(
   let fatal = false;
 
   const runtime = await resolveRuntimeContext();
-  const config = await loadConfig(resolveConfigPath(runtime.vaultDir));
+  const config = await loadVaultConfigOrExit(runtime.vaultDir);
   const recipients = Object.values(config.recipients);
 
   if (recipients.length === 0) {
@@ -216,7 +215,7 @@ export const pushCommand = defineCommand({
     if (args.dryRun) {
       // Collect dry-run output manually for display
       const runtime = await resolveRuntimeContext();
-      const config = await loadConfig(resolveConfigPath(runtime.vaultDir));
+      const config = await loadVaultConfigOrExit(runtime.vaultDir);
       const claudeOpts: ClaudeSyncOptions = {
         syncMarketplace: config.claudePlugins?.syncMarketplace ?? false,
       };
