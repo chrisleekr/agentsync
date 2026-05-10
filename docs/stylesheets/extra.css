@@ -47,62 +47,24 @@
   fill: var(--md-default-bg-color) !important;
 }
 
-/* Light-mode contrast fix for our dark-fill classDef nodes.
+/* Light-mode contrast fix for architecture-overview's dark-fill diagrams.
 
    Background: classDef sets `color:#ffffff` but Material's `.md-typeset`
-   rule for `.nodeLabel` wins on specificity and forces text back to
-   dark — invisible on our dark fills. We match two ways for resilience
-   across mermaid versions:
+   rule for `.nodeLabel` wins on specificity, leaving dark text on dark
+   fills — invisible. Earlier attempts (`:has()`, classDef class names,
+   fill-attribute selectors) matched some node colors but not slate
+   `#2c3e50`, because mermaid's emitted markup varies by node shape.
 
-   1. By classDef-derived class on `g.node` (mermaid emits e.g. `.local`
-      from `classDef local ...`). Cleanest, semantic, no fill coupling.
-   2. By rect/path fill via general-sibling selector `~`. Works when the
-      label-g is a sibling of the shape-rect inside `g.node`. Guards
-      against any mermaid build where the classDef class name is dropped.
-
-   Colors mirror the classDef palette in architecture-overview.md. */
-.mermaid g.node.local .nodeLabel,
-.mermaid g.node.key .nodeLabel,
-.mermaid g.node.gate .nodeLabel,
-.mermaid g.node.remote .nodeLabel,
-.mermaid g.node.step .nodeLabel,
-.mermaid g.node.abort .nodeLabel,
-.mermaid g.node.local .nodeLabel p,
-.mermaid g.node.key .nodeLabel p,
-.mermaid g.node.gate .nodeLabel p,
-.mermaid g.node.remote .nodeLabel p,
-.mermaid g.node.step .nodeLabel p,
-.mermaid g.node.abort .nodeLabel p,
-.mermaid g.node.local .nodeLabel span,
-.mermaid g.node.key .nodeLabel span,
-.mermaid g.node.gate .nodeLabel span,
-.mermaid g.node.remote .nodeLabel span,
-.mermaid g.node.step .nodeLabel span,
-.mermaid g.node.abort .nodeLabel span,
-.mermaid g.node rect[fill="#2c3e50"] ~ g .nodeLabel,
-.mermaid g.node rect[fill="#8e44ad"] ~ g .nodeLabel,
-.mermaid g.node rect[fill="#c0392b"] ~ g .nodeLabel,
-.mermaid g.node rect[fill="#27ae60"] ~ g .nodeLabel,
-.mermaid g.node path[fill="#27ae60"] ~ g .nodeLabel,
-.mermaid g.node rect[fill="#d35400"] ~ g .nodeLabel,
-.mermaid g.node rect[fill="#2c3e50"] ~ g .nodeLabel p,
-.mermaid g.node rect[fill="#8e44ad"] ~ g .nodeLabel p,
-.mermaid g.node rect[fill="#c0392b"] ~ g .nodeLabel p,
-.mermaid g.node rect[fill="#27ae60"] ~ g .nodeLabel p,
-.mermaid g.node path[fill="#27ae60"] ~ g .nodeLabel p,
-.mermaid g.node rect[fill="#d35400"] ~ g .nodeLabel p,
-.mermaid g.node rect[style*="#2c3e50"] ~ g .nodeLabel,
-.mermaid g.node rect[style*="#8e44ad"] ~ g .nodeLabel,
-.mermaid g.node rect[style*="#c0392b"] ~ g .nodeLabel,
-.mermaid g.node rect[style*="#27ae60"] ~ g .nodeLabel,
-.mermaid g.node path[style*="#27ae60"] ~ g .nodeLabel,
-.mermaid g.node rect[style*="#d35400"] ~ g .nodeLabel,
-.mermaid g.node rect[style*="#2c3e50"] ~ g .nodeLabel p,
-.mermaid g.node rect[style*="#8e44ad"] ~ g .nodeLabel p,
-.mermaid g.node rect[style*="#c0392b"] ~ g .nodeLabel p,
-.mermaid g.node rect[style*="#27ae60"] ~ g .nodeLabel p,
-.mermaid g.node path[style*="#27ae60"] ~ g .nodeLabel p,
-.mermaid g.node rect[style*="#d35400"] ~ g .nodeLabel p {
+   Scope: each mermaid block in architecture-overview.md is wrapped in
+   `<div class="agentsync-darknodes" markdown>` so the override applies
+   ONLY to those diagrams (which use dark fills universally). Inherited
+   pale-fill diagrams in architecture.md / daemon.md / migrate.md are
+   unaffected and keep their dark-on-light defaults in light mode. */
+.agentsync-darknodes .mermaid .nodeLabel,
+.agentsync-darknodes .mermaid .nodeLabel p,
+.agentsync-darknodes .mermaid .nodeLabel span,
+.agentsync-darknodes .mermaid foreignObject p,
+.agentsync-darknodes .mermaid foreignObject span {
   color: #ffffff !important;
   fill: #ffffff !important;
 }

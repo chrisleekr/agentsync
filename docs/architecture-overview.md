@@ -10,6 +10,8 @@ The diagram below shows the major actors and the trust boundaries
 between them. **Plaintext never crosses the network**; the Git remote
 only ever sees ciphertext blobs and metadata.
 
+<div class="agentsync-darknodes" markdown>
+
 ```mermaid
 flowchart LR
     AgentsA["AI agents<br/>Machine A"]:::local
@@ -37,6 +39,8 @@ flowchart LR
     classDef remote fill:#27ae60,color:#ffffff,stroke:#196f3d
 ```
 
+</div>
+
 The dark slate nodes (Machine A and Machine B) live inside their
 respective trust boundaries — plaintext never crosses out. The purple
 key nodes sit alongside their machine because the age private key is
@@ -50,6 +54,8 @@ them is not a supported path. The green **vault** sees only ciphertext.
 When you run `agentsync push` (or the daemon fires one), bytes flow
 through four gates in order. Any gate can abort the entire push — there
 is no partial state in the vault.
+
+<div class="agentsync-darknodes" markdown>
 
 ```mermaid
 flowchart LR
@@ -72,6 +78,8 @@ flowchart LR
     classDef abort fill:#d35400,color:#ffffff,stroke:#a04000
 ```
 
+</div>
+
 ## Why these specific gates?
 
 | Gate | What it enforces | Why it's non-negotiable |
@@ -86,6 +94,8 @@ flowchart LR
 existing ones, but it never deletes. Skill removal is explicit
 (`agentsync skill remove`) precisely so a misconfigured pull on a fresh
 machine can never wipe local work.
+
+<div class="agentsync-darknodes" markdown>
 
 ```mermaid
 flowchart LR
@@ -106,6 +116,8 @@ flowchart LR
     classDef remote fill:#27ae60,color:#ffffff,stroke:#196f3d
     classDef abort fill:#d35400,color:#ffffff,stroke:#a04000
 ```
+
+</div>
 
 ## Where to look in the source
 
