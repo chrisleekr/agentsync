@@ -12,9 +12,15 @@ export function __setPullAgentsForTesting(agents: AgentDefinition[] | null): voi
   agentDefinitions = agents ?? Agents;
 }
 
-/** Inject the Claude plugin/marketplace opt-in flag into the registry's claude entry. */
+const REGISTRY_CLAUDE = Agents.find((a) => a.name === "claude");
+
+/**
+ * Inject the Claude plugin/marketplace opt-in flag into the registry's claude
+ * entry. Test fakes installed via `__setPullAgentsForTesting` are different
+ * object references and pass through unchanged.
+ */
 function withClaudeOptions(agent: AgentDefinition, claudeOpts: ClaudeSyncOptions): AgentDefinition {
-  if (agent.name !== "claude") return agent;
+  if (agent !== REGISTRY_CLAUDE) return agent;
   return {
     ...agent,
     snapshot: () => snapshotClaude(claudeOpts),

@@ -16,13 +16,16 @@ export function __setPushAgentsForTesting(agents: AgentDefinition[] | null): voi
   agentDefinitions = agents ?? Agents;
 }
 
+const REGISTRY_CLAUDE = Agents.find((a) => a.name === "claude");
+
 /**
  * Replace the registry's default Claude entry with one that knows about the
- * Claude plugin/marketplace opt-in flag from agentsync.toml. All other agents
- * pass through unchanged so the registry contract stays narrow.
+ * Claude plugin/marketplace opt-in flag from agentsync.toml. Test fakes
+ * installed via `__setPushAgentsForTesting` are different object references
+ * and pass through unchanged so the registry contract stays narrow.
  */
 function withClaudeOptions(agent: AgentDefinition, claudeOpts: ClaudeSyncOptions): AgentDefinition {
-  if (agent.name !== "claude") return agent;
+  if (agent !== REGISTRY_CLAUDE) return agent;
   return {
     ...agent,
     snapshot: () => snapshotClaude(claudeOpts),

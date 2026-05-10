@@ -140,8 +140,8 @@ export async function snapshotClaude(options: ClaudeSyncOptions = {}): Promise<S
       }
     }
 
-    await collectPluginMarkdownDir(plugin.paths.commandsDir, `${ns}/commands`, artifacts, warnings);
-    await collectPluginMarkdownDir(plugin.paths.agentsDir, `${ns}/agents`, artifacts, warnings);
+    await collectPluginMarkdownDir(plugin.paths.commandsDir, `${ns}/commands`, artifacts);
+    await collectPluginMarkdownDir(plugin.paths.agentsDir, `${ns}/agents`, artifacts);
     await collectPluginHooksDir(plugin.paths.hooksDir, `${ns}/hooks`, artifacts, warnings);
 
     const pluginMcpRaw = await readIfExists(plugin.paths.mcpJson);
@@ -212,7 +212,6 @@ async function collectPluginMarkdownDir(
   dir: string,
   vaultPrefix: string,
   artifacts: SnapshotArtifact[],
-  _warnings: string[],
 ): Promise<void> {
   let names: string[];
   try {
@@ -453,14 +452,13 @@ export async function applyClaudeMarketplace(content: string): Promise<void> {
 
 // ─── Apply (pull side) ────────────────────────────────────────────────────────
 
-import { readdir as _readdir } from "node:fs/promises";
 import { basename } from "node:path";
 import { decryptString } from "../core/encryptor";
 
 /** Read encrypted files from a vault subdirectory, ignoring missing directories. */
 async function readAgeFiles(dir: string): Promise<{ name: string; fullPath: string }[]> {
   try {
-    const names = await _readdir(dir);
+    const names = await readdir(dir);
     return names
       .filter((name) => name.endsWith(".age"))
       .map((name) => ({
@@ -596,12 +594,17 @@ async function applyClaudePluginsDir(
 ): Promise<void> {
   let pluginEntries: string[];
   try {
-    pluginEntries = await _readdir(pluginsVaultDir);
+    pluginEntries = await readdir(pluginsVaultDir);
   } catch {
     return;
   }
 
   for (const pluginName of pluginEntries) {
+    // Symmetric with the push-side walker (claude-plugins.ts): dot-prefixed
+    // entries are ignorable noise (.gitkeep, .DS_Store), not adversarial. Skip
+    // silently before validation so the warning channel stays reserved for
+    // genuinely hostile names like `..`.
+    if (pluginName.startsWith(".")) continue;
     try {
       validatePluginName(pluginName);
     } catch (err) {

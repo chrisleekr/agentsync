@@ -200,7 +200,7 @@ flowchart TD
 	MarketArt["marketplace.json.age<br/>opt-in only"]:::keep
 	Vault["Vault namespace<br/>claude/plugins/<name>/..."]:::vault
 	Pull["pull command<br/>applyClaudePluginsDir"]:::keep
-	NameGate{"validatePluginName<br/>before any path.join"]}:::decision
+	NameGate{"validatePluginName<br/>before any path.join"}:::decision
 	Apply["restore manifest commands agents<br/>hooks mcp skills"]:::keep
 	SkipSilent["Skipped silently<br/>missing root or invalid"]:::skip
 	Reject["Warning emitted<br/>traversal name rejected"]:::fail
