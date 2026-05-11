@@ -55,8 +55,11 @@ describe("Watcher", () => {
     // Await the actual callback rather than a fixed sleep — FSEvents latency
     // can exceed any fixed budget under full-suite I/O contention.
     await waitFor(() => fired.length >= 1);
-    // Give any spurious extras a chance to land before snapshotting.
-    await Bun.sleep(150);
+    // Watch for a spurious extra. Inverting the poll makes the "no extras
+    // within window" intent explicit and matches the 300 ms margin used by
+    // the other negative branches — a fixed sleep here would be silently
+    // masked by close() cancelling any still-pending debounce timer.
+    await waitFor(() => fired.length > 1, 300).catch(() => {});
     watcher.close();
 
     // Debounce must collapse all writes into exactly one callback
