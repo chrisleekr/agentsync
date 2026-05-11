@@ -6,7 +6,7 @@ source /home/agent/scenarios/_lib.sh
 # Verify AgentSync's push HARD-ABORTS when a literal secret is detected by the
 # sanitizer. This is the strongest possible posture: the secret never gets
 # encrypted, never lands in the vault, and the user gets an actionable error.
-# Confirms that adapter-level redaction warnings escalate to a fatal abort
+# Confirms that adapter-level detection warnings escalate to a fatal abort
 # in push.ts Phase 1.
 
 VAULT_PATH=/vault/sanitizer.git
@@ -57,8 +57,8 @@ echo "$push_output" | grep -qF "Push aborted"   || fail "no 'Push aborted' in er
 echo "$push_output" | grep -qF "security issue" || fail "no 'security issue' in error"
 pass "abort message has expected content"
 
-step "CRITICAL: error attributes the redaction (cursor adapter, field K = OPENAI_API_KEY)"
-echo "$push_output" | grep -qiE "redact"   || fail "no redaction reference in abort message"
+step "CRITICAL: error attributes the detection (cursor adapter, field K = OPENAI_API_KEY)"
+echo "$push_output" | grep -qiE "detect"   || fail "no detection reference in abort message"
 echo "$push_output" | grep -qF "[cursor]"  || fail "abort message doesn't identify the offending adapter"
 pass "abort message attributes the source"
 
