@@ -89,7 +89,7 @@ describe("snapshotVsCode", () => {
     // The literal secret must be replaced by the redaction placeholder
     expect(authVal).not.toContain("ghp_abcdefghij");
     expect(authVal).toContain("REDACTED");
-    expect(result.warnings.some((w) => w.includes("Redacted"))).toBe(true);
+    expect(result.warnings.some((w) => w.includes("Detected"))).toBe(true);
     // Shape is preserved (top-level servers, not re-shaped to mcpServers)
     expect((parsed as Record<string, unknown>).mcpServers).toBeUndefined();
   });
@@ -118,7 +118,7 @@ describe("snapshotVsCode", () => {
     expect(apiKeyVal).toContain("REDACTED");
 
     // A warning must surface to the caller
-    expect(result.warnings.some((w) => w.includes("Redacted"))).toBe(true);
+    expect(result.warnings.some((w) => w.includes("Detected"))).toBe(true);
   });
 });
 

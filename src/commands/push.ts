@@ -6,7 +6,7 @@ import { applyClaudeVault, type ClaudeSyncOptions, snapshotClaude } from "../age
 import { type AgentDefinition, type AgentName, Agents } from "../agents/registry";
 import { encryptString } from "../core/encryptor";
 import { GitClient } from "../core/git";
-import { shouldNeverSync } from "../core/sanitizer";
+import { scanForSecrets, shouldNeverSync } from "../core/sanitizer";
 import { loadVaultConfigOrExit, resolveRuntimeContext } from "./shared";
 
 let agentDefinitions: AgentDefinition[] = Agents;
@@ -101,9 +101,27 @@ export async function performPush(
     allSnapshots.push({ agent, snapshot });
     for (const artifact of snapshot.artifacts) {
       for (const w of artifact.warnings) {
-        if (w.startsWith("Redacted literal secret")) {
+        if (w.startsWith("Detected literal secret")) {
           secretErrors.push(`[${agent.name}] ${w}`);
         }
+      }
+      // Defense-in-depth chokepoint: scan the raw plaintext that is about to
+      // be encrypted for credentials the adapter-level sanitizer never saw —
+      // markdown bodies, prompts, and prose-style JSON values. A future agent
+      // adapter cannot bypass this by forgetting to call a helper; every byte
+      // heading for encryptString flows through here.
+      //
+      // Skill/agent bundles are base64-encoded tars. Their alphabet
+      // statistically overlaps with `AKIA…` and `AIza…` credentials, so
+      // scanning the encoded form would false-positive without reliably
+      // catching credentials *inside* the bundle (encoding scrambles
+      // prefixes). Per-file scanning at the walker layer is tracked
+      // separately; for now skip the encoded surface entirely.
+      if (artifact.vaultPath.endsWith(".tar.age")) {
+        continue;
+      }
+      for (const w of scanForSecrets(artifact.plaintext, artifact.sourcePath)) {
+        secretErrors.push(`[${agent.name}] ${w}`);
       }
     }
     // Walker-level warnings (e.g. "never-sync inside skill: <path>") are

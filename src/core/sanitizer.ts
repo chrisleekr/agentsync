@@ -51,11 +51,35 @@ function globToRegex(glob: string): RegExp {
 
 const NEVER_SYNC_REGEXPS: RegExp[] = NEVER_SYNC_PATTERNS.map((p) => globToRegex(p));
 
-const SECRET_VALUE_PATTERNS = [
+// Anchored patterns: used by `redactSecretLiterals` to replace an entire JSON
+// string value with the redaction placeholder. The generic base64 catch-all
+// only belongs here, since unanchored it would false-positive on long
+// alphanumeric runs in prose.
+const WHOLE_VALUE_SECRET_PATTERNS = [
   /^sk-[a-zA-Z0-9]{20,}$/,
   /^ghp_[a-zA-Z0-9]{36}$/,
   /^xoxb-[0-9]+-[a-zA-Z0-9]+$/,
   /^[A-Za-z0-9+/]{40,}={0,2}$/,
+];
+
+// Unanchored, high-precision credential prefixes. Used by `scanForSecrets`
+// to detect secrets embedded as substrings inside arbitrary text — markdown
+// bodies, prompts, skill READMEs, and sentence-style values inside JSON
+// `env` blocks. Every pattern here must be specific enough that a paragraph
+// of prose cannot match it; otherwise legitimate pushes start aborting.
+//
+// Each fixed-length pattern is bounded with the exact real-world key length
+// (e.g. AWS access keys are 16 chars). Open-ended `{n,}` quantifiers
+// require a high minimum to push the false-positive rate toward zero.
+export const EMBEDDED_SECRET_PATTERNS: ReadonlyArray<{ name: string; pattern: RegExp }> = [
+  { name: "anthropic-api-key", pattern: /sk-ant-api03-[A-Za-z0-9_-]{40,}/ },
+  { name: "openai-project-key", pattern: /sk-proj-[A-Za-z0-9_-]{40,}/ },
+  { name: "github-classic-pat", pattern: /ghp_[A-Za-z0-9]{36}/ },
+  { name: "github-fine-grained-pat", pattern: /github_pat_[A-Za-z0-9_]{80,}/ },
+  { name: "gitlab-pat", pattern: /glpat-[A-Za-z0-9_-]{20,}/ },
+  { name: "aws-access-key", pattern: /AKIA[0-9A-Z]{16}/ },
+  { name: "google-api-key", pattern: /AIza[0-9A-Za-z_-]{35}/ },
+  { name: "slack-token", pattern: /xox[abprs]-[A-Za-z0-9-]{10,}/ },
 ];
 
 export interface RedactionResult<T> {
@@ -74,7 +98,30 @@ export function shouldNeverSync(path: string): boolean {
 }
 
 function looksLikeSecretLiteral(value: string): boolean {
-  return SECRET_VALUE_PATTERNS.some((pattern) => pattern.test(value));
+  return WHOLE_VALUE_SECRET_PATTERNS.some((pattern) => pattern.test(value));
+}
+
+/**
+ * Scan arbitrary text for secrets embedded as substrings. Returns warnings
+ * prefixed `Detected literal secret` so the Phase-1 abort in
+ * `commands/push.ts` fires on any hit. Empty array means clean.
+ *
+ * This is the defense-in-depth chokepoint that catches credentials in
+ * markdown bodies and prose-style JSON values — neither of which goes
+ * through `redactSecretLiterals` (it only walks structured JSON values).
+ *
+ * The prefix is a contract marker, not a description: the scan only
+ * detects, the push aborts, the user removes the secret. Nothing is
+ * actually redacted in this path.
+ */
+export function scanForSecrets(text: string, sourcePath: string): string[] {
+  const warnings: string[] = [];
+  for (const { name, pattern } of EMBEDDED_SECRET_PATTERNS) {
+    if (pattern.test(text)) {
+      warnings.push(`Detected literal secret (${name}) in ${sourcePath}`);
+    }
+  }
+  return warnings;
 }
 
 /** Recursively replace literal-looking secrets while preserving surrounding structure. */
@@ -86,7 +133,7 @@ export function redactSecretLiterals(
     if (looksLikeSecretLiteral(input)) {
       return {
         value: `$AGENTSYNC_REDACTED_${fieldName.toUpperCase()}`,
-        warnings: [`Redacted literal secret for field ${fieldName}`],
+        warnings: [`Detected literal secret for field ${fieldName}`],
       };
     }
     return { value: input, warnings: [] };
