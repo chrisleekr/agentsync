@@ -51,10 +51,10 @@ describe("performPull", () => {
   });
 
   test("accepts force option and returns valid result shape", async () => {
-    // performPull never throws when called against a real vault; it returns
-    // a result object so the CLI can decide how to surface errors. We seed a
-    // vault explicitly because performPull's missing-vault branch now exits
-    // via loadVaultConfigOrExit rather than returning an error row.
+    // performPull catches non-fatal failures internally and returns a result
+    // object so the CLI can decide how to surface errors; only the ENOENT
+    // missing-vault path exits via loadVaultConfigOrExit. We seed a vault so
+    // this run exercises the result-shape contract rather than the exit path.
     const result = await performPull({ force: true, dryRun: true });
 
     expect(result).toHaveProperty("applied");

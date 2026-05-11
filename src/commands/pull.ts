@@ -41,9 +41,14 @@ export async function performPull(
   const errors: string[] = [];
   let applied = 0;
   let fatal = false;
-  const runtime = await resolveRuntimeContext();
-  const config = await loadVaultConfigOrExit(runtime.vaultDir);
+  // Keep runtime + config resolution inside the outer try so non-ENOENT
+  // failures (zod schema errors, mkdir EACCES, etc.) become a friendly
+  // errors[] row instead of bubbling out as a Node stack trace.
+  // loadVaultConfigOrExit's process.exit(1) for ENOENT terminates before
+  // any catch runs, so the missing-vault path is unaffected.
   try {
+    const runtime = await resolveRuntimeContext();
+    const config = await loadVaultConfigOrExit(runtime.vaultDir);
     const key = await loadPrivateKey(runtime.privateKeyPath);
 
     const git = new GitClient(runtime.vaultDir);
