@@ -1,6 +1,7 @@
 import { afterAll, afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
-import { rm } from "node:fs/promises";
+import { rm, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
+import { join } from "node:path";
 import {
   createBareRepo,
   createMachineFixture,
@@ -141,6 +142,22 @@ describe("performPull recipient-handoff error UX", () => {
     const result = await performPull({});
     expect(result.fatal).toBe(true);
     expect(result.errors[0]).toContain("disk full");
-    expect(result.errors[0] ?? "").not.toContain("agentsync key add");
+    expect(result.errors[0]).not.toContain("agentsync key add");
+  });
+
+  test("non-ENOENT config load failures surface as a friendly errors[] row, not a raw throw", async () => {
+    // Corrupt the seeded agentsync.toml so loadConfig's TOML parser throws.
+    // loadVaultConfigOrExit only swallows ENOENT into a friendly exit; any
+    // other failure must re-throw and be caught by performPull's outer try,
+    // becoming an errors[] row with fatal=true instead of crashing the CLI
+    // with a Node stack trace.
+    await writeFile(join(machine.vaultDir, "agentsync.toml"), "this is = not valid toml [", "utf8");
+
+    const result = await performPull({});
+
+    expect(result.fatal).toBe(true);
+    expect(result.errors).toHaveLength(1);
+    expect(result.errors[0]).toBeTruthy();
+    expect(result.errors[0]).not.toContain("agentsync key add");
   });
 });

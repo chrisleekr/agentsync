@@ -369,6 +369,14 @@ describe("integration", () => {
       } as never);
     });
 
+    // Pin to the canonical lead phrase of the init hint (see src/commands/init.ts)
+    // so reworded variants like "key set" / "recipient add" still fall through to
+    // the negative assertion and don't silently bypass it.
+    expect(
+      fakeLogs.warn.some((message) =>
+        message.includes("This machine is registered but cannot decrypt"),
+      ),
+    ).toBe(false);
     expect(fakeLogs.warn.some((message) => message.includes("agentsync key add"))).toBe(false);
   });
 
