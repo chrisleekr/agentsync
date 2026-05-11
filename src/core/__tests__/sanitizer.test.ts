@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  EMBEDDED_SECRET_PATTERNS,
   NEVER_SYNC_PATTERNS,
   redactionEnvNameForPath,
   redactSecretLiterals,
@@ -7,6 +8,7 @@ import {
   sanitizeClaudeMcp,
   sanitizeClaudePluginManifest,
   sanitizeClaudePluginMcp,
+  scanForSecrets,
   shouldNeverSync,
 } from "../sanitizer";
 
@@ -193,5 +195,76 @@ describe("sanitizer", () => {
     const out = sanitizeClaudePluginMcp(mcp);
     expect(out.warnings.length).toBe(1);
     expect(out.value).toContain("$AGENTSYNC_REDACTED");
+  });
+
+  test("EMBEDDED_SECRET_PATTERNS is non-empty so scanForSecrets has rules to run", () => {
+    expect(EMBEDDED_SECRET_PATTERNS.length).toBeGreaterThan(0);
+    for (const entry of EMBEDDED_SECRET_PATTERNS) {
+      expect(typeof entry.name).toBe("string");
+      expect(entry.name.length).toBeGreaterThan(0);
+      expect(entry.pattern).toBeInstanceOf(RegExp);
+    }
+  });
+
+  test("scanForSecrets returns no warnings on plain prose", () => {
+    const prose =
+      "AgentSync syncs your local agent configuration through an encrypted vault. " +
+      "Read README.md for setup. Path: /home/user/.claude/CLAUDE.md is fine.";
+    expect(scanForSecrets(prose, "/home/user/.claude/CLAUDE.md")).toEqual([]);
+  });
+
+  test("scanForSecrets returns no warnings on empty input", () => {
+    expect(scanForSecrets("", "/tmp/empty.md")).toEqual([]);
+  });
+
+  test.each<[string, string]>([
+    ["anthropic-api-key", `sk-ant-api03-${"A".repeat(48)}`],
+    ["openai-project-key", `sk-proj-${"a".repeat(48)}`],
+    ["github-classic-pat", `ghp_${"x".repeat(36)}`],
+    ["github-fine-grained-pat", `github_pat_${"y".repeat(82)}`],
+    ["gitlab-pat", `glpat-${"z".repeat(20)}`],
+    ["aws-access-key", `AKIA${"ABCDEFGHIJKLMNOP"}`],
+    ["google-api-key", `AIza${"a".repeat(35)}`],
+    ["slack-token-bot", `xoxb-${"abc123".repeat(2)}`],
+    ["slack-token-user", `xoxp-${"abc123".repeat(2)}`],
+    ["slack-token-app", `xoxa-${"abc123".repeat(2)}`],
+    ["slack-token-refresh", `xoxr-${"abc123".repeat(2)}`],
+    ["slack-token-session", `xoxs-${"abc123".repeat(2)}`],
+  ])("scanForSecrets detects %s embedded in prose", (expectedName, sampleSecret) => {
+    const body = `Note from setup: my key is ${sampleSecret}. Do not share.`;
+    const warnings = scanForSecrets(body, "/tmp/leaky.md");
+    expect(warnings.length).toBeGreaterThan(0);
+    expect(warnings.some((w) => w.startsWith("Detected literal secret"))).toBe(true);
+    expect(warnings.some((w) => w.includes("/tmp/leaky.md"))).toBe(true);
+    // The matching pattern's name (or the slack-token base name for the
+    // Slack probes — all five variants share one regex) must appear in at
+    // least one warning.
+    const stem = expectedName.startsWith("slack-token") ? "slack-token" : expectedName;
+    expect(warnings.some((w) => w.includes(stem))).toBe(true);
+  });
+
+  test("scanForSecrets catches Gap 2 — secrets embedded in JSON-stringified env values", () => {
+    // The original `redactSecretLiterals` only matches whole-string JSON
+    // values. A prose-style env value like "the key is sk-ant-…" sails
+    // through unanchored. The central scan in performPush sees the full
+    // stringified JSON and must catch it.
+    const mcpJson = JSON.stringify({
+      mcpServers: {
+        acme: {
+          env: { GREETING: `my key is sk-ant-api03-${"A".repeat(48)} thanks` },
+        },
+      },
+    });
+    const warnings = scanForSecrets(mcpJson, "/home/user/.claude.json");
+    expect(warnings.length).toBeGreaterThan(0);
+    expect(warnings.some((w) => w.includes("anthropic-api-key"))).toBe(true);
+  });
+
+  test("scanForSecrets does NOT false-positive on long alphanumeric runs in prose", () => {
+    const prose =
+      "Commit 0123456789abcdef0123456789abcdef0123456789abcdef contains a fix. " +
+      "The build hash AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA passed CI. " +
+      "Branch feature-xyz merged at 2026-05-11.";
+    expect(scanForSecrets(prose, "/tmp/notes.md")).toEqual([]);
   });
 });

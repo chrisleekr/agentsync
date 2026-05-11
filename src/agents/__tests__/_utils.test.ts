@@ -83,10 +83,10 @@ describe("agents/_utils", () => {
   test("collect propagates warnings from RedactionResult", () => {
     const result = {
       value: "$AGENTSYNC_REDACTED_SECRET",
-      warnings: ["Redacted literal secret in field 'token'"],
+      warnings: ["Detected literal secret in field 'token'"],
     };
     const artifact = collect(result, "/src/settings.json", "claude/settings.json.age");
     expect(artifact.warnings).toHaveLength(1);
-    expect(artifact.warnings[0]).toContain("Redacted");
+    expect(artifact.warnings[0]).toContain("Detected");
   });
 });

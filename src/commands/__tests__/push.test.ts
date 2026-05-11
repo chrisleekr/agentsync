@@ -280,3 +280,101 @@ describe("performPush — additive default for local deletes", () => {
     expect(Buffer.compare(firstBytes, secondBytes)).toBe(0);
   });
 });
+
+describe("performPush — literal secret embedded in markdown body", () => {
+  // Closes the issue-#47 gap: markdown bodies (CLAUDE.md, *.prompt.md, skill
+  // READMEs) were forwarded straight to encryptString without being scanned
+  // for literal credentials. The chokepoint now lives in performPush Phase 1.
+
+  let tmpDir: string;
+  let machine: TestMachineFixture;
+  const savedEnv: Record<string, string | undefined> = {};
+  const savedCopilot = {
+    skillsDir: mutableCopilotPaths.skillsDir,
+    instructionsFile: mutableCopilotPaths.instructionsFile,
+    instructionsDir: mutableCopilotPaths.instructionsDir,
+    promptsDir: mutableCopilotPaths.promptsDir,
+    agentsDir: mutableCopilotPaths.agentsDir,
+    vscodeMcpInSettings: mutableCopilotPaths.vscodeMcpInSettings,
+  };
+
+  beforeEach(async () => {
+    tmpDir = await createTmpDir();
+    const bareRepoPath = await createBareRepo(tmpDir);
+    machine = await createMachineFixture(tmpDir, "secret-test-machine");
+
+    const copilotHome = join(tmpDir, "copilot-home-secret");
+    mutableCopilotPaths.skillsDir = join(copilotHome, "skills");
+    mutableCopilotPaths.instructionsFile = join(copilotHome, "instructions");
+    mutableCopilotPaths.instructionsDir = join(copilotHome, "instructions");
+    mutableCopilotPaths.promptsDir = join(copilotHome, "prompts");
+    mutableCopilotPaths.agentsDir = join(copilotHome, "agents");
+    mutableCopilotPaths.vscodeMcpInSettings = join(tmpDir, "vscode-settings.json");
+
+    for (const key of RUNTIME_ENV_KEYS) {
+      savedEnv[key] = process.env[key];
+    }
+    process.env.AGENTSYNC_VAULT_DIR = machine.vaultDir;
+    process.env.AGENTSYNC_KEY_PATH = machine.keyPath;
+    process.env.AGENTSYNC_MACHINE = machine.machineName;
+
+    seedVaultRepo({
+      machine,
+      bareRepoPath,
+      agents: { copilot: true, claude: false },
+    });
+
+    fakeLogs.success.length = 0;
+    fakeLogs.info.length = 0;
+    fakeLogs.warn.length = 0;
+    fakeLogs.error.length = 0;
+    process.exitCode = 0;
+  });
+
+  afterEach(async () => {
+    for (const key of RUNTIME_ENV_KEYS) {
+      const value = savedEnv[key];
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
+    mutableCopilotPaths.skillsDir = savedCopilot.skillsDir;
+    mutableCopilotPaths.instructionsFile = savedCopilot.instructionsFile;
+    mutableCopilotPaths.instructionsDir = savedCopilot.instructionsDir;
+    mutableCopilotPaths.promptsDir = savedCopilot.promptsDir;
+    mutableCopilotPaths.agentsDir = savedCopilot.agentsDir;
+    mutableCopilotPaths.vscodeMcpInSettings = savedCopilot.vscodeMcpInSettings;
+    await rm(tmpDir, { recursive: true, force: true });
+  });
+
+  test("aborts the entire push when a prompt file body contains a Claude API key", async () => {
+    // The repro from issue #47: a literal sk-ant-api03-… credential pasted
+    // into a markdown body sails past the adapter-level sanitizer (which
+    // only walks structured JSON values) and reaches encryptString.
+    mkdirSync(mutableCopilotPaths.promptsDir, { recursive: true });
+    const promptPath = join(mutableCopilotPaths.promptsDir, "leaky.prompt.md");
+    const fakeKey = `sk-ant-api03-${"A".repeat(48)}`;
+    writeFileSync(
+      promptPath,
+      `# Demo prompt\n\nMy API key is ${fakeKey}\n\nDo not share.\n`,
+      "utf8",
+    );
+
+    const result = await pushMod.performPush({ agent: "copilot" });
+
+    expect(result.fatal).toBe(true);
+    expect(result.pushed).toBe(0);
+    expect(result.errors.some((e) => e.startsWith("Push aborted"))).toBe(true);
+    expect(result.errors.some((e) => e.includes("Detected literal secret"))).toBe(true);
+    // The offending source path must appear so the user can locate the leak
+    // without grepping their config tree.
+    expect(result.errors.some((e) => e.includes("leaky.prompt.md"))).toBe(true);
+
+    // Belt and braces: no encrypted artifact written for the prompt.
+    expect(existsSync(join(machine.vaultDir, "copilot", "prompts", "leaky.prompt.md.age"))).toBe(
+      false,
+    );
+  });
+});

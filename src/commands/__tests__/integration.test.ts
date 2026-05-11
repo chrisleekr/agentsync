@@ -467,12 +467,12 @@ describe("integration", () => {
     expect(fakeApplyCalls).toContain(vaultDir);
   });
 
-  test("performPush aborts when an artifact warning contains 'Redacted literal secret'", async () => {
+  test("performPush aborts when an artifact warning contains 'Detected literal secret'", async () => {
     fakeArtifacts.push({
       vaultPath: "claude/settings.age",
       sourcePath: "/fake/.claude/settings.json",
       plaintext: '{"apiKey":"[REDACTED]"}',
-      warnings: ["Redacted literal secret for field apiKey"],
+      warnings: ["Detected literal secret for field apiKey"],
     });
 
     const result = await pushMod.performPush({ agent: "claude" });
@@ -481,7 +481,7 @@ describe("integration", () => {
     expect(result.pushed).toBe(0);
     expect(result.errors.length).toBeGreaterThan(0);
     expect(result.errors[0]).toMatch(/Push aborted/);
-    expect(result.errors.some((message) => message.includes("Redacted literal secret"))).toBe(true);
+    expect(result.errors.some((message) => message.includes("Detected literal secret"))).toBe(true);
   });
 
   test("status command runs without throwing", async () => {
