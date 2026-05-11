@@ -7,9 +7,8 @@ import { defineCommand } from "citty";
 import pc from "picocolors";
 import type { AgentDefinition, SnapshotArtifact } from "../agents/registry";
 import { Agents } from "../agents/registry";
-import { loadConfig, resolveConfigPath } from "../config/loader";
 import { decryptString } from "../core/encryptor";
-import { loadPrivateKey, resolveRuntimeContext } from "./shared";
+import { loadPrivateKey, loadVaultConfigOrExit, resolveRuntimeContext } from "./shared";
 
 /** Build a short hash so status comparisons stay readable in terminal output. */
 type SyncStatus = "synced" | "local-changed" | "vault-only" | "local-only" | "error";
@@ -80,7 +79,7 @@ export const statusCommand = defineCommand({
   },
   async run({ args }) {
     const runtime = await resolveRuntimeContext();
-    const config = await loadConfig(resolveConfigPath(runtime.vaultDir));
+    const config = await loadVaultConfigOrExit(runtime.vaultDir);
 
     log.info("AgentSync Status");
     log.info(`Vault : ${runtime.vaultDir}`);

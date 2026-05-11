@@ -2,9 +2,11 @@ import { log } from "@clack/prompts";
 import { defineCommand } from "citty";
 import { applyClaudeVault, type ClaudeSyncOptions, snapshotClaude } from "../agents/claude";
 import { type AgentDefinition, type AgentName, Agents } from "../agents/registry";
-import { loadConfig, resolveConfigPath } from "../config/loader";
+import { identityToRecipient } from "../core/encryptor";
 import { GitClient } from "../core/git";
-import { loadPrivateKey, resolveRuntimeContext } from "./shared";
+import { loadPrivateKey, loadVaultConfigOrExit, resolveRuntimeContext } from "./shared";
+
+const AGE_NO_IDENTITY_MARKER = "no identity matched any of the file's recipients";
 
 let agentDefinitions: AgentDefinition[] = Agents;
 
@@ -39,9 +41,14 @@ export async function performPull(
   const errors: string[] = [];
   let applied = 0;
   let fatal = false;
+  // Keep runtime + config resolution inside the outer try so non-ENOENT
+  // failures (zod schema errors, mkdir EACCES, etc.) become a friendly
+  // errors[] row instead of bubbling out as a Node stack trace.
+  // loadVaultConfigOrExit's process.exit(1) for ENOENT terminates before
+  // any catch runs, so the missing-vault path is unaffected.
   try {
     const runtime = await resolveRuntimeContext();
-    const config = await loadConfig(resolveConfigPath(runtime.vaultDir));
+    const config = await loadVaultConfigOrExit(runtime.vaultDir);
     const key = await loadPrivateKey(runtime.privateKeyPath);
 
     const git = new GitClient(runtime.vaultDir);
@@ -63,14 +70,46 @@ export async function performPull(
       .map((a) => withClaudeOptions(a, claudeOpts));
 
     for (const agent of agentsToSync) {
-      await agent.apply(runtime.vaultDir, key, options.dryRun ?? false);
-      applied++;
+      try {
+        await agent.apply(runtime.vaultDir, key, options.dryRun ?? false);
+        applied++;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        if (message.includes(AGE_NO_IDENTITY_MARKER)) {
+          errors.push(await buildRecipientHandoffHint(runtime.machineName, key));
+          fatal = true;
+          return { applied, errors, fatal };
+        }
+        throw err;
+      }
     }
   } catch (err) {
     errors.push(err instanceof Error ? err.message : String(err));
     fatal = true;
   }
   return { applied, errors, fatal };
+}
+
+/**
+ * The vault was decryptable by another machine but not by us. Translate the
+ * raw age library error into the missing-handoff guidance: this machine's
+ * pubkey isn't in the recipient set yet, so an existing recipient must run
+ * `agentsync key add <name> <pubkey>` to re-encrypt the vault for us.
+ */
+async function buildRecipientHandoffHint(machineName: string, identity: string): Promise<string> {
+  let pubkeyLine = "(unable to derive local pubkey — re-run after `agentsync init`)";
+  try {
+    const recipient = await identityToRecipient(identity);
+    pubkeyLine = recipient;
+  } catch {
+    // identity unreadable — fall back to generic guidance below.
+  }
+  return [
+    "Cannot decrypt vault: this machine's age key is not in the recipient set.",
+    "An existing machine that can decrypt the vault must add this machine as a recipient:",
+    `  agentsync key add ${machineName} ${pubkeyLine}`,
+    "Until then, `pull` will fail.",
+  ].join("\n");
 }
 
 /** CLI wrapper around the pull pipeline with optional agent filtering and dry-run output. */

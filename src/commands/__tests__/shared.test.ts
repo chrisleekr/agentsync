@@ -1,5 +1,5 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { rm, writeFile } from "node:fs/promises";
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { createTmpDir } from "../../test-helpers/fixtures";
 
@@ -105,5 +105,68 @@ describe("loadPrivateKey", () => {
 
     const missingPath = join(tmpDir, "nonexistent.txt");
     await expect(loadPrivateKey(missingPath)).rejects.toThrow();
+  });
+});
+
+describe("loadVaultConfigOrExit", () => {
+  let tmpDir: string;
+  const fakeLogs: { error: string[] } = { error: [] };
+  let originalExit: typeof process.exit;
+  let exitCalledWith: number | null;
+
+  beforeEach(async () => {
+    tmpDir = await createTmpDir();
+    fakeLogs.error = [];
+    exitCalledWith = null;
+    originalExit = process.exit;
+    // Throw a sentinel from process.exit so control returns to the test
+    // harness instead of actually exiting the worker.
+    process.exit = ((code?: number) => {
+      exitCalledWith = code ?? 0;
+      throw new Error("__test_exit__");
+    }) as typeof process.exit;
+
+    mock.module("@clack/prompts", () => ({
+      log: {
+        error: (m: string) => {
+          fakeLogs.error.push(m);
+        },
+        info: () => {},
+        warn: () => {},
+        success: () => {},
+      },
+    }));
+  });
+
+  afterEach(async () => {
+    process.exit = originalExit;
+    await rm(tmpDir, { recursive: true, force: true });
+  });
+
+  test("prints friendly error and exits 1 when the config file is missing", async () => {
+    const { loadVaultConfigOrExit } = await import("../shared");
+
+    const vaultDir = join(tmpDir, "missing-vault");
+    await expect(loadVaultConfigOrExit(vaultDir)).rejects.toThrow("__test_exit__");
+
+    expect(exitCalledWith).toBe(1);
+    expect(fakeLogs.error).toHaveLength(1);
+    expect(fakeLogs.error[0]).toContain(`Vault not initialized at ${vaultDir}`);
+    expect(fakeLogs.error[0]).toContain("agentsync init --remote");
+    // The message must not include Node ENOENT shorthand or stack frames.
+    expect(fakeLogs.error[0]).not.toContain("ENOENT");
+    expect(fakeLogs.error[0]).not.toContain("at async");
+  });
+
+  test("re-throws non-ENOENT errors so callers see schema/parse failures intact", async () => {
+    const { loadVaultConfigOrExit } = await import("../shared");
+
+    const vaultDir = join(tmpDir, "broken-vault");
+    await mkdir(vaultDir, { recursive: true });
+    await writeFile(join(vaultDir, "agentsync.toml"), "this is = not [ valid toml", "utf8");
+
+    await expect(loadVaultConfigOrExit(vaultDir)).rejects.toThrow();
+    // Should NOT have called process.exit — only ENOENT triggers the friendly path.
+    expect(exitCalledWith).toBeNull();
   });
 });
