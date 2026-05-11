@@ -13,6 +13,19 @@ import { Watcher } from "../watcher";
   mock.module("node:fs/promises", () => realFsPromises);
 }
 
+// Poll for an event-driven condition instead of a fixed sleep — fs.watch on
+// macOS (FSEvents) batches with non-deterministic latency, so positive
+// assertions need to await callback arrival rather than assume a budget.
+async function waitFor(condition: () => boolean, maxMs = 2000, stepMs = 25): Promise<void> {
+  const start = Date.now();
+  while (!condition()) {
+    if (Date.now() - start > maxMs) {
+      throw new Error(`waitFor: condition not met within ${maxMs}ms`);
+    }
+    await Bun.sleep(stepMs);
+  }
+}
+
 // Watcher debounce and lifecycle
 
 describe("Watcher", () => {
@@ -39,8 +52,11 @@ describe("Watcher", () => {
       await writeFile(filePath, `write-${i}`, "utf8");
     }
 
-    // Wait debounce window + generous buffer
-    await Bun.sleep(250);
+    // Await the actual callback rather than a fixed sleep — FSEvents latency
+    // can exceed any fixed budget under full-suite I/O contention.
+    await waitFor(() => fired.length >= 1);
+    // Give any spurious extras a chance to land before snapshotting.
+    await Bun.sleep(150);
     watcher.close();
 
     // Debounce must collapse all writes into exactly one callback
@@ -57,16 +73,18 @@ describe("Watcher", () => {
       fireCount++;
     });
 
-    // First write — should trigger
+    // First write — must observe the callback before snapshotting, otherwise
+    // the negative assertion can pass for the wrong reason on slow event delivery.
     await writeFile(filePath, "initial", "utf8");
-    await Bun.sleep(150);
+    await waitFor(() => fireCount >= 1);
     const beforeRemove = fireCount;
 
     watcher.remove(tmpDir);
 
-    // Write after remove — must NOT trigger
+    // Write after remove — must NOT trigger. Use a wider margin than the
+    // original 150 ms so FSEvents latency can't masquerade as a quiet watcher.
     await writeFile(filePath, "after-remove", "utf8");
-    await Bun.sleep(150);
+    await Bun.sleep(300);
 
     expect(fireCount).toBe(beforeRemove); // no new events
   });
@@ -75,18 +93,24 @@ describe("Watcher", () => {
   test("Watcher.close stops all watchers; writes after close invoke no callbacks", async () => {
     const watcher = new Watcher();
     let fireCount = 0;
+    const warmupPath = join(tmpDir, "warmup.txt");
     const filePath = join(tmpDir, "post-close.txt");
 
     watcher.add(tmpDir, 50, () => {
       fireCount++;
     });
-    await Bun.sleep(50); // let the watcher initialise
+
+    // Warm-up write proves the watcher is live before we close it; without
+    // this, a slow FSEvents subscribe could let a pre-close event leak past.
+    await writeFile(warmupPath, "warmup", "utf8");
+    await waitFor(() => fireCount >= 1);
+    const beforeClose = fireCount;
 
     watcher.close();
 
     await writeFile(filePath, "after-close", "utf8");
-    await Bun.sleep(150);
+    await Bun.sleep(300);
 
-    expect(fireCount).toBe(0);
+    expect(fireCount).toBe(beforeClose);
   });
 });
