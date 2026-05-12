@@ -378,3 +378,99 @@ describe("performPush — literal secret embedded in markdown body", () => {
     );
   });
 });
+
+describe("performPush — literal secret embedded inside a skill bundle body", () => {
+  // The Phase-1 central scan in performPush deliberately skips `.tar.age`
+  // artifacts (base64 of a tar buffer scrambles credential prefixes and
+  // overlaps `AKIA…`/`AIza…` shapes). Without per-file scanning at the
+  // walker layer, a literal key pasted into SKILL.md would be encrypted
+  // and shipped. This test proves the walker warning flows through the
+  // existing Phase-1 abort wiring end-to-end.
+
+  let tmpDir: string;
+  let machine: TestMachineFixture;
+  const savedEnv: Record<string, string | undefined> = {};
+  const savedCopilot = {
+    skillsDir: mutableCopilotPaths.skillsDir,
+    instructionsFile: mutableCopilotPaths.instructionsFile,
+    instructionsDir: mutableCopilotPaths.instructionsDir,
+    promptsDir: mutableCopilotPaths.promptsDir,
+    agentsDir: mutableCopilotPaths.agentsDir,
+    vscodeMcpInSettings: mutableCopilotPaths.vscodeMcpInSettings,
+  };
+
+  beforeEach(async () => {
+    tmpDir = await createTmpDir();
+    const bareRepoPath = await createBareRepo(tmpDir);
+    machine = await createMachineFixture(tmpDir, "bundle-secret-machine");
+
+    const copilotHome = join(tmpDir, "copilot-home-bundle-secret");
+    mutableCopilotPaths.skillsDir = join(copilotHome, "skills");
+    mutableCopilotPaths.instructionsFile = join(copilotHome, "instructions");
+    mutableCopilotPaths.instructionsDir = join(copilotHome, "instructions");
+    mutableCopilotPaths.promptsDir = join(copilotHome, "prompts");
+    mutableCopilotPaths.agentsDir = join(copilotHome, "agents");
+    mutableCopilotPaths.vscodeMcpInSettings = join(tmpDir, "vscode-settings.json");
+
+    for (const key of RUNTIME_ENV_KEYS) {
+      savedEnv[key] = process.env[key];
+    }
+    process.env.AGENTSYNC_VAULT_DIR = machine.vaultDir;
+    process.env.AGENTSYNC_KEY_PATH = machine.keyPath;
+    process.env.AGENTSYNC_MACHINE = machine.machineName;
+
+    seedVaultRepo({
+      machine,
+      bareRepoPath,
+      agents: { copilot: true, claude: false },
+    });
+
+    fakeLogs.success.length = 0;
+    fakeLogs.info.length = 0;
+    fakeLogs.warn.length = 0;
+    fakeLogs.error.length = 0;
+    process.exitCode = 0;
+  });
+
+  afterEach(async () => {
+    for (const key of RUNTIME_ENV_KEYS) {
+      const value = savedEnv[key];
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
+    mutableCopilotPaths.skillsDir = savedCopilot.skillsDir;
+    mutableCopilotPaths.instructionsFile = savedCopilot.instructionsFile;
+    mutableCopilotPaths.instructionsDir = savedCopilot.instructionsDir;
+    mutableCopilotPaths.promptsDir = savedCopilot.promptsDir;
+    mutableCopilotPaths.agentsDir = savedCopilot.agentsDir;
+    mutableCopilotPaths.vscodeMcpInSettings = savedCopilot.vscodeMcpInSettings;
+    await rm(tmpDir, { recursive: true, force: true });
+  });
+
+  test("aborts when a Copilot skill SKILL.md body contains a literal Claude API key", async () => {
+    const skillDir = join(mutableCopilotPaths.skillsDir, "leaky-bundle");
+    mkdirSync(skillDir, { recursive: true });
+    const fakeKey = `sk-ant-api03-${"D".repeat(48)}`;
+    const skillMd = join(skillDir, "SKILL.md");
+    writeFileSync(skillMd, `# leaky\n\ntoken: ${fakeKey}\n`, "utf8");
+
+    const result = await pushMod.performPush({ agent: "copilot" });
+
+    expect(result.fatal).toBe(true);
+    expect(result.pushed).toBe(0);
+    expect(result.errors.some((e) => e.startsWith("Push aborted"))).toBe(true);
+    expect(result.errors.some((e) => e.includes("Detected literal secret"))).toBe(true);
+    // The offending file path must appear so the user can locate the leak
+    // without grepping their config tree.
+    expect(result.errors.some((e) => e.includes(skillMd))).toBe(true);
+
+    // No encrypted artifact written for the leaky skill — the walker drops
+    // the artifact before encryption.
+    expect(existsSync(join(machine.vaultDir, "copilot", "skills", "leaky-bundle.tar.age"))).toBe(
+      false,
+    );
+  });
+});

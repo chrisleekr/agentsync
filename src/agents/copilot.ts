@@ -5,7 +5,12 @@ import { AgentPaths } from "../config/paths";
 import { shouldNeverSync } from "../core/sanitizer";
 import { archiveDirectory, extractArchive } from "../core/tar";
 import { atomicWrite, readIfExists, type SnapshotArtifact, type SnapshotResult } from "./_utils";
-import { collectSkillArtifacts, InvalidSkillNameError, validateSkillName } from "./skills-walker";
+import {
+  collectInteriorViolations,
+  collectSkillArtifacts,
+  InvalidSkillNameError,
+  validateSkillName,
+} from "./skills-walker";
 
 /** Snapshot payload for the Copilot adapter. */
 export type CopilotSnapshotResult = SnapshotResult;
@@ -77,13 +82,27 @@ export async function snapshotCopilot(): Promise<SnapshotResult> {
   artifacts.push(...copilotSkills.artifacts);
   warnings.push(...copilotSkills.warnings);
 
-  // Agents directories (tar each one, similar to skills)
+  // Agents directories (tar each one, similar to skills). Each agent's
+  // interior is scanned for literal credentials before the bytes head for
+  // encryption: the central scan in `commands/push.ts` skips `.tar.age`
+  // artifacts (base64 scrambles credential prefixes), so a per-file scan
+  // here is the only layer that can catch a key pasted into an agent's
+  // markdown body. Mirrors the shared walker's gate 4 contract: collect
+  // every offender, emit `Detected literal secret …` warnings (which
+  // performPush escalates to a fatal abort), and skip the artifact.
   try {
     const names = await readdir(AgentPaths.copilot.agentsDir);
     for (const name of names) {
       const agentDir = join(AgentPaths.copilot.agentsDir, name);
       const agentDirStat = await stat(agentDir).catch(() => null);
       if (!agentDirStat?.isDirectory()) continue;
+
+      const violations = await collectInteriorViolations(agentDir);
+      if (violations.secretWarnings.length > 0) {
+        warnings.push(...violations.secretWarnings);
+        continue;
+      }
+
       const tarBuffer = await archiveDirectory(agentDir);
       artifacts.push({
         vaultPath: `copilot/agents/${name}.tar.age`,

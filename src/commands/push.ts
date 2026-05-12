@@ -115,8 +115,14 @@ export async function performPush(
       // statistically overlaps with `AKIA…` and `AIza…` credentials, so
       // scanning the encoded form would false-positive without reliably
       // catching credentials *inside* the bundle (encoding scrambles
-      // prefixes). Per-file scanning at the walker layer is tracked
-      // separately; for now skip the encoded surface entirely.
+      // prefixes). The encoded surface is intentionally skipped here.
+      // Bundle internals are covered separately at the walker layer:
+      // `collectInteriorViolations` in `src/agents/skills-walker.ts` scans
+      // each readable interior file body with `scanForSecrets` before the
+      // tar buffer is built, and the Copilot agents walk in
+      // `src/agents/copilot.ts` invokes the same helper. Both surface
+      // `Detected literal secret …` warnings on the snapshot, which the
+      // walker-warning loop below escalates to a fatal abort.
       if (artifact.vaultPath.endsWith(".tar.age")) {
         continue;
       }
@@ -124,13 +130,18 @@ export async function performPush(
         secretErrors.push(`[${agent.name}] ${w}`);
       }
     }
-    // Walker-level warnings (e.g. "never-sync inside skill: <path>") are
-    // emitted on the top-level snapshot.warnings array by the shared skills
-    // walker (src/agents/skills-walker.ts), not on individual artifacts. They
-    // must also escalate to a fatal abort so a never-sync file inside a skill
-    // directory never reaches encryption.
+    // Walker-level warnings are emitted on the top-level snapshot.warnings
+    // array (not per-artifact, since the offending bundle is dropped before
+    // any artifact is built). Two prefixes escalate to a fatal abort:
+    //   - `never-sync inside skill: <path>` — a path-pattern hit inside a
+    //     skill, so the bundle would have contained a hard never-sync file.
+    //   - `Detected literal secret …` — a credential found inside an
+    //     interior file body during the walker's per-file scan. The central
+    //     scan a few lines above skips `.tar.age` artifacts, so this is the
+    //     only layer that catches a key pasted into `SKILL.md`, READMEs, or
+    //     any other file inside a skill/agent bundle.
     for (const w of snapshot.warnings) {
-      if (w.startsWith("never-sync inside skill: ")) {
+      if (w.startsWith("never-sync inside skill: ") || w.startsWith("Detected literal secret")) {
         secretErrors.push(`[${agent.name}] ${w}`);
       }
     }

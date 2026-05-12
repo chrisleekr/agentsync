@@ -199,6 +199,81 @@ describe("collectSkillArtifacts", () => {
     expect(result.warnings[0]?.startsWith("never-sync inside skill: ")).toBe(true);
   });
 
+  // Literal-secret coverage at the walker layer. The central scan in
+  // `commands/push.ts` skips `.tar.age` artifacts because base64 scrambles
+  // credential prefixes and statistically overlaps `AKIA…`/`AIza…` shapes —
+  // so a key pasted into `SKILL.md` would otherwise be encrypted and shipped.
+  // The walker now scans each readable interior file body before tarring.
+
+  test("rejects a skill whose SKILL.md contains a literal Claude API key", async () => {
+    const skillDir = join(tmpDir, "leaky-skill");
+    await mkdir(skillDir, { recursive: true });
+    const fakeKey = `sk-ant-api03-${"A".repeat(48)}`;
+    await writeFile(join(skillDir, "SKILL.md"), `# leaky\n\ntoken: ${fakeKey}\n`, "utf8");
+
+    const result = await collectSkillArtifacts("claude", tmpDir);
+    expect(result.artifacts).toHaveLength(0);
+    expect(result.warnings).toHaveLength(1);
+    const warn = result.warnings[0] ?? "";
+    expect(warn.startsWith("Detected literal secret")).toBe(true);
+    expect(warn).toContain("anthropic-api-key");
+    expect(warn).toContain(join(skillDir, "SKILL.md"));
+  });
+
+  test("rejects a skill with a nested markdown file containing an AWS key", async () => {
+    const skillDir = join(tmpDir, "nested-leak");
+    await mkdir(join(skillDir, "notes"), { recursive: true });
+    await writeFile(join(skillDir, "SKILL.md"), "# clean sentinel", "utf8");
+    // Embedded AWS access-key-id prefix (16-char alphanumeric body).
+    const leak = join(skillDir, "notes", "leak.md");
+    await writeFile(leak, "deploy with AKIAIOSFODNN7EXAMPLE\n", "utf8");
+
+    const result = await collectSkillArtifacts("claude", tmpDir);
+    expect(result.artifacts).toHaveLength(0);
+    expect(result.warnings).toHaveLength(1);
+    const warn = result.warnings[0] ?? "";
+    expect(warn.startsWith("Detected literal secret")).toBe(true);
+    expect(warn).toContain("aws-access-key");
+    expect(warn).toContain(leak);
+  });
+
+  test("does NOT false-positive on a clean skill with AKIA-shaped prose", async () => {
+    const skillDir = join(tmpDir, "clean-prose");
+    await mkdir(skillDir, { recursive: true });
+    // `sha256:` digest is a long base64-ish run that the original
+    // anchored-only redactor would have flagged. Here we are exercising
+    // the unanchored EMBEDDED_SECRET_PATTERNS — none of which match a
+    // plain `AKIA` substring without the 16-char alphanumeric body.
+    await writeFile(
+      join(skillDir, "SKILL.md"),
+      "# clean\n\nrelated word: AKIA-history-of-aviation\n\nsha256:abcdef0123456789abcdef0123456789abcdef0123456789\n",
+      "utf8",
+    );
+
+    const result = await collectSkillArtifacts("claude", tmpDir);
+    expect(result.artifacts).toHaveLength(1);
+    expect(result.artifacts[0]?.vaultPath).toBe("claude/skills/clean-prose.tar.age");
+    expect(result.warnings).toHaveLength(0);
+  });
+
+  test("collects clean skills even when another skill has a literal-secret hit", async () => {
+    const clean = join(tmpDir, "clean-skill");
+    await mkdir(clean, { recursive: true });
+    await writeFile(join(clean, "SKILL.md"), "# clean", "utf8");
+
+    const dirty = join(tmpDir, "dirty-skill");
+    await mkdir(dirty, { recursive: true });
+    const fakeKey = `sk-ant-api03-${"B".repeat(48)}`;
+    await writeFile(join(dirty, "SKILL.md"), `# dirty\n\ntoken: ${fakeKey}\n`, "utf8");
+
+    const result = await collectSkillArtifacts("claude", tmpDir);
+    expect(result.artifacts).toHaveLength(1);
+    expect(result.artifacts[0]?.vaultPath).toBe("claude/skills/clean-skill.tar.age");
+    expect(result.warnings).toHaveLength(1);
+    expect(result.warnings[0]?.startsWith("Detected literal secret")).toBe(true);
+    expect(result.warnings[0]).toContain(join(dirty, "SKILL.md"));
+  });
+
   // Row 13 — the skills root path itself is a symlink. Resolves the spec
   // ambiguity toward the conservative "skills I created" intent: if the
   // entire root is a symlink (e.g., a power user has done

@@ -10,7 +10,14 @@
  *      silently so only authored skills sync.
  *   4. Interior paths matching `NEVER_SYNC_PATTERNS` emit a
  *      `never-sync inside skill: ` warning that the push pipeline escalates
- *      to a fatal abort, so secrets nested inside a skill cannot leak.
+ *      to a fatal abort, so secrets nested inside a skill cannot leak. The
+ *      same interior walk also runs `scanForSecrets` over each readable
+ *      file body and emits `Detected literal secret` warnings. The central
+ *      Phase-1 scan in `commands/push.ts` skips `.tar.age` artifacts (base64
+ *      scrambles credential prefixes and false-positives on the encoded
+ *      alphabet), so a per-file scan inside the bundle is the only layer
+ *      that can catch a literal credential pasted into `SKILL.md` or any
+ *      other interior file.
  *   5. Interior symlinks are filtered from the tar archive so vendored
  *      files cannot smuggle in through a symlinked child.
  *
@@ -18,9 +25,9 @@
  * travel back as warnings on the result so the caller decides how to surface.
  */
 
-import { lstat, readdir } from "node:fs/promises";
+import { lstat, readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { shouldNeverSync } from "../core/sanitizer";
+import { scanForSecrets, shouldNeverSync } from "../core/sanitizer";
 import { archiveDirectory } from "../core/tar";
 import type { SnapshotArtifact, SnapshotResult } from "./_utils";
 
@@ -190,14 +197,20 @@ export async function collectSkillArtifacts(
     }
     if (!sentinelStat.isFile()) continue;
 
-    // Gate 4: never-sync interior walk. The walker collects every
-    // matching path in the skill — not just the first — so the user sees
-    // every offender in one push instead of fixing them one at a time.
-    const neverSyncHits = await collectNeverSyncHits(entryPath);
-    if (neverSyncHits.length > 0) {
-      for (const hit of neverSyncHits) {
+    // Gate 4: interior violation walk. A single pass collects both
+    // never-sync hits (path-pattern only) and literal secret hits
+    // (file-body scan). The walker collects every match in the skill —
+    // not just the first — so the user sees every offender in one push
+    // instead of fixing them one at a time. Literal-secret coverage at
+    // this layer closes the bundle-internals gap: the central scan in
+    // `commands/push.ts` skips `.tar.age` artifacts because base64 of a
+    // tar buffer is both scramble-prone and false-positive prone.
+    const violations = await collectInteriorViolations(entryPath);
+    if (violations.neverSyncHits.length > 0 || violations.secretWarnings.length > 0) {
+      for (const hit of violations.neverSyncHits) {
         warnings.push(`${NEVER_SYNC_WARNING_PREFIX}${hit}`);
       }
+      warnings.push(...violations.secretWarnings);
       // Skip the artifact entirely so encryption never sees the bad bytes,
       // even in the unlikely event that the push gate is later removed.
       continue;
@@ -234,15 +247,41 @@ export async function collectSkillArtifacts(
 }
 
 /**
- * Walk a real skill directory and return the absolute paths of every interior
- * file whose path matches a {@link shouldNeverSync} rule.
+ * Walk a real skill directory and surface every interior gate violation in
+ * one pass. Returned shape:
+ *
+ *   - `neverSyncHits`  — absolute paths of files whose path matches a
+ *                        {@link shouldNeverSync} rule (gate 4a, path-only).
+ *   - `secretWarnings` — `Detected literal secret …` warnings emitted by
+ *                        {@link scanForSecrets} over each readable file
+ *                        body (gate 4b, body-scan). The full warning
+ *                        string from `scanForSecrets` is preserved so the
+ *                        push pipeline's existing `Detected literal secret`
+ *                        prefix check fires unchanged.
+ *
+ * One pass means each interior file is `lstat`-ed and read at most once,
+ * and both gates share the same symlink-skipping rules.
  *
  * Symlinks (files OR sub-directories) are NOT followed and NOT inspected,
- * which is consistent with the archive step: vendored content reached via a symlink is
- * out of scope for this feature and will not be archived in gate 5 either.
+ * which is consistent with the archive step: vendored content reached via a
+ * symlink is out of scope for this feature and will not be archived in gate
+ * 5 either.
+ *
+ * File-body reads use UTF-8. Read failures (binary files, permission errors,
+ * transient I/O) silently skip the body scan for that file — the path-only
+ * never-sync check still runs against the path. Binary files cannot be
+ * scanned reliably with the embedded-secret regexes anyway; the goal is to
+ * catch credentials pasted into text files like `SKILL.md`, READMEs, and
+ * any other authored markdown or config.
  */
-async function collectNeverSyncHits(rootDir: string): Promise<string[]> {
-  const hits: string[] = [];
+export interface InteriorViolations {
+  neverSyncHits: string[];
+  secretWarnings: string[];
+}
+
+export async function collectInteriorViolations(rootDir: string): Promise<InteriorViolations> {
+  const neverSyncHits: string[] = [];
+  const secretWarnings: string[] = [];
 
   async function walk(dir: string): Promise<void> {
     let names: string[];
@@ -269,12 +308,29 @@ async function collectNeverSyncHits(rootDir: string): Promise<string[]> {
 
       if (childStat.isDirectory()) {
         await walk(childPath);
-      } else if (childStat.isFile() && shouldNeverSync(childPath)) {
-        hits.push(childPath);
+        continue;
       }
+      if (!childStat.isFile()) continue;
+
+      if (shouldNeverSync(childPath)) {
+        neverSyncHits.push(childPath);
+        // Do not also body-scan a never-sync file: it is rejected by path,
+        // and reading it would leak its contents into memory for no benefit.
+        continue;
+      }
+
+      let body: string;
+      try {
+        body = await readFile(childPath, "utf8");
+      } catch {
+        // Binary content, EACCES, or transient I/O — the path-only gate
+        // above is already best-effort for non-readable files. Skip silently.
+        continue;
+      }
+      secretWarnings.push(...scanForSecrets(body, childPath));
     }
   }
 
   await walk(rootDir);
-  return hits;
+  return { neverSyncHits, secretWarnings };
 }
