@@ -441,10 +441,12 @@ describe("integration", () => {
     const root = join(tmpDir, "init-unreachable-remote");
     mkdirSync(root, { recursive: true });
     const machine = await createMachineFixture(root, "init-unreachable-machine");
-    // createMachineFixture pre-seeds a key.txt so that other tests can model
-    // "machine that has already run init once". For this test we want the
-    // first-init case, so remove the seeded key before invoking init.
+    // createMachineFixture pre-seeds a key.txt and a vaultDir so that other
+    // tests can model "machine that has already run init once". For this test
+    // we want the first-init case, so remove both before invoking init — and
+    // then assert that init's failure path does NOT recreate the vault dir.
     await rm(machine.keyPath, { force: true });
+    await rm(machine.vaultDir, { recursive: true, force: true });
 
     const bogusRemote = join(root, "nonexistent-remote.git");
 
@@ -457,10 +459,12 @@ describe("integration", () => {
     });
 
     expect(process.exitCode).toBe(1);
-    // An unreachable remote must abort BEFORE any key material is written.
-    // Otherwise a retry against a different URL silently inherits an orphan
-    // key bound to no completed init.
+    // An unreachable remote must abort BEFORE any local artifact is written.
+    // No key.txt, no agentsync.toml, AND no vault dir on disk — otherwise a
+    // retry against a different URL silently inherits an orphan key or an
+    // empty vault dir bound to no completed init.
     expect(existsSync(machine.keyPath)).toBe(false);
+    expect(existsSync(machine.vaultDir)).toBe(false);
     expect(existsSync(join(machine.vaultDir, "agentsync.toml"))).toBe(false);
     expect(fakeLogs.error.length).toBeGreaterThan(0);
     expect(fakeLogs.success.some((message) => message.includes("Initialized vault"))).toBe(false);

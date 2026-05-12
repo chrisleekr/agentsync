@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { log } from "@clack/prompts";
 import { defineCommand } from "citty";
 import { loadConfig, resolveConfigPath, writeConfig } from "../config/loader";
+import { resolveAgentSyncHome } from "../config/paths";
 import { generateIdentity, identityToRecipient } from "../core/encryptor";
 import { GitClient } from "../core/git";
 import { isFileNotFoundError, loadPrivateKey, resolveRuntimeContext } from "./shared";
@@ -64,10 +65,18 @@ async function ensureKeypair(
     // the file we just created — full, partial, or empty — must not survive
     // as an "existing key" that the next init silently loads. `force: true`
     // swallows ENOENT for the case where writeFile failed before opening the
-    // file. A real rm failure (EBUSY/EACCES/EROFS) is swallowed too: the
-    // original write/recipient error is the actionable root cause, and the
-    // user will see it via the outer init catch.
-    await rm(path, { force: true }).catch(() => {});
+    // file. A real rm failure (EBUSY/EACCES/EROFS) is surfaced as a warn:
+    // the original write/recipient error is still the root cause, but the
+    // user needs to know an orphan key.txt may remain on disk so a naive
+    // retry does not silently inherit it.
+    try {
+      await rm(path, { force: true });
+    } catch (rmErr) {
+      const rmMessage = rmErr instanceof Error ? rmErr.message : String(rmErr);
+      log.warn(
+        `Failed to remove newly generated key at ${path}: ${rmMessage}.\nRemove it manually before retrying.`,
+      );
+    }
     throw err;
   }
 }
@@ -94,22 +103,30 @@ export const initCommand = defineCommand({
     log.info("Initializing AgentSync");
 
     const runtime = await resolveRuntimeContext();
-    await mkdir(runtime.vaultDir, { recursive: true });
 
-    let git = new GitClient(runtime.vaultDir);
-
-    // Probe the remote BEFORE writing any key material. An unreachable or
-    // auth-blocked remote here must abort with no `key.txt` on disk so a
-    // retry against a different URL does not silently inherit an orphan key
-    // that was generated for a never-completed init.
+    // Probe the remote BEFORE writing any local artifacts (key.txt or even
+    // the vault directory itself). An unreachable or auth-blocked remote
+    // must abort with no on-disk state inside `runtime.vaultDir` so a retry
+    // against a different URL does not silently inherit an orphan key or
+    // an empty vault dir that was created for a never-completed init.
+    //
+    // The probe needs a cwd to run `git -C <cwd> ls-remote` against, but
+    // does not need a git repo. `resolveRuntimeContext` has already created
+    // the agentsync home (the parent of the default vault dir), which is
+    // always a valid cwd regardless of whether `AGENTSYNC_VAULT_DIR`
+    // overrides the vault location.
+    const probeClient = new GitClient(resolveAgentSyncHome());
     let remoteState: Awaited<ReturnType<GitClient["inspectRemoteBranch"]>>;
     try {
-      remoteState = await git.inspectRemoteBranch(args.remote, args.branch);
+      remoteState = await probeClient.inspectRemoteBranch(args.remote, args.branch);
     } catch (err) {
       log.error(err instanceof Error ? err.message : String(err));
       process.exitCode = 1;
       return;
     }
+
+    await mkdir(runtime.vaultDir, { recursive: true });
+    let git = new GitClient(runtime.vaultDir);
 
     // `keyIsNew` is declared outside the try so the catch can tell whether
     // this invocation generated the key (and is allowed to delete it) or
