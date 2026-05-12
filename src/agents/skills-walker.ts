@@ -262,17 +262,27 @@ export async function collectSkillArtifacts(
  * One pass means each interior file is `lstat`-ed and read at most once,
  * and both gates share the same symlink-skipping rules.
  *
- * Symlinks (files OR sub-directories) are NOT followed and NOT inspected,
- * which is consistent with the archive step: vendored content reached via a
- * symlink is out of scope for this feature and will not be archived in gate
- * 5 either.
+ * Symlinks (files OR sub-directories) are NOT followed and NOT inspected.
+ * This matches the skills-walker caller, which then calls
+ * `archiveDirectory(skillDir, { skipSymlinks: true })`. The Copilot agents
+ * caller in `src/agents/copilot.ts` currently passes `archiveDirectory` its
+ * default (`skipSymlinks: false`) for backwards-compatibility with existing
+ * agent tarballs, so an interior symlink there is skipped by the body-scan
+ * but its target-path string is still archived. node-tar archives symlinks
+ * as `SymbolicLink` entries (target path only, not target content), so this
+ * does not exfiltrate credential bodies through a vendored helper — but
+ * callers that need full symmetry should pass `{ skipSymlinks: true }`.
  *
- * File-body reads use UTF-8. Read failures (binary files, permission errors,
- * transient I/O) silently skip the body scan for that file — the path-only
- * never-sync check still runs against the path. Binary files cannot be
- * scanned reliably with the embedded-secret regexes anyway; the goal is to
- * catch credentials pasted into text files like `SKILL.md`, READMEs, and
- * any other authored markdown or config.
+ * File-body reads use UTF-8. Permission errors and transient I/O silently
+ * skip the body scan for that file — the path-only never-sync check still
+ * runs against the path. Binary content does NOT throw under UTF-8: Node
+ * substitutes U+FFFD for invalid sequences and returns a string, so the
+ * regex still executes against the decoded bytes. This is intentional —
+ * `EMBEDDED_SECRET_PATTERNS` are anchored on real credential prefixes
+ * (`sk-ant-api03-`, `AKIA…`, `AIza…`, …) with realistic length floors, so
+ * random binary bytes virtually never match while a credential pasted into
+ * a binary blob is still caught. Do NOT add a binary-detection early-return
+ * here without a measured false-positive case; it would only weaken coverage.
  */
 export interface InteriorViolations {
   neverSyncHits: string[];
@@ -301,8 +311,12 @@ export async function collectInteriorViolations(rootDir: string): Promise<Interi
       }
 
       if (childStat.isSymbolicLink()) {
-        // Skip vendored content. The archive step filters interior symlinks
-        // out anyway, so inspecting them here would only produce noise.
+        // Skip vendored content. The skills-walker caller filters interior
+        // symlinks out of the tar archive via `skipSymlinks: true`; the
+        // Copilot agents caller currently does not, so a symlink there is
+        // archived as a `SymbolicLink` entry (path string only, not target
+        // content). See the symmetry note in `collectInteriorViolations`'s
+        // contract docstring above.
         continue;
       }
 

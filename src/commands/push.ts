@@ -135,13 +135,20 @@ export async function performPush(
     // any artifact is built). Two prefixes escalate to a fatal abort:
     //   - `never-sync inside skill: <path>` — a path-pattern hit inside a
     //     skill, so the bundle would have contained a hard never-sync file.
-    //   - `Detected literal secret …` — a credential found inside an
-    //     interior file body during the walker's per-file scan. The central
-    //     scan a few lines above skips `.tar.age` artifacts, so this is the
-    //     only layer that catches a key pasted into `SKILL.md`, READMEs, or
-    //     any other file inside a skill/agent bundle.
+    //   - `Detected literal secret (<name>) in <path>` — a credential found
+    //     inside an interior file body during the walker's per-file scan.
+    //     The central scan a few lines above skips `.tar.age` artifacts, so
+    //     this is the only layer that catches a key pasted into `SKILL.md`,
+    //     READMEs, or any other file inside a skill/agent bundle.
+    //
+    // The walker prefix is matched with the trailing `(` so it stays distinct
+    // from `Detected literal secret for field <name>` emitted by
+    // `redactSecretLiterals` (sanitizeClaudeHooks/Mcp/PluginManifest/PluginMcp).
+    // Those redactor warnings land on BOTH artifact.warnings AND
+    // snapshot.warnings; the per-artifact loop above already catches them, so
+    // a broad `Detected literal secret` match here would double-report.
     for (const w of snapshot.warnings) {
-      if (w.startsWith("never-sync inside skill: ") || w.startsWith("Detected literal secret")) {
+      if (w.startsWith("never-sync inside skill: ") || w.startsWith("Detected literal secret (")) {
         secretErrors.push(`[${agent.name}] ${w}`);
       }
     }
