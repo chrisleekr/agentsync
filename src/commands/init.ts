@@ -5,7 +5,7 @@ import { defineCommand } from "citty";
 import { loadConfig, resolveConfigPath, writeConfig } from "../config/loader";
 import { generateIdentity, identityToRecipient } from "../core/encryptor";
 import { GitClient } from "../core/git";
-import { loadPrivateKey, resolveRuntimeContext } from "./shared";
+import { isFileNotFoundError, loadPrivateKey, resolveRuntimeContext } from "./shared";
 
 const DEFAULT_AGENTS = {
   cursor: true,
@@ -37,7 +37,14 @@ async function ensureKeypair(
 
   try {
     identity = await loadPrivateKey(path);
-  } catch {
+  } catch (err) {
+    // Only auto-generate when key.txt is genuinely absent. Other read errors
+    // (EACCES on a locked-down key, a malformed file from a previous corrupt
+    // write, an unreadable mount) must surface as failures — silently
+    // overwriting them would destroy a key the user may still be able to
+    // recover and rebind every recipient to fresh material the user did not
+    // consent to.
+    if (!isFileNotFoundError(err)) throw err;
     identity = await generateIdentity();
     await writeFile(path, `${identity}\n`, { mode: 0o600 });
     isNew = true;

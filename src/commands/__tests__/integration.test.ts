@@ -492,6 +492,36 @@ describe("integration", () => {
     expect(afterKeyContents).toBe(originalKeyContents);
   });
 
+  test("init preserves an unreadable key.txt instead of overwriting it", async () => {
+    const root = join(tmpDir, "init-preserves-unreadable-key");
+    mkdirSync(root, { recursive: true });
+    const bareRepoPath = await createBareRepo(root);
+    const machine = await createMachineFixture(root, "init-unreadable-key");
+    // Replace the seeded key.txt with a directory at the same path. readFile
+    // throws EISDIR (not ENOENT), which previously fell through the bare catch
+    // and silently overwrote the path with a freshly generated key — a
+    // destructive outcome for any non-missing key file (locked permissions,
+    // corrupt prior write, mount issue).
+    await rm(machine.keyPath, { force: true });
+    mkdirSync(machine.keyPath);
+
+    await withMachineEnv(machine, async () => {
+      await initMod.initCommand.run?.({
+        args: { remote: bareRepoPath, branch: "main" },
+        rawArgs: [],
+        cmd: {} as never,
+      } as never);
+    });
+
+    expect(process.exitCode).toBe(1);
+    // The directory at key.txt must still be a directory — never replaced
+    // with a regenerated identity file. This is the invariant the fix exists
+    // to protect: only ENOENT means "no key", everything else must surface.
+    expect(existsSync(machine.keyPath)).toBe(true);
+    const { statSync } = createRequire(import.meta.url)("fs") as typeof import("node:fs");
+    expect(statSync(machine.keyPath).isDirectory()).toBe(true);
+  });
+
   test("init failure after a successful remote probe cleans up a freshly generated key.txt", async () => {
     const root = join(tmpDir, "init-divergence-rollback");
     mkdirSync(root, { recursive: true });

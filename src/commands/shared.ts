@@ -54,7 +54,7 @@ export async function loadVaultConfigOrExit(vaultDir: string): Promise<AgentSync
   }
 }
 
-function isFileNotFoundError(err: unknown): boolean {
+export function isFileNotFoundError(err: unknown): boolean {
   return (
     typeof err === "object" &&
     err !== null &&
