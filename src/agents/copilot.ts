@@ -5,7 +5,13 @@ import { AgentPaths } from "../config/paths";
 import { shouldNeverSync } from "../core/sanitizer";
 import { archiveDirectory, extractArchive } from "../core/tar";
 import { atomicWrite, readIfExists, type SnapshotArtifact, type SnapshotResult } from "./_utils";
-import { collectSkillArtifacts, InvalidSkillNameError, validateSkillName } from "./skills-walker";
+import {
+  collectInteriorViolations,
+  collectSkillArtifacts,
+  InvalidSkillNameError,
+  NEVER_SYNC_WARNING_PREFIX,
+  validateSkillName,
+} from "./skills-walker";
 
 /** Snapshot payload for the Copilot adapter. */
 export type CopilotSnapshotResult = SnapshotResult;
@@ -77,13 +83,36 @@ export async function snapshotCopilot(): Promise<SnapshotResult> {
   artifacts.push(...copilotSkills.artifacts);
   warnings.push(...copilotSkills.warnings);
 
-  // Agents directories (tar each one, similar to skills)
+  // Agents directories (tar each one, similar to skills). Each agent's
+  // interior is scanned for both never-sync path hits and literal
+  // credentials before the bytes head for encryption: the central scan
+  // in `commands/push.ts` skips `.tar.age` artifacts (base64 scrambles
+  // credential prefixes), so this per-file walk is the only layer that
+  // can catch a key pasted into an agent's markdown body or a never-sync
+  // file (auth.json, history.jsonl, sessions/**, …) nested under the
+  // agent dir. Mirrors the shared walker's gate 4 contract symmetrically:
+  // collect every offender, emit `never-sync inside skill: …` for path
+  // hits and `Detected literal secret …` for body hits — both prefixes
+  // are escalated to a fatal abort by performPush — and skip the artifact.
   try {
     const names = await readdir(AgentPaths.copilot.agentsDir);
     for (const name of names) {
       const agentDir = join(AgentPaths.copilot.agentsDir, name);
       const agentDirStat = await stat(agentDir).catch(() => null);
       if (!agentDirStat?.isDirectory()) continue;
+
+      const violations = await collectInteriorViolations(agentDir);
+      if (violations.neverSyncHits.length > 0 || violations.secretWarnings.length > 0) {
+        for (const hit of violations.neverSyncHits) {
+          // Re-use the skills-walker prefix so the push gate's existing
+          // escalation rule covers agent-dir hits too — keeping the contract
+          // string in one exported constant prevents silent drift.
+          warnings.push(`${NEVER_SYNC_WARNING_PREFIX}${hit}`);
+        }
+        warnings.push(...violations.secretWarnings);
+        continue;
+      }
+
       const tarBuffer = await archiveDirectory(agentDir);
       artifacts.push({
         vaultPath: `copilot/agents/${name}.tar.age`,

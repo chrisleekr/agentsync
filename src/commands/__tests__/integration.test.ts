@@ -675,6 +675,60 @@ describe("integration", () => {
     expect(result.errors.some((message) => message.includes("Detected literal secret"))).toBe(true);
   });
 
+  test("performPush does NOT double-report when a redactor warning lands on both artifact.warnings and snapshot.warnings", async () => {
+    // Real adapters (sanitizeClaudeHooks / sanitizeClaudeMcp / plugin manifest)
+    // push the `Detected literal secret for field X` warning onto BOTH the
+    // artifact (via collect()) AND the top-level snapshot.warnings (see
+    // src/agents/claude.ts:54). The Phase-1 artifact loop and the walker-
+    // warning loop must not both fire on the same warning, or one secret would
+    // produce two entries in the abort banner. Walker hits use the
+    // `Detected literal secret (<name>) in …` shape; redactor hits use
+    // `Detected literal secret for field <name>` — the snapshot-level prefix
+    // matches the walker shape only.
+    const duplicatedWarning = "Detected literal secret for field apiKey";
+    const dualSnapshotAgent = [
+      {
+        name: "claude" as const,
+        snapshot: async () => ({
+          artifacts: [
+            {
+              vaultPath: "claude/settings.age",
+              sourcePath: "/fake/.claude/settings.json",
+              plaintext: '{"apiKey":"[REDACTED]"}',
+              warnings: [duplicatedWarning],
+            },
+          ],
+          warnings: [duplicatedWarning],
+        }),
+        apply: async () => {},
+      },
+    ];
+
+    pushMod.__setPushAgentsForTesting(dualSnapshotAgent);
+    try {
+      const result = await pushMod.performPush({ agent: "claude" });
+
+      expect(result.fatal).toBe(true);
+      expect(result.pushed).toBe(0);
+      const literalSecretEntries = result.errors.filter((e) => e.includes(duplicatedWarning));
+      expect(literalSecretEntries.length).toBe(1);
+      // The banner's count must match the distinct-issue count, not 2× it.
+      // Exact substring (not a loose regex): `/1 security issue/` would also
+      // pass for `11`, `21`, … if a future regression bumped the count.
+      expect(result.errors[0]).toContain("1 security issue(s)");
+    } finally {
+      pushMod.__setPushAgentsForTesting([
+        {
+          name: "claude" as const,
+          snapshot: async () => ({ artifacts: [...fakeArtifacts], warnings: [] }),
+          apply: async (vaultDir: string) => {
+            fakeApplyCalls.push(vaultDir);
+          },
+        },
+      ]);
+    }
+  });
+
   test("status command runs without throwing", async () => {
     const statusMod = await import("../../commands/status");
     await statusMod.statusCommand.run?.({

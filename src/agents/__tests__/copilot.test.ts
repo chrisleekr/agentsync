@@ -144,6 +144,69 @@ describe("snapshotCopilot", () => {
     expect(() => Buffer.from(art!.plaintext, "base64")).not.toThrow();
   });
 
+  // Per-file secret scan on the agents walk. The central scan in
+  // `commands/push.ts` skips `.tar.age` artifacts, so a key pasted into an
+  // agent's markdown body would slip through unless the walk-side scan
+  // catches it. The Copilot agents walk does NOT delegate to the shared
+  // skills walker, so this coverage is independent of the skill tests above.
+
+  test("agent dir with a literal Anthropic key in markdown body is rejected", async () => {
+    const agentDir = join(testCopilotPaths.agentsDir, "leaky-agent");
+    mkdirSync(agentDir, { recursive: true });
+    const fakeKey = `sk-ant-api03-${"C".repeat(48)}`;
+    const leak = join(agentDir, "agent.md");
+    writeFileSync(leak, `# leaky\n\ntoken: ${fakeKey}\n`, "utf8");
+
+    const result = await copilotModule.snapshotCopilot();
+    const art = result.artifacts.find((a) => a.vaultPath === "copilot/agents/leaky-agent.tar.age");
+    expect(art).toBeUndefined();
+
+    const offending = result.warnings.find((w) => w.startsWith("Detected literal secret"));
+    expect(offending).toBeDefined();
+    expect(offending).toContain("anthropic-api-key");
+    expect(offending).toContain(leak);
+  });
+
+  // Never-sync path hit inside an agent dir. The agents walk consumes the
+  // same collectInteriorViolations helper as the skills walker, so a file
+  // matching NEVER_SYNC_PATTERNS (auth.json, .credentials.json, history.jsonl,
+  // sessions/**, *.local.md, …) anywhere inside the agent must drop the
+  // artifact and emit the `never-sync inside skill: …` warning that
+  // performPush escalates to a fatal abort. Without this gate the agent
+  // would be archived with `archiveDirectory(agentDir)` and the credential
+  // would ship to the vault.
+  test("agent dir containing a never-sync file (auth.json) is rejected", async () => {
+    const agentDir = join(testCopilotPaths.agentsDir, "leaky-auth-agent");
+    mkdirSync(agentDir, { recursive: true });
+    writeFileSync(join(agentDir, "agent.md"), "# agent\n", "utf8");
+    const authFile = join(agentDir, "auth.json");
+    writeFileSync(authFile, '{"token":"secret"}', "utf8");
+
+    const result = await copilotModule.snapshotCopilot();
+    const art = result.artifacts.find(
+      (a) => a.vaultPath === "copilot/agents/leaky-auth-agent.tar.age",
+    );
+    expect(art).toBeUndefined();
+
+    const neverSync = result.warnings.find((w) => w.startsWith("never-sync inside skill: "));
+    expect(neverSync).toBeDefined();
+    expect(neverSync).toContain(authFile);
+  });
+
+  test("clean agent dir still produces a single .tar.age artifact", async () => {
+    const agentDir = join(testCopilotPaths.agentsDir, "clean-agent");
+    mkdirSync(agentDir, { recursive: true });
+    writeFileSync(join(agentDir, "agent.md"), "# clean prose, no keys here\n", "utf8");
+    writeFileSync(join(agentDir, "notes.md"), "# also clean\n", "utf8");
+
+    const result = await copilotModule.snapshotCopilot();
+    const arts = result.artifacts.filter(
+      (a) => a.vaultPath === "copilot/agents/clean-agent.tar.age",
+    );
+    expect(arts).toHaveLength(1);
+    expect(result.warnings.filter((w) => w.startsWith("Detected literal secret"))).toHaveLength(0);
+  });
+
   // walker retrofit regression: snapshotCopilot must inherit the
   // symlink-rejection and dot-skip rules from the shared walker.
 
