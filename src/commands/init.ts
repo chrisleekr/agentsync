@@ -28,15 +28,20 @@ const DEFAULT_SYNC = {
  * "loaded" log line until after init has actually committed to keeping the key
  * and (b) roll back a freshly written `key.txt` without touching a pre-existing
  * one if a later step fails.
+ *
+ * Contract on failure: if this function throws, the on-disk state of `path` is
+ * either unchanged (pre-existing key preserved, or no key ever written) or
+ * has been best-effort cleaned up. The caller's `isNew` rollback only fires
+ * after a successful return, so any failure mid-generate-and-write must be
+ * handled locally or the orphan key.txt is invisible to the outer recovery.
  */
 async function ensureKeypair(
   path: string,
 ): Promise<{ identity: string; recipient: string; isNew: boolean }> {
-  let identity: string;
-  let isNew = false;
-
   try {
-    identity = await loadPrivateKey(path);
+    const identity = await loadPrivateKey(path);
+    const recipient = await identityToRecipient(identity);
+    return { identity, recipient, isNew: false };
   } catch (err) {
     // Only auto-generate when key.txt is genuinely absent. Other read errors
     // (EACCES on a locked-down key, a malformed file from a previous corrupt
@@ -45,14 +50,26 @@ async function ensureKeypair(
     // recover and rebind every recipient to fresh material the user did not
     // consent to.
     if (!isFileNotFoundError(err)) throw err;
-    identity = await generateIdentity();
-    await writeFile(path, `${identity}\n`, { mode: 0o600 });
-    isNew = true;
   }
 
-  const recipient = await identityToRecipient(identity);
-
-  return { identity, recipient, isNew };
+  const identity = await generateIdentity();
+  try {
+    await writeFile(path, `${identity}\n`, { mode: 0o600 });
+    const recipient = await identityToRecipient(identity);
+    return { identity, recipient, isNew: true };
+  } catch (err) {
+    // writeFile may have written partial data before rejecting (per Node docs,
+    // the call performs multiple internal writes and is best-effort on abort),
+    // and identityToRecipient can throw on a freshly written key. Either way,
+    // the file we just created — full, partial, or empty — must not survive
+    // as an "existing key" that the next init silently loads. `force: true`
+    // swallows ENOENT for the case where writeFile failed before opening the
+    // file. A real rm failure (EBUSY/EACCES/EROFS) is swallowed too: the
+    // original write/recipient error is the actionable root cause, and the
+    // user will see it via the outer init catch.
+    await rm(path, { force: true }).catch(() => {});
+    throw err;
+  }
 }
 
 /** Bootstrap a vault, local key material, and the initial git remote wiring. */
@@ -97,11 +114,12 @@ export const initCommand = defineCommand({
     // `keyIsNew` is declared outside the try so the catch can tell whether
     // this invocation generated the key (and is allowed to delete it) or
     // inherited one from a previous successful init (which must be preserved).
+    // It is only set to true after `ensureKeypair` returns successfully —
+    // partial-write and post-write failures inside `ensureKeypair` clean up
+    // their own orphan file locally (see its contract above), since this
+    // catch cannot observe `isNew` for a call that threw.
     let keyIsNew = false;
     try {
-      // `ensureKeypair` is inside the guarded block so a mid-call failure
-      // (writeFile partial-write, identityToRecipient throw) still triggers
-      // the rollback below instead of leaving a half-written key on disk.
       const { recipient, isNew } = await ensureKeypair(runtime.privateKeyPath);
       keyIsNew = isNew;
 

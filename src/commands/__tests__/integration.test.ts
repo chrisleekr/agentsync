@@ -522,6 +522,44 @@ describe("integration", () => {
     expect(statSync(machine.keyPath).isDirectory()).toBe(true);
   });
 
+  test("init failure inside ensureKeypair writeFile leaves no orphan key.txt", async () => {
+    const root = join(tmpDir, "init-writefile-failure");
+    mkdirSync(root, { recursive: true });
+    const bareRepoPath = await createBareRepo(root);
+    const machine = await createMachineFixture(root, "init-writefile-machine");
+    // Remove the seeded key.txt so init takes the generate-and-write path.
+    await rm(machine.keyPath, { force: true });
+
+    // Point the key path under a parent directory that does not exist. init's
+    // mkdir creates `vaultDir` (recursive: true) but not the key.txt parent,
+    // so writeFile inside ensureKeypair will reject AFTER the remote probe
+    // succeeds. The cleanup contract is that any failure mid-generate-and-
+    // write must leave no orphan key.txt at the target path — otherwise a
+    // retry could silently inherit a partial-written key as "existing".
+    const orphanKeyPath = join(root, "missing-parent-dir", "key.txt");
+
+    await withMachineEnv({ ...machine, keyPath: orphanKeyPath }, async () => {
+      await initMod.initCommand.run?.({
+        args: { remote: bareRepoPath, branch: "main" },
+        rawArgs: [],
+        cmd: {} as never,
+      } as never);
+    });
+
+    expect(process.exitCode).toBe(1);
+    // No orphan key at the target. force: true in the cleanup catches
+    // ENOENT for the case where writeFile failed before any bytes hit disk,
+    // and removes partial bytes when writeFile rejected mid-write.
+    expect(existsSync(orphanKeyPath)).toBe(false);
+    // The "back up your private key now" warn must NOT fire when init
+    // never actually committed to the key — otherwise the user would copy
+    // a key that is about to be (or has just been) cleaned up.
+    expect(fakeLogs.warn.some((message) => message.includes("New age keypair generated"))).toBe(
+      false,
+    );
+    expect(fakeLogs.error.length).toBeGreaterThan(0);
+  });
+
   test("init failure after a successful remote probe cleans up a freshly generated key.txt", async () => {
     const root = join(tmpDir, "init-divergence-rollback");
     mkdirSync(root, { recursive: true });
