@@ -1,11 +1,12 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { log } from "@clack/prompts";
 import { defineCommand } from "citty";
 import { loadConfig, resolveConfigPath, writeConfig } from "../config/loader";
+import { resolveAgentSyncHome } from "../config/paths";
 import { generateIdentity, identityToRecipient } from "../core/encryptor";
 import { GitClient } from "../core/git";
-import { loadPrivateKey, resolveRuntimeContext } from "./shared";
+import { isFileNotFoundError, loadPrivateKey, resolveRuntimeContext } from "./shared";
 
 const DEFAULT_AGENTS = {
   cursor: true,
@@ -22,30 +23,62 @@ const DEFAULT_SYNC = {
   pullIntervalMs: 300_000,
 };
 
-/** Load or create the local age keypair so init can register this machine as a recipient. */
-async function ensureKeypair(path: string): Promise<{ identity: string; recipient: string }> {
-  let identity: string;
-  let isNew = false;
-
+/**
+ * Load or create the local age keypair so init can register this machine as a
+ * recipient. Returns `isNew` so the caller can (a) defer the "generated" /
+ * "loaded" log line until after init has actually committed to keeping the key
+ * and (b) roll back a freshly written `key.txt` without touching a pre-existing
+ * one if a later step fails.
+ *
+ * Contract on failure: if this function throws, the on-disk state of `path` is
+ * either unchanged (pre-existing key preserved, or no key ever written) or
+ * has been best-effort cleaned up. The caller's `isNew` rollback only fires
+ * after a successful return, so any failure mid-generate-and-write must be
+ * handled locally or the orphan key.txt is invisible to the outer recovery.
+ */
+async function ensureKeypair(
+  path: string,
+): Promise<{ identity: string; recipient: string; isNew: boolean }> {
   try {
-    identity = await loadPrivateKey(path);
-  } catch {
-    identity = await generateIdentity();
+    const identity = await loadPrivateKey(path);
+    const recipient = await identityToRecipient(identity);
+    return { identity, recipient, isNew: false };
+  } catch (err) {
+    // Only auto-generate when key.txt is genuinely absent. Other read errors
+    // (EACCES on a locked-down key, a malformed file from a previous corrupt
+    // write, an unreadable mount) must surface as failures — silently
+    // overwriting them would destroy a key the user may still be able to
+    // recover and rebind every recipient to fresh material the user did not
+    // consent to.
+    if (!isFileNotFoundError(err)) throw err;
+  }
+
+  const identity = await generateIdentity();
+  try {
     await writeFile(path, `${identity}\n`, { mode: 0o600 });
-    isNew = true;
+    const recipient = await identityToRecipient(identity);
+    return { identity, recipient, isNew: true };
+  } catch (err) {
+    // writeFile may have written partial data before rejecting (per Node docs,
+    // the call performs multiple internal writes and is best-effort on abort),
+    // and identityToRecipient can throw on a freshly written key. Either way,
+    // the file we just created — full, partial, or empty — must not survive
+    // as an "existing key" that the next init silently loads. `force: true`
+    // swallows ENOENT for the case where writeFile failed before opening the
+    // file. A real rm failure (EBUSY/EACCES/EROFS) is surfaced as a warn:
+    // the original write/recipient error is still the root cause, but the
+    // user needs to know an orphan key.txt may remain on disk so a naive
+    // retry does not silently inherit it.
+    try {
+      await rm(path, { force: true });
+    } catch (rmErr) {
+      const rmMessage = rmErr instanceof Error ? rmErr.message : String(rmErr);
+      log.warn(
+        `Failed to remove newly generated key at ${path}: ${rmMessage}.\nRemove it manually before retrying.`,
+      );
+    }
+    throw err;
   }
-
-  const recipient = await identityToRecipient(identity);
-
-  if (isNew) {
-    log.warn(
-      `New age keypair generated.\n  Public key : ${recipient}\n  Private key: ${path}\n  ⚠  Back up your private key in a password manager now. It cannot be recovered.`,
-    );
-  } else {
-    log.info(`Loaded existing keypair — public key: ${recipient}`);
-  }
-
-  return { identity, recipient };
 }
 
 /** Bootstrap a vault, local key material, and the initial git remote wiring. */
@@ -70,15 +103,44 @@ export const initCommand = defineCommand({
     log.info("Initializing AgentSync");
 
     const runtime = await resolveRuntimeContext();
+
+    // Probe the remote BEFORE writing any local artifacts (key.txt or even
+    // the vault directory itself). An unreachable or auth-blocked remote
+    // must abort with no on-disk state inside `runtime.vaultDir` so a retry
+    // against a different URL does not silently inherit an orphan key or
+    // an empty vault dir that was created for a never-completed init.
+    //
+    // The probe needs a cwd to run `git -C <cwd> ls-remote` against, but
+    // does not need a git repo. `resolveRuntimeContext` has already created
+    // the agentsync home (the parent of the default vault dir), which is
+    // always a valid cwd regardless of whether `AGENTSYNC_VAULT_DIR`
+    // overrides the vault location.
+    const probeClient = new GitClient(resolveAgentSyncHome());
+    let remoteState: Awaited<ReturnType<GitClient["inspectRemoteBranch"]>>;
+    try {
+      remoteState = await probeClient.inspectRemoteBranch(args.remote, args.branch);
+    } catch (err) {
+      log.error(err instanceof Error ? err.message : String(err));
+      process.exitCode = 1;
+      return;
+    }
+
     await mkdir(runtime.vaultDir, { recursive: true });
-
-    const { recipient } = await ensureKeypair(runtime.privateKeyPath);
-
     let git = new GitClient(runtime.vaultDir);
 
+    // `keyIsNew` is declared outside the try so the catch can tell whether
+    // this invocation generated the key (and is allowed to delete it) or
+    // inherited one from a previous successful init (which must be preserved).
+    // It is only set to true after `ensureKeypair` returns successfully —
+    // partial-write and post-write failures inside `ensureKeypair` clean up
+    // their own orphan file locally (see its contract above), since this
+    // catch cannot observe `isNew` for a call that threw.
+    let keyIsNew = false;
     try {
+      const { recipient, isNew } = await ensureKeypair(runtime.privateKeyPath);
+      keyIsNew = isNew;
+
       const repoInitialized = await git.isInitialized();
-      const remoteState = await git.inspectRemoteBranch(args.remote, args.branch);
 
       if (!repoInitialized) {
         if (remoteState.exists) {
@@ -137,6 +199,19 @@ export const initCommand = defineCommand({
         log.info("Vault pushed to remote.");
       }
 
+      // Defer the keypair status log until every fallible step above has
+      // succeeded. Reporting "New age keypair generated, back it up now"
+      // earlier risks the user copying a key into a password manager seconds
+      // before the catch block rolls it back, leaving them with a backup
+      // that no longer matches anything on disk.
+      if (keyIsNew) {
+        log.warn(
+          `New age keypair generated.\n  Public key : ${recipient}\n  Private key: ${runtime.privateKeyPath}\n  ⚠  Back up your private key in a password manager now. It cannot be recovered.`,
+        );
+      } else {
+        log.info(`Loaded existing keypair — public key: ${recipient}`);
+      }
+
       log.success(`Initialized vault at ${runtime.vaultDir}`);
 
       if (joinedExistingVault) {
@@ -153,6 +228,27 @@ export const initCommand = defineCommand({
         );
       }
     } catch (err) {
+      // The remote probe above passed, so the failure here is in keypair
+      // generation, clone/init, reconcile, config write, commit, or push. If
+      // we generated the key on this invocation, delete it so a retry is not
+      // bound to material that never made it into a successful init. A
+      // pre-existing key (one a previous successful init committed to) is
+      // preserved untouched.
+      if (keyIsNew) {
+        try {
+          await rm(runtime.privateKeyPath, { force: true });
+          log.info(`Rolled back freshly generated keypair at ${runtime.privateKeyPath}.`);
+        } catch (rmErr) {
+          // Surface rm failures (EBUSY/EACCES/EROFS) as a warning instead of
+          // letting them propagate and mask the real init error below. The
+          // hint tells the user that an orphan key.txt may still be on disk
+          // and a naive retry would silently inherit it.
+          const rmMessage = rmErr instanceof Error ? rmErr.message : String(rmErr);
+          log.warn(
+            `Failed to roll back freshly generated key at ${runtime.privateKeyPath}: ${rmMessage}.\nRemove key.txt manually before retrying.`,
+          );
+        }
+      }
       log.error(err instanceof Error ? err.message : String(err));
       process.exitCode = 1;
     }

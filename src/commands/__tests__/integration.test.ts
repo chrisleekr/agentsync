@@ -437,6 +437,197 @@ describe("integration", () => {
     expect(fakeLogs.success.some((message) => message.includes("Initialized vault"))).toBe(false);
   });
 
+  test("init against an unreachable remote leaves no key.txt and no vault artifacts", async () => {
+    const root = join(tmpDir, "init-unreachable-remote");
+    mkdirSync(root, { recursive: true });
+    const machine = await createMachineFixture(root, "init-unreachable-machine");
+    // createMachineFixture pre-seeds a key.txt and a vaultDir so that other
+    // tests can model "machine that has already run init once". For this test
+    // we want the first-init case, so remove both before invoking init — and
+    // then assert that init's failure path does NOT recreate the vault dir.
+    await rm(machine.keyPath, { force: true });
+    await rm(machine.vaultDir, { recursive: true, force: true });
+
+    const bogusRemote = join(root, "nonexistent-remote.git");
+
+    await withMachineEnv(machine, async () => {
+      await initMod.initCommand.run?.({
+        args: { remote: bogusRemote, branch: "main" },
+        rawArgs: [],
+        cmd: {} as never,
+      } as never);
+    });
+
+    expect(process.exitCode).toBe(1);
+    // An unreachable remote must abort BEFORE any local artifact is written.
+    // No key.txt, no agentsync.toml, AND no vault dir on disk — otherwise a
+    // retry against a different URL silently inherits an orphan key or an
+    // empty vault dir bound to no completed init.
+    expect(existsSync(machine.keyPath)).toBe(false);
+    expect(existsSync(machine.vaultDir)).toBe(false);
+    expect(existsSync(join(machine.vaultDir, "agentsync.toml"))).toBe(false);
+    expect(fakeLogs.error.length).toBeGreaterThan(0);
+    expect(fakeLogs.success.some((message) => message.includes("Initialized vault"))).toBe(false);
+  });
+
+  test("init failure against an unreachable remote preserves a pre-existing keypair", async () => {
+    const root = join(tmpDir, "init-preserves-existing-key");
+    mkdirSync(root, { recursive: true });
+    // createMachineFixture writes a key.txt with a fresh identity. That key
+    // stands in for one a previous successful init committed to.
+    const machine = await createMachineFixture(root, "init-preserve-machine");
+    const bogusRemote = join(root, "nonexistent-remote.git");
+
+    const originalKeyContents = await readFile(machine.keyPath, "utf8");
+
+    await withMachineEnv(machine, async () => {
+      await initMod.initCommand.run?.({
+        args: { remote: bogusRemote, branch: "main" },
+        rawArgs: [],
+        cmd: {} as never,
+      } as never);
+    });
+
+    expect(process.exitCode).toBe(1);
+    expect(existsSync(machine.keyPath)).toBe(true);
+    // A pre-existing key must be byte-for-byte unchanged. Rolling it back
+    // would destroy the only copy of the user's age private key.
+    const afterKeyContents = await readFile(machine.keyPath, "utf8");
+    expect(afterKeyContents).toBe(originalKeyContents);
+  });
+
+  test("init preserves an unreadable key.txt instead of overwriting it", async () => {
+    const root = join(tmpDir, "init-preserves-unreadable-key");
+    mkdirSync(root, { recursive: true });
+    const bareRepoPath = await createBareRepo(root);
+    const machine = await createMachineFixture(root, "init-unreadable-key");
+    // Replace the seeded key.txt with a directory at the same path. readFile
+    // throws EISDIR (not ENOENT), which previously fell through the bare catch
+    // and silently overwrote the path with a freshly generated key — a
+    // destructive outcome for any non-missing key file (locked permissions,
+    // corrupt prior write, mount issue).
+    await rm(machine.keyPath, { force: true });
+    mkdirSync(machine.keyPath);
+
+    await withMachineEnv(machine, async () => {
+      await initMod.initCommand.run?.({
+        args: { remote: bareRepoPath, branch: "main" },
+        rawArgs: [],
+        cmd: {} as never,
+      } as never);
+    });
+
+    expect(process.exitCode).toBe(1);
+    // The directory at key.txt must still be a directory — never replaced
+    // with a regenerated identity file. This is the invariant the fix exists
+    // to protect: only ENOENT means "no key", everything else must surface.
+    expect(existsSync(machine.keyPath)).toBe(true);
+    const { statSync } = createRequire(import.meta.url)("fs") as typeof import("node:fs");
+    expect(statSync(machine.keyPath).isDirectory()).toBe(true);
+  });
+
+  test("init failure inside ensureKeypair writeFile leaves no orphan key.txt", async () => {
+    const root = join(tmpDir, "init-writefile-failure");
+    mkdirSync(root, { recursive: true });
+    const bareRepoPath = await createBareRepo(root);
+    const machine = await createMachineFixture(root, "init-writefile-machine");
+    // Remove the seeded key.txt so init takes the generate-and-write path.
+    await rm(machine.keyPath, { force: true });
+
+    // Point the key path under a parent directory that does not exist. init's
+    // mkdir creates `vaultDir` (recursive: true) but not the key.txt parent,
+    // so writeFile inside ensureKeypair will reject AFTER the remote probe
+    // succeeds. The cleanup contract is that any failure mid-generate-and-
+    // write must leave no orphan key.txt at the target path — otherwise a
+    // retry could silently inherit a partial-written key as "existing".
+    const orphanKeyPath = join(root, "missing-parent-dir", "key.txt");
+
+    await withMachineEnv({ ...machine, keyPath: orphanKeyPath }, async () => {
+      await initMod.initCommand.run?.({
+        args: { remote: bareRepoPath, branch: "main" },
+        rawArgs: [],
+        cmd: {} as never,
+      } as never);
+    });
+
+    expect(process.exitCode).toBe(1);
+    // No orphan key at the target. force: true in the cleanup catches
+    // ENOENT for the case where writeFile failed before any bytes hit disk,
+    // and removes partial bytes when writeFile rejected mid-write.
+    expect(existsSync(orphanKeyPath)).toBe(false);
+    // The "back up your private key now" warn must NOT fire when init
+    // never actually committed to the key — otherwise the user would copy
+    // a key that is about to be (or has just been) cleaned up.
+    expect(fakeLogs.warn.some((message) => message.includes("New age keypair generated"))).toBe(
+      false,
+    );
+    expect(fakeLogs.error.length).toBeGreaterThan(0);
+  });
+
+  test("init failure after a successful remote probe cleans up a freshly generated key.txt", async () => {
+    const root = join(tmpDir, "init-divergence-rollback");
+    mkdirSync(root, { recursive: true });
+    const bareRepoPath = await createBareRepo(root);
+    const machineA = await createMachineFixture(root, "machine-a");
+    const machineB = await createMachineFixture(root, "machine-b");
+    // Remove machineB's pre-seeded key so init must generate a fresh one
+    // during this run. That makes this run the "isNew = true" path and lets
+    // the assertion below distinguish "rolled back" from "never written".
+    await rm(machineB.keyPath, { force: true });
+
+    seedVaultRepo({ machine: machineA, bareRepoPath });
+
+    await writeConfig(resolveConfigPath(machineB.vaultDir), {
+      version: "1",
+      recipients: { [machineB.machineName]: machineB.recipient },
+      agents: {
+        cursor: false,
+        claude: true,
+        codex: false,
+        copilot: false,
+        vscode: false,
+      },
+      remote: {
+        url: bareRepoPath,
+        branch: "main",
+      },
+      sync: {
+        debounceMs: 300,
+        autoPush: true,
+        autoPull: true,
+        pullIntervalMs: 300_000,
+      },
+      claudePlugins: { syncMarketplace: false },
+    });
+    writeFileSync(join(machineB.vaultDir, ".gitignore"), "*.tmp\n", "utf8");
+    runGit(["init"], machineB.vaultDir);
+    runGit(["symbolic-ref", "HEAD", "refs/heads/main"], machineB.vaultDir);
+    runGit(["config", "user.name", "Agent Sync Test"], machineB.vaultDir);
+    runGit(["config", "user.email", "test@agentsync.local"], machineB.vaultDir);
+    runGit(["remote", "add", "origin", bareRepoPath], machineB.vaultDir);
+    runGit(["add", "."], machineB.vaultDir);
+    runGit(["commit", "-m", "local-only bootstrap"], machineB.vaultDir);
+
+    await withMachineEnv(machineB, async () => {
+      await initMod.initCommand.run?.({
+        args: { remote: bareRepoPath, branch: "main" },
+        rawArgs: [],
+        cmd: {} as never,
+      } as never);
+    });
+
+    expect(process.exitCode).toBe(1);
+    expect(
+      fakeLogs.error.some((message) =>
+        message.includes("AgentSync only supports fast-forward sync"),
+      ),
+    ).toBe(true);
+    // The remote probe succeeded (so a key was generated), but the
+    // post-probe reconcile step failed. The key must be cleaned up so a
+    // retry does not silently reuse material from a never-completed init.
+    expect(existsSync(machineB.keyPath)).toBe(false);
+  });
+
   test("performPush encrypts artifact and writes .age file to vault", async () => {
     fakeArtifacts.push({
       vaultPath: "claude/CLAUDE.age",
