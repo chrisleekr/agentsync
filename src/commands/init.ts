@@ -1,4 +1,4 @@
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { log } from "@clack/prompts";
 import { defineCommand } from "citty";
@@ -191,7 +191,6 @@ export const initCommand = defineCommand({
 
       const gitignorePath = join(runtime.vaultDir, ".gitignore");
       await writeFile(gitignorePath, "*.tmp\n", "utf8");
-      await readFile(configPath, "utf8");
 
       const committed = await git.commit({ message: `init: ${runtime.machineName}` });
       if (committed) {
