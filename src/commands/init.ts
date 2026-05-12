@@ -87,17 +87,25 @@ export const initCommand = defineCommand({
       return;
     }
 
-    const { recipient, isNew: keyIsNew } = await ensureKeypair(runtime.privateKeyPath);
-
-    if (keyIsNew) {
-      log.warn(
-        `New age keypair generated.\n  Public key : ${recipient}\n  Private key: ${runtime.privateKeyPath}\n  ⚠  Back up your private key in a password manager now. It cannot be recovered.`,
-      );
-    } else {
-      log.info(`Loaded existing keypair — public key: ${recipient}`);
-    }
-
+    // `keyIsNew` is declared outside the try so the catch can tell whether
+    // this invocation generated the key (and is allowed to delete it) or
+    // inherited one from a previous successful init (which must be preserved).
+    let keyIsNew = false;
     try {
+      // `ensureKeypair` is inside the guarded block so a mid-call failure
+      // (writeFile partial-write, identityToRecipient throw) still triggers
+      // the rollback below instead of leaving a half-written key on disk.
+      const { recipient, isNew } = await ensureKeypair(runtime.privateKeyPath);
+      keyIsNew = isNew;
+
+      if (keyIsNew) {
+        log.warn(
+          `New age keypair generated.\n  Public key : ${recipient}\n  Private key: ${runtime.privateKeyPath}\n  ⚠  Back up your private key in a password manager now. It cannot be recovered.`,
+        );
+      } else {
+        log.info(`Loaded existing keypair — public key: ${recipient}`);
+      }
+
       const repoInitialized = await git.isInitialized();
 
       if (!repoInitialized) {
@@ -173,13 +181,25 @@ export const initCommand = defineCommand({
         );
       }
     } catch (err) {
-      // The remote probe above passed, so the failure here is in clone/init,
-      // reconcile, config write, commit, or push. If we generated the key on
-      // this invocation, delete it so a retry is not bound to material that
-      // never made it into a successful init. A pre-existing key (one a
-      // previous successful init committed to) is preserved untouched.
+      // The remote probe above passed, so the failure here is in keypair
+      // generation, clone/init, reconcile, config write, commit, or push. If
+      // we generated the key on this invocation, delete it so a retry is not
+      // bound to material that never made it into a successful init. A
+      // pre-existing key (one a previous successful init committed to) is
+      // preserved untouched.
       if (keyIsNew) {
-        await rm(runtime.privateKeyPath, { force: true });
+        try {
+          await rm(runtime.privateKeyPath, { force: true });
+        } catch (rmErr) {
+          // Surface rm failures (EBUSY/EACCES/EROFS) as a warning instead of
+          // letting them propagate and mask the real init error below. The
+          // hint tells the user that an orphan key.txt may still be on disk
+          // and a naive retry would silently inherit it.
+          const rmMessage = rmErr instanceof Error ? rmErr.message : String(rmErr);
+          log.warn(
+            `Failed to roll back freshly generated key at ${runtime.privateKeyPath}: ${rmMessage}.\nRemove key.txt manually before retrying.`,
+          );
+        }
       }
       log.error(err instanceof Error ? err.message : String(err));
       process.exitCode = 1;
