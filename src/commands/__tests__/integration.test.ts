@@ -890,6 +890,39 @@ describe("integration", () => {
     expect(existsSync(join(vaultDir, "claude", "dry-cli.age"))).toBe(false);
   });
 
+  test("pushCommand.run with dryRun=true aborts when an artifact warning reports a literal secret", async () => {
+    // Dry-run is the canonical pre-flight gate. If it ever lets a literal
+    // credential through, users (and CI) will rely on it as a safe preview
+    // only to be surprised by a fatal on the real push. The CLI dry-run
+    // path must run the same Phase 1 abort that the non-dry-run path does.
+    fakeArtifacts.length = 0;
+    fakeArtifacts.push({
+      vaultPath: "claude/leaky-cli.age",
+      sourcePath: "/fake/.claude/leaky-cli.md",
+      plaintext: "# clean prompt body",
+      warnings: ["Detected literal secret for field anthropic_api_key in /fake/.claude/leaky.json"],
+    });
+    fakeLogs.error.length = 0;
+    fakeLogs.info.length = 0;
+    process.exitCode = 0;
+
+    await pushMod.pushCommand.run?.({
+      args: { agent: "claude", dryRun: true, message: undefined },
+      rawArgs: [],
+      cmd: {} as never,
+    } as never);
+
+    expect(process.exitCode).toBe(1);
+    expect(fakeLogs.error.some((message) => message.startsWith("Push aborted"))).toBe(true);
+    expect(fakeLogs.error.some((message) => message.includes("Detected literal secret"))).toBe(
+      true,
+    );
+    expect(existsSync(join(vaultDir, "claude", "leaky-cli.age"))).toBe(false);
+
+    fakeArtifacts.length = 0;
+    process.exitCode = 0;
+  });
+
   test("pushCommand.run without dryRun encrypts and pushes artifacts", async () => {
     fakeArtifacts.push({
       vaultPath: "claude/cli-push.age",

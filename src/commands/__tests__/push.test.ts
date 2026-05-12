@@ -474,3 +474,144 @@ describe("performPush — literal secret embedded inside a skill bundle body", (
     );
   });
 });
+
+describe("performPush — dry-run still runs Phase 1 security gates", () => {
+  // Dry-run must enforce the same abort gates as a real push. A clean preview
+  // followed by a real-push abort builds false confidence: dry-run is the
+  // canonical pre-flight gate, so any path that hides a fatal must be wired
+  // back through performPush's Phase 1.
+
+  let tmpDir: string;
+  let machine: TestMachineFixture;
+  const savedEnv: Record<string, string | undefined> = {};
+  const savedCopilot = {
+    skillsDir: mutableCopilotPaths.skillsDir,
+    instructionsFile: mutableCopilotPaths.instructionsFile,
+    instructionsDir: mutableCopilotPaths.instructionsDir,
+    promptsDir: mutableCopilotPaths.promptsDir,
+    agentsDir: mutableCopilotPaths.agentsDir,
+    vscodeMcpInSettings: mutableCopilotPaths.vscodeMcpInSettings,
+  };
+
+  beforeEach(async () => {
+    tmpDir = await createTmpDir();
+    const bareRepoPath = await createBareRepo(tmpDir);
+    machine = await createMachineFixture(tmpDir, "dry-run-secret-machine");
+
+    const copilotHome = join(tmpDir, "copilot-home-dry-run");
+    mutableCopilotPaths.skillsDir = join(copilotHome, "skills");
+    mutableCopilotPaths.instructionsFile = join(copilotHome, "instructions");
+    mutableCopilotPaths.instructionsDir = join(copilotHome, "instructions");
+    mutableCopilotPaths.promptsDir = join(copilotHome, "prompts");
+    mutableCopilotPaths.agentsDir = join(copilotHome, "agents");
+    mutableCopilotPaths.vscodeMcpInSettings = join(tmpDir, "vscode-settings.json");
+
+    for (const key of RUNTIME_ENV_KEYS) {
+      savedEnv[key] = process.env[key];
+    }
+    process.env.AGENTSYNC_VAULT_DIR = machine.vaultDir;
+    process.env.AGENTSYNC_KEY_PATH = machine.keyPath;
+    process.env.AGENTSYNC_MACHINE = machine.machineName;
+
+    seedVaultRepo({
+      machine,
+      bareRepoPath,
+      agents: { copilot: true, claude: false },
+    });
+
+    fakeLogs.success.length = 0;
+    fakeLogs.info.length = 0;
+    fakeLogs.warn.length = 0;
+    fakeLogs.error.length = 0;
+    process.exitCode = 0;
+  });
+
+  afterEach(async () => {
+    for (const key of RUNTIME_ENV_KEYS) {
+      const value = savedEnv[key];
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
+    mutableCopilotPaths.skillsDir = savedCopilot.skillsDir;
+    mutableCopilotPaths.instructionsFile = savedCopilot.instructionsFile;
+    mutableCopilotPaths.instructionsDir = savedCopilot.instructionsDir;
+    mutableCopilotPaths.promptsDir = savedCopilot.promptsDir;
+    mutableCopilotPaths.agentsDir = savedCopilot.agentsDir;
+    mutableCopilotPaths.vscodeMcpInSettings = savedCopilot.vscodeMcpInSettings;
+    await rm(tmpDir, { recursive: true, force: true });
+  });
+
+  test("aborts a dry-run when a prompt file body contains a Claude API key", async () => {
+    mkdirSync(mutableCopilotPaths.promptsDir, { recursive: true });
+    const promptPath = join(mutableCopilotPaths.promptsDir, "dry-leaky.prompt.md");
+    const fakeKey = `sk-ant-api03-${"B".repeat(48)}`;
+    writeFileSync(
+      promptPath,
+      `# Demo prompt\n\nMy API key is ${fakeKey}\n\nDo not share.\n`,
+      "utf8",
+    );
+
+    const previews: Array<{ sourcePath: string; skipped: boolean }> = [];
+    const result = await pushMod.performPush({
+      agent: "copilot",
+      dryRun: true,
+      onPreview: (entry) => {
+        previews.push({ sourcePath: entry.sourcePath, skipped: entry.skipped });
+      },
+    });
+
+    expect(result.fatal).toBe(true);
+    expect(result.pushed).toBe(0);
+    expect(result.errors.some((e) => e.startsWith("Push aborted"))).toBe(true);
+    expect(result.errors.some((e) => e.includes("Detected literal secret"))).toBe(true);
+    expect(result.errors.some((e) => e.includes("dry-leaky.prompt.md"))).toBe(true);
+
+    // Phase 1 aborts before Phase 2 runs, so the preview callback must not
+    // fire for the leaky artifact (otherwise the user sees a clean preview).
+    expect(previews).toHaveLength(0);
+
+    // No encrypted artifact written even though the operation was a dry-run.
+    expect(
+      existsSync(join(machine.vaultDir, "copilot", "prompts", "dry-leaky.prompt.md.age")),
+    ).toBe(false);
+  });
+
+  test("aborts a dry-run when a Copilot skill contains a never-sync file", async () => {
+    const cleanSkill = join(mutableCopilotPaths.skillsDir, "clean-skill");
+    mkdirSync(cleanSkill, { recursive: true });
+    writeFileSync(join(cleanSkill, "SKILL.md"), "# clean", "utf8");
+
+    const dirtySkill = join(mutableCopilotPaths.skillsDir, "dirty-skill");
+    mkdirSync(dirtySkill, { recursive: true });
+    writeFileSync(join(dirtySkill, "SKILL.md"), "# dirty", "utf8");
+    writeFileSync(join(dirtySkill, "auth.json"), '{"token":"x"}', "utf8");
+
+    const previews: Array<{ sourcePath: string; skipped: boolean }> = [];
+    const result = await pushMod.performPush({
+      agent: "copilot",
+      dryRun: true,
+      onPreview: (entry) => {
+        previews.push({ sourcePath: entry.sourcePath, skipped: entry.skipped });
+      },
+    });
+
+    expect(result.fatal).toBe(true);
+    expect(result.pushed).toBe(0);
+    expect(result.errors.some((e) => e.startsWith("Push aborted"))).toBe(true);
+    expect(result.errors.some((e) => e.includes("never-sync inside skill"))).toBe(true);
+    expect(result.errors.some((e) => e.includes("auth.json"))).toBe(true);
+
+    // Phase 1 aborts before any preview entry is emitted.
+    expect(previews).toHaveLength(0);
+
+    expect(existsSync(join(machine.vaultDir, "copilot", "skills", "clean-skill.tar.age"))).toBe(
+      false,
+    );
+    expect(existsSync(join(machine.vaultDir, "copilot", "skills", "dirty-skill.tar.age"))).toBe(
+      false,
+    );
+  });
+});

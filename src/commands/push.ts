@@ -33,13 +33,28 @@ function withClaudeOptions(agent: AgentDefinition, claudeOpts: ClaudeSyncOptions
   };
 }
 
+/** Preview entry emitted to onPreview callbacks during a dry-run push. */
+export type PushPreviewEntry = {
+  agent: AgentName;
+  sourcePath: string;
+  vaultPath: string;
+  targetPath: string;
+  skipped: boolean;
+  skipReason?: string;
+};
+
 /**
  * Snapshot local agent state, encrypt it, and publish the resulting vault changes.
- * @param options Optional agent filter, dry-run flag, and commit message override.
+ * @param options Optional agent filter, dry-run flag, commit message override, and dry-run preview callback.
  * @returns The number of written artifacts, collected errors, and whether the run failed fatally.
  */
 export async function performPush(
-  options: { agent?: string; dryRun?: boolean; message?: string } = {},
+  options: {
+    agent?: string;
+    dryRun?: boolean;
+    message?: string;
+    onPreview?: (entry: PushPreviewEntry) => void;
+  } = {},
 ): Promise<{ pushed: number; errors: string[]; fatal: boolean }> {
   const errors: string[] = [];
   let pushed = 0;
@@ -175,17 +190,34 @@ export async function performPush(
     }
 
     for (const artifact of snapshot.artifacts) {
+      const target = join(runtime.vaultDir, artifact.vaultPath);
+
       // Guard: never sync files matching global never-sync patterns
       if (shouldNeverSync(artifact.sourcePath)) {
         allWarnings.push(
           `[${agent.name}] Skipped ${artifact.sourcePath} — matches never-sync pattern`,
         );
+        if (options.dryRun) {
+          options.onPreview?.({
+            agent: agent.name,
+            sourcePath: artifact.sourcePath,
+            vaultPath: artifact.vaultPath,
+            targetPath: target,
+            skipped: true,
+            skipReason: "never-sync",
+          });
+        }
         continue;
       }
 
-      const target = join(runtime.vaultDir, artifact.vaultPath);
-
       if (options.dryRun) {
+        options.onPreview?.({
+          agent: agent.name,
+          sourcePath: artifact.sourcePath,
+          vaultPath: artifact.vaultPath,
+          targetPath: target,
+          skipped: false,
+        });
         continue;
       }
 
@@ -249,37 +281,20 @@ export const pushCommand = defineCommand({
   async run({ args }) {
     const requestedAgent = args.agent as string | undefined;
 
-    if (args.dryRun) {
-      // Collect dry-run output manually for display
-      const runtime = await resolveRuntimeContext();
-      const config = await loadVaultConfigOrExit(runtime.vaultDir);
-      const claudeOpts: ClaudeSyncOptions = {
-        syncMarketplace: config.claudePlugins?.syncMarketplace ?? false,
-      };
-      const agentsToSync = agentDefinitions
-        .filter((a) => {
-          if (requestedAgent) return a.name === requestedAgent;
-          return config.agents[a.name] === true;
-        })
-        .map((a) => withClaudeOptions(a, claudeOpts));
-      for (const agent of agentsToSync) {
-        const snapshot = await agent.snapshot();
-        for (const artifact of snapshot.artifacts) {
-          if (shouldNeverSync(artifact.sourcePath)) {
-            log.warn(`[dry-run] [${agent.name}] SKIP ${artifact.sourcePath} — never-sync`);
-            continue;
-          }
-          const target = join(runtime.vaultDir, artifact.vaultPath);
-          log.info(`[dry-run] [${agent.name}] ${artifact.sourcePath} → ${target}`);
-        }
-      }
-      return;
-    }
-
     const result = await performPush({
       agent: requestedAgent,
-      dryRun: false,
+      dryRun: args.dryRun === true,
       message: args.message as string | undefined,
+      onPreview: args.dryRun
+        ? (entry) => {
+            if (entry.skipped) {
+              const reason = entry.skipReason ?? "skipped";
+              log.warn(`[dry-run] [${entry.agent}] SKIP ${entry.sourcePath} — ${reason}`);
+            } else {
+              log.info(`[dry-run] [${entry.agent}] ${entry.sourcePath} → ${entry.targetPath}`);
+            }
+          }
+        : undefined,
     });
 
     for (const err of result.errors) {
@@ -292,6 +307,10 @@ export const pushCommand = defineCommand({
 
     if (result.fatal) {
       process.exitCode = 1;
+      return;
+    }
+
+    if (args.dryRun) {
       return;
     }
 
