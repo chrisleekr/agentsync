@@ -4,6 +4,7 @@ import { log } from "@clack/prompts";
 import { defineCommand } from "citty";
 import { applyClaudeVault, type ClaudeSyncOptions, snapshotClaude } from "../agents/claude";
 import { type AgentDefinition, type AgentName, Agents } from "../agents/registry";
+import { NEVER_SYNC_WARNING_PREFIX, WALKER_SECRET_WARNING_PREFIX } from "../agents/skills-walker";
 import { encryptString } from "../core/encryptor";
 import { GitClient } from "../core/git";
 import { scanForSecrets, shouldNeverSync } from "../core/sanitizer";
@@ -148,7 +149,7 @@ export async function performPush(
     // snapshot.warnings; the per-artifact loop above already catches them, so
     // a broad `Detected literal secret` match here would double-report.
     for (const w of snapshot.warnings) {
-      if (w.startsWith("never-sync inside skill: ") || w.startsWith("Detected literal secret (")) {
+      if (w.startsWith(NEVER_SYNC_WARNING_PREFIX) || w.startsWith(WALKER_SECRET_WARNING_PREFIX)) {
         secretErrors.push(`[${agent.name}] ${w}`);
       }
     }

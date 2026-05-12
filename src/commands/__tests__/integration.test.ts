@@ -713,7 +713,9 @@ describe("integration", () => {
       const literalSecretEntries = result.errors.filter((e) => e.includes(duplicatedWarning));
       expect(literalSecretEntries.length).toBe(1);
       // The banner's count must match the distinct-issue count, not 2× it.
-      expect(result.errors[0]).toMatch(/1 security issue/);
+      // Exact substring (not a loose regex): `/1 security issue/` would also
+      // pass for `11`, `21`, … if a future regression bumped the count.
+      expect(result.errors[0]).toContain("1 security issue(s)");
     } finally {
       pushMod.__setPushAgentsForTesting([
         {

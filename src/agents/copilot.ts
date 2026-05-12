@@ -9,6 +9,7 @@ import {
   collectInteriorViolations,
   collectSkillArtifacts,
   InvalidSkillNameError,
+  NEVER_SYNC_WARNING_PREFIX,
   validateSkillName,
 } from "./skills-walker";
 
@@ -103,7 +104,10 @@ export async function snapshotCopilot(): Promise<SnapshotResult> {
       const violations = await collectInteriorViolations(agentDir);
       if (violations.neverSyncHits.length > 0 || violations.secretWarnings.length > 0) {
         for (const hit of violations.neverSyncHits) {
-          warnings.push(`never-sync inside skill: ${hit}`);
+          // Re-use the skills-walker prefix so the push gate's existing
+          // escalation rule covers agent-dir hits too — keeping the contract
+          // string in one exported constant prevents silent drift.
+          warnings.push(`${NEVER_SYNC_WARNING_PREFIX}${hit}`);
         }
         warnings.push(...violations.secretWarnings);
         continue;

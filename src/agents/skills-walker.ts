@@ -45,8 +45,23 @@ export type SkillBearingAgent = "claude" | "cursor" | "codex" | "copilot";
  */
 export type SkillsWalkerResult = SnapshotResult;
 
-/** Warning prefix emitted when a never-sync rule matches inside a skill. */
-const NEVER_SYNC_WARNING_PREFIX = "never-sync inside skill: ";
+/**
+ * Warning prefix emitted when a never-sync rule matches inside a skill or
+ * agent bundle. Exported so every emitter (this file, `copilot.ts`) and the
+ * push gate (`commands/push.ts`) match the same literal — drift on this
+ * string would silently downgrade fatal aborts to soft warnings.
+ */
+export const NEVER_SYNC_WARNING_PREFIX = "never-sync inside skill: ";
+
+/**
+ * Warning prefix emitted by `scanForSecrets` when a literal credential is
+ * found inside a readable bundle interior file body. Note the trailing `(` —
+ * it disambiguates walker hits (`Detected literal secret (<name>) in …`)
+ * from redactor hits (`Detected literal secret for field <name>`), so the
+ * push gate can escalate the walker arm without re-catching the redactor
+ * warnings that the per-artifact loop already handles.
+ */
+export const WALKER_SECRET_WARNING_PREFIX = "Detected literal secret (";
 
 /** Warning prefix emitted when `archiveDirectory` fails on an otherwise-valid skill. */
 const ARCHIVE_FAILURE_WARNING_PREFIX = "skill archive failed: ";
