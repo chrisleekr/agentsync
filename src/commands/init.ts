@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { log } from "@clack/prompts";
 import { defineCommand } from "citty";
@@ -22,8 +22,16 @@ const DEFAULT_SYNC = {
   pullIntervalMs: 300_000,
 };
 
-/** Load or create the local age keypair so init can register this machine as a recipient. */
-async function ensureKeypair(path: string): Promise<{ identity: string; recipient: string }> {
+/**
+ * Load or create the local age keypair so init can register this machine as a
+ * recipient. Returns `isNew` so the caller can (a) defer the "generated" /
+ * "loaded" log line until after init has actually committed to keeping the key
+ * and (b) roll back a freshly written `key.txt` without touching a pre-existing
+ * one if a later step fails.
+ */
+async function ensureKeypair(
+  path: string,
+): Promise<{ identity: string; recipient: string; isNew: boolean }> {
   let identity: string;
   let isNew = false;
 
@@ -37,15 +45,7 @@ async function ensureKeypair(path: string): Promise<{ identity: string; recipien
 
   const recipient = await identityToRecipient(identity);
 
-  if (isNew) {
-    log.warn(
-      `New age keypair generated.\n  Public key : ${recipient}\n  Private key: ${path}\n  ⚠  Back up your private key in a password manager now. It cannot be recovered.`,
-    );
-  } else {
-    log.info(`Loaded existing keypair — public key: ${recipient}`);
-  }
-
-  return { identity, recipient };
+  return { identity, recipient, isNew };
 }
 
 /** Bootstrap a vault, local key material, and the initial git remote wiring. */
@@ -72,13 +72,33 @@ export const initCommand = defineCommand({
     const runtime = await resolveRuntimeContext();
     await mkdir(runtime.vaultDir, { recursive: true });
 
-    const { recipient } = await ensureKeypair(runtime.privateKeyPath);
-
     let git = new GitClient(runtime.vaultDir);
+
+    // Probe the remote BEFORE writing any key material. An unreachable or
+    // auth-blocked remote here must abort with no `key.txt` on disk so a
+    // retry against a different URL does not silently inherit an orphan key
+    // that was generated for a never-completed init.
+    let remoteState: Awaited<ReturnType<GitClient["inspectRemoteBranch"]>>;
+    try {
+      remoteState = await git.inspectRemoteBranch(args.remote, args.branch);
+    } catch (err) {
+      log.error(err instanceof Error ? err.message : String(err));
+      process.exitCode = 1;
+      return;
+    }
+
+    const { recipient, isNew: keyIsNew } = await ensureKeypair(runtime.privateKeyPath);
+
+    if (keyIsNew) {
+      log.warn(
+        `New age keypair generated.\n  Public key : ${recipient}\n  Private key: ${runtime.privateKeyPath}\n  ⚠  Back up your private key in a password manager now. It cannot be recovered.`,
+      );
+    } else {
+      log.info(`Loaded existing keypair — public key: ${recipient}`);
+    }
 
     try {
       const repoInitialized = await git.isInitialized();
-      const remoteState = await git.inspectRemoteBranch(args.remote, args.branch);
 
       if (!repoInitialized) {
         if (remoteState.exists) {
@@ -153,6 +173,14 @@ export const initCommand = defineCommand({
         );
       }
     } catch (err) {
+      // The remote probe above passed, so the failure here is in clone/init,
+      // reconcile, config write, commit, or push. If we generated the key on
+      // this invocation, delete it so a retry is not bound to material that
+      // never made it into a successful init. A pre-existing key (one a
+      // previous successful init committed to) is preserved untouched.
+      if (keyIsNew) {
+        await rm(runtime.privateKeyPath, { force: true });
+      }
       log.error(err instanceof Error ? err.message : String(err));
       process.exitCode = 1;
     }
