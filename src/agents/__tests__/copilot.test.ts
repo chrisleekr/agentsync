@@ -167,6 +167,32 @@ describe("snapshotCopilot", () => {
     expect(offending).toContain(leak);
   });
 
+  // Never-sync path hit inside an agent dir. The agents walk consumes the
+  // same collectInteriorViolations helper as the skills walker, so a file
+  // matching NEVER_SYNC_PATTERNS (auth.json, .credentials.json, history.jsonl,
+  // sessions/**, *.local.md, …) anywhere inside the agent must drop the
+  // artifact and emit the `never-sync inside skill: …` warning that
+  // performPush escalates to a fatal abort. Without this gate the agent
+  // would be archived with `archiveDirectory(agentDir)` and the credential
+  // would ship to the vault.
+  test("agent dir containing a never-sync file (auth.json) is rejected", async () => {
+    const agentDir = join(testCopilotPaths.agentsDir, "leaky-auth-agent");
+    mkdirSync(agentDir, { recursive: true });
+    writeFileSync(join(agentDir, "agent.md"), "# agent\n", "utf8");
+    const authFile = join(agentDir, "auth.json");
+    writeFileSync(authFile, '{"token":"secret"}', "utf8");
+
+    const result = await copilotModule.snapshotCopilot();
+    const art = result.artifacts.find(
+      (a) => a.vaultPath === "copilot/agents/leaky-auth-agent.tar.age",
+    );
+    expect(art).toBeUndefined();
+
+    const neverSync = result.warnings.find((w) => w.startsWith("never-sync inside skill: "));
+    expect(neverSync).toBeDefined();
+    expect(neverSync).toContain(authFile);
+  });
+
   test("clean agent dir still produces a single .tar.age artifact", async () => {
     const agentDir = join(testCopilotPaths.agentsDir, "clean-agent");
     mkdirSync(agentDir, { recursive: true });

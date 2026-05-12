@@ -83,13 +83,16 @@ export async function snapshotCopilot(): Promise<SnapshotResult> {
   warnings.push(...copilotSkills.warnings);
 
   // Agents directories (tar each one, similar to skills). Each agent's
-  // interior is scanned for literal credentials before the bytes head for
-  // encryption: the central scan in `commands/push.ts` skips `.tar.age`
-  // artifacts (base64 scrambles credential prefixes), so a per-file scan
-  // here is the only layer that can catch a key pasted into an agent's
-  // markdown body. Mirrors the shared walker's gate 4 contract: collect
-  // every offender, emit `Detected literal secret …` warnings (which
-  // performPush escalates to a fatal abort), and skip the artifact.
+  // interior is scanned for both never-sync path hits and literal
+  // credentials before the bytes head for encryption: the central scan
+  // in `commands/push.ts` skips `.tar.age` artifacts (base64 scrambles
+  // credential prefixes), so this per-file walk is the only layer that
+  // can catch a key pasted into an agent's markdown body or a never-sync
+  // file (auth.json, history.jsonl, sessions/**, …) nested under the
+  // agent dir. Mirrors the shared walker's gate 4 contract symmetrically:
+  // collect every offender, emit `never-sync inside skill: …` for path
+  // hits and `Detected literal secret …` for body hits — both prefixes
+  // are escalated to a fatal abort by performPush — and skip the artifact.
   try {
     const names = await readdir(AgentPaths.copilot.agentsDir);
     for (const name of names) {
@@ -98,7 +101,10 @@ export async function snapshotCopilot(): Promise<SnapshotResult> {
       if (!agentDirStat?.isDirectory()) continue;
 
       const violations = await collectInteriorViolations(agentDir);
-      if (violations.secretWarnings.length > 0) {
+      if (violations.neverSyncHits.length > 0 || violations.secretWarnings.length > 0) {
+        for (const hit of violations.neverSyncHits) {
+          warnings.push(`never-sync inside skill: ${hit}`);
+        }
         warnings.push(...violations.secretWarnings);
         continue;
       }
