@@ -192,11 +192,13 @@ export async function performPush(
     for (const artifact of snapshot.artifacts) {
       const target = join(runtime.vaultDir, artifact.vaultPath);
 
-      // Guard: never sync files matching global never-sync patterns
+      // Guard: never sync files matching global never-sync patterns. In
+      // dry-run, the SKIP signal goes only through onPreview so the CLI
+      // renders one line per artifact. In a real push, the warning goes
+      // onto allWarnings so the post-run summary still surfaces it.
+      // Emitting both in dry-run would double-print the same artifact
+      // (onPreview → SKIP line, then result.errors → log.warn).
       if (shouldNeverSync(artifact.sourcePath)) {
-        allWarnings.push(
-          `[${agent.name}] Skipped ${artifact.sourcePath} — matches never-sync pattern`,
-        );
         if (options.dryRun) {
           options.onPreview?.({
             agent: agent.name,
@@ -206,6 +208,10 @@ export async function performPush(
             skipped: true,
             skipReason: "never-sync",
           });
+        } else {
+          allWarnings.push(
+            `[${agent.name}] Skipped ${artifact.sourcePath} — matches never-sync pattern`,
+          );
         }
         continue;
       }
