@@ -98,14 +98,6 @@ export const initCommand = defineCommand({
       const { recipient, isNew } = await ensureKeypair(runtime.privateKeyPath);
       keyIsNew = isNew;
 
-      if (keyIsNew) {
-        log.warn(
-          `New age keypair generated.\n  Public key : ${recipient}\n  Private key: ${runtime.privateKeyPath}\n  ⚠  Back up your private key in a password manager now. It cannot be recovered.`,
-        );
-      } else {
-        log.info(`Loaded existing keypair — public key: ${recipient}`);
-      }
-
       const repoInitialized = await git.isInitialized();
 
       if (!repoInitialized) {
@@ -165,6 +157,19 @@ export const initCommand = defineCommand({
         log.info("Vault pushed to remote.");
       }
 
+      // Defer the keypair status log until every fallible step above has
+      // succeeded. Reporting "New age keypair generated, back it up now"
+      // earlier risks the user copying a key into a password manager seconds
+      // before the catch block rolls it back, leaving them with a backup
+      // that no longer matches anything on disk.
+      if (keyIsNew) {
+        log.warn(
+          `New age keypair generated.\n  Public key : ${recipient}\n  Private key: ${runtime.privateKeyPath}\n  ⚠  Back up your private key in a password manager now. It cannot be recovered.`,
+        );
+      } else {
+        log.info(`Loaded existing keypair — public key: ${recipient}`);
+      }
+
       log.success(`Initialized vault at ${runtime.vaultDir}`);
 
       if (joinedExistingVault) {
@@ -190,6 +195,7 @@ export const initCommand = defineCommand({
       if (keyIsNew) {
         try {
           await rm(runtime.privateKeyPath, { force: true });
+          log.info(`Rolled back freshly generated keypair at ${runtime.privateKeyPath}.`);
         } catch (rmErr) {
           // Surface rm failures (EBUSY/EACCES/EROFS) as a warning instead of
           // letting them propagate and mask the real init error below. The
