@@ -27,17 +27,32 @@ services:
     environment:
       VAULT_URL: "file:///vault/repo.git"
       HOME: /home/agent
+    # Default CMD runs the smoke scenario. Per-scenario CI runs override CMD
+    # via `docker compose run --rm machine /home/agent/scenarios/$NAME.sh`.
+
+  # Scenario 17 (git:// protocol). Brought up only when the `git-daemon`
+  # profile is selected so default `compose up` stays cheap. Modern git refuses
+  # to run `git daemon` as root unless --user is set; we drop to the alpine
+  # `git` user (uid 1000 in alpine/git) for the listener.
+  git-daemon:
+    image: alpine/git:latest
+    profiles: ["git-daemon"]
+    volumes:
+      - vault-data:/vault
+    user: "1000:1000"
+    expose: ["9418"]
     command:
-      - bash
+      - sh
       - -c
       - |
         set -e
-        /home/agent/scenarios/smoke.sh
-        /home/agent/scenarios/02-multi-machine.sh
-        /home/agent/scenarios/03-diverged-history.sh
-        /home/agent/scenarios/04-sanitizer-aborts.sh
-        /home/agent/scenarios/05-key-rotate.sh
-        /home/agent/scenarios/06-skill-additive.sh
+        git daemon \
+          --reuseaddr \
+          --base-path=/vault \
+          --export-all \
+          --enable=receive-pack \
+          --verbose \
+          /vault
 
 volumes:
   vault-data:

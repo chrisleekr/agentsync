@@ -1,0 +1,5 @@
+{
+  "editor.fontSize": 14,
+  "workbench.colorTheme": "Dracula",
+  "rules": "Always prefer composition. Never use class inheritance for shared behaviour."
+}

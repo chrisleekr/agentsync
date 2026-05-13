@@ -49,6 +49,10 @@
     "test:coverage": "bun test --coverage",
     "check": "bun run typecheck && bun run lint && bun run test",
     "check:act": "act -W .github/workflows/ci.yml",
+    "e2e:all": "bash docker/e2e/run-all.sh",
+    "e2e:smoke": "bash -c 'trap \"docker compose -f docker/e2e/compose.yml down -v\" EXIT; docker compose -f docker/e2e/compose.yml up --build --abort-on-container-exit --exit-code-from machine'",
+    "e2e:scenario": "bash -c 'docker compose -f docker/e2e/compose.yml run --rm machine /home/agent/scenarios/${SCENARIO:?SCENARIO env var required}'",
+    "e2e:audit": "docker compose -f docker/e2e/compose.yml run --rm machine /home/agent/scripts/audit-vaults.sh",
     "docs:install": "pip install -r docs/requirements.txt",
     "docs:serve": "mkdocs serve",
     "docs:build": "mkdocs build --strict",
@@ -73,6 +77,6 @@
     "typescript": "^6.0.0"
   },
   "volta": {
-    "node": "22.14.0"
+    "node": "24"
   }
 }

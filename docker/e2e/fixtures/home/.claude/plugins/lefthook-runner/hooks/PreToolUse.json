@@ -1,0 +1,4 @@
+{
+  "matcher": "Bash",
+  "hooks": [{ "type": "command", "command": "lefthook run pre-commit" }]
+}

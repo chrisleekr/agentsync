@@ -3,73 +3,104 @@ set -euo pipefail
 # shellcheck source=/home/agent/scenarios/_lib.sh
 source /home/agent/scenarios/_lib.sh
 
-step "Verify bootstrap populated agent config dirs"
-assert_dir_exists  "$HOME/.claude"
-assert_file_exists "$HOME/.claude/settings.json"
-assert_dir_exists  "$HOME/.codex"
-assert_dir_exists  "$HOME/.cursor"
-assert_file_exists "$HOME/.config/Code/User/settings.json"
-assert_file_exists "$HOME/.config/Cursor/User/settings.json"
+# Scenario 1 (smoke) — single-machine init+push proves the full fixture
+# survives a round through the encrypted vault, every adapter contributed
+# at least one artifact, and no credential canary leaked.
 
-step "Run agentsync init against file:// vault (init also performs first push)"
+step "Verify entrypoint installed the complete real-customer fixture"
+assert_dir_exists  "$HOME/.claude"
+assert_file_exists "$HOME/.claude/CLAUDE.md"
+assert_file_exists "$HOME/.claude/settings.json"
+assert_file_exists "$HOME/.claude.json"
+assert_file_exists "$HOME/.claude/rules/coding-style.md"
+assert_dir_exists  "$HOME/.claude/skills/postgres-helper"
+assert_file_exists "$HOME/.codex/AGENTS.md"
+assert_file_exists "$HOME/.codex/AGENTS.override.md"
+assert_file_exists "$HOME/.codex/config.toml"
+assert_file_exists "$HOME/.agents/skills/sql-formatter/SKILL.md"
+assert_file_exists "$HOME/.cursor/mcp.json"
+assert_file_exists "$HOME/.config/Code/User/mcp.json"
+assert_file_exists "$HOME/.config/Cursor/User/settings.json"
+assert_file_exists "$HOME/.copilot/copilot-instructions.md"
+assert_file_exists "$HOME/.copilot/agents/bug-triager.agent.md"
+
+step "agentsync init"
 cd /app
 bun run src/cli.ts init --remote "${VAULT_URL}" --branch main
-
-step "Verify init wrote keypair and vault config"
 assert_file_exists "$HOME/.config/agentsync/key.txt"
 assert_file_exists "$HOME/.config/agentsync/vault/agentsync.toml"
 assert_contains    "$HOME/.config/agentsync/vault/agentsync.toml" "${VAULT_URL}"
 
-step "Verify vault remote received the init commit"
-git --git-dir=/vault/repo.git log --oneline | tee /tmp/vault-log.txt
-[ -s /tmp/vault-log.txt ] || fail "vault has no commits after init"
-pass "vault has commits"
+step "Enable vscode adapter (off by default per schema) so mcp.json is exercised"
+sed -i 's/^vscode = false$/vscode = true/' "$HOME/.config/agentsync/vault/agentsync.toml"
+grep -qE '^vscode = true$' "$HOME/.config/agentsync/vault/agentsync.toml" \
+  || fail "vscode toggle did not apply"
 
-step "Run agentsync push (snapshot encrypted agent state)"
+step "agentsync push"
 bun run src/cli.ts push --message "smoke: encrypted snapshot"
 
-step "Verify vault now contains .age artifacts"
-artifact_count=$(git --git-dir=/vault/repo.git ls-tree -r HEAD | grep -c '\.age$' || true)
-[ "$artifact_count" -gt 0 ] || fail "vault contains no .age artifacts after push"
-pass "vault contains $artifact_count encrypted artifacts"
+step "Vault advanced (≥1 commit)"
+git --git-dir=/vault/repo.git log --oneline | tee /tmp/vault-log.txt
+[ -s /tmp/vault-log.txt ] || fail "vault has no commits after push"
+pass "vault has commits"
 
-step "Mutate a synced file and push again (incremental commit path)"
-echo '{"rules": "updated rule from smoke test"}' > "$HOME/.config/Cursor/User/settings.json"
-bun run src/cli.ts push --message "smoke: incremental update"
-new_count=$(git --git-dir=/vault/repo.git log --oneline | wc -l | tr -d ' ')
-[ "$new_count" -ge 2 ] || fail "expected ≥2 commits, got $new_count"
-pass "vault now has $new_count commits"
+step "Vault contains ≥1 artifact for every adapter the fixture populated"
+assert_in_vault /vault/repo.git "claude/"
+assert_in_vault /vault/repo.git "codex/"
+assert_in_vault /vault/repo.git "cursor/"
+assert_in_vault /vault/repo.git "vscode/"
+assert_in_vault /vault/repo.git "copilot/"
 
-step "Run agentsync status"
+step "Vault contains the specific adapter artifacts we care about"
+# Claude — wholesale + subset. The hooks-subset of settings.json lands at
+# claude/settings.hooks.json.age (not settings.json.age) — the adapter
+# names it explicitly to signal that only the hooks block travels.
+assert_in_vault /vault/repo.git "claude/CLAUDE.md.age"
+assert_in_vault /vault/repo.git "claude/settings.hooks.json.age"
+assert_in_vault /vault/repo.git "claude/claude.json.age"
+assert_in_vault /vault/repo.git "claude/rules/coding-style.md.age"
+assert_in_vault /vault/repo.git "claude/skills/postgres-helper.tar.age"
+# Codex — AGENTS + override + config + skill at canonical user-scope path
+assert_in_vault /vault/repo.git "codex/AGENTS.md.age"
+assert_in_vault /vault/repo.git "codex/AGENTS.override.md.age"
+assert_in_vault /vault/repo.git "codex/config.toml.age"
+assert_in_vault /vault/repo.git "codex/skills/sql-formatter.tar.age"
+# Cursor — MCP whole + rules subset
+assert_in_vault /vault/repo.git "cursor/mcp.json.age"
+# VS Code — MCP only (no settings/keybindings/snippets)
+assert_in_vault /vault/repo.git "vscode/mcp.json.age"
+assert_not_in_vault /vault/repo.git "vscode/settings.json"
+assert_not_in_vault /vault/repo.git "vscode/keybindings.json"
+assert_not_in_vault /vault/repo.git "vscode/snippets"
+# Copilot — disk filename is `copilot-instructions.md` (B16); vault path is
+# `copilot/instructions.md.age` (adapter strips the `copilot-` prefix to keep
+# vault history stable). Single-file `<name>.agent.md` shape (B15).
+assert_in_vault /vault/repo.git "copilot/instructions.md.age"
+assert_in_vault /vault/repo.git "copilot/agents/bug-triager.agent.md.age"
+
+step "agentsync status (sanity check; output is informational)"
 bun run src/cli.ts status
 
 step "CRITICAL: never-sync paths must NOT appear in vault tree"
-# Codex's bootstrap created ~/.codex/auth.json with a stub credential.
-# Claude's never-sync list also includes .credentials.json.
-# Vault must not contain ANY of these under any path or .age suffix.
 vault_files=$(git --git-dir=/vault/repo.git ls-tree -r HEAD | awk '{print $4}')
-echo "$vault_files" | sed 's/^/    /'
-forbidden=$(echo "$vault_files" | grep -E '(^|/)(auth\.json|\.credentials\.json|key\.txt)(\.age)?$' || true)
+forbidden=$(echo "$vault_files" | grep -E '(^|/)(auth\.json|\.credentials\.json|key\.txt|settings\.local\.json)(\.age)?$' || true)
 if [ -n "$forbidden" ]; then
   fail "credential file leaked into vault: $forbidden"
 fi
 pass "no credential files in vault tree"
 
-step "CRITICAL: vault artifacts must be age-encrypted (not plaintext)"
-# AgentSync emits ASCII-armored age, which begins with the PEM-style header.
-# Binary age would start with "age-encryption.org" — accept either form.
-sample_artifact=$(echo "$vault_files" | grep '\.age$' | head -1)
-[ -n "$sample_artifact" ] || fail "no .age artifact to verify"
-header=$(git --git-dir=/vault/repo.git show "HEAD:${sample_artifact}" | head -1)
+step "CRITICAL: vault artifacts are age-encrypted, not plaintext"
+sample=$(echo "$vault_files" | grep '\.age$' | head -1)
+[ -n "$sample" ] || fail "no .age artifact to verify"
+header=$(git --git-dir=/vault/repo.git show "HEAD:${sample}" | head -1)
 case "$header" in
   *"age-encryption.org"*|*"BEGIN AGE ENCRYPTED FILE"*)
-    pass "artifact $sample_artifact is age-encrypted (header: $header)" ;;
+    pass "artifact $sample is age-encrypted" ;;
   *)
-    fail "artifact $sample_artifact is NOT age-encrypted (header: $header)" ;;
+    fail "artifact $sample is NOT age-encrypted (header: $header)" ;;
 esac
 
-step "CRITICAL: vault must NOT contain plaintext of the stub credential"
-# Walk every blob in the vault and grep for the stub key. Even one match = leak.
+step "CRITICAL: stub OPENAI_API_KEY must not appear plaintext in vault"
 stub_key="${OPENAI_API_KEY:-sk-stub-for-bootstrap}"
 leak=$(git --git-dir=/vault/repo.git rev-list --objects --all | awk '{print $1}' | sort -u | \
        while read -r sha; do
@@ -80,7 +111,4 @@ if [ -n "$leak" ]; then
 fi
 pass "stub credential absent from every vault blob"
 
-green ""
-green "════════════════════════════════════════"
-green "  ✓✓✓ SMOKE + CRITICAL-PATH SCENARIO PASSED"
-green "════════════════════════════════════════"
+banner "SMOKE + ADAPTER-COVERAGE"

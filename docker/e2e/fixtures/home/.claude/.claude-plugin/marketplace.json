@@ -1,0 +1,5 @@
+{
+  "installed": [
+    { "name": "lefthook-runner", "source": "github:example/lefthook-runner", "version": "0.1.0" }
+  ]
+}

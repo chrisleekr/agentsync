@@ -14,10 +14,39 @@ permissions:
   contents: read
 
 jobs:
-  smoke:
-    name: Docker E2E Smoke
+  scenarios:
+    name: ${{ matrix.scenario }}
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        scenario:
+          - smoke.sh
+          - 02-multi-machine.sh
+          - 03-diverged-history.sh
+          - 04-sanitizer-aborts.sh
+          - 05-key-rotate.sh
+          - 06-skill-additive.sh
+          - 07-skill-mcp-fidelity.sh
+          - 08-agent-filter.sh
+          - 09-key-add.sh
+          - 10-migrate.sh
+          - 11-daemon-ipc.sh
+          - 12-pull-force.sh
+          - 13-doctor.sh
+          - 14-dry-run.sh
+          - 15-plugin-marketplace.sh
+          - 16-vscode-non-mcp.sh
+          # 17-git-protocol.sh — deferred: `docker compose run --rm` does not
+          # reliably resolve the `git-daemon` service hostname even when the
+          # profile is active. Tracked separately; scenario file ships in the
+          # tree so the locally-running developer can exercise it via
+          # `bun run e2e:scenario SCENARIO=17-git-protocol.sh` after a manual
+          # `--profile git-daemon up -d git-daemon`.
+          - 18-copilot.sh
+          - 19-codex-overrides.sh
+          - 20-home-portability.sh
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -25,14 +54,36 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
-      - name: Build images and run smoke scenario
-        run: |
-          docker compose -f docker/e2e/compose.yml up \
-            --build \
-            --abort-on-container-exit \
-            --exit-code-from machine
+      - name: Build machine image
+        run: docker compose -f docker/e2e/compose.yml build machine
 
-      - name: Capture container logs on failure
+      - name: Initialize vault
+        run: docker compose -f docker/e2e/compose.yml up -d vault-init
+
+      # matrix.scenario is a static list literal in this file; not untrusted.
+      - name: Start git-daemon (only for scenario 17)
+        if: matrix.scenario == '17-git-protocol.sh'
+        run: docker compose -f docker/e2e/compose.yml --profile git-daemon up -d git-daemon
+
+      - name: Run scenario (non-git-daemon)
+        if: matrix.scenario != '17-git-protocol.sh'
+        env:
+          SCENARIO: ${{ matrix.scenario }}
+        run: |
+          docker compose -f docker/e2e/compose.yml run --rm \
+            machine "/home/agent/scenarios/$SCENARIO"
+
+      # Scenario 17 needs to share the git-daemon network — `docker compose run`
+      # only attaches to services in the active profile, so include it here.
+      - name: Run scenario 17 with git-daemon profile
+        if: matrix.scenario == '17-git-protocol.sh'
+        env:
+          SCENARIO: ${{ matrix.scenario }}
+        run: |
+          docker compose -f docker/e2e/compose.yml --profile git-daemon run --rm \
+            machine "/home/agent/scenarios/$SCENARIO"
+
+      - name: Capture logs on failure
         if: failure()
         run: |
           docker compose -f docker/e2e/compose.yml logs --no-color > docker-e2e-logs.txt || true
@@ -41,9 +92,41 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: docker-e2e-logs
+          name: docker-e2e-${{ matrix.scenario }}-logs
           path: docker-e2e-logs.txt
           retention-days: 7
+
+      - name: Tear down
+        if: always()
+        run: docker compose -f docker/e2e/compose.yml down -v
+
+  audit:
+    name: Vault leak audit
+    runs-on: ubuntu-latest
+    # Run regardless of whether the scenarios job succeeded — a vault leak
+    # is a separate security signal that we don't want hidden behind an
+    # unrelated scenario failure.
+    needs: [scenarios]
+    if: always()
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Run smoke + audit (single container so the key persists)
+        run: |
+          docker compose -f docker/e2e/compose.yml build machine
+          docker compose -f docker/e2e/compose.yml up -d vault-init
+          # The agentsync keypair lives under HOME (not /vault), so it dies
+          # with the smoke container under --rm. Chain smoke and audit into
+          # one `bash -c` so the key file is still on disk when the audit
+          # decrypts vault blobs.
+          docker compose -f docker/e2e/compose.yml run --rm machine bash -c '
+            /home/agent/scenarios/smoke.sh && /home/agent/scripts/audit-vaults.sh
+          '
 
       - name: Tear down
         if: always()

@@ -3,64 +3,58 @@ set -euo pipefail
 # shellcheck source=/home/agent/scenarios/_lib.sh
 source /home/agent/scenarios/_lib.sh
 
-# Verify the additive contract for skills (CLAUDE.md):
-#   - push ADDS skills, never removes them implicitly
-#   - pull APPLIES skills, never deletes local ones absent from vault
-#   - `skill remove` is the ONLY way to drop a skill from the vault
-# This protects users from losing skill state to a stale push from another machine.
+# Scenario 6 — pull is additive for skills: removing a skill from disk and
+# pulling does not delete the vault's copy from disk; explicit
+# `agentsync skill remove` is the only way to drop a skill from the vault.
+# Plus: bundle content equality via tar_age_extract.
 
-VAULT_PATH=/vault/skill.git
-VAULT_URL="file://${VAULT_PATH}"
-MACHINE=/tmp/skill-machine
+VAULT_PATH=/vault/skills.git
+VAULT_URL_K="file://${VAULT_PATH}"
+MACHINE_A=/tmp/skills-a
+MACHINE_B=/tmp/skills-b
+KEY_A="$MACHINE_A/.config/agentsync/key.txt"
 
-step "Initialize fresh bare vault for skill scenario"
-rm -rf "$MACHINE" "$VAULT_PATH"
-git init --bare "$VAULT_PATH" >/dev/null
-git -C "$VAULT_PATH" symbolic-ref HEAD refs/heads/main
-
-step "Init machine"
-mkdir -p "$MACHINE/.claude/skills/canary-skill"
-cat > "$MACHINE/.claude/skills/canary-skill/SKILL.md" <<'EOF'
-# Canary Skill
-A test skill used to verify the additive-contract invariant.
-EOF
 cd /app
-HOME="$MACHINE" bun run src/cli.ts init --remote "$VAULT_URL" --branch main
+fresh_bare_vault "$VAULT_PATH"
+rm -rf "$MACHINE_A" "$MACHINE_B"
+mkdir -p "$MACHINE_A"
+rsync -a --exclude='*.bak' --exclude='*~' /home/agent/fixtures/home/ "$MACHINE_A/"
 
-step "Push — vault should now contain canary-skill artifact"
-HOME="$MACHINE" bun run src/cli.ts push --message "add canary-skill"
-vault_files=$(git --git-dir="$VAULT_PATH" ls-tree -r HEAD | awk '{print $4}')
-echo "$vault_files" | sed 's/^/    /'
-echo "$vault_files" | grep -q "canary-skill" \
-  || fail "canary-skill missing from vault after push"
-pass "canary-skill present in vault"
+step "Machine A init + push baseline state"
+with_machine "$MACHINE_A" bun run src/cli.ts init --remote "$VAULT_URL_K" --branch main
+with_machine "$MACHINE_A" bun run src/cli.ts push --message "skills baseline"
 
-step "DELETE the local skill directory and push again"
-rm -rf "$MACHINE/.claude/skills/canary-skill"
-[ ! -d "$MACHINE/.claude/skills/canary-skill" ] || fail "local delete failed"
-HOME="$MACHINE" bun run src/cli.ts push --message "after local skill deletion"
+step "Verify postgres-helper skill bundle tar.age in vault"
+assert_in_vault "$VAULT_PATH" "claude/skills/postgres-helper.tar.age"
 
-step "CRITICAL: vault STILL contains canary-skill (additive contract — push never removes)"
-post_delete_files=$(git --git-dir="$VAULT_PATH" ls-tree -r HEAD | awk '{print $4}')
-if echo "$post_delete_files" | grep -q "canary-skill"; then
-  pass "canary-skill still in vault after local delete + push (additive)"
-else
-  fail "canary-skill REMOVED from vault by push — ADDITIVE CONTRACT VIOLATED"
-fi
+step "tar_age_extract — bundle content equals source tree"
+# Wipe the extraction target so a stale leftover from a previous local run
+# can't sneak files into the diff comparison.
+rm -rf /tmp/extracted-skill
+mkdir -p /tmp/extracted-skill
+tar_age_extract "$VAULT_PATH" "claude/skills/postgres-helper.tar.age" /tmp/extracted-skill "$KEY_A"
+diff -r "$MACHINE_A/.claude/skills/postgres-helper" /tmp/extracted-skill || \
+  fail "extracted bundle does not match source tree"
+pass "tar.age contents byte-equal to disk skill"
 
-step "Use 'agentsync skill remove' — vault should drop canary-skill"
-HOME="$MACHINE" bun run src/cli.ts skill remove claude canary-skill 2>&1 | sed 's/^/    /'
+step "Machine A: remove the skill locally and push"
+rm -rf "$MACHINE_A/.claude/skills/postgres-helper"
+with_machine "$MACHINE_A" bun run src/cli.ts push --message "skill removed from disk"
 
-step "CRITICAL: vault no longer contains canary-skill (explicit removal honored)"
-post_remove_files=$(git --git-dir="$VAULT_PATH" ls-tree -r HEAD | awk '{print $4}')
-echo "$post_remove_files" | sed 's/^/    /'
-if echo "$post_remove_files" | grep -q "canary-skill"; then
-  fail "canary-skill STILL in vault after explicit 'skill remove' — removal broken"
-else
-  pass "canary-skill removed from vault by explicit skill remove"
-fi
+step "Additive contract: vault still contains postgres-helper.tar.age"
+assert_in_vault "$VAULT_PATH" "claude/skills/postgres-helper.tar.age"
 
-green ""
-green "════════════════════════════════════════"
-green "  ✓✓✓ SKILL-ADDITIVE SCENARIO PASSED"
-green "════════════════════════════════════════"
+step "Machine B: clone vault using A's key — gets the skill back"
+mkdir -p "$MACHINE_B/.config/agentsync"
+cp "$KEY_A" "$MACHINE_B/.config/agentsync/key.txt"
+chmod 600 "$MACHINE_B/.config/agentsync/key.txt"
+with_machine "$MACHINE_B" bun run src/cli.ts init --remote "$VAULT_URL_K" --branch main
+with_machine "$MACHINE_B" bun run src/cli.ts pull
+assert_dir_exists  "$MACHINE_B/.claude/skills/postgres-helper"
+assert_file_exists "$MACHINE_B/.claude/skills/postgres-helper/SKILL.md"
+
+step "agentsync skill remove — explicit removal from vault"
+with_machine "$MACHINE_A" bun run src/cli.ts skill remove claude postgres-helper
+assert_not_in_vault "$VAULT_PATH" "claude/skills/postgres-helper.tar.age"
+
+banner "SKILL ADDITIVE + EXPLICIT REMOVE"

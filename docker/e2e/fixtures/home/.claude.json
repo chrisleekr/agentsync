@@ -1,0 +1,15 @@
+{
+  "oauthAccount": { "redacted_for_fixture": true },
+  "mcpServers": {
+    "filesystem": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/home/agent/projects/x"],
+      "cwd": "/home/agent/projects/x"
+    },
+    "github": {
+      "command": "docker",
+      "args": ["run", "-i", "ghcr.io/github/github-mcp-server"]
+    }
+  },
+  "projects": { "/home/agent/example": { "allowedTools": [] } }
+}

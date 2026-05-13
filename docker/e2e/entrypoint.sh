@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# AgentSync E2E entrypoint — rsync the complete-real-customer fixture tree into
+# the container's HOME, then exec whatever scenario the compose CMD selected.
+# *.bak and *~ patterns are excluded so the never-sync canary rule (B21) is
+# exercised by scenarios that explicitly plant them.
+
 if [ "$(id -u)" = "0" ]; then
   echo "FATAL: entrypoint must not run as root" >&2
   exit 1
@@ -11,39 +16,34 @@ if [ "${HOME:-}" != "/home/agent" ]; then
   exit 1
 fi
 
-# Bootstrap matrix (verified empirically against the installed CLIs):
-#   - Codex `--version` creates ~/.codex/. `codex login --with-api-key` adds auth.json.
-#   - cursor-agent `--version` creates ~/.cursor/cli-config.json.
-#   - Claude Code 2.x `--version` creates NOTHING. The CLI is intentionally lazy:
-#     ~/.claude is only written during a real interactive session. We install the
-#     real binary (proves npm install works, exposes schema drift) but create a
-#     minimal settings.json fixture representing a real-customer state.
+# Drift detection — keep upstream CLIs honest on every container start.
+# `--version` exits non-zero on a corrupt install; pipefail propagates the
+# failure to the entrypoint so a broken @latest image fails fast.
+echo "[bootstrap] CLI drift check"
+claude --version       >/dev/null
+codex --version        >/dev/null
+cursor-agent --version >/dev/null
 
-echo "[bootstrap] claude (real npm install + fixture for ~/.claude)"
-claude --version
-mkdir -p "$HOME/.claude"
-[ -f "$HOME/.claude/settings.json" ] || \
-  echo '{"theme": "dark"}' > "$HOME/.claude/settings.json"
+# Codex's `--version` doesn't write auth.json; scenarios that need a stub
+# credential canary plant it explicitly from docker/e2e/fixtures/canaries.
+# We do still run `codex login --with-api-key` once with a stub so the
+# auth.json path exists for scenarios that exercise its never-sync behaviour.
+# Use a fixed literal — NEVER inherit the ambient OPENAI_API_KEY because a
+# developer or CI runner that exports a real key would otherwise leak it
+# into the test HOME's auth.json (the suite is supposed to exercise canaries
+# only, not real credentials).
+unset OPENAI_API_KEY
+printf '%s' 'sk-stub-for-bootstrap' | codex login --with-api-key >/dev/null
 
-echo "[bootstrap] codex (real install + login with stub key)"
-export OPENAI_API_KEY="${OPENAI_API_KEY:-sk-stub-for-bootstrap}"
-codex --version
-printf '%s' "$OPENAI_API_KEY" | codex login --with-api-key
+# Fixture install. `rsync -a` is additive — it copies fixtures/home/* onto
+# HOME without touching siblings (.bun, .npm-global, fixtures, scenarios,
+# scripts, entrypoint.sh). We deliberately do NOT pass --delete: HOME and
+# the fixture source share a parent, so --delete would wipe the toolchain.
+# `*.bak` and `*~` are excluded so that backup-file canaries planted later
+# under a scenario's machine HOME do not leak in here.
+rsync -a \
+  --exclude='*.bak' --exclude='*~' \
+  /home/agent/fixtures/home/ /home/agent/
 
-echo "[bootstrap] cursor-agent (real install + version)"
-cursor-agent --version
-
-# Editor settings.json — documented fixtures.
-# VS Code and Cursor desktop (Electron) do not auto-write settings.json on launch
-# (microsoft/vscode#44418). The fixtures below represent a real-customer state
-# (one saved preference). See docker/e2e/README.md for the full rationale.
-mkdir -p "$HOME/.config/Code/User" "$HOME/.config/Cursor/User"
-[ -f "$HOME/.config/Code/User/settings.json" ] || \
-  echo '{"editor.fontSize": 14}' > "$HOME/.config/Code/User/settings.json"
-[ -f "$HOME/.config/Cursor/User/settings.json" ] || \
-  echo '{"rules": "test rule from fixture"}' > "$HOME/.config/Cursor/User/settings.json"
-
-echo "[bootstrap] complete. agent home contents:"
-ls -la "$HOME" | head -25
-
+echo "[bootstrap] complete — agent home rooted at $HOME"
 exec "$@"

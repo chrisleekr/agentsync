@@ -1,0 +1,6 @@
+{
+  "name": "lefthook-runner",
+  "version": "0.1.0",
+  "description": "Runs lefthook precommit hooks via Claude",
+  "installPath": "/home/agent/.claude/plugins/cache/lefthook-runner/0.1.0"
+}
