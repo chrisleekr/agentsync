@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "filesystem": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/home/agent/projects/y"],
+      "cwd": "/home/agent/projects/y"
+    }
+  }
+}

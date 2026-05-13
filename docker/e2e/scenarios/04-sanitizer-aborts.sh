@@ -3,82 +3,94 @@ set -euo pipefail
 # shellcheck source=/home/agent/scenarios/_lib.sh
 source /home/agent/scenarios/_lib.sh
 
-# Verify AgentSync's push HARD-ABORTS when a literal secret is detected by the
-# sanitizer. This is the strongest possible posture: the secret never gets
-# encrypted, never lands in the vault, and the user gets an actionable error.
-# Confirms that adapter-level detection warnings escalate to a fatal abort
-# in push.ts Phase 1.
+# Scenario 4 — table-driven coverage of the sanitizer aborts:
+#   1. Literal-secret canaries: planting them inside a synced file must
+#      cause push to exit non-zero and the vault must not contain the marker.
+#   2. Never-sync canaries (auth.json, .credentials.json, .bak, *~, etc):
+#      they sit in HOME but must not appear in vault.
+#   3. cli-config absence — agentsync no longer bootstraps it (B1).
 
 VAULT_PATH=/vault/sanitizer.git
-VAULT_URL="file://${VAULT_PATH}"
-MACHINE=/tmp/sanitizer-machine
-FAKE_SECRET="sk-FAKEFAKEFAKEFAKEFAKEFAKEFAKEFAKE"
+VAULT_URL_S="file://${VAULT_PATH}"
+MACHINE=/tmp/sanitizer
+KEY="$MACHINE/.config/agentsync/key.txt"
 
-step "Initialize fresh bare vault"
-rm -rf "$MACHINE" "$VAULT_PATH"
-git init --bare "$VAULT_PATH" >/dev/null
-git -C "$VAULT_PATH" symbolic-ref HEAD refs/heads/main
-
-step "Plant a literal sk- secret inside cursor mcp.json"
-mkdir -p "$MACHINE/.cursor"
-cat > "$MACHINE/.cursor/mcp.json" <<EOF
-{
-  "mcpServers": {
-    "test-server": {
-      "command": "node",
-      "env": {
-        "OPENAI_API_KEY": "${FAKE_SECRET}"
-      }
-    }
-  }
-}
-EOF
-assert_contains "$MACHINE/.cursor/mcp.json" "$FAKE_SECRET"
-
-step "agentsync init (init's own push contains no agent state yet, so it succeeds)"
 cd /app
-HOME="$MACHINE" bun run src/cli.ts init --remote "$VAULT_URL" --branch main
-init_head=$(git --git-dir="$VAULT_PATH" rev-parse HEAD)
-pass "vault @ ${init_head:0:10} after init"
+fresh_bare_vault "$VAULT_PATH"
+rm -rf "$MACHINE"
+mkdir -p "$MACHINE"
+rsync -a --exclude='*.bak' --exclude='*~' /home/agent/fixtures/home/ "$MACHINE/"
 
-step "agentsync push (must ABORT — secret in mcp.json triggers sanitizer escalation)"
-set +e
-push_output=$(HOME="$MACHINE" bun run src/cli.ts push --message "should abort" 2>&1)
-push_exit=$?
-set -e
-echo "$push_output" | sed 's/^/    /'
+step "Init the machine"
+with_machine "$MACHINE" bun run src/cli.ts init --remote "$VAULT_URL_S" --branch main
 
-step "CRITICAL: push exited non-zero (sanitizer escalated to fatal)"
-[ "$push_exit" -ne 0 ] || fail "push succeeded despite literal secret — sanitizer DID NOT abort"
-pass "push exit=$push_exit"
+# ─── Literal-secret canaries ─────────────────────────────────────────────────
+step "Literal-secret canaries: push must abort"
+for canary in /home/agent/fixtures/canaries/literal-secrets/*; do
+  name=$(basename "$canary")
+  info "  planting $name into ~/.cursor/mcp.json"
 
-step "CRITICAL: error mentions 'Push aborted' + 'security issue'"
-echo "$push_output" | grep -qF "Push aborted"   || fail "no 'Push aborted' in error"
-echo "$push_output" | grep -qF "security issue" || fail "no 'security issue' in error"
-pass "abort message has expected content"
+  # Snapshot vault HEAD so we can verify no new commit landed if abort works.
+  pre_head=$(git --git-dir="$VAULT_PATH" rev-parse HEAD 2>/dev/null || echo NONE)
 
-step "CRITICAL: error attributes the detection (cursor adapter, field K = OPENAI_API_KEY)"
-echo "$push_output" | grep -qiE "detect"   || fail "no detection reference in abort message"
-echo "$push_output" | grep -qF "[cursor]"  || fail "abort message doesn't identify the offending adapter"
-pass "abort message attributes the source"
+  cp "$canary" "$MACHINE/.cursor/mcp.json"
 
-step "CRITICAL: vault HEAD unchanged (no new commit landed despite the abort)"
-post_head=$(git --git-dir="$VAULT_PATH" rev-parse HEAD)
-[ "$post_head" = "$init_head" ] \
-  || fail "vault HEAD advanced from ${init_head:0:10} to ${post_head:0:10} — secret may have leaked into a commit"
-pass "vault HEAD intact at ${post_head:0:10}"
+  if with_machine "$MACHINE" bun run src/cli.ts push --message "should-abort: $name" 2>&1; then
+    fail "expected sanitizer abort for $name, push exited 0"
+  fi
+  pass "push aborted for $name"
 
-step "CRITICAL: literal secret NEVER appears in any vault blob (proves abort happened pre-encryption)"
-leak=$(git --git-dir="$VAULT_PATH" rev-list --objects --all | awk '{print $1}' | sort -u | \
-       while read -r sha; do
-         if git --git-dir="$VAULT_PATH" cat-file -p "$sha" 2>/dev/null | grep -qF "$FAKE_SECRET"; then
-           echo "LEAK:$sha"
-         fi
-       done | grep '^LEAK:' || true)
-[ -z "$leak" ] || fail "literal secret leaked to vault objects: $leak"
-pass "no vault blob contains the literal secret"
+  post_head=$(git --git-dir="$VAULT_PATH" rev-parse HEAD 2>/dev/null || echo NONE)
+  [ "$pre_head" = "$post_head" ] || fail "vault advanced despite abort for $name"
+done
 
-green ""
-green "════════════════════════════════════════"
-green "  ✓✓✓ SANITIZER-ABORTS SCENARIO PASSED"
-green "════════════════════════════════════════"
+# Restore the canonical fixture so subsequent steps have a clean cursor mcp.json
+cp /home/agent/fixtures/home/.cursor/mcp.json "$MACHINE/.cursor/mcp.json"
+pass "cursor mcp.json restored to clean fixture"
+
+# ─── Never-sync canaries ────────────────────────────────────────────────────
+step "Never-sync canaries: present in HOME but absent from vault after push"
+
+# Plant the never-sync set (auth.json, credentials, settings.local, bak/tilde, etc.)
+mkdir -p "$MACHINE/.codex" "$MACHINE/.codex/sessions" "$MACHINE/.codex/themes"
+cp /home/agent/fixtures/canaries/never-sync/.codex/auth.json          "$MACHINE/.codex/auth.json"
+cp /home/agent/fixtures/canaries/never-sync/.codex/history.jsonl      "$MACHINE/.codex/history.jsonl"
+cp /home/agent/fixtures/canaries/never-sync/.codex/sessions/2026-05-13.jsonl "$MACHINE/.codex/sessions/2026-05-13.jsonl"
+cp /home/agent/fixtures/canaries/never-sync/.codex/themes/dark.tmTheme "$MACHINE/.codex/themes/dark.tmTheme"
+mkdir -p "$MACHINE/.claude/statsig"
+cp /home/agent/fixtures/canaries/never-sync/.claude/.credentials.json "$MACHINE/.claude/.credentials.json"
+cp /home/agent/fixtures/canaries/never-sync/.claude/settings.local.json "$MACHINE/.claude/settings.local.json"
+cp /home/agent/fixtures/canaries/never-sync/.claude/statsig/state.json "$MACHINE/.claude/statsig/state.json"
+cp /home/agent/fixtures/canaries/never-sync/NOTES.local.md            "$MACHINE/NOTES.local.md"
+cp /home/agent/fixtures/canaries/never-sync/stale-copy.bak            "$MACHINE/.claude/stale-copy.bak"
+cp /home/agent/fixtures/canaries/never-sync/editor-temp.md~           "$MACHINE/.claude/editor-temp.md~"
+
+step "Push with never-sync canaries planted — should succeed (they get filtered)"
+with_machine "$MACHINE" bun run src/cli.ts push --message "sanitizer: never-sync canaries"
+
+step "Verify each canary is absent from the vault tree"
+assert_not_in_vault "$VAULT_PATH" "auth.json"
+assert_not_in_vault "$VAULT_PATH" ".credentials.json"
+assert_not_in_vault "$VAULT_PATH" "settings.local.json"
+assert_not_in_vault "$VAULT_PATH" "statsig"
+assert_not_in_vault "$VAULT_PATH" "history.jsonl"
+assert_not_in_vault "$VAULT_PATH" "sessions"
+assert_not_in_vault "$VAULT_PATH" "themes"
+assert_not_in_vault "$VAULT_PATH" ".bak"
+# Editor backup files like `editor-temp.md~` get rsync-excluded by the entrypoint
+# and ignored by the sanitizer; assert by the basename, not the trailing `~`
+# substring (vault paths never contain `~`).
+assert_not_in_vault "$VAULT_PATH" "editor-temp.md"
+assert_not_in_vault "$VAULT_PATH" "NOTES.local.md"
+assert_not_in_vault "$VAULT_PATH" "cli-config.json"
+
+step "Decrypted-blob audit: none of the canary markers appear inside any blob"
+assert_no_literal_in_vault "$VAULT_PATH" "$KEY" "canary-CCCCCC"
+assert_no_literal_in_vault "$VAULT_PATH" "$KEY" "canary-DDDDDD"
+assert_no_literal_in_vault "$VAULT_PATH" "$KEY" "canary-EEEEEE"
+assert_no_literal_in_vault "$VAULT_PATH" "$KEY" "canary-FFFFFF-bak"
+assert_no_literal_in_vault "$VAULT_PATH" "$KEY" "canary-GGGGGG-tilde"
+assert_no_literal_in_vault "$VAULT_PATH" "$KEY" "sk-stub-canary-AAAAAA"
+assert_no_literal_in_vault "$VAULT_PATH" "$KEY" "sk-canary-credential-BBBBBB"
+
+banner "SANITIZER ABORTS + NEVER-SYNC + B21"

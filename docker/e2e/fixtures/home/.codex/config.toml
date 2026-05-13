@@ -1,0 +1,11 @@
+[profiles.default]
+model = "gpt-5"
+model_instructions_file = "/home/agent/.codex/AGENTS.md"
+
+[features]
+unified_exec = true
+
+[mcp_servers.local-fs]
+command = "node"
+args = ["/home/agent/srv/mcp/index.js"]
+cwd = "/home/agent/srv/mcp"

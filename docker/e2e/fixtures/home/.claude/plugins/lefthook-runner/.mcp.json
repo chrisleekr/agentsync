@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "lefthook": {
+      "command": "node",
+      "args": ["/home/agent/.claude/plugins/lefthook-runner/server.js"],
+      "cwd": "/home/agent/.claude/plugins/lefthook-runner"
+    }
+  }
+}

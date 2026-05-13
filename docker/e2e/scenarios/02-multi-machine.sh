@@ -3,80 +3,89 @@ set -euo pipefail
 # shellcheck source=/home/agent/scenarios/_lib.sh
 source /home/agent/scenarios/_lib.sh
 
-# Simulate two machines (same user, different laptops) inside one container by
-# swapping HOME between bun invocations. paths.ts captures HOME once per process,
-# so each `bun run` gets its own isolated agent paths and ~/.config/agentsync.
+# Scenario 2 — round-trip every wholly-synced file byte-equal, and every
+# subset-field file by field equality, between two machine homes sharing one
+# age key.
 
 VAULT_PATH=/vault/multi.git
 VAULT_URL_MULTI="file://${VAULT_PATH}"
 
-step "Initialize fresh bare vault for multi-machine scenario"
-# Always wipe — state from a previous run would corrupt this scenario's
-# assumptions (e.g., vault HEAD ancestry across multiple runs in one container).
-rm -rf "${VAULT_PATH}"
-git init --bare "${VAULT_PATH}" >/dev/null
-git -C "${VAULT_PATH}" symbolic-ref HEAD refs/heads/main
-pass "vault ready at ${VAULT_PATH}"
+fresh_bare_vault "$VAULT_PATH"
 
-# ─── Machine A ────────────────────────────────────────────────────────────────
 MACHINE_A=/tmp/machine-a
-step "Machine A: populate fresh agent state in $MACHINE_A"
-# Adapter-aware fixtures: pick fields each adapter actually syncs wholesale.
-#   - CLAUDE.md    → claude adapter syncs whole file
-#   - settings.json {hooks:...} → claude adapter syncs only the hooks subset
-#   - Cursor settings.json {rules:...} → cursor adapter syncs only the rules field
-rm -rf "$MACHINE_A"
-mkdir -p "$MACHINE_A/.claude" "$MACHINE_A/.config/Cursor/User"
-echo "# Machine A's CLAUDE.md — round-trip canary" > "$MACHINE_A/.claude/CLAUDE.md"
-echo '{"hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"echo from-A"}]}]}}' \
-  > "$MACHINE_A/.claude/settings.json"
-echo '{"rules":"shared rule from machine A"}' > "$MACHINE_A/.config/Cursor/User/settings.json"
-
-step "Machine A: agentsync init + push"
-cd /app
-HOME="$MACHINE_A" bun run src/cli.ts init --remote "$VAULT_URL_MULTI" --branch main
-HOME="$MACHINE_A" bun run src/cli.ts push --message "machine-a initial snapshot"
-assert_file_exists "$MACHINE_A/.config/agentsync/key.txt"
-
-# ─── Machine B (same user, different machine — reuses age key) ───────────────
 MACHINE_B=/tmp/machine-b
-step "Machine B: bootstrap empty agent state, copy A's age key (single-user-multi-machine)"
-rm -rf "$MACHINE_B"
+
+step "Machine A: populate from fixture tree (the bootstrap rsync target)"
+rm -rf "$MACHINE_A" "$MACHINE_B"
+mkdir -p "$MACHINE_A"
+rsync -a --exclude='*.bak' --exclude='*~' /home/agent/fixtures/home/ "$MACHINE_A/"
+assert_file_exists "$MACHINE_A/.claude/CLAUDE.md"
+assert_file_exists "$MACHINE_A/.codex/AGENTS.override.md"
+assert_file_exists "$MACHINE_A/.copilot/agents/bug-triager.agent.md"
+assert_file_exists "$MACHINE_A/.agents/skills/sql-formatter/SKILL.md"
+
+step "Machine A: init + push"
+cd /app
+with_machine "$MACHINE_A" bun run src/cli.ts init --remote "$VAULT_URL_MULTI" --branch main
+with_machine "$MACHINE_A" bun run src/cli.ts push --message "machine-a snapshot"
+
+step "Machine B: clone vault using A's age key"
 mkdir -p "$MACHINE_B/.config/agentsync"
 cp "$MACHINE_A/.config/agentsync/key.txt" "$MACHINE_B/.config/agentsync/key.txt"
 chmod 600 "$MACHINE_B/.config/agentsync/key.txt"
-[ ! -f "$MACHINE_B/.config/Cursor/User/settings.json" ] || fail "Machine B started dirty"
-pass "Machine B starts empty (no agent state)"
+with_machine "$MACHINE_B" bun run src/cli.ts init --remote "$VAULT_URL_MULTI" --branch main
+with_machine "$MACHINE_B" bun run src/cli.ts pull
 
-step "Machine B: init (clones existing vault using shared key)"
-HOME="$MACHINE_B" bun run src/cli.ts init --remote "$VAULT_URL_MULTI" --branch main
+# ─── Wholesale files — byte-equal round-trip ─────────────────────────────────
+step "Wholesale markdown round-trips"
+assert_round_trip "$MACHINE_A" "$MACHINE_B" ".claude/CLAUDE.md"
+assert_round_trip "$MACHINE_A" "$MACHINE_B" ".claude/commands/deploy.md"
+assert_round_trip "$MACHINE_A" "$MACHINE_B" ".claude/commands/review.md"
+assert_round_trip "$MACHINE_A" "$MACHINE_B" ".claude/agents/code-reviewer.md"
+assert_round_trip "$MACHINE_A" "$MACHINE_B" ".claude/agents/test-writer.md"
+assert_round_trip "$MACHINE_A" "$MACHINE_B" ".claude/rules/coding-style.md"
+assert_round_trip "$MACHINE_A" "$MACHINE_B" ".claude/rules/review-checklist.md"
+assert_round_trip "$MACHINE_A" "$MACHINE_B" ".codex/AGENTS.md"
+assert_round_trip "$MACHINE_A" "$MACHINE_B" ".codex/AGENTS.override.md"
+assert_round_trip "$MACHINE_A" "$MACHINE_B" ".copilot/copilot-instructions.md"
+assert_round_trip "$MACHINE_A" "$MACHINE_B" ".copilot/instructions/style.instructions.md"
+assert_round_trip "$MACHINE_A" "$MACHINE_B" ".copilot/prompts/refactor.prompt.md"
+assert_round_trip "$MACHINE_A" "$MACHINE_B" ".copilot/agents/bug-triager.agent.md"
+assert_round_trip "$MACHINE_A" "$MACHINE_B" ".cursor/commands/refactor.md"
 
-step "Machine B: pull (decrypt + apply Machine A's state)"
-HOME="$MACHINE_B" bun run src/cli.ts pull
+# ─── Subset-field semantics ──────────────────────────────────────────────────
+step "Claude settings.json — hooks subset round-trips; sibling fields stay local-only"
+assert_contains "$MACHINE_B/.claude/settings.json" "PreToolUse"
+assert_field_eq "$MACHINE_A/.claude/settings.json" "$MACHINE_B/.claude/settings.json" ".hooks"
+# Subset contract: only `hooks` travels through the vault. Machine B started
+# empty, so `theme`, `model`, `permissions`, etc. must NOT have leaked through
+# the pull (else the adapter regressed to wholesale-syncing settings.json).
+for sibling in theme model permissions statusLine; do
+  value=$(jq -c ".${sibling} // null" "$MACHINE_B/.claude/settings.json")
+  if [ "$value" != "null" ]; then
+    fail "settings.json sibling '$sibling' leaked into vault: $value"
+  fi
+done
+pass "settings.json siblings absent on B (theme/model/permissions/statusLine)"
 
-# ─── Verify the round-trip ────────────────────────────────────────────────────
-step "CRITICAL: Machine B has Machine A's state after pull (decryption round-trip)"
-assert_file_exists "$MACHINE_B/.config/Cursor/User/settings.json"
-assert_contains    "$MACHINE_B/.config/Cursor/User/settings.json" "shared rule from machine A"
+step "Claude .claude.json — mcpServers subset round-trips"
+assert_field_eq "$MACHINE_A/.claude.json" "$MACHINE_B/.claude.json" ".mcpServers.filesystem"
+assert_field_eq "$MACHINE_A/.claude.json" "$MACHINE_B/.claude.json" ".mcpServers.github"
 
-step "CRITICAL: Cursor 'rules' field round-trips semantically (cursor adapter pretty-prints, so byte-diff would be wrong)"
-a_rules=$(bun -e 'console.log(JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).rules)' "$MACHINE_A/.config/Cursor/User/settings.json")
-b_rules=$(bun -e 'console.log(JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).rules)' "$MACHINE_B/.config/Cursor/User/settings.json")
-if [ "$a_rules" = "$b_rules" ]; then
-  pass "rules field semantic-identical: '$a_rules'"
-else
-  fail "Cursor rules field differs: A='$a_rules' B='$b_rules'"
+step "Cursor mcp.json round-trips whole"
+assert_field_eq "$MACHINE_A/.cursor/mcp.json" "$MACHINE_B/.cursor/mcp.json" ".mcpServers"
+
+step "Cursor settings.json — rules field round-trips"
+assert_field_eq "$MACHINE_A/.config/Cursor/User/settings.json" "$MACHINE_B/.config/Cursor/User/settings.json" ".rules"
+
+step "VS Code mcp.json round-trips; settings/keybindings/snippets stay local-only"
+assert_field_eq "$MACHINE_A/.config/Code/User/mcp.json" "$MACHINE_B/.config/Code/User/mcp.json" ".mcpServers"
+# Pull on B does not write settings/keybindings/snippets unless they were in vault
+# (which they aren't — VS Code adapter only syncs mcp.json). assert that on B
+# the absence is fresh-machine reality (they weren't planted, won't be written):
+if [ -e "$MACHINE_B/.config/Code/User/settings.json" ]; then
+  fail "vscode settings.json leaked into B via pull"
 fi
+pass "vscode non-MCP files correctly absent on B"
 
-step "CRITICAL: Claude CLAUDE.md round-trips wholesale (full-file sync target)"
-assert_file_exists "$MACHINE_B/.claude/CLAUDE.md"
-assert_contains    "$MACHINE_B/.claude/CLAUDE.md" "round-trip canary"
-
-step "CRITICAL: Claude hooks subset round-trips (settings.json hooks-only sync)"
-assert_file_exists "$MACHINE_B/.claude/settings.json"
-assert_contains    "$MACHINE_B/.claude/settings.json" "echo from-A"
-
-green ""
-green "════════════════════════════════════════"
-green "  ✓✓✓ MULTI-MACHINE ROUND-TRIP PASSED"
-green "════════════════════════════════════════"
+banner "MULTI-MACHINE ROUND-TRIP"
