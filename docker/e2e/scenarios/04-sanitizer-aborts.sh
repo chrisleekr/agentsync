@@ -26,14 +26,24 @@ with_machine "$MACHINE" bun run src/cli.ts init --remote "$VAULT_URL_S" --branch
 
 # ─── Literal-secret canaries ─────────────────────────────────────────────────
 step "Literal-secret canaries: push must abort"
+# JSON-shaped canaries plant into ~/.cursor/mcp.json (must parse as JSON to
+# reach the field-level redactor); non-JSON canaries plant into a markdown
+# body (~/.claude/rules/canary.md) so the markdown-body scanner catches them.
 for canary in /home/agent/fixtures/canaries/literal-secrets/*; do
   name=$(basename "$canary")
-  info "  planting $name into ~/.cursor/mcp.json"
-
-  # Snapshot vault HEAD so we can verify no new commit landed if abort works.
   pre_head=$(git --git-dir="$VAULT_PATH" rev-parse HEAD 2>/dev/null || echo NONE)
 
-  cp "$canary" "$MACHINE/.cursor/mcp.json"
+  case "$name" in
+    *.json)
+      info "  planting $name into ~/.cursor/mcp.json"
+      cp "$canary" "$MACHINE/.cursor/mcp.json"
+      ;;
+    *)
+      info "  planting $name into ~/.claude/rules/canary.md (markdown-body scan)"
+      mkdir -p "$MACHINE/.claude/rules"
+      cp "$canary" "$MACHINE/.claude/rules/canary.md"
+      ;;
+  esac
 
   if with_machine "$MACHINE" bun run src/cli.ts push --message "should-abort: $name" 2>&1; then
     fail "expected sanitizer abort for $name, push exited 0"
@@ -42,6 +52,9 @@ for canary in /home/agent/fixtures/canaries/literal-secrets/*; do
 
   post_head=$(git --git-dir="$VAULT_PATH" rev-parse HEAD 2>/dev/null || echo NONE)
   [ "$pre_head" = "$post_head" ] || fail "vault advanced despite abort for $name"
+
+  # Reset to a clean planting surface for the next iteration.
+  rm -f "$MACHINE/.claude/rules/canary.md"
 done
 
 # Restore the canonical fixture so subsequent steps have a clean cursor mcp.json

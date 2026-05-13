@@ -31,6 +31,11 @@ assert_file_exists "$HOME/.config/agentsync/key.txt"
 assert_file_exists "$HOME/.config/agentsync/vault/agentsync.toml"
 assert_contains    "$HOME/.config/agentsync/vault/agentsync.toml" "${VAULT_URL}"
 
+step "Enable vscode adapter (off by default per schema) so mcp.json is exercised"
+sed -i 's/^vscode = false$/vscode = true/' "$HOME/.config/agentsync/vault/agentsync.toml"
+grep -qE '^vscode = true$' "$HOME/.config/agentsync/vault/agentsync.toml" \
+  || fail "vscode toggle did not apply"
+
 step "agentsync push"
 bun run src/cli.ts push --message "smoke: encrypted snapshot"
 

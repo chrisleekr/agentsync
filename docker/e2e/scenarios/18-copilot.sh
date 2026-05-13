@@ -62,12 +62,14 @@ assert_in_vault "$VAULT_PATH" "copilot/skills/log-summariser.tar.age"
 step "Agent blob decrypts to plaintext markdown (NOT a tar bundle — B15)"
 DEC=$(git --git-dir="$VAULT_PATH" show HEAD:copilot/agents/bug-triager.agent.md.age \
   | age -d -i "$A_KEY")
-# tar archives start with binary; markdown starts with `#` or fixture text.
-first_byte=$(printf '%s' "$DEC" | head -c 1)
-case "$first_byte" in
-  '#'|[A-Za-z]) pass "agent decrypts to markdown (first byte: '$first_byte')" ;;
-  *)            fail "agent appears non-markdown (first byte: '$first_byte')" ;;
-esac
+# Markdown bodies start with `#`, frontmatter `---`, or letters. Tar archives
+# start with a filename byte (rarely `-` or `#`) followed by NUL padding; the
+# real "is this a tar" test is whether the decrypted bytes contain any NULs
+# (tar block alignment guarantees them in the first 512 bytes).
+if printf '%s' "$DEC" | head -c 512 | LC_ALL=C grep -q $'\x00'; then
+  fail "agent vault blob contains NUL bytes — looks like a tar archive, not markdown"
+fi
+pass "agent decrypts to plaintext (no NUL bytes — confirms single-file shape)"
 # Body match is exact — copilot agents are wholesale-synced.
 expected_body=$(cat /home/agent/fixtures/home/.copilot/agents/bug-triager.agent.md)
 if [ "$DEC" = "$expected_body" ]; then

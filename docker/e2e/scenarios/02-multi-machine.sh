@@ -24,16 +24,18 @@ assert_file_exists "$MACHINE_A/.codex/AGENTS.override.md"
 assert_file_exists "$MACHINE_A/.copilot/agents/bug-triager.agent.md"
 assert_file_exists "$MACHINE_A/.agents/skills/sql-formatter/SKILL.md"
 
-step "Machine A: init + push"
+step "Machine A: init + enable vscode + push"
 cd /app
 with_machine "$MACHINE_A" bun run src/cli.ts init --remote "$VAULT_URL_MULTI" --branch main
+sed -i 's/^vscode = false$/vscode = true/' "$MACHINE_A/.config/agentsync/vault/agentsync.toml"
 with_machine "$MACHINE_A" bun run src/cli.ts push --message "machine-a snapshot"
 
-step "Machine B: clone vault using A's age key"
+step "Machine B: clone vault using A's age key + enable vscode for pull"
 mkdir -p "$MACHINE_B/.config/agentsync"
 cp "$MACHINE_A/.config/agentsync/key.txt" "$MACHINE_B/.config/agentsync/key.txt"
 chmod 600 "$MACHINE_B/.config/agentsync/key.txt"
 with_machine "$MACHINE_B" bun run src/cli.ts init --remote "$VAULT_URL_MULTI" --branch main
+sed -i 's/^vscode = false$/vscode = true/' "$MACHINE_B/.config/agentsync/vault/agentsync.toml"
 with_machine "$MACHINE_B" bun run src/cli.ts pull
 
 # ─── Wholesale files — byte-equal round-trip ─────────────────────────────────

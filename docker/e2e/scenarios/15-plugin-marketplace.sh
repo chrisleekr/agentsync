@@ -88,14 +88,22 @@ chmod 600 "$MACHINE_B/.config/agentsync/key.txt"
 HOME="$MACHINE_B" bun run src/cli.ts init --remote "$VAULT_URL" --branch main
 HOME="$MACHINE_B" bun run src/cli.ts pull
 
-step "CRITICAL: every plugin subpath round-trips byte-equal A → B"
+step "Every plugin markdown subpath round-trips byte-equal A → B"
 for rel in \
-  ".claude/plugins/$PLUGIN/.claude-plugin/plugin.json" \
   ".claude/plugins/$PLUGIN/commands/run.md" \
   ".claude/plugins/$PLUGIN/agents/precommit-helper.md" \
-  ".claude/plugins/$PLUGIN/hooks/PreToolUse.json" \
   ".claude/plugins/$PLUGIN/skills/precommit/SKILL.md" ; do
   assert_round_trip "$MACHINE_A" "$MACHINE_B" "$rel"
+done
+
+step "Plugin JSON subpaths round-trip by field-eq (sanitizer re-stringifies on push)"
+# JSON files go parse → normalize → sanitize → stringify, so byte-equal is too
+# strict for plugin.json/PreToolUse.json/.mcp.json. We compare structurally.
+for rel in \
+  ".claude/plugins/$PLUGIN/.claude-plugin/plugin.json" \
+  ".claude/plugins/$PLUGIN/hooks/PreToolUse.json" \
+  ".claude/plugins/$PLUGIN/.mcp.json" ; do
+  assert_field_eq "$MACHINE_A/$rel" "$MACHINE_B/$rel" "."
 done
 
 step "marketplace.json also lands on Machine B (syncMarketplace = true)"

@@ -18,11 +18,15 @@ DAEMON_LOG=/tmp/daemon.log
 # ── Helper: invoke IpcClient.send via bun, against HOME=$A's socket ──────────
 ipc_call() {
   local cmd="$1"
+  # `bun -e "<code>" arg1 arg2` puts the first positional in process.argv[2]
+  # (argv[0] is bun, argv[1] is the eval marker). Use [argv.length - 1] so the
+  # invocation is robust to bun's argv-shape across versions.
   ( cd /app && HOME="$A" bun -e '
     const {IpcClient} = await import("./src/core/ipc.ts");
     const {resolveDaemonSocketPath} = await import("./src/config/paths.ts");
     const c = new IpcClient();
-    const r = await c.send(process.argv[1], {}, resolveDaemonSocketPath());
+    const cmd = process.argv[process.argv.length - 1];
+    const r = await c.send(cmd, {}, resolveDaemonSocketPath());
     console.log(JSON.stringify(r));
   ' "$cmd" )
 }

@@ -34,6 +34,7 @@ echo "# anchor" > "$A/.claude/CLAUDE.md"
 
 step "Machine A: init + push"
 with_machine "$A" bun run src/cli.ts init --remote "$VAULT_URL" --branch main
+sed -i 's/^vscode = false$/vscode = true/' "$A/.config/agentsync/vault/agentsync.toml"
 with_machine "$A" bun run src/cli.ts push --message "skill+mcp fidelity baseline"
 
 step "Verify vault contains expected skill bundles"
@@ -47,6 +48,7 @@ mkdir -p "$B/.config/agentsync"
 cp "$A/.config/agentsync/key.txt" "$B/.config/agentsync/key.txt"
 chmod 600 "$B/.config/agentsync/key.txt"
 with_machine "$B" bun run src/cli.ts init --remote "$VAULT_URL" --branch main
+sed -i 's/^vscode = false$/vscode = true/' "$B/.config/agentsync/vault/agentsync.toml"
 with_machine "$B" bun run src/cli.ts pull
 
 step "Claude skill bundle: byte-equal across machines"

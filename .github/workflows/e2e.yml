@@ -60,11 +60,22 @@ jobs:
         if: matrix.scenario == '17-git-protocol.sh'
         run: docker compose -f docker/e2e/compose.yml --profile git-daemon up -d git-daemon
 
-      - name: Run scenario
+      - name: Run scenario (non-git-daemon)
+        if: matrix.scenario != '17-git-protocol.sh'
         env:
           SCENARIO: ${{ matrix.scenario }}
         run: |
           docker compose -f docker/e2e/compose.yml run --rm \
+            machine "/home/agent/scenarios/$SCENARIO"
+
+      # Scenario 17 needs to share the git-daemon network — `docker compose run`
+      # only attaches to services in the active profile, so include it here.
+      - name: Run scenario 17 with git-daemon profile
+        if: matrix.scenario == '17-git-protocol.sh'
+        env:
+          SCENARIO: ${{ matrix.scenario }}
+        run: |
+          docker compose -f docker/e2e/compose.yml --profile git-daemon run --rm \
             machine "/home/agent/scenarios/$SCENARIO"
 
       - name: Capture logs on failure

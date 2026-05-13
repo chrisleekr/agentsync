@@ -8,6 +8,11 @@ coverage
 .codex
 .copilot
 .vscode
+# Re-include the e2e fixtures tree. Its subpaths intentionally use
+# .claude/.cursor/.codex/.copilot dotted directory names because that's what
+# the harness rsyncs into HOME at container start; without these negations,
+# Docker COPY would silently drop them from the image build.
+!docker/e2e/fixtures/**
 *.log
 .env
 .env.*
