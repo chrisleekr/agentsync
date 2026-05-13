@@ -31,12 +31,13 @@ cursor-agent --version >/dev/null
 export OPENAI_API_KEY="${OPENAI_API_KEY:-sk-stub-for-bootstrap}"
 printf '%s' "$OPENAI_API_KEY" | codex login --with-api-key >/dev/null
 
-# Fixture install. `rsync -a` preserves perms/times and is idempotent under
-# repeat invocations. `--delete` reaps stale files from a previous scenario
-# but is scoped to fixture paths only (entries outside fixtures stay put).
-# `*.bak` and `*~` are excluded so that backup-file canaries planted under a
-# scenario's machine HOME do not leak in here.
-rsync -a --delete \
+# Fixture install. `rsync -a` is additive — it copies fixtures/home/* onto
+# HOME without touching siblings (.bun, .npm-global, fixtures, scenarios,
+# scripts, entrypoint.sh). We deliberately do NOT pass --delete: HOME and
+# the fixture source share a parent, so --delete would wipe the toolchain.
+# `*.bak` and `*~` are excluded so that backup-file canaries planted later
+# under a scenario's machine HOME do not leak in here.
+rsync -a \
   --exclude='*.bak' --exclude='*~' \
   /home/agent/fixtures/home/ /home/agent/
 
