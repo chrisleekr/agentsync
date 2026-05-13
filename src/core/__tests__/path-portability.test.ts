@@ -85,6 +85,12 @@ describe("path-portability — string denormalization", () => {
     expect(() => denormalizeStringFromVault(`${PLACE}/x`, "")).toThrow();
     expect(() => denormalizeFromVault({ cwd: `${PLACE}/x` }, "")).toThrow();
   });
+
+  test("home containing $ is not interpreted as a replacement pattern", () => {
+    const dollarHome = "/home/$user";
+    expect(denormalizeStringFromVault(`${PLACE}/proj`, dollarHome)).toBe(`${dollarHome}/proj`);
+    expect(denormalizeStringFromVault(`${PLACE}/$$x`, "/home/u")).toBe("/home/u/$$x");
+  });
 });
 
 describe("path-portability — JSON walker", () => {

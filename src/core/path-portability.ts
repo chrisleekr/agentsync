@@ -53,7 +53,10 @@ export function denormalizeStringFromVault(input: string, home: string): string 
   if (input.length === 0) {
     return input;
   }
-  return input.replaceAll(AGENTSYNC_HOME_PLACEHOLDER, home);
+  // Replacement-as-function form bypasses `$&`, `$$`, `$1` pattern
+  // interpretation, which `replaceAll(str, str)` performs. A home path
+  // containing a literal `$` would otherwise corrupt the output.
+  return input.replaceAll(AGENTSYNC_HOME_PLACEHOLDER, () => home);
 }
 
 /**
