@@ -57,14 +57,37 @@ pass "re-run produced byte-identical AGENTS.md"
 step "Subtest 4: migrate --from cursor --to claude --type global-rules"
 reset_machine
 # Force a recognisable rules string into Cursor's settings so we can assert it
-# made it into CLAUDE.md.
-# Subtest 4 deferred — surfaced a real translator bug. The registry at
-# src/migrate/translators/global-rules.ts:104 binds `cursorToClaude` to a
-# helper named `fromCursor` whose targetName returns the source filename
-# rather than `CLAUDE.md`. Running this subtest writes back into the cursor
-# settings.json instead of producing ~/.claude/CLAUDE.md. Tracking as a
-# follow-up issue; current PR is e2e-only (no src/ changes).
-info "Subtest 4 (cursor→claude) deferred — src/migrate translator bug at registry.ts:104"
+# made it into CLAUDE.md without altering cursor's settings.json.
+CURSOR_RULES_BODY="MIGRATE_CANARY_CURSOR_RULES — be concise."
+CURSOR_SETTINGS="$MACHINE/.config/Cursor/User/settings.json"
+node -e '
+  const fs = require("fs");
+  const p = process.argv[1];
+  const body = process.argv[2];
+  const s = JSON.parse(fs.readFileSync(p, "utf8"));
+  s.rules = body;
+  s.siblingSetting = "keep-me";
+  fs.writeFileSync(p, JSON.stringify(s, null, 2));
+' "$CURSOR_SETTINGS" "$CURSOR_RULES_BODY"
+cursor_settings_pre_sha=$(sha256sum "$CURSOR_SETTINGS" | awk '{print $1}')
+rm -f "$MACHINE/.claude/CLAUDE.md"
+
+with_machine "$MACHINE" bun run src/cli.ts migrate --from cursor --to claude --type global-rules \
+  2>&1 | sed 's/^/    /'
+
+assert_file_exists "$MACHINE/.claude/CLAUDE.md"
+grep -q "$CURSOR_RULES_BODY" "$MACHINE/.claude/CLAUDE.md" \
+  || fail "migrated CLAUDE.md missing canary rules body"
+grep -q "migrated from Cursor" "$MACHINE/.claude/CLAUDE.md" \
+  || fail "migrated CLAUDE.md missing 'migrated from Cursor' heading"
+
+# Source must be byte-identical — the prior bug clobbered settings.json with
+# the wrapped migration output and lost sibling fields.
+cursor_settings_post_sha=$(sha256sum "$CURSOR_SETTINGS" | awk '{print $1}')
+[ "$cursor_settings_pre_sha" = "$cursor_settings_post_sha" ] \
+  || fail "cursor settings.json was modified by cursor→claude migration ($cursor_settings_pre_sha → $cursor_settings_post_sha)"
+
+pass "cursor→claude wrote CLAUDE.md and left cursor settings.json untouched"
 
 # ── Subtest 5: claude → cursor mcp ──────────────────────────────────────────
 step "Subtest 5: migrate --from claude --to cursor --type mcp"
