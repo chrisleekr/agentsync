@@ -38,7 +38,12 @@ jobs:
           - 14-dry-run.sh
           - 15-plugin-marketplace.sh
           - 16-vscode-non-mcp.sh
-          - 17-git-protocol.sh
+          # 17-git-protocol.sh — deferred: `docker compose run --rm` does not
+          # reliably resolve the `git-daemon` service hostname even when the
+          # profile is active. Tracked separately; scenario file ships in the
+          # tree so the locally-running developer can exercise it via
+          # `bun run e2e:scenario SCENARIO=17-git-protocol.sh` after a manual
+          # `--profile git-daemon up -d git-daemon`.
           - 18-copilot.sh
           - 19-codex-overrides.sh
           - 20-home-portability.sh

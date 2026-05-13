@@ -3,16 +3,15 @@ dist
 coverage
 .git
 .github
-.claude
-.cursor
-.codex
-.copilot
-.vscode
-# Re-include the e2e fixtures tree. Its subpaths intentionally use
-# .claude/.cursor/.codex/.copilot dotted directory names because that's what
-# the harness rsyncs into HOME at container start; without these negations,
-# Docker COPY would silently drop them from the image build.
-!docker/e2e/fixtures/**
+# Anchored dot-dir excludes — they apply ONLY at the build-context root, not
+# to the nested `.claude/.cursor/.codex/.copilot/.vscode` paths the e2e
+# fixture tree uses. Without the leading slash these patterns would match
+# `docker/e2e/fixtures/**/.claude` and silently drop scenario coverage.
+/.claude
+/.cursor
+/.codex
+/.copilot
+/.vscode
 *.log
 .env
 .env.*

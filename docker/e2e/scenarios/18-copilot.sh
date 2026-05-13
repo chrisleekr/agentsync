@@ -60,16 +60,19 @@ assert_in_vault "$VAULT_PATH" "copilot/instructions/style.instructions.md.age"
 assert_in_vault "$VAULT_PATH" "copilot/skills/log-summariser.tar.age"
 
 step "Agent blob decrypts to plaintext markdown (NOT a tar bundle — B15)"
-DEC=$(git --git-dir="$VAULT_PATH" show HEAD:copilot/agents/bug-triager.agent.md.age \
-  | age -d -i "$A_KEY")
-# Markdown bodies start with `#`, frontmatter `---`, or letters. Tar archives
-# start with a filename byte (rarely `-` or `#`) followed by NUL padding; the
-# real "is this a tar" test is whether the decrypted bytes contain any NULs
-# (tar block alignment guarantees them in the first 512 bytes).
-if printf '%s' "$DEC" | head -c 512 | LC_ALL=C grep -q $'\x00'; then
-  fail "agent vault blob contains NUL bytes — looks like a tar archive, not markdown"
+# Decrypt to a temp file so we can detect tar magic vs markdown headers
+# without bash string truncation on NUL bytes (bash variables can't hold NUL).
+TMP_AGENT=/tmp/copilot-agent-dec
+git --git-dir="$VAULT_PATH" show HEAD:copilot/agents/bug-triager.agent.md.age \
+  | age -d -i "$A_KEY" > "$TMP_AGENT"
+# Single-file shape proof: gzipped tar archives start with the gzip magic
+# bytes 0x1f 0x8b. Markdown bodies (with or without YAML frontmatter) never do.
+magic=$(head -c 2 "$TMP_AGENT" | od -A n -t x1 | tr -d ' \n')
+if [ "$magic" = "1f8b" ]; then
+  fail "agent vault blob is gzipped (tar bundle), not the single-file shape B15 mandates"
 fi
-pass "agent decrypts to plaintext (no NUL bytes — confirms single-file shape)"
+pass "agent vault blob has no gzip magic — single-file shape confirmed"
+DEC=$(cat "$TMP_AGENT")
 # Body match is exact — copilot agents are wholesale-synced.
 expected_body=$(cat /home/agent/fixtures/home/.copilot/agents/bug-triager.agent.md)
 if [ "$DEC" = "$expected_body" ]; then

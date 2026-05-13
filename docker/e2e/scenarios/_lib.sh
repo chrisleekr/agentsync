@@ -116,9 +116,12 @@ assert_no_literal_in_vault() {
 tar_age_extract() {
   local vault="$1" vault_path="$2" out_dir="$3" key_file="$4"
   mkdir -p "$out_dir"
-  # Skill bundles are gzipped tar archives (see src/core/tar.ts: gzip: true).
+  # Skill artifact pipeline (see src/agents/skills-walker.ts:256):
+  #   disk → archiveDirectory (tar.gz buffer) → base64 string → encryptString
+  # On extract: age-decrypt → base64 decode → tar -xz.
   git --git-dir="$vault" show "HEAD:${vault_path}" \
     | age -d -i "$key_file" \
+    | base64 -d \
     | tar -xz -C "$out_dir"
 }
 

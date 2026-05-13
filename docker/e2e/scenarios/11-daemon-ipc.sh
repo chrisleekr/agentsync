@@ -34,7 +34,11 @@ ipc_call() {
 step "Fresh vault + initial state on machine A"
 fresh_bare_vault "$VAULT_PATH"
 rm -rf "$A"
-mkdir -p "$A/.claude"
+# Daemon's startDaemon() registers watchers for every enabled agent's root
+# dir; missing dirs throw and the daemon exits AFTER binding the IPC socket,
+# leaving ipc_call to ENOENT. Materialise all watch targets so the daemon
+# can run cleanly. (Watchers fire only on disk changes — empty is fine.)
+mkdir -p "$A/.claude" "$A/.cursor" "$A/.codex" "$A/.copilot/instructions"
 echo "# daemon-ipc canary" > "$A/.claude/CLAUDE.md"
 plant_fixture home/.claude.json "$A"
 
