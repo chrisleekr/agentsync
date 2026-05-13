@@ -112,14 +112,17 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
-      - name: Run smoke + audit
+      - name: Run smoke + audit (single container so the key persists)
         run: |
           docker compose -f docker/e2e/compose.yml build machine
           docker compose -f docker/e2e/compose.yml up -d vault-init
-          docker compose -f docker/e2e/compose.yml run --rm \
-            machine /home/agent/scenarios/smoke.sh
-          docker compose -f docker/e2e/compose.yml run --rm \
-            machine /home/agent/scripts/audit-vaults.sh
+          # The agentsync keypair lives under HOME (not /vault), so it dies
+          # with the smoke container under --rm. Chain smoke and audit into
+          # one `bash -c` so the key file is still on disk when the audit
+          # decrypts vault blobs.
+          docker compose -f docker/e2e/compose.yml run --rm machine bash -c '
+            /home/agent/scenarios/smoke.sh && /home/agent/scripts/audit-vaults.sh
+          '
 
       - name: Tear down
         if: always()
