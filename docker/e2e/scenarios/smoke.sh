@@ -52,9 +52,11 @@ assert_in_vault /vault/repo.git "vscode/"
 assert_in_vault /vault/repo.git "copilot/"
 
 step "Vault contains the specific adapter artifacts we care about"
-# Claude — wholesale + subset
+# Claude — wholesale + subset. The hooks-subset of settings.json lands at
+# claude/settings.hooks.json.age (not settings.json.age) — the adapter
+# names it explicitly to signal that only the hooks block travels.
 assert_in_vault /vault/repo.git "claude/CLAUDE.md.age"
-assert_in_vault /vault/repo.git "claude/settings.json.age"
+assert_in_vault /vault/repo.git "claude/settings.hooks.json.age"
 assert_in_vault /vault/repo.git "claude/claude.json.age"
 assert_in_vault /vault/repo.git "claude/rules/coding-style.md.age"
 assert_in_vault /vault/repo.git "claude/skills/postgres-helper.tar.age"

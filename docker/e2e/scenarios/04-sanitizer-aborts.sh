@@ -64,19 +64,24 @@ pass "cursor mcp.json restored to clean fixture"
 # ─── Never-sync canaries ────────────────────────────────────────────────────
 step "Never-sync canaries: present in HOME but absent from vault after push"
 
-# Plant the never-sync set (auth.json, credentials, settings.local, bak/tilde, etc.)
-mkdir -p "$MACHINE/.codex" "$MACHINE/.codex/sessions" "$MACHINE/.codex/themes"
-cp /home/agent/fixtures/canaries/never-sync/.codex/auth.json          "$MACHINE/.codex/auth.json"
-cp /home/agent/fixtures/canaries/never-sync/.codex/history.jsonl      "$MACHINE/.codex/history.jsonl"
-cp /home/agent/fixtures/canaries/never-sync/.codex/sessions/2026-05-13.jsonl "$MACHINE/.codex/sessions/2026-05-13.jsonl"
-cp /home/agent/fixtures/canaries/never-sync/.codex/themes/dark.tmTheme "$MACHINE/.codex/themes/dark.tmTheme"
-mkdir -p "$MACHINE/.claude/statsig"
-cp /home/agent/fixtures/canaries/never-sync/.claude/.credentials.json "$MACHINE/.claude/.credentials.json"
-cp /home/agent/fixtures/canaries/never-sync/.claude/settings.local.json "$MACHINE/.claude/settings.local.json"
-cp /home/agent/fixtures/canaries/never-sync/.claude/statsig/state.json "$MACHINE/.claude/statsig/state.json"
-cp /home/agent/fixtures/canaries/never-sync/NOTES.local.md            "$MACHINE/NOTES.local.md"
-cp /home/agent/fixtures/canaries/never-sync/stale-copy.bak            "$MACHINE/.claude/stale-copy.bak"
-cp /home/agent/fixtures/canaries/never-sync/editor-temp.md~           "$MACHINE/.claude/editor-temp.md~"
+# Plant the never-sync set. Each canary is materialised by writing the
+# marker string directly rather than copying from the fixture tree — Docker
+# BuildKit was observed to drop some deeply-nested dotted-directory canary
+# paths even with a permissive .dockerignore, and we'd rather assert the
+# never-sync contract from a known-present payload than chase image-build
+# inconsistencies that don't affect the contract under test.
+mkdir -p "$MACHINE/.codex/sessions" "$MACHINE/.codex/themes" \
+         "$MACHINE/.claude/statsig"
+printf '%s' '{"OPENAI_API_KEY": "sk-stub-canary-AAAAAA"}'         > "$MACHINE/.codex/auth.json"
+printf 'first\nsecond\nthird\n'                                    > "$MACHINE/.codex/history.jsonl"
+printf '{"session": "canary"}\n'                                   > "$MACHINE/.codex/sessions/2026-05-13.jsonl"
+printf '<?xml version="1.0"?><plist></plist>'                      > "$MACHINE/.codex/themes/dark.tmTheme"
+printf '%s' '{"token": "sk-canary-credential-BBBBBB"}'             > "$MACHINE/.claude/.credentials.json"
+printf '%s' '{"local": true, "secret": "canary-CCCCCC"}'           > "$MACHINE/.claude/settings.local.json"
+printf '%s' '{"id": "abc", "secret": "canary-DDDDDD"}'             > "$MACHINE/.claude/statsig/state.json"
+printf 'Local notes; should not sync. Marker: canary-EEEEEE\n'     > "$MACHINE/NOTES.local.md"
+printf 'Marker: canary-FFFFFF-bak\n'                               > "$MACHINE/.claude/stale-copy.bak"
+printf 'Marker: canary-GGGGGG-tilde\n'                             > "$MACHINE/.claude/editor-temp.md~"
 
 step "Push with never-sync canaries planted — should succeed (they get filtered)"
 with_machine "$MACHINE" bun run src/cli.ts push --message "sanitizer: never-sync canaries"
