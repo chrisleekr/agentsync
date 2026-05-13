@@ -1,4 +1,6 @@
+import { homedir } from "node:os";
 import { basename } from "node:path";
+import { normalizeForVault } from "./path-portability";
 
 /** Global path patterns that AgentSync must never copy into the encrypted vault. */
 export const NEVER_SYNC_PATTERNS = [
@@ -170,22 +172,38 @@ export function redactSecretLiterals(
   return { value: input, warnings: [] };
 }
 
-/** Keep only Claude hook settings and redact any embedded literal secrets. */
-export function sanitizeClaudeHooks(rawSettingsJson: string): RedactionResult<string> {
+/**
+ * Keep only Claude hook settings and redact any embedded literal secrets.
+ * HOME-rooted string values are rewritten to the AGENTSYNC_HOME placeholder so
+ * the vault round-trips across machines with different home directories.
+ * Pass `home: ""` to disable normalization in tests.
+ */
+export function sanitizeClaudeHooks(
+  rawSettingsJson: string,
+  home: string = homedir(),
+): RedactionResult<string> {
   const parsed = JSON.parse(rawSettingsJson) as Record<string, unknown>;
   const hooksOnly = { hooks: parsed.hooks ?? {} };
-  const redacted = redactSecretLiterals(hooksOnly, "hooks");
+  const normalized = normalizeForVault(hooksOnly, home);
+  const redacted = redactSecretLiterals(normalized, "hooks");
   return {
     value: `${JSON.stringify(redacted.value, null, 2)}\n`,
     warnings: redacted.warnings,
   };
 }
 
-/** Keep only Claude MCP settings and redact any embedded literal secrets. */
-export function sanitizeClaudeMcp(rawClaudeJson: string): RedactionResult<string> {
+/**
+ * Keep only Claude MCP settings and redact any embedded literal secrets.
+ * Path-portability rules match {@link sanitizeClaudeHooks}.
+ */
+export function sanitizeClaudeMcp(
+  rawClaudeJson: string,
+  home: string = homedir(),
+): RedactionResult<string> {
   const parsed = JSON.parse(rawClaudeJson) as Record<string, unknown>;
   const mcpOnly = { mcpServers: parsed.mcpServers ?? {} };
-  const redacted = redactSecretLiterals(mcpOnly, "mcpServers");
+  const normalized = normalizeForVault(mcpOnly, home);
+  const redacted = redactSecretLiterals(normalized, "mcpServers");
   return {
     value: `${JSON.stringify(redacted.value, null, 2)}\n`,
     warnings: redacted.warnings,
@@ -203,9 +221,13 @@ export function sanitizeClaudeMcp(rawClaudeJson: string): RedactionResult<string
  * replaces obvious credential strings with the standard placeholder while
  * leaving structural fields untouched.
  */
-export function sanitizeClaudePluginManifest(rawJson: string): RedactionResult<string> {
+export function sanitizeClaudePluginManifest(
+  rawJson: string,
+  home: string = homedir(),
+): RedactionResult<string> {
   const parsed = JSON.parse(rawJson) as unknown;
-  const redacted = redactSecretLiterals(parsed, "plugin");
+  const normalized = normalizeForVault(parsed, home);
+  const redacted = redactSecretLiterals(normalized, "plugin");
   return {
     value: `${JSON.stringify(redacted.value, null, 2)}\n`,
     warnings: redacted.warnings,
@@ -219,9 +241,13 @@ export function sanitizeClaudePluginManifest(rawJson: string): RedactionResult<s
  * descriptor that the plugin owner controls. Literal secret redaction still
  * runs over every value.
  */
-export function sanitizeClaudePluginMcp(rawJson: string): RedactionResult<string> {
+export function sanitizeClaudePluginMcp(
+  rawJson: string,
+  home: string = homedir(),
+): RedactionResult<string> {
   const parsed = JSON.parse(rawJson) as unknown;
-  const redacted = redactSecretLiterals(parsed, "pluginMcp");
+  const normalized = normalizeForVault(parsed, home);
+  const redacted = redactSecretLiterals(normalized, "pluginMcp");
   return {
     value: `${JSON.stringify(redacted.value, null, 2)}\n`,
     warnings: redacted.warnings,

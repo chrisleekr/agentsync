@@ -4,6 +4,7 @@ import { mkdir, readdir, rm, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { join } from "node:path";
 import { AgentPaths } from "../../config/paths";
+import { AGENTSYNC_HOME_PLACEHOLDER } from "../../core/path-portability";
 import { archiveDirectory, extractArchive } from "../../core/tar";
 import { createTmpDir } from "../../test-helpers/fixtures";
 
@@ -16,10 +17,12 @@ import { createTmpDir } from "../../test-helpers/fixtures";
 type MutableCodexPaths = {
   root: string;
   agentsMd: string;
+  agentsOverrideMd: string;
   configToml: string;
   rulesDir: string;
   authJson: string;
   skillsDir: string;
+  userSkillsDir: string;
 };
 
 const testCodexPaths = AgentPaths.codex as MutableCodexPaths;
@@ -49,10 +52,12 @@ describe("snapshotCodex", () => {
     tmpDir = await createTmpDir();
     testCodexPaths.root = tmpDir;
     testCodexPaths.agentsMd = join(tmpDir, "AGENTS.md");
+    testCodexPaths.agentsOverrideMd = join(tmpDir, "AGENTS.override.md");
     testCodexPaths.configToml = join(tmpDir, "config.toml");
     testCodexPaths.rulesDir = join(tmpDir, "rules");
     testCodexPaths.authJson = join(tmpDir, "auth.json");
     testCodexPaths.skillsDir = join(tmpDir, "skills");
+    testCodexPaths.userSkillsDir = join(tmpDir, "user-skills");
   });
 
   afterEach(async () => {
@@ -193,10 +198,12 @@ describe("apply* functions", () => {
     tmpDir = await createTmpDir();
     testCodexPaths.root = tmpDir;
     testCodexPaths.agentsMd = join(tmpDir, "AGENTS.md");
+    testCodexPaths.agentsOverrideMd = join(tmpDir, "AGENTS.override.md");
     testCodexPaths.configToml = join(tmpDir, "config.toml");
     testCodexPaths.rulesDir = join(tmpDir, "rules");
     testCodexPaths.authJson = join(tmpDir, "auth.json");
     testCodexPaths.skillsDir = join(tmpDir, "skills");
+    testCodexPaths.userSkillsDir = join(tmpDir, "user-skills");
   });
 
   afterEach(async () => {
@@ -233,7 +240,7 @@ describe("apply* functions", () => {
 
   // applyCodexSkill direct extraction test
 
-  test("applyCodexSkill extracts a tar archive into the local skills dir", async () => {
+  test("applyCodexSkill extracts a tar archive into the user skills dir", async () => {
     const srcSkill = join(tmpDir, "src-skill");
     mkdirSync(srcSkill, { recursive: true });
     writeFileSync(join(srcSkill, "SKILL.md"), "# codex skill body", "utf8");
@@ -244,7 +251,7 @@ describe("apply* functions", () => {
 
     await codexModule.applyCodexSkill("my-skill", base64);
 
-    const targetSkillDir = join(testCodexPaths.skillsDir, "my-skill");
+    const targetSkillDir = join(testCodexPaths.userSkillsDir, "my-skill");
     const skillMd = await Bun.file(join(targetSkillDir, "SKILL.md")).text();
     const extra = await Bun.file(join(targetSkillDir, "extra.md")).text();
     expect(skillMd).toBe("# codex skill body");
@@ -265,6 +272,7 @@ describe("applyCodexVault dryRun", () => {
     testCodexPaths.rulesDir = join(tmpDir, "apply", "rules");
     testCodexPaths.authJson = join(tmpDir, "apply", "auth.json");
     testCodexPaths.skillsDir = join(tmpDir, "apply", "skills");
+    testCodexPaths.userSkillsDir = join(tmpDir, "apply", "user-skills");
   });
 
   afterEach(async () => {
@@ -315,7 +323,7 @@ describe("applyCodexVault dryRun", () => {
 
     await codexModule.applyCodexVault(vaultDir, identity, false);
 
-    const restoredSkillDir = join(testCodexPaths.skillsDir, "round-trip-skill");
+    const restoredSkillDir = join(testCodexPaths.userSkillsDir, "round-trip-skill");
     const restoredSkill = await Bun.file(join(restoredSkillDir, "SKILL.md")).text();
     const restoredGuide = await Bun.file(join(restoredSkillDir, "guide.md")).text();
     expect(restoredSkill).toBe("# codex round trip");
@@ -346,7 +354,7 @@ describe("applyCodexVault dryRun", () => {
 
     await codexModule.applyCodexVault(vaultDir, identity, true);
 
-    const restoredSkillDir = join(testCodexPaths.skillsDir, "dry-run-skill");
+    const restoredSkillDir = join(testCodexPaths.userSkillsDir, "dry-run-skill");
     const exists = await Bun.file(join(restoredSkillDir, "SKILL.md")).exists();
     expect(exists).toBeFalse();
   });
@@ -384,8 +392,191 @@ describe("applyCodexVault dryRun", () => {
 
     await codexModule.applyCodexVault(vaultDir, identity, false);
 
-    const escapedPayload = join(testCodexPaths.skillsDir, "..", "AGENTS.md");
+    const escapedPayload = join(testCodexPaths.userSkillsDir, "..", "AGENTS.md");
     const leakedExists = await Bun.file(escapedPayload).exists();
     expect(leakedExists).toBeFalse();
+  });
+});
+
+describe("Codex config.toml HOME path portability wiring (B24)", () => {
+  let tmpDir: string;
+
+  beforeEach(async () => {
+    tmpDir = await createTmpDir();
+    testCodexPaths.root = tmpDir;
+    testCodexPaths.agentsMd = join(tmpDir, "AGENTS.md");
+    testCodexPaths.agentsOverrideMd = join(tmpDir, "AGENTS.override.md");
+    testCodexPaths.configToml = join(tmpDir, "config.toml");
+    testCodexPaths.rulesDir = join(tmpDir, "rules");
+    testCodexPaths.authJson = join(tmpDir, "auth.json");
+    testCodexPaths.skillsDir = join(tmpDir, "skills");
+    testCodexPaths.userSkillsDir = join(tmpDir, "user-skills");
+  });
+
+  afterEach(async () => {
+    await rm(tmpDir, { recursive: true, force: true });
+  });
+
+  test("snapshotCodex rewrites home-rooted TOML values to placeholder", async () => {
+    const { homedir } = await import("node:os");
+    const home = homedir();
+    await writeFile(
+      testCodexPaths.configToml,
+      `model = "gpt-4"\ninstructions_file = "${home}/.codex/system.md"\n`,
+      "utf8",
+    );
+
+    const result = await codexModule.snapshotCodex();
+    const art = result.artifacts.find((a) => a.vaultPath === "codex/config.toml.age");
+    expect(art).toBeDefined();
+    expect(art?.plaintext).toContain(`${AGENTSYNC_HOME_PLACEHOLDER}/.codex/system.md`);
+    expect(art?.plaintext).not.toContain(home);
+  });
+
+  test("applyCodexConfig restores placeholders to this machine's home", async () => {
+    const { homedir } = await import("node:os");
+    const home = homedir();
+    const incoming = `model = "gpt-4"\ninstructions_file = "${AGENTSYNC_HOME_PLACEHOLDER}/.codex/system.md"\n`;
+    await codexModule.applyCodexConfig(incoming);
+    const written = await Bun.file(testCodexPaths.configToml).text();
+    expect(written).toContain(`${home}/.codex/system.md`);
+    expect(written).not.toContain("AGENTSYNC_HOME");
+  });
+});
+
+describe("Codex AGENTS.override.md precedence (B17)", () => {
+  let tmpDir: string;
+
+  beforeEach(async () => {
+    tmpDir = await createTmpDir();
+    testCodexPaths.root = tmpDir;
+    testCodexPaths.agentsMd = join(tmpDir, "AGENTS.md");
+    testCodexPaths.agentsOverrideMd = join(tmpDir, "AGENTS.override.md");
+    testCodexPaths.configToml = join(tmpDir, "config.toml");
+    testCodexPaths.rulesDir = join(tmpDir, "rules");
+    testCodexPaths.authJson = join(tmpDir, "auth.json");
+    testCodexPaths.skillsDir = join(tmpDir, "skills");
+    testCodexPaths.userSkillsDir = join(tmpDir, "user-skills");
+  });
+
+  afterEach(async () => {
+    await rm(tmpDir, { recursive: true, force: true });
+  });
+
+  test("snapshots AGENTS.override.md alongside AGENTS.md when both exist", async () => {
+    await writeFile(testCodexPaths.agentsMd, "# base", "utf8");
+    await writeFile(testCodexPaths.agentsOverrideMd, "# override wins", "utf8");
+
+    const result = await codexModule.snapshotCodex();
+    const base = result.artifacts.find((a) => a.vaultPath === "codex/AGENTS.md.age");
+    const override = result.artifacts.find((a) => a.vaultPath === "codex/AGENTS.override.md.age");
+    expect(base?.plaintext).toBe("# base");
+    expect(override?.plaintext).toBe("# override wins");
+  });
+
+  test("applyCodexVault restores both AGENTS.md and AGENTS.override.md", async () => {
+    const { generateIdentity, identityToRecipient, encryptString } = await import(
+      "../../core/encryptor"
+    );
+    const identity = await generateIdentity();
+    const recipient = await identityToRecipient(identity);
+
+    const vaultDir = join(tmpDir, "vault");
+    await mkdir(join(vaultDir, "codex"), { recursive: true });
+    await writeFile(
+      join(vaultDir, "codex", "AGENTS.md.age"),
+      await encryptString("# base", [recipient]),
+      "utf8",
+    );
+    await writeFile(
+      join(vaultDir, "codex", "AGENTS.override.md.age"),
+      await encryptString("# override wins", [recipient]),
+      "utf8",
+    );
+
+    await codexModule.applyCodexVault(vaultDir, identity, false);
+
+    expect(await Bun.file(testCodexPaths.agentsMd).text()).toBe("# base");
+    expect(await Bun.file(testCodexPaths.agentsOverrideMd).text()).toBe("# override wins");
+  });
+});
+
+describe("Codex skills at $HOME/.agents/skills (B22)", () => {
+  let tmpDir: string;
+
+  beforeEach(async () => {
+    tmpDir = await createTmpDir();
+    testCodexPaths.root = tmpDir;
+    testCodexPaths.agentsMd = join(tmpDir, "AGENTS.md");
+    testCodexPaths.agentsOverrideMd = join(tmpDir, "AGENTS.override.md");
+    testCodexPaths.configToml = join(tmpDir, "config.toml");
+    testCodexPaths.rulesDir = join(tmpDir, "rules");
+    testCodexPaths.authJson = join(tmpDir, "auth.json");
+    testCodexPaths.skillsDir = join(tmpDir, "skills"); // legacy
+    testCodexPaths.userSkillsDir = join(tmpDir, "user-skills"); // canonical
+  });
+
+  afterEach(async () => {
+    await rm(tmpDir, { recursive: true, force: true });
+  });
+
+  test("snapshot reads skills from the canonical userSkillsDir", async () => {
+    const skillDir = join(testCodexPaths.userSkillsDir, "sql-formatter");
+    mkdirSync(skillDir, { recursive: true });
+    writeFileSync(join(skillDir, "SKILL.md"), "# sql formatter", "utf8");
+
+    const result = await codexModule.snapshotCodex();
+    const art = result.artifacts.find((a) => a.vaultPath === "codex/skills/sql-formatter.tar.age");
+    expect(art).toBeDefined();
+  });
+
+  test("snapshot also reads skills from the legacy skillsDir as fallback", async () => {
+    const legacySkill = join(testCodexPaths.skillsDir, "legacy-fmt");
+    mkdirSync(legacySkill, { recursive: true });
+    writeFileSync(join(legacySkill, "SKILL.md"), "# legacy", "utf8");
+
+    const result = await codexModule.snapshotCodex();
+    const art = result.artifacts.find((a) => a.vaultPath === "codex/skills/legacy-fmt.tar.age");
+    expect(art).toBeDefined();
+  });
+
+  test("rejected canonical skill blocks the legacy copy from leaking through", async () => {
+    // Canonical version is poisoned — contains an auth.json (never-sync hit
+    // inside the bundle). The walker rejects it. The legacy copy is clean.
+    // Without dedup-by-disk, the legacy clean copy would slip into the vault
+    // and apply would silently restore a skill that the canonical user
+    // explicitly intended to keep local-only.
+    const canonical = join(testCodexPaths.userSkillsDir, "poisoned");
+    const legacy = join(testCodexPaths.skillsDir, "poisoned");
+    mkdirSync(canonical, { recursive: true });
+    mkdirSync(legacy, { recursive: true });
+    writeFileSync(join(canonical, "SKILL.md"), "# poisoned", "utf8");
+    writeFileSync(join(canonical, "auth.json"), '{"x":1}', "utf8");
+    writeFileSync(join(legacy, "SKILL.md"), "# legacy clean copy", "utf8");
+
+    const result = await codexModule.snapshotCodex();
+    const arts = result.artifacts.filter((a) => a.vaultPath === "codex/skills/poisoned.tar.age");
+    expect(arts).toHaveLength(0);
+    expect(result.warnings.some((w) => w.startsWith("never-sync inside skill"))).toBe(true);
+  });
+
+  test("when a skill exists in both locations, the canonical one wins", async () => {
+    const canonical = join(testCodexPaths.userSkillsDir, "dup");
+    const legacy = join(testCodexPaths.skillsDir, "dup");
+    mkdirSync(canonical, { recursive: true });
+    mkdirSync(legacy, { recursive: true });
+    writeFileSync(join(canonical, "SKILL.md"), "# canonical body", "utf8");
+    writeFileSync(join(legacy, "SKILL.md"), "# legacy body", "utf8");
+
+    const result = await codexModule.snapshotCodex();
+    const arts = result.artifacts.filter((a) => a.vaultPath === "codex/skills/dup.tar.age");
+    expect(arts).toHaveLength(1);
+    // Decode the tar payload and verify it carries the canonical body, not the legacy one.
+    const tarBuf = Buffer.from(arts[0]?.plaintext ?? "", "base64");
+    const outDir = join(tmpDir, "extract-dup");
+    mkdirSync(outDir, { recursive: true });
+    await extractArchive(tarBuf, outDir);
+    const body = await Bun.file(join(outDir, "SKILL.md")).text();
+    expect(body).toBe("# canonical body");
   });
 });

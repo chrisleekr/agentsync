@@ -1,8 +1,10 @@
 import { readFile } from "node:fs/promises";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import { log } from "@clack/prompts";
 import { AgentPaths } from "../config/paths";
 import { decryptString } from "../core/encryptor";
+import { denormalizeStringFromVault, normalizeForVault } from "../core/path-portability";
 import { redactSecretLiterals } from "../core/sanitizer";
 import {
   atomicWrite,
@@ -22,10 +24,8 @@ export async function snapshotVsCode(): Promise<SnapshotResult> {
 
   const mcpRaw = await readIfExists(AgentPaths.vscode.mcpJson);
   if (mcpRaw !== null) {
-    const redacted = redactSecretLiterals(
-      JSON.parse(mcpRaw) as Record<string, unknown>,
-      "vscode_mcp",
-    );
+    const normalized = normalizeForVault(JSON.parse(mcpRaw), homedir());
+    const redacted = redactSecretLiterals(normalized, "vscode_mcp");
     const artifact = collect(
       {
         value: `${JSON.stringify(redacted.value, null, 2)}\n`,
@@ -43,7 +43,10 @@ export async function snapshotVsCode(): Promise<SnapshotResult> {
 
 /** Restore the synced VS Code MCP configuration file. */
 export async function applyVsCodeMcp(mcpJsonContent: string): Promise<void> {
-  await atomicWrite(AgentPaths.vscode.mcpJson, mcpJsonContent);
+  await atomicWrite(
+    AgentPaths.vscode.mcpJson,
+    denormalizeStringFromVault(mcpJsonContent, homedir()),
+  );
 }
 
 // ─── Apply (pull side) ────────────────────────────────────────────────────────

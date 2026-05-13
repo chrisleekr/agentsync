@@ -1,17 +1,30 @@
-import { mkdir, readdir, stat } from "node:fs/promises";
+import { mkdir, readdir } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { log } from "@clack/prompts";
 import { AgentPaths } from "../config/paths";
 import { shouldNeverSync } from "../core/sanitizer";
-import { archiveDirectory, extractArchive } from "../core/tar";
+import { extractArchive } from "../core/tar";
 import { atomicWrite, readIfExists, type SnapshotArtifact, type SnapshotResult } from "./_utils";
-import {
-  collectInteriorViolations,
-  collectSkillArtifacts,
-  InvalidSkillNameError,
-  NEVER_SYNC_WARNING_PREFIX,
-  validateSkillName,
-} from "./skills-walker";
+import { collectSkillArtifacts, InvalidSkillNameError, validateSkillName } from "./skills-walker";
+
+/**
+ * Reject Copilot agent filenames that could escape `agentsDir`, smuggle in
+ * vendor dotfiles, or skip the documented `.agent.md` suffix. Called on both
+ * sides of the wire so a malicious vault entry or a stray dotfile in the user
+ * directory cannot widen the surface beyond what the GitHub Copilot CLI docs
+ * actually consume.
+ */
+function validateCopilotAgentFileName(fileName: string): void {
+  if (
+    fileName.length === 0 ||
+    fileName !== basename(fileName) ||
+    fileName.startsWith(".") ||
+    fileName.includes("\0") ||
+    !fileName.endsWith(".agent.md")
+  ) {
+    throw new Error(`Invalid Copilot agent filename: ${fileName}`);
+  }
+}
 
 /** Snapshot payload for the Copilot adapter. */
 export type CopilotSnapshotResult = SnapshotResult;
@@ -83,43 +96,33 @@ export async function snapshotCopilot(): Promise<SnapshotResult> {
   artifacts.push(...copilotSkills.artifacts);
   warnings.push(...copilotSkills.warnings);
 
-  // Agents directories (tar each one, similar to skills). Each agent's
-  // interior is scanned for both never-sync path hits and literal
-  // credentials before the bytes head for encryption: the central scan
-  // in `commands/push.ts` skips `.tar.age` artifacts (base64 scrambles
-  // credential prefixes), so this per-file walk is the only layer that
-  // can catch a key pasted into an agent's markdown body or a never-sync
-  // file (auth.json, history.jsonl, sessions/**, …) nested under the
-  // agent dir. Mirrors the shared walker's gate 4 contract symmetrically:
-  // collect every offender, emit `never-sync inside skill: …` for path
-  // hits and `Detected literal secret …` for body hits — both prefixes
-  // are escalated to a fatal abort by performPush — and skip the artifact.
+  // Copilot agents live as single `<name>.agent.md` files per the GitHub docs.
+  // The walker rejects dotfiles, traversal segments, and symlinked entries
+  // (readFile follows symlinks, so a `foo.agent.md → /etc/passwd` symlink
+  // would otherwise smuggle arbitrary content into the encrypted vault).
+  // Markdown bodies are scanned for embedded literal secrets by the central
+  // walker in `commands/push.ts`.
   try {
-    const names = await readdir(AgentPaths.copilot.agentsDir);
-    for (const name of names) {
-      const agentDir = join(AgentPaths.copilot.agentsDir, name);
-      const agentDirStat = await stat(agentDir).catch(() => null);
-      if (!agentDirStat?.isDirectory()) continue;
-
-      const violations = await collectInteriorViolations(agentDir);
-      if (violations.neverSyncHits.length > 0 || violations.secretWarnings.length > 0) {
-        for (const hit of violations.neverSyncHits) {
-          // Re-use the skills-walker prefix so the push gate's existing
-          // escalation rule covers agent-dir hits too — keeping the contract
-          // string in one exported constant prevents silent drift.
-          warnings.push(`${NEVER_SYNC_WARNING_PREFIX}${hit}`);
-        }
-        warnings.push(...violations.secretWarnings);
+    const entries = await readdir(AgentPaths.copilot.agentsDir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (!entry.isFile() || entry.isSymbolicLink()) continue;
+      const name = entry.name;
+      try {
+        validateCopilotAgentFileName(name);
+      } catch {
         continue;
       }
-
-      const tarBuffer = await archiveDirectory(agentDir);
-      artifacts.push({
-        vaultPath: `copilot/agents/${name}.tar.age`,
-        sourcePath: agentDir,
-        plaintext: tarBuffer.toString("base64"),
-        warnings: [],
-      });
+      const sourcePath = join(AgentPaths.copilot.agentsDir, name);
+      if (shouldNeverSync(sourcePath)) continue;
+      const content = await readIfExists(sourcePath);
+      if (content !== null) {
+        artifacts.push({
+          vaultPath: `copilot/agents/${name}.age`,
+          sourcePath,
+          plaintext: content,
+          warnings: [],
+        });
+      }
     }
   } catch {
     // agents dir may not exist
@@ -159,18 +162,12 @@ export async function applyCopilotSkill(skillName: string, base64Tar: string): P
   await extractArchive(tarBuffer, targetDir);
 }
 
-/** Extract one archived Copilot agent directory into the local agents folder. */
-export async function applyCopilotAgent(agentName: string, base64Tar: string): Promise<void> {
-  // Symmetric path-traversal guard to the one in applyCopilotSkill: a vault
-  // file named `...tar.age` would basename-strip to `..` and resolve outside
-  // agentsDir, letting a compromised vault overwrite files in `~/.copilot/`
-  // or any parent directory. See validateSkillName in skills-walker.ts — the
-  // helper is named for skills but is the generic vault-basename check.
-  validateSkillName(agentName);
-  const targetDir = join(AgentPaths.copilot.agentsDir, agentName);
-  await mkdir(targetDir, { recursive: true });
-  const tarBuffer = Buffer.from(base64Tar, "base64");
-  await extractArchive(tarBuffer, targetDir);
+/** Restore one Copilot `<name>.agent.md` single-file agent from the vault. */
+export async function applyCopilotAgent(fileName: string, content: string): Promise<void> {
+  validateCopilotAgentFileName(fileName);
+  const target = join(AgentPaths.copilot.agentsDir, fileName);
+  await mkdir(AgentPaths.copilot.agentsDir, { recursive: true });
+  await atomicWrite(target, content);
 }
 
 // ─── Apply (pull side) ────────────────────────────────────────────────────────
@@ -266,26 +263,23 @@ export async function applyCopilotVault(
     await applyCopilotSkill(skillName, decrypted);
   }
 
-  // agents/ sub-directory — stored as <name>.tar.age
+  // agents/ sub-directory — stored as <name>.agent.md.age
   const agentFiles = await readAgeFiles(join(copilotDir, "agents"));
   for (const { name, fullPath } of agentFiles) {
-    if (!name.endsWith(".tar.age")) continue;
-    const agentName = basename(name, ".tar.age");
+    if (!name.endsWith(".agent.md.age")) continue;
+    const fileName = basename(name, ".age");
     try {
-      validateSkillName(agentName);
-    } catch (err) {
-      if (err instanceof InvalidSkillNameError) {
-        log.warn(`[copilot] Skipping vault agent with invalid name '${name}': ${err.reason}`);
-        continue;
-      }
-      throw err;
+      validateCopilotAgentFileName(fileName);
+    } catch {
+      log.warn(`[copilot] Skipping vault agent with invalid name '${name}'`);
+      continue;
     }
     const encrypted = await readFile(fullPath, "utf8");
     const decrypted = await decryptString(encrypted, key);
     if (dryRun) {
-      log.info(`[dry-run] [copilot] would extract agent: ${agentName}`);
+      log.info(`[dry-run] [copilot] would write agent: ${fileName}`);
       continue;
     }
-    await applyCopilotAgent(agentName, decrypted);
+    await applyCopilotAgent(fileName, decrypted);
   }
 }

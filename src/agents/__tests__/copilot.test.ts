@@ -130,82 +130,48 @@ describe("snapshotCopilot", () => {
     expect(art?.plaintext).toBe("# Top-level");
   });
 
-  test("snapshots agents directories as base64 tar archives", async () => {
-    const agentDir = join(testCopilotPaths.agentsDir, "my-copilot-agent");
-    mkdirSync(agentDir, { recursive: true });
-    writeFileSync(join(agentDir, "agent.md"), "# Agent", "utf8");
+  test("snapshots .agent.md files as plaintext artifacts", async () => {
+    mkdirSync(testCopilotPaths.agentsDir, { recursive: true });
+    writeFileSync(join(testCopilotPaths.agentsDir, "my-copilot-agent.agent.md"), "# Agent", "utf8");
 
     const result = await copilotModule.snapshotCopilot();
     const art = result.artifacts.find(
-      (a) => a.vaultPath === "copilot/agents/my-copilot-agent.tar.age",
+      (a) => a.vaultPath === "copilot/agents/my-copilot-agent.agent.md.age",
     );
     expect(art).toBeDefined();
-    // biome-ignore lint/style/noNonNullAssertion: asserted by toBeDefined above
-    expect(() => Buffer.from(art!.plaintext, "base64")).not.toThrow();
+    expect(art?.plaintext).toBe("# Agent");
   });
 
-  // Per-file secret scan on the agents walk. The central scan in
-  // `commands/push.ts` skips `.tar.age` artifacts, so a key pasted into an
-  // agent's markdown body would slip through unless the walk-side scan
-  // catches it. The Copilot agents walk does NOT delegate to the shared
-  // skills walker, so this coverage is independent of the skill tests above.
-
-  test("agent dir with a literal Anthropic key in markdown body is rejected", async () => {
-    const agentDir = join(testCopilotPaths.agentsDir, "leaky-agent");
-    mkdirSync(agentDir, { recursive: true });
-    const fakeKey = `sk-ant-api03-${"C".repeat(48)}`;
-    const leak = join(agentDir, "agent.md");
-    writeFileSync(leak, `# leaky\n\ntoken: ${fakeKey}\n`, "utf8");
+  test("ignores files in agents dir that lack the .agent.md suffix", async () => {
+    mkdirSync(testCopilotPaths.agentsDir, { recursive: true });
+    writeFileSync(join(testCopilotPaths.agentsDir, "notes.md"), "# notes", "utf8");
+    writeFileSync(join(testCopilotPaths.agentsDir, "stray.txt"), "stray", "utf8");
 
     const result = await copilotModule.snapshotCopilot();
-    const art = result.artifacts.find((a) => a.vaultPath === "copilot/agents/leaky-agent.tar.age");
-    expect(art).toBeUndefined();
-
-    const offending = result.warnings.find((w) => w.startsWith("Detected literal secret"));
-    expect(offending).toBeDefined();
-    expect(offending).toContain("anthropic-api-key");
-    expect(offending).toContain(leak);
+    const arts = result.artifacts.filter((a) => a.vaultPath.startsWith("copilot/agents/"));
+    expect(arts).toHaveLength(0);
   });
 
-  // Never-sync path hit inside an agent dir. The agents walk consumes the
-  // same collectInteriorViolations helper as the skills walker, so a file
-  // matching NEVER_SYNC_PATTERNS (auth.json, .credentials.json, history.jsonl,
-  // sessions/**, *.local.md, …) anywhere inside the agent must drop the
-  // artifact and emit the `never-sync inside skill: …` warning that
-  // performPush escalates to a fatal abort. Without this gate the agent
-  // would be archived with `archiveDirectory(agentDir)` and the credential
-  // would ship to the vault.
-  test("agent dir containing a never-sync file (auth.json) is rejected", async () => {
-    const agentDir = join(testCopilotPaths.agentsDir, "leaky-auth-agent");
-    mkdirSync(agentDir, { recursive: true });
-    writeFileSync(join(agentDir, "agent.md"), "# agent\n", "utf8");
-    const authFile = join(agentDir, "auth.json");
-    writeFileSync(authFile, '{"token":"secret"}', "utf8");
+  test("snapshot skips dotfile agents and refuses to follow symlinks", async () => {
+    mkdirSync(testCopilotPaths.agentsDir, { recursive: true });
+    // Dotfile — must be skipped even if it has the right suffix.
+    writeFileSync(join(testCopilotPaths.agentsDir, ".hidden.agent.md"), "# hidden", "utf8");
+    // Symlinked agent pointing at an external file — must NOT smuggle the
+    // target content into the vault. The vendored helper sits outside agentsDir.
+    const external = join(tmpDir, "external-secret.md");
+    writeFileSync(external, "SECRET FROM /etc/passwd", "utf8");
+    symlinkSync(external, join(testCopilotPaths.agentsDir, "linked.agent.md"));
 
     const result = await copilotModule.snapshotCopilot();
-    const art = result.artifacts.find(
-      (a) => a.vaultPath === "copilot/agents/leaky-auth-agent.tar.age",
-    );
-    expect(art).toBeUndefined();
-
-    const neverSync = result.warnings.find((w) => w.startsWith("never-sync inside skill: "));
-    expect(neverSync).toBeDefined();
-    expect(neverSync).toContain(authFile);
+    const arts = result.artifacts.filter((a) => a.vaultPath.startsWith("copilot/agents/"));
+    expect(arts).toHaveLength(0);
   });
 
-  test("clean agent dir still produces a single .tar.age artifact", async () => {
-    const agentDir = join(testCopilotPaths.agentsDir, "clean-agent");
-    mkdirSync(agentDir, { recursive: true });
-    writeFileSync(join(agentDir, "agent.md"), "# clean prose, no keys here\n", "utf8");
-    writeFileSync(join(agentDir, "notes.md"), "# also clean\n", "utf8");
-
-    const result = await copilotModule.snapshotCopilot();
-    const arts = result.artifacts.filter(
-      (a) => a.vaultPath === "copilot/agents/clean-agent.tar.age",
-    );
-    expect(arts).toHaveLength(1);
-    expect(result.warnings.filter((w) => w.startsWith("Detected literal secret"))).toHaveLength(0);
-  });
+  // Copilot agents are single .agent.md files per the GitHub docs, not
+  // directories. Body-scanning for literal secrets and never-sync paths is
+  // handled by the central walker in `commands/push.ts` over the plaintext
+  // artifact stream, so the adapter no longer carries its own interior
+  // scan. The old tar-based "leaky agent" tests moved with that contract.
 
   // walker retrofit regression: snapshotCopilot must inherit the
   // symlink-rejection and dot-skip rules from the shared walker.
@@ -311,19 +277,28 @@ describe("apply* functions", () => {
     expect(extracted).toBe("# Skill content");
   });
 
-  test("applyCopilotAgent extracts a tar archive into agents dir", async () => {
-    const { archiveDirectory } = await import("../../core/tar");
-    const srcAgent = join(tmpDir, "src-agent");
-    mkdirSync(srcAgent, { recursive: true });
-    writeFileSync(join(srcAgent, "agent.md"), "# Agent content", "utf8");
+  test("applyCopilotAgent writes a single .agent.md file", async () => {
+    await copilotModule.applyCopilotAgent("my-agent.agent.md", "# Agent content");
 
-    const buf = await archiveDirectory(srcAgent);
-    await copilotModule.applyCopilotAgent("my-agent", buf.toString("base64"));
-
-    const extracted = await Bun.file(
-      join(testCopilotPaths.agentsDir, "my-agent", "agent.md"),
-    ).text();
+    const extracted = await Bun.file(join(testCopilotPaths.agentsDir, "my-agent.agent.md")).text();
     expect(extracted).toBe("# Agent content");
+  });
+
+  test("applyCopilotAgent rejects traversal, dotfiles, and non-suffix names", async () => {
+    const badNames = [
+      "../escape.agent.md",
+      "./escape.agent.md",
+      "foo/bar.agent.md",
+      ".hidden.agent.md",
+      "no-suffix.md",
+      "with\0null.agent.md",
+      "",
+    ];
+    for (const bad of badNames) {
+      await expect(copilotModule.applyCopilotAgent(bad, "x")).rejects.toThrow(
+        /Invalid Copilot agent filename/,
+      );
+    }
   });
 
   test("applyCopilotInstructionFile writes to instructions subdir", async () => {
@@ -431,20 +406,6 @@ describe("applyCopilotVault dryRun", () => {
     }
   });
 
-  // Thread 6 regression — the agents/ loop in applyCopilotVault mirrors the
-  // skills/ loop and was missed in the Phase 8 fix. Same basename-strip
-  // vector (`...tar.age` → `..`) would let a compromised vault overwrite
-  // files in the agent config root via path.join(agentsDir, "..").
-  test("applyCopilotAgent rejects traversal and hidden agent names", async () => {
-    const { InvalidSkillNameError } = await import("../skills-walker");
-    const badNames = ["", ".", "..", "../foo", "foo/bar", "foo\\bar", ".hidden", "foo\x00bar"];
-    for (const bad of badNames) {
-      await expect(copilotModule.applyCopilotAgent(bad, "")).rejects.toBeInstanceOf(
-        InvalidSkillNameError,
-      );
-    }
-  });
-
   test("applyCopilotVault skips adversarial vault filenames without traversal", async () => {
     const { generateIdentity, identityToRecipient, encryptString } = await import(
       "../../core/encryptor"
@@ -476,30 +437,27 @@ describe("applyCopilotVault dryRun", () => {
   // must be rejected symmetrically with the skills/ loop above. Distinct
   // payload filename (`AGENT_LEAKED.md`) so a false positive can't be
   // mistaken for the skills-loop assertion's leakage.
-  test("applyCopilotVault skips adversarial agent filenames without traversal", async () => {
+  test("applyCopilotVault rejects a dotfile-named agent artifact via the validator", async () => {
     const { generateIdentity, identityToRecipient, encryptString } = await import(
       "../../core/encryptor"
     );
-    const { archiveDirectory } = await import("../../core/tar");
     const identity = await generateIdentity();
     const recipient = await identityToRecipient(identity);
 
-    const payloadSrc = join(tmpDir, "agent-payload-src");
-    mkdirSync(payloadSrc, { recursive: true });
-    writeFileSync(join(payloadSrc, "AGENT_LEAKED.md"), "LEAKED_AGENT_PAYLOAD", "utf8");
-    const tarBuffer = await archiveDirectory(payloadSrc);
-    const base64 = tarBuffer.toString("base64");
-    const encrypted = await encryptString(base64, [recipient]);
-
+    // The filename passes the `.agent.md.age` suffix gate so the dispatch loop
+    // reaches the validator, which then rejects on the leading dot and
+    // warn-and-skips. Single-file agents post-B15 have no tar layer, so the
+    // payload is plaintext markdown.
+    const encrypted = await encryptString("LEAKED_DOTFILE_PAYLOAD", [recipient]);
     const vaultDir = join(tmpDir, "vault-adversarial-agent");
     const agentsVaultDir = join(vaultDir, "copilot", "agents");
     mkdirSync(agentsVaultDir, { recursive: true });
-    writeFileSync(join(agentsVaultDir, "...tar.age"), encrypted, "utf8");
+    writeFileSync(join(agentsVaultDir, ".hidden.agent.md.age"), encrypted, "utf8");
 
     await copilotModule.applyCopilotVault(vaultDir, identity, false);
 
-    const escapedPayload = join(testCopilotPaths.agentsDir, "..", "AGENT_LEAKED.md");
-    const leakedExists = await Bun.file(escapedPayload).exists();
-    expect(leakedExists).toBeFalse();
+    const dotfileTarget = join(testCopilotPaths.agentsDir, ".hidden.agent.md");
+    const dotfileExists = await Bun.file(dotfileTarget).exists();
+    expect(dotfileExists).toBeFalse();
   });
 });
