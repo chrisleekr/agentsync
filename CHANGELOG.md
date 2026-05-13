@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.1.6](https://github.com/chrisleekr/agentsync/compare/v0.1.5...v0.1.6) (2026-05-13)
+
+
+### Features
+
+* **agents:** wire HOME path portability + B15/B17/B19/B22 adapter fixes ([#70](https://github.com/chrisleekr/agentsync/issues/70)) ([#73](https://github.com/chrisleekr/agentsync/issues/73)) ([d9d2370](https://github.com/chrisleekr/agentsync/commit/d9d23706a86f1eac88bc4ca2a09b63b66ca6edd9))
+* **claude:** plugin-aware sync with opt-in marketplace ([#53](https://github.com/chrisleekr/agentsync/issues/53)) ([05d4028](https://github.com/chrisleekr/agentsync/commit/05d40282b711d327f151cf58f9940231363c71c1))
+* **cli:** friendly errors for missing vault and second-machine pull ([#56](https://github.com/chrisleekr/agentsync/issues/56)) ([2d74b6d](https://github.com/chrisleekr/agentsync/commit/2d74b6de7bcfb7a1aaa370e0a366ae3a5bcf3579))
+* **core:** HOME path portability + paths.ts corrections + .bak/*~ never-sync (phase 1) ([#72](https://github.com/chrisleekr/agentsync/issues/72)) ([af646ba](https://github.com/chrisleekr/agentsync/commit/af646ba5ee9234184b9ca680deddacf6e4d84581))
+* **migrate:** transport-aware MCP model with VS Code servers/inputs schema ([#55](https://github.com/chrisleekr/agentsync/issues/55)) ([29b7e4d](https://github.com/chrisleekr/agentsync/commit/29b7e4d36cc63657f592bead0ac553f6525893b9))
+
+
+### Bug Fixes
+
+* **config:** tighten schema for recipients, branch, and remote.url ([#68](https://github.com/chrisleekr/agentsync/issues/68)) ([f5f97e1](https://github.com/chrisleekr/agentsync/commit/f5f97e1011603849df9df32d4cff27fe54990489))
+* **init:** probe remote before writing keypair; roll back orphan key on failure ([#62](https://github.com/chrisleekr/agentsync/issues/62)) ([c5642a6](https://github.com/chrisleekr/agentsync/commit/c5642a622d36efaa2f55096efb52c5c1ac7e8b87))
+* **migrate:** cursorToClaude writes CLAUDE.md, gate sentinel routing in applyMigrated ([#75](https://github.com/chrisleekr/agentsync/issues/75)) ([#78](https://github.com/chrisleekr/agentsync/issues/78)) ([545135b](https://github.com/chrisleekr/agentsync/commit/545135b7c91797f2e5c867d29369fb5cb3275b7a))
+* **push:** route --dry-run through performPush so Phase 1 security gates run ([#67](https://github.com/chrisleekr/agentsync/issues/67)) ([edcdaf3](https://github.com/chrisleekr/agentsync/commit/edcdaf3aeb4d74f00e8bf9d495c7343494c3c5ae))
+* **sanitizer:** scan markdown bodies and prose-style values for literal secrets ([#58](https://github.com/chrisleekr/agentsync/issues/58)) ([4689eea](https://github.com/chrisleekr/agentsync/commit/4689eea6de5893b767616f5db88eb86cf2575031))
+* **walker:** scan skill/agent bundle bodies for literal secrets ([#65](https://github.com/chrisleekr/agentsync/issues/65)) ([c8dc814](https://github.com/chrisleekr/agentsync/commit/c8dc814b7cdcd327f33e46de8c0d927c1485ec05))
+* **workflow:** feature-research silent-success + strict-mode hardening ([#28](https://github.com/chrisleekr/agentsync/issues/28)) ([d7d7949](https://github.com/chrisleekr/agentsync/commit/d7d794967caa5a8067da2212a72594fb9948ca3d))
+
 ## [0.1.5](https://github.com/chrisleekr/agentsync/compare/v0.1.4...v0.1.5) (2026-04-11)
 
 
