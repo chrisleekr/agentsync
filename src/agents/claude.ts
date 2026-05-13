@@ -115,10 +115,15 @@ export async function snapshotClaude(options: ClaudeSyncOptions = {}): Promise<S
 
   // Rules markdown at ~/.claude/rules/*.md is referenced from CLAUDE.md via
   // include directives, so the files must travel with the agent config or the
-  // includes break on the destination machine.
+  // includes break on the destination machine. Use withFileTypes + symlink
+  // rejection so a `rules/secret.md → /etc/passwd` symlink can't smuggle
+  // arbitrary file content into the encrypted vault — readFile would follow
+  // it and shouldNeverSync only sees the symlink path.
   try {
-    const names = await readdir(AgentPaths.claude.rulesDir);
-    for (const name of names) {
+    const entries = await readdir(AgentPaths.claude.rulesDir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (!entry.isFile() || entry.isSymbolicLink()) continue;
+      const name = entry.name;
       if (!name.endsWith(".md")) continue;
       const sourcePath = join(AgentPaths.claude.rulesDir, name);
       if (shouldNeverSync(sourcePath)) continue;
@@ -300,7 +305,11 @@ async function collectPluginHooksDir(
     }
     try {
       const parsed = JSON.parse(raw) as unknown;
-      const redacted = redactSecretLiterals(parsed, "pluginHook");
+      // Plugin hooks routinely reference commands or working directories
+      // under HOME, so they need the same normalize-before-redact treatment
+      // as plugin.json and .mcp.json to round-trip across machines.
+      const normalized = normalizeForVault(parsed, homedir());
+      const redacted = redactSecretLiterals(normalized, "pluginHook");
       artifacts.push({
         vaultPath: `${vaultPrefix}/${name}.age`,
         sourcePath,
@@ -462,7 +471,7 @@ export async function applyClaudePluginHook(
   const target = join(dir, fileName);
   await mkdir(dir, { recursive: true });
   await ensureCommandBackup(target);
-  await atomicWrite(target, content);
+  await atomicWrite(target, denormalizeStringFromVault(content, homedir()));
 }
 
 /** Restore one plugin's `.mcp.json`. */

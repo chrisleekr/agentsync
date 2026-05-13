@@ -152,6 +152,21 @@ describe("snapshotCopilot", () => {
     expect(arts).toHaveLength(0);
   });
 
+  test("snapshot skips dotfile agents and refuses to follow symlinks", async () => {
+    mkdirSync(testCopilotPaths.agentsDir, { recursive: true });
+    // Dotfile — must be skipped even if it has the right suffix.
+    writeFileSync(join(testCopilotPaths.agentsDir, ".hidden.agent.md"), "# hidden", "utf8");
+    // Symlinked agent pointing at an external file — must NOT smuggle the
+    // target content into the vault. The vendored helper sits outside agentsDir.
+    const external = join(tmpDir, "external-secret.md");
+    writeFileSync(external, "SECRET FROM /etc/passwd", "utf8");
+    symlinkSync(external, join(testCopilotPaths.agentsDir, "linked.agent.md"));
+
+    const result = await copilotModule.snapshotCopilot();
+    const arts = result.artifacts.filter((a) => a.vaultPath.startsWith("copilot/agents/"));
+    expect(arts).toHaveLength(0);
+  });
+
   // Copilot agents are single .agent.md files per the GitHub docs, not
   // directories. Body-scanning for literal secrets and never-sync paths is
   // handled by the central walker in `commands/push.ts` over the plaintext
@@ -267,6 +282,23 @@ describe("apply* functions", () => {
 
     const extracted = await Bun.file(join(testCopilotPaths.agentsDir, "my-agent.agent.md")).text();
     expect(extracted).toBe("# Agent content");
+  });
+
+  test("applyCopilotAgent rejects traversal, dotfiles, and non-suffix names", async () => {
+    const badNames = [
+      "../escape.agent.md",
+      "./escape.agent.md",
+      "foo/bar.agent.md",
+      ".hidden.agent.md",
+      "no-suffix.md",
+      "with\0null.agent.md",
+      "",
+    ];
+    for (const bad of badNames) {
+      await expect(copilotModule.applyCopilotAgent(bad, "x")).rejects.toThrow(
+        /Invalid Copilot agent filename/,
+      );
+    }
   });
 
   test("applyCopilotInstructionFile writes to instructions subdir", async () => {

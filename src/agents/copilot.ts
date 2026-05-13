@@ -7,6 +7,25 @@ import { extractArchive } from "../core/tar";
 import { atomicWrite, readIfExists, type SnapshotArtifact, type SnapshotResult } from "./_utils";
 import { collectSkillArtifacts, InvalidSkillNameError, validateSkillName } from "./skills-walker";
 
+/**
+ * Reject Copilot agent filenames that could escape `agentsDir`, smuggle in
+ * vendor dotfiles, or skip the documented `.agent.md` suffix. Called on both
+ * sides of the wire so a malicious vault entry or a stray dotfile in the user
+ * directory cannot widen the surface beyond what the GitHub Copilot CLI docs
+ * actually consume.
+ */
+function validateCopilotAgentFileName(fileName: string): void {
+  if (
+    fileName.length === 0 ||
+    fileName !== basename(fileName) ||
+    fileName.startsWith(".") ||
+    fileName.includes("\0") ||
+    !fileName.endsWith(".agent.md")
+  ) {
+    throw new Error(`Invalid Copilot agent filename: ${fileName}`);
+  }
+}
+
 /** Snapshot payload for the Copilot adapter. */
 export type CopilotSnapshotResult = SnapshotResult;
 
@@ -77,14 +96,22 @@ export async function snapshotCopilot(): Promise<SnapshotResult> {
   artifacts.push(...copilotSkills.artifacts);
   warnings.push(...copilotSkills.warnings);
 
-  // Copilot agents live as single `<name>.agent.md` files per the GitHub docs,
-  // not as per-agent directories. Markdown bodies are scanned for embedded
-  // literal secrets via the central walker in `commands/push.ts`, so no
-  // separate interior-scan helper is needed here.
+  // Copilot agents live as single `<name>.agent.md` files per the GitHub docs.
+  // The walker rejects dotfiles, traversal segments, and symlinked entries
+  // (readFile follows symlinks, so a `foo.agent.md → /etc/passwd` symlink
+  // would otherwise smuggle arbitrary content into the encrypted vault).
+  // Markdown bodies are scanned for embedded literal secrets by the central
+  // walker in `commands/push.ts`.
   try {
-    const names = await readdir(AgentPaths.copilot.agentsDir);
-    for (const name of names) {
-      if (!name.endsWith(".agent.md")) continue;
+    const entries = await readdir(AgentPaths.copilot.agentsDir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (!entry.isFile() || entry.isSymbolicLink()) continue;
+      const name = entry.name;
+      try {
+        validateCopilotAgentFileName(name);
+      } catch {
+        continue;
+      }
       const sourcePath = join(AgentPaths.copilot.agentsDir, name);
       if (shouldNeverSync(sourcePath)) continue;
       const content = await readIfExists(sourcePath);
@@ -137,6 +164,7 @@ export async function applyCopilotSkill(skillName: string, base64Tar: string): P
 
 /** Restore one Copilot `<name>.agent.md` single-file agent from the vault. */
 export async function applyCopilotAgent(fileName: string, content: string): Promise<void> {
+  validateCopilotAgentFileName(fileName);
   const target = join(AgentPaths.copilot.agentsDir, fileName);
   await mkdir(AgentPaths.copilot.agentsDir, { recursive: true });
   await atomicWrite(target, content);
@@ -239,9 +267,15 @@ export async function applyCopilotVault(
   const agentFiles = await readAgeFiles(join(copilotDir, "agents"));
   for (const { name, fullPath } of agentFiles) {
     if (!name.endsWith(".agent.md.age")) continue;
+    const fileName = basename(name, ".age");
+    try {
+      validateCopilotAgentFileName(fileName);
+    } catch {
+      log.warn(`[copilot] Skipping vault agent with invalid name '${name}'`);
+      continue;
+    }
     const encrypted = await readFile(fullPath, "utf8");
     const decrypted = await decryptString(encrypted, key);
-    const fileName = basename(name, ".age");
     if (dryRun) {
       log.info(`[dry-run] [copilot] would write agent: ${fileName}`);
       continue;

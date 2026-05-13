@@ -775,6 +775,71 @@ describe("Claude plugin sync", () => {
   });
 });
 
+describe("Claude plugin hook HOME portability (B24)", () => {
+  let tmpDir: string;
+
+  beforeEach(async () => {
+    tmpDir = await createTmpDir();
+    testClaudePaths.claudeMd = join(tmpDir, "CLAUDE.md");
+    testClaudePaths.settingsJson = join(tmpDir, "settings.json");
+    testClaudePaths.commandsDir = join(tmpDir, "commands");
+    testClaudePaths.agentsDir = join(tmpDir, "agents");
+    testClaudePaths.rulesDir = join(tmpDir, "rules");
+    testClaudePaths.mcpJson = join(tmpDir, ".claude.json");
+    testClaudePaths.credentials = join(tmpDir, ".credentials.json");
+    testClaudePaths.skillsDir = join(tmpDir, "skills");
+    testClaudePaths.pluginsDir = join(tmpDir, "plugins");
+    testClaudePaths.marketplaceJson = join(tmpDir, ".claude-plugin", "marketplace.json");
+  });
+
+  afterEach(async () => {
+    await rm(tmpDir, { recursive: true, force: true });
+  });
+
+  test("snapshot rewrites home-rooted paths inside plugin hook JSONs", async () => {
+    const { homedir } = await import("node:os");
+    const home = homedir();
+    const root = join(testClaudePaths.pluginsDir, "hooky-plugin");
+    mkdirSync(join(root, ".claude-plugin"), { recursive: true });
+    writeFileSync(
+      join(root, ".claude-plugin", "plugin.json"),
+      JSON.stringify({ name: "hooky-plugin", version: "1.0.0" }),
+      "utf8",
+    );
+    mkdirSync(join(root, "hooks"), { recursive: true });
+    writeFileSync(
+      join(root, "hooks", "pre-commit.json"),
+      JSON.stringify({ command: `${home}/.claude/runner.sh`, cwd: `${home}/proj` }),
+      "utf8",
+    );
+
+    const result = await claudeModule.snapshotClaude();
+    const hook = result.artifacts.find(
+      (a) => a.vaultPath === "claude/plugins/hooky-plugin/hooks/pre-commit.json.age",
+    );
+    expect(hook).toBeDefined();
+    expect(hook?.plaintext).toContain(`${AGENTSYNC_HOME_PLACEHOLDER}/.claude/runner.sh`);
+    expect(hook?.plaintext).toContain(`${AGENTSYNC_HOME_PLACEHOLDER}/proj`);
+    expect(hook?.plaintext).not.toContain(home);
+  });
+
+  test("applyClaudePluginHook denormalizes placeholders to this machine's home", async () => {
+    const { homedir } = await import("node:os");
+    const home = homedir();
+    const incoming = `${JSON.stringify(
+      { command: `${AGENTSYNC_HOME_PLACEHOLDER}/.claude/runner.sh` },
+      null,
+      2,
+    )}\n`;
+    await claudeModule.applyClaudePluginHook("hooky", "pre-commit.json", incoming);
+    const written = await Bun.file(
+      join(testClaudePaths.pluginsDir, "hooky", "hooks", "pre-commit.json"),
+    ).text();
+    expect(written).toContain(`${home}/.claude/runner.sh`);
+    expect(written).not.toContain("AGENTSYNC_HOME");
+  });
+});
+
 describe("Claude rules sync (B19)", () => {
   let tmpDir: string;
 
@@ -818,6 +883,19 @@ describe("Claude rules sync (B19)", () => {
     await claudeModule.applyClaudeRule("coding-style.md", "# coding style");
     const written = await Bun.file(join(testClaudePaths.rulesDir, "coding-style.md")).text();
     expect(written).toBe("# coding style");
+  });
+
+  test("snapshot refuses to follow a symlinked rule file", async () => {
+    await mkdir(testClaudePaths.rulesDir, { recursive: true });
+    const external = join(tmpDir, "secret-outside-rulesDir.md");
+    await writeFile(external, "SHOULD-NEVER-LEAK", "utf8");
+    symlinkSync(external, join(testClaudePaths.rulesDir, "linked.md"));
+
+    const result = await claudeModule.snapshotClaude();
+    const ruleArts = result.artifacts.filter((a) => a.vaultPath.startsWith("claude/rules/"));
+    expect(ruleArts).toHaveLength(0);
+    // Belt and braces: the leaked content must not appear in any artifact.
+    expect(result.artifacts.every((a) => !a.plaintext.includes("SHOULD-NEVER-LEAK"))).toBe(true);
   });
 
   test("applyClaudeVault dispatches claude/rules/*.md.age to applyClaudeRule", async () => {
