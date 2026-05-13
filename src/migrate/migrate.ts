@@ -60,8 +60,7 @@ export async function readSourceArtefacts(
       if (filePath) {
         const content = await readIfExists(filePath);
         if (content) {
-          const name = basename(filePath) || "rules.md";
-          results.push({ content, name });
+          results.push({ content, name: basename(filePath) });
         }
       }
     }
@@ -127,7 +126,13 @@ export async function applyMigrated(
   dryRun: boolean,
 ): Promise<MigratedArtifact | null> {
   if (type === "global-rules") {
-    if (targetName === "__cursor_rules__") {
+    // The cursor-rules sentinel only routes to cursor's settings.json when the
+    // declared target is cursor. Without this gate, a translator that
+    // mistakenly returns the sentinel for a non-cursor target would overwrite
+    // cursor's settings.json instead of writing the intended agent file.
+    // Fall-through (below) preserves data integrity for the source even if
+    // the resulting target file is missing the translator's usual wrapper.
+    if (targetName === "__cursor_rules__" && to === "cursor") {
       const targetPath = AgentPaths.cursor.settingsJson;
       if (!dryRun) await applyCursorRules(content);
       return {

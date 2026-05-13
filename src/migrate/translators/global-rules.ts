@@ -20,11 +20,13 @@ const toCursor: Translator = (content) => {
   return { content: trimmed, targetName: CURSOR_RULES_SENTINEL };
 };
 
-const fromCursor: Translator = (content, sourceName) => {
+const cursorToClaude: Translator = (content) => {
   const trimmed = content.trim();
   if (!trimmed) return null;
-  const target = sourceName ?? "rules.md";
-  return { content: `# Rules (migrated from Cursor)\n\n${trimmed}\n`, targetName: target };
+  return {
+    content: `# Rules (migrated from Cursor)\n\n${trimmed}\n`,
+    targetName: "CLAUDE.md",
+  };
 };
 
 // ── Between file-based agents (Claude, Codex, Copilot) ───────────────────────
@@ -101,7 +103,7 @@ const copilotToCodex: Translator = (content) => {
  */
 export const translateGlobalRules = {
   claudeToCursor: toCursor,
-  cursorToClaude: fromCursor,
+  cursorToClaude,
   claudeToCodex,
   codexToClaude,
   claudeToCopilot,

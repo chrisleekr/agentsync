@@ -14,12 +14,23 @@ describe("global-rules translators", () => {
     expect(result?.content).toBe("# My Rules\n\nBe helpful.");
   });
 
-  test("cursor → claude wraps content with heading", () => {
+  test("cursor → claude wraps content with heading, targets CLAUDE.md", () => {
     const result = translateGlobalRules.cursorToClaude("Be concise.");
     expect(result).not.toBeNull();
-    expect(result?.targetName).toBe("rules.md");
+    expect(result?.targetName).toBe("CLAUDE.md");
     expect(result?.content).toContain("migrated from Cursor");
     expect(result?.content).toContain("Be concise.");
+  });
+
+  test("cursor → claude ignores sourceName (no source-file overwrite)", () => {
+    // Regression guard: a prior version returned `sourceName` as targetName,
+    // routing the write back to cursor's settings.json. The translator must
+    // always emit the literal CLAUDE.md filename so the orchestrator resolves
+    // the destination via the agent path map, not the source path. Also
+    // pins the provenance wrapper so a future "simplification" can't drop it.
+    const result = translateGlobalRules.cursorToClaude("rules", "__cursor_rules__");
+    expect(result?.targetName).toBe("CLAUDE.md");
+    expect(result?.content).toContain("migrated from Cursor");
   });
 
   test("claude → codex preserves content, targets AGENTS.md", () => {

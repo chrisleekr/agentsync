@@ -166,6 +166,65 @@ describe("performMigrate", () => {
     expect(result.migrated[0].targetPath).toBe(testCursor.settingsJson);
   });
 
+  test("migrates cursor global-rules to claude (writes CLAUDE.md, leaves source untouched)", async () => {
+    const cursorRulesBody = "Be concise.\nNo emojis.";
+    writeFixture(
+      testCursor.settingsJson,
+      JSON.stringify({ rules: cursorRulesBody, otherSetting: "keep-me" }),
+    );
+
+    const result = await performMigrate({
+      from: "cursor",
+      to: "claude",
+      type: "global-rules",
+      dryRun: false,
+    });
+
+    expect(result.errors).toHaveLength(0);
+    expect(result.migrated).toHaveLength(1);
+    expect(result.migrated[0].targetPath).toBe(testClaude.claudeMd);
+
+    const { readIfExists } = await import("../../agents/_utils");
+    const claudeMd = await readIfExists(testClaude.claudeMd);
+    expect(claudeMd).toContain("migrated from Cursor");
+    expect(claudeMd).toContain(cursorRulesBody);
+
+    // Regression guard: prior version routed this migration back to
+    // cursor's settings.json. The `rules` field and sibling settings
+    // must both be preserved exactly.
+    const cursorRaw = await readIfExists(testCursor.settingsJson);
+    expect(cursorRaw).not.toBeNull();
+    const cursor = JSON.parse(cursorRaw as string);
+    expect(cursor.rules).toBe(cursorRulesBody);
+    expect(cursor.otherSetting).toBe("keep-me");
+  });
+
+  test("applyMigrated ignores cursor-rules sentinel when target is not cursor", async () => {
+    // Defense in depth: even if a translator returns the sentinel for a
+    // non-cursor target, applyMigrated must route the write to the declared
+    // target agent's file, not cursor's settings.json.
+    writeFixture(testCursor.settingsJson, JSON.stringify({ rules: "untouched-cursor-rules" }));
+
+    const artifact = await applyMigrated(
+      "claude",
+      "global-rules",
+      "__cursor_rules__",
+      "# Rules\n\nbody\n",
+      false,
+    );
+
+    expect(artifact).not.toBeNull();
+    expect(artifact?.targetPath).toBe(testClaude.claudeMd);
+
+    const { readIfExists } = await import("../../agents/_utils");
+    const claudeMd = await readIfExists(testClaude.claudeMd);
+    expect(claudeMd).toContain("body");
+
+    const cursorRaw = await readIfExists(testCursor.settingsJson);
+    const cursor = JSON.parse(cursorRaw as string);
+    expect(cursor.rules).toBe("untouched-cursor-rules");
+  });
+
   test("migrates claude MCP to codex (JSON → TOML)", async () => {
     writeFixture(
       testClaude.mcpJson,
