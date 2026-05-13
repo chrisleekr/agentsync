@@ -1,7 +1,13 @@
 import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import { log } from "@clack/prompts";
 import { AgentPaths } from "../config/paths";
+import {
+  denormalizeFromVault,
+  denormalizeStringFromVault,
+  normalizeForVault,
+} from "../core/path-portability";
 import {
   redactSecretLiterals,
   sanitizeClaudeHooks,
@@ -47,7 +53,7 @@ export async function snapshotClaude(options: ClaudeSyncOptions = {}): Promise<S
 
   const settingsJson = await readIfExists(AgentPaths.claude.settingsJson);
   if (settingsJson !== null) {
-    const hooks = sanitizeClaudeHooks(settingsJson);
+    const hooks = sanitizeClaudeHooks(settingsJson, homedir());
     artifacts.push(
       collect(hooks, AgentPaths.claude.settingsJson, "claude/settings.hooks.json.age"),
     );
@@ -56,7 +62,7 @@ export async function snapshotClaude(options: ClaudeSyncOptions = {}): Promise<S
 
   const mcpJson = await readIfExists(AgentPaths.claude.mcpJson);
   if (mcpJson !== null) {
-    const mcp = sanitizeClaudeMcp(mcpJson);
+    const mcp = sanitizeClaudeMcp(mcpJson, homedir());
     artifacts.push(collect(mcp, AgentPaths.claude.mcpJson, "claude/claude.json.age"));
     warnings.push(...mcp.warnings);
   }
@@ -107,6 +113,32 @@ export async function snapshotClaude(options: ClaudeSyncOptions = {}): Promise<S
     // agents dir may not exist yet.
   }
 
+  // Rules markdown at ~/.claude/rules/*.md is referenced from CLAUDE.md via
+  // include directives, so the files must travel with the agent config or the
+  // includes break on the destination machine.
+  try {
+    const names = await readdir(AgentPaths.claude.rulesDir);
+    for (const name of names) {
+      if (!name.endsWith(".md")) continue;
+      const sourcePath = join(AgentPaths.claude.rulesDir, name);
+      if (shouldNeverSync(sourcePath)) continue;
+      let content: string;
+      try {
+        content = await readFile(sourcePath, "utf8");
+      } catch {
+        continue;
+      }
+      artifacts.push({
+        vaultPath: `claude/rules/${name}.age`,
+        sourcePath,
+        plaintext: content,
+        warnings: [],
+      });
+    }
+  } catch {
+    // rules dir may not exist yet.
+  }
+
   // Skills — delegated to the shared walker.
   // The walker handles dot-skip, symlink rejection, sentinel verification, the
   // never-sync interior scan, and the symlink-filtered tar archival in one
@@ -128,7 +160,7 @@ export async function snapshotClaude(options: ClaudeSyncOptions = {}): Promise<S
     const manifestRaw = await readIfExists(plugin.paths.manifest);
     if (manifestRaw !== null && !shouldNeverSync(plugin.paths.manifest)) {
       try {
-        const manifest = sanitizeClaudePluginManifest(manifestRaw);
+        const manifest = sanitizeClaudePluginManifest(manifestRaw, homedir());
         artifacts.push(collect(manifest, plugin.paths.manifest, `${ns}/plugin.json.age`));
         warnings.push(...manifest.warnings);
       } catch (err) {
@@ -147,7 +179,7 @@ export async function snapshotClaude(options: ClaudeSyncOptions = {}): Promise<S
     const pluginMcpRaw = await readIfExists(plugin.paths.mcpJson);
     if (pluginMcpRaw !== null && !shouldNeverSync(plugin.paths.mcpJson)) {
       try {
-        const pluginMcp = sanitizeClaudePluginMcp(pluginMcpRaw);
+        const pluginMcp = sanitizeClaudePluginMcp(pluginMcpRaw, homedir());
         artifacts.push(collect(pluginMcp, plugin.paths.mcpJson, `${ns}/mcp.json.age`));
         warnings.push(...pluginMcp.warnings);
       } catch (err) {
@@ -182,7 +214,8 @@ export async function snapshotClaude(options: ClaudeSyncOptions = {}): Promise<S
     if (marketplaceRaw !== null && !shouldNeverSync(AgentPaths.claude.marketplaceJson)) {
       try {
         const parsed = JSON.parse(marketplaceRaw) as unknown;
-        const redacted = redactSecretLiterals(parsed, "marketplace");
+        const normalized = normalizeForVault(parsed, homedir());
+        const redacted = redactSecretLiterals(normalized, "marketplace");
         artifacts.push({
           vaultPath: "claude/marketplace.json.age",
           sourcePath: AgentPaths.claude.marketplaceJson,
@@ -311,19 +344,24 @@ export async function applyClaudeMd(content: string): Promise<void> {
 
 /** Merge synced Claude hooks back into the local settings file. */
 export async function applyClaudeHooks(hooksJsonContent: string): Promise<void> {
+  const home = homedir();
   const existingRaw = await readIfExists(AgentPaths.claude.settingsJson);
   const existing = existingRaw ? (JSON.parse(existingRaw) as Record<string, unknown>) : {};
   const incoming = JSON.parse(hooksJsonContent) as Record<string, unknown>;
-  existing.hooks = incoming.hooks ?? {};
+  // Denormalize only the incoming subset — local-only keys must not be touched
+  // because they were never normalized on snapshot and any `$` in their values
+  // is literal.
+  existing.hooks = denormalizeFromVault(incoming.hooks ?? {}, home);
   await atomicWrite(AgentPaths.claude.settingsJson, `${JSON.stringify(existing, null, 2)}\n`);
 }
 
 /** Merge synced Claude MCP servers back into the local Claude config file. */
 export async function applyClaudeMcp(claudeJsonContent: string): Promise<void> {
+  const home = homedir();
   const existingRaw = await readIfExists(AgentPaths.claude.mcpJson);
   const existing = existingRaw ? (JSON.parse(existingRaw) as Record<string, unknown>) : {};
   const incoming = JSON.parse(claudeJsonContent) as Record<string, unknown>;
-  existing.mcpServers = incoming.mcpServers ?? {};
+  existing.mcpServers = denormalizeFromVault(incoming.mcpServers ?? {}, home);
   await atomicWrite(AgentPaths.claude.mcpJson, `${JSON.stringify(existing, null, 2)}\n`);
 }
 
@@ -353,6 +391,14 @@ export async function applyClaudeAgent(agentName: string, content: string): Prom
   await atomicWrite(target, content);
 }
 
+/** Restore one Claude rule markdown file from the vault. */
+export async function applyClaudeRule(ruleName: string, content: string): Promise<void> {
+  const target = join(AgentPaths.claude.rulesDir, ruleName);
+  await mkdir(AgentPaths.claude.rulesDir, { recursive: true });
+  await ensureCommandBackup(target);
+  await atomicWrite(target, content);
+}
+
 // ─── Claude plugin apply helpers (issue #31) ─────────────────────────────────
 
 /**
@@ -374,7 +420,7 @@ export async function applyClaudePluginManifest(
   const target = join(root, ".claude-plugin", "plugin.json");
   await mkdir(join(root, ".claude-plugin"), { recursive: true });
   await ensureCommandBackup(target);
-  await atomicWrite(target, content);
+  await atomicWrite(target, denormalizeStringFromVault(content, homedir()));
 }
 
 /** Restore one plugin-local command markdown file. */
@@ -425,7 +471,7 @@ export async function applyClaudePluginMcp(pluginName: string, content: string):
   const target = join(root, ".mcp.json");
   await mkdir(root, { recursive: true });
   await ensureCommandBackup(target);
-  await atomicWrite(target, content);
+  await atomicWrite(target, denormalizeStringFromVault(content, homedir()));
 }
 
 /** Restore one plugin-local skill tar archive into the plugin's skills dir. */
@@ -447,7 +493,7 @@ export async function applyClaudeMarketplace(content: string): Promise<void> {
   const target = AgentPaths.claude.marketplaceJson;
   await mkdir(join(target, ".."), { recursive: true });
   await ensureCommandBackup(target);
-  await atomicWrite(target, content);
+  await atomicWrite(target, denormalizeStringFromVault(content, homedir()));
 }
 
 // ─── Apply (pull side) ────────────────────────────────────────────────────────
@@ -543,6 +589,20 @@ export async function applyClaudeVault(
       log.info(`[dry-run] [claude] would write agent: ${agentName}`);
     } else {
       await applyClaudeAgent(agentName, decrypted);
+    }
+  }
+
+  // Rules sub-directory — mirrors commands/agents handling.
+  const ruleFiles = await readAgeFiles(join(claudeDir, "rules"));
+  for (const { name, fullPath } of ruleFiles) {
+    if (!name.endsWith(".md.age")) continue;
+    const encrypted = await readFile(fullPath, "utf8");
+    const decrypted = await decryptString(encrypted, key);
+    const ruleName = basename(name, ".age");
+    if (dryRun) {
+      log.info(`[dry-run] [claude] would write rule: ${ruleName}`);
+    } else {
+      await applyClaudeRule(ruleName, decrypted);
     }
   }
 

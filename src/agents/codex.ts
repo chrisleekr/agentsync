@@ -1,8 +1,10 @@
 import { mkdir, readdir, readFile } from "node:fs/promises";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import { log } from "@clack/prompts";
 import * as TOML from "@iarna/toml";
 import { AgentPaths } from "../config/paths";
+import { denormalizeFromVault, normalizeForVault } from "../core/path-portability";
 import { type RedactionResult, redactSecretLiterals, shouldNeverSync } from "../core/sanitizer";
 import { extractArchive } from "../core/tar";
 import {
@@ -23,7 +25,7 @@ export type CodexSnapshotResult = SnapshotResult;
  * Using TOML parse → redact → stringify avoids the line-level regex approach which
  * misses multi-line values and nested tables.
  */
-function sanitizeCodexConfig(raw: string): RedactionResult<string> {
+function sanitizeCodexConfig(raw: string, home: string = homedir()): RedactionResult<string> {
   const warnings: string[] = [];
   let parsed: TOML.JsonMap;
   try {
@@ -33,7 +35,8 @@ function sanitizeCodexConfig(raw: string): RedactionResult<string> {
     return { value: raw, warnings };
   }
 
-  const redacted = redactSecretLiterals(parsed as unknown, "codex_config");
+  const normalized = normalizeForVault(parsed as unknown, home);
+  const redacted = redactSecretLiterals(normalized, "codex_config");
   warnings.push(...redacted.warnings);
   return {
     value: TOML.stringify(redacted.value as TOML.JsonMap),
@@ -56,9 +59,21 @@ export async function snapshotCodex(): Promise<SnapshotResult> {
     });
   }
 
+  // AGENTS.override.md wins over AGENTS.md when codex reads the pair; sync
+  // both so the override semantics are preserved on the destination machine.
+  const agentsOverrideMd = await readIfExists(AgentPaths.codex.agentsOverrideMd);
+  if (agentsOverrideMd !== null) {
+    artifacts.push({
+      vaultPath: "codex/AGENTS.override.md.age",
+      sourcePath: AgentPaths.codex.agentsOverrideMd,
+      plaintext: agentsOverrideMd,
+      warnings: [],
+    });
+  }
+
   const configToml = await readIfExists(AgentPaths.codex.configToml);
   if (configToml !== null) {
-    const sanitized = sanitizeCodexConfig(configToml);
+    const sanitized = sanitizeCodexConfig(configToml, homedir());
     artifacts.push(collect(sanitized, AgentPaths.codex.configToml, "codex/config.toml.age"));
     warnings.push(...sanitized.warnings);
   }
@@ -86,14 +101,34 @@ export async function snapshotCodex(): Promise<SnapshotResult> {
     // rules dir may not exist yet
   }
 
-  // Skills — delegated to the shared walker.
-  // The walker enforces dot-skip (which covers Codex's vendored `.system/`
-  // bundle), symlink rejection at the root, sentinel verification,
-  // the never-sync interior scan, and the symlink-filtered tar archival in one
-  // place so every skill-bearing agent inherits identical rules.
-  const codexSkills = await collectSkillArtifacts("codex", AgentPaths.codex.skillsDir);
-  artifacts.push(...codexSkills.artifacts);
-  warnings.push(...codexSkills.warnings);
+  // Skills — canonical USER scope is $HOME/.agents/skills per the Codex Skills
+  // docs; the legacy $CODEX_HOME/.codex/skills path stays readable so prior
+  // installs migrate forward on the next pull. Deduplication keys come from
+  // the canonical directory listing rather than emitted artifacts so a skill
+  // the walker REJECTED at the canonical location (never-sync hit, literal
+  // secret) still blocks the legacy copy from leaking through.
+  let canonicalNames: string[] = [];
+  try {
+    canonicalNames = await readdir(AgentPaths.codex.userSkillsDir);
+  } catch {
+    // canonical dir may not exist yet
+  }
+  const seen = new Set(canonicalNames.filter((n) => !n.startsWith(".")));
+
+  const userSkills = await collectSkillArtifacts("codex", AgentPaths.codex.userSkillsDir);
+  const legacySkills = await collectSkillArtifacts("codex", AgentPaths.codex.skillsDir);
+  artifacts.push(...userSkills.artifacts);
+  for (const artifact of legacySkills.artifacts) {
+    // vaultPath is `codex/skills/<name>.tar.age` — extract `<name>` and skip
+    // when the canonical directory already carries the name (regardless of
+    // whether the canonical scan emitted an artifact).
+    const legacyName = artifact.vaultPath
+      .replace(/^codex\/skills\//, "")
+      .replace(/\.tar\.age$/, "");
+    if (seen.has(legacyName)) continue;
+    artifacts.push(artifact);
+  }
+  warnings.push(...userSkills.warnings, ...legacySkills.warnings);
 
   return { artifacts, warnings };
 }
@@ -103,12 +138,24 @@ export async function applyCodexAgentsMd(content: string): Promise<void> {
   await atomicWrite(AgentPaths.codex.agentsMd, content);
 }
 
+/** Restore the optional AGENTS.override.md companion to AGENTS.md. */
+export async function applyCodexAgentsOverrideMd(content: string): Promise<void> {
+  await atomicWrite(AgentPaths.codex.agentsOverrideMd, content);
+}
+
 /** Merge synced Codex config into the local TOML while preserving unrelated local keys. */
 export async function applyCodexConfig(content: string): Promise<void> {
+  const home = homedir();
+  // Denormalize only the incoming subset. Local-only top-level keys that
+  // pre-exist on disk are not in scope for portability — they were never
+  // normalized on snapshot, and a `$` literal in their values must stay
+  // literal. Any AGENTSYNC_HOME placeholder reaching this branch came from
+  // the vault, so denormalization here is sufficient for the synced surface.
+  const incoming = denormalizeFromVault(TOML.parse(content), home) as TOML.JsonMap;
+
   const existingRaw = await readIfExists(AgentPaths.codex.configToml);
   if (existingRaw === null) {
-    // No local file yet — write directly.
-    await atomicWrite(AgentPaths.codex.configToml, content);
+    await atomicWrite(AgentPaths.codex.configToml, TOML.stringify(incoming));
     return;
   }
 
@@ -116,12 +163,10 @@ export async function applyCodexConfig(content: string): Promise<void> {
   try {
     existing = TOML.parse(existingRaw);
   } catch {
-    // Existing file is corrupt — overwrite.
-    await atomicWrite(AgentPaths.codex.configToml, content);
+    await atomicWrite(AgentPaths.codex.configToml, TOML.stringify(incoming));
     return;
   }
 
-  const incoming = TOML.parse(content);
   // Shallow-merge at top level: incoming keys win, local-only keys survive.
   const merged: TOML.JsonMap = { ...existing, ...incoming };
   await atomicWrite(AgentPaths.codex.configToml, TOML.stringify(merged));
@@ -147,7 +192,10 @@ export async function applyCodexRule(ruleName: string, content: string): Promise
  */
 export async function applyCodexSkill(skillName: string, base64Tar: string): Promise<void> {
   validateSkillName(skillName);
-  const targetDir = join(AgentPaths.codex.skillsDir, skillName);
+  // Always restore under $HOME/.agents/skills — the canonical Codex USER scope.
+  // Legacy $CODEX_HOME/.codex/skills remains readable on snapshot but is never
+  // a write target, so pulls migrate forward in place without leaving stragglers.
+  const targetDir = join(AgentPaths.codex.userSkillsDir, skillName);
   await mkdir(targetDir, { recursive: true });
   const tarBuffer = Buffer.from(base64Tar, "base64");
   await extractArchive(tarBuffer, targetDir);
@@ -192,6 +240,12 @@ export async function applyCodexVault(
         continue;
       }
       await applyCodexAgentsMd(decrypted);
+    } else if (name === "AGENTS.override.md.age") {
+      if (dryRun) {
+        log.info("[dry-run] [codex] would apply AGENTS.override.md");
+        continue;
+      }
+      await applyCodexAgentsOverrideMd(decrypted);
     } else if (name === "config.toml.age") {
       if (dryRun) {
         log.info("[dry-run] [codex] would apply config.toml");

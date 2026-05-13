@@ -1,7 +1,13 @@
 import { mkdir, readdir, readFile } from "node:fs/promises";
+import { homedir } from "node:os";
 import { basename, join } from "node:path";
 import { log } from "@clack/prompts";
 import { AgentPaths } from "../config/paths";
+import {
+  denormalizeStringFromVault,
+  normalizeForVault,
+  normalizeStringForVault,
+} from "../core/path-portability";
 import { redactSecretLiterals, shouldNeverSync } from "../core/sanitizer";
 import { extractArchive } from "../core/tar";
 import {
@@ -44,17 +50,15 @@ export async function snapshotCursor(): Promise<SnapshotResult> {
     artifacts.push({
       vaultPath: "cursor/user-rules.md.age",
       sourcePath: AgentPaths.cursor.settingsJson,
-      plaintext: rules,
+      plaintext: normalizeStringForVault(rules, homedir()),
       warnings: [],
     });
   }
 
   const mcpRaw = await readIfExists(AgentPaths.cursor.mcpGlobal);
   if (mcpRaw !== null) {
-    const redacted = redactSecretLiterals(
-      JSON.parse(mcpRaw) as Record<string, unknown>,
-      "cursor_mcp",
-    );
+    const normalized = normalizeForVault(JSON.parse(mcpRaw), homedir());
+    const redacted = redactSecretLiterals(normalized, "cursor_mcp");
     const artifact = collect(
       {
         value: `${JSON.stringify(redacted.value, null, 2)}\n`,
@@ -111,15 +115,20 @@ export async function snapshotCursor(): Promise<SnapshotResult> {
 export async function applyCursorRules(rulesContent: string): Promise<void> {
   const raw = await readIfExists(AgentPaths.cursor.settingsJson);
   const settings: Record<string, unknown> = raw ? (JSON.parse(raw) as Record<string, unknown>) : {};
-  settings.rules = rulesContent;
+  settings.rules = denormalizeStringFromVault(rulesContent, homedir());
   await atomicWrite(AgentPaths.cursor.settingsJson, `${JSON.stringify(settings, null, 2)}\n`);
 }
 
 /**
  * Apply the synced Cursor MCP config back to ~/.cursor/mcp.json.
+ * Placeholders are expanded back to this machine's HOME before write so the
+ * file is immediately usable by Cursor without a separate post-process.
  */
 export async function applyCursorMcp(mcpJsonContent: string): Promise<void> {
-  await atomicWrite(AgentPaths.cursor.mcpGlobal, mcpJsonContent);
+  await atomicWrite(
+    AgentPaths.cursor.mcpGlobal,
+    denormalizeStringFromVault(mcpJsonContent, homedir()),
+  );
 }
 
 /** Restore one Cursor command markdown file from the vault. */
