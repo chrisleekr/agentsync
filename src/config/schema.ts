@@ -1,9 +1,43 @@
 import { z } from "zod";
 
+/**
+ * Age public-key (X25519 recipient) format: `age1` HRP followed by the bech32
+ * data charset. Enforced everywhere a recipient enters the system so the
+ * CLI, vault config, and pulled remote state agree on what "valid" means —
+ * otherwise an invalid value only surfaces inside the age library at push
+ * time as an opaque error, after the snapshot pipeline has done work.
+ */
+export const AgePublicKeySchema = z
+  .string()
+  .regex(
+    /^age1[qpzry9x8gf2tvdw0s3jn54khce6mua7l]+$/,
+    "Invalid age public key: must start with 'age1' and contain only bech32 characters",
+  );
+
+/**
+ * Minimal sanity check for the vault's git remote URL. We do not try to
+ * fully validate every git URL form (https, ssh, git, scp-style, file)
+ * because the user-facing failure is the next `git ls-remote` / `git push`,
+ * which gives a precise message. The schema only rejects strings that
+ * obviously cannot be a URL at all (no protocol marker and no path
+ * separator), so a typo like `branch = "main"` accidentally placed in the
+ * URL field fails fast at config load.
+ */
+const RemoteUrlSchema = z
+  .string()
+  .min(1)
+  .refine((url) => /[:/]/.test(url), {
+    message: "remote.url does not look like a git URL (expected ':' or '/')",
+  });
+
 /** Schema for the vault configuration file shared by every command and test. */
 export const AgentSyncConfigSchema = z.object({
   version: z.string().default("1"),
-  recipients: z.record(z.string().min(1), z.string().min(1)),
+  recipients: z
+    .record(z.string().min(1), AgePublicKeySchema)
+    .refine((r) => Object.keys(r).length > 0, {
+      message: "recipients must contain at least one entry — run `agentsync key add` to add one",
+    }),
   agents: z.object({
     cursor: z.boolean().default(true),
     claude: z.boolean().default(true),
@@ -12,8 +46,8 @@ export const AgentSyncConfigSchema = z.object({
     vscode: z.boolean().default(false),
   }),
   remote: z.object({
-    url: z.string().min(1),
-    branch: z.string().default("main"),
+    url: RemoteUrlSchema,
+    branch: z.string().min(1).default("main"),
   }),
   sync: z.object({
     debounceMs: z.number().int().min(50).max(10_000).default(300),

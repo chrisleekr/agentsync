@@ -1,9 +1,14 @@
 import { describe, expect, test } from "bun:test";
-import { AgentSyncConfigSchema } from "../schema";
+import { AgentSyncConfigSchema, AgePublicKeySchema } from "../schema";
+
+// A bech32-only recipient. `age1abc` cannot be used as a fixture because `b`
+// is not in the bech32 charset `qpzry9x8gf2tvdw0s3jn54khce6mua7l` that the
+// schema now enforces.
+const VALID_RECIPIENT = "age1qpzry9x8gf2tvdw0s3jn54khce6mua7l";
 
 const VALID_BASE = {
   version: "1",
-  recipients: { local: "age1abc" },
+  recipients: { local: VALID_RECIPIENT },
   agents: {
     cursor: true,
     claude: true,
@@ -36,7 +41,7 @@ describe("AgentSyncConfigSchema", () => {
 
   test("rejects config with missing remote", () => {
     const result = AgentSyncConfigSchema.safeParse({
-      recipients: { me: "age1xxx" },
+      recipients: { me: VALID_RECIPIENT },
       agents: {
         cursor: true,
         claude: false,
@@ -51,7 +56,7 @@ describe("AgentSyncConfigSchema", () => {
   test("rejects recipients as array instead of object", () => {
     const result = AgentSyncConfigSchema.safeParse({
       ...VALID_BASE,
-      recipients: ["age1xxx"],
+      recipients: [VALID_RECIPIENT],
     });
     expect(result.success).toBe(false);
   });
@@ -60,6 +65,51 @@ describe("AgentSyncConfigSchema", () => {
     const result = AgentSyncConfigSchema.safeParse({
       ...VALID_BASE,
       recipients: { me: "" },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  test("rejects empty recipients map — empty vault is a misconfiguration, not a state", () => {
+    const result = AgentSyncConfigSchema.safeParse({
+      ...VALID_BASE,
+      recipients: {},
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const message = result.error.issues.map((i) => i.message).join("\n");
+      expect(message).toContain("at least one entry");
+    }
+  });
+
+  test("rejects recipient value without age1 prefix", () => {
+    const result = AgentSyncConfigSchema.safeParse({
+      ...VALID_BASE,
+      recipients: { me: "notage1xyz" },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  test("rejects recipient value with invalid bech32 characters", () => {
+    // 'B' / 'I' / 'O' / '1' are explicitly excluded from the bech32 charset.
+    const result = AgentSyncConfigSchema.safeParse({
+      ...VALID_BASE,
+      recipients: { me: "age1BAD" },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  test("rejects empty branch — would push to empty refspec", () => {
+    const result = AgentSyncConfigSchema.safeParse({
+      ...VALID_BASE,
+      remote: { url: "git@github.com:user/vault.git", branch: "" },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  test("rejects remote.url that is obviously not a URL", () => {
+    const result = AgentSyncConfigSchema.safeParse({
+      ...VALID_BASE,
+      remote: { url: "not a url", branch: "main" },
     });
     expect(result.success).toBe(false);
   });
@@ -104,7 +154,7 @@ describe("AgentSyncConfigSchema", () => {
   test("recipients object must have at least one entry with non-empty key", () => {
     const result = AgentSyncConfigSchema.safeParse({
       ...VALID_BASE,
-      recipients: { "": "age1abc" },
+      recipients: { "": VALID_RECIPIENT },
     });
     expect(result.success).toBe(false);
   });
@@ -118,5 +168,32 @@ describe("AgentSyncConfigSchema", () => {
     const { version: _v, ...withoutVersion } = VALID_BASE;
     const parsed = AgentSyncConfigSchema.parse(withoutVersion);
     expect(parsed.version).toBe("1");
+  });
+});
+
+describe("AgePublicKeySchema", () => {
+  test("accepts a bech32-charset key with age1 prefix", () => {
+    expect(AgePublicKeySchema.safeParse("age1qpzry9x8gf2tvdw0s3jn54khce6mua7l").success).toBe(true);
+  });
+
+  test("rejects empty string", () => {
+    expect(AgePublicKeySchema.safeParse("").success).toBe(false);
+  });
+
+  test("rejects missing age1 prefix", () => {
+    expect(AgePublicKeySchema.safeParse("notage1xyz").success).toBe(false);
+  });
+
+  test("rejects uppercase letters (bech32 is case-segregated)", () => {
+    expect(AgePublicKeySchema.safeParse("age1BAD").success).toBe(false);
+  });
+
+  test("rejects characters outside the bech32 data charset", () => {
+    // 'b' is one of the four bech32-excluded letters (b/i/o/1).
+    expect(AgePublicKeySchema.safeParse("age1abc").success).toBe(false);
+  });
+
+  test("rejects whitespace around an otherwise-valid key", () => {
+    expect(AgePublicKeySchema.safeParse(" age1qpzry9 ").success).toBe(false);
   });
 });

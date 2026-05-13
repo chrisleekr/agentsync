@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { log } from "@clack/prompts";
 import { defineCommand } from "citty";
 import { loadConfig, resolveConfigPath, writeConfig } from "../config/loader";
+import { AgePublicKeySchema } from "../config/schema";
 import {
   decryptString,
   encryptString,
@@ -62,7 +63,7 @@ export const keyCommand = defineCommand({
         const name = args.name as string;
         const pubkey = args.pubkey as string;
 
-        if (!pubkey.startsWith("age1")) {
+        if (!AgePublicKeySchema.safeParse(pubkey).success) {
           log.error("Invalid key: age public keys must start with 'age1'");
           process.exitCode = 1;
           return;

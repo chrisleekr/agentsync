@@ -10,8 +10,9 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { rm, symlink } from "node:fs/promises";
 import { join } from "node:path";
 import { AgentPaths } from "../../config/paths";
+import { AgentSyncConfigSchema } from "../../config/schema";
 import { createTmpDir } from "../../test-helpers/fixtures";
-import { buildSkillsDirChecks } from "../doctor";
+import { buildSkillsDirChecks, formatSchemaError } from "../doctor";
 
 type MutablePaths = {
   claude: { skillsDir: string };
@@ -127,5 +128,61 @@ describe("buildSkillsDirChecks", () => {
     const claudeRow = rows.find((r) => r.name === "Claude skills directory");
     expect(claudeRow?.status).toBe("warn");
     expect(claudeRow?.detail).toContain("Symlinked skills root");
+  });
+});
+
+describe("formatSchemaError", () => {
+  test("names the offending recipient alias on a non-age1 value", () => {
+    const result = AgentSyncConfigSchema.safeParse({
+      recipients: { alice: "notage1xyz" },
+      agents: {
+        cursor: true,
+        claude: true,
+        codex: true,
+        copilot: true,
+        vscode: false,
+      },
+      remote: { url: "git@github.com:user/vault.git", branch: "main" },
+      sync: {
+        debounceMs: 300,
+        autoPush: true,
+        autoPull: true,
+        pullIntervalMs: 300_000,
+      },
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const detail = formatSchemaError(result.error);
+      expect(detail).toContain("recipients.alice");
+    }
+  });
+
+  test("names remote.branch on empty branch", () => {
+    const result = AgentSyncConfigSchema.safeParse({
+      recipients: { me: "age1qpzry9x8gf2tvdw0s3jn54khce6mua7l" },
+      agents: {
+        cursor: true,
+        claude: true,
+        codex: true,
+        copilot: true,
+        vscode: false,
+      },
+      remote: { url: "git@github.com:user/vault.git", branch: "" },
+      sync: {
+        debounceMs: 300,
+        autoPush: true,
+        autoPull: true,
+        pullIntervalMs: 300_000,
+      },
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const detail = formatSchemaError(result.error);
+      expect(detail).toContain("remote.branch");
+    }
+  });
+
+  test("falls back to String(err) for non-Zod errors", () => {
+    expect(formatSchemaError(new Error("disk full"))).toBe("Invalid: Error: disk full");
   });
 });
