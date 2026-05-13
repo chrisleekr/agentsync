@@ -30,29 +30,11 @@ services:
     # Default CMD runs the smoke scenario. Per-scenario CI runs override CMD
     # via `docker compose run --rm machine /home/agent/scenarios/$NAME.sh`.
 
-  # Scenario 17 (git:// protocol). Brought up only when the `git-daemon`
-  # profile is selected so default `compose up` stays cheap. Modern git refuses
-  # to run `git daemon` as root unless --user is set; we drop to the alpine
-  # `git` user (uid 1000 in alpine/git) for the listener.
-  git-daemon:
-    image: alpine/git:latest
-    profiles: ["git-daemon"]
-    volumes:
-      - vault-data:/vault
-    user: "1000:1000"
-    expose: ["9418"]
-    command:
-      - sh
-      - -c
-      - |
-        set -e
-        git daemon \
-          --reuseaddr \
-          --base-path=/vault \
-          --export-all \
-          --enable=receive-pack \
-          --verbose \
-          /vault
+  # Scenario 17 (git:// protocol) is self-contained — it spawns `git daemon`
+  # inside the `machine` container on 127.0.0.1:9418 rather than relying on a
+  # cross-container service. That avoids the DNS quirk we hit on GitHub
+  # Actions runners where `compose --profile … run --rm` could not resolve a
+  # sibling service hostname. See docker/e2e/scenarios/17-git-protocol.sh.
 
 volumes:
   vault-data:
