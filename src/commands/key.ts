@@ -63,8 +63,9 @@ export const keyCommand = defineCommand({
         const name = args.name as string;
         const pubkey = args.pubkey as string;
 
-        if (!AgePublicKeySchema.safeParse(pubkey).success) {
-          log.error("Invalid key: age public keys must start with 'age1'");
+        const parsed = AgePublicKeySchema.safeParse(pubkey);
+        if (!parsed.success) {
+          log.error(`Invalid key: ${parsed.error.issues[0].message}`);
           process.exitCode = 1;
           return;
         }
