@@ -76,9 +76,9 @@ with_machine "$MACHINE" bun run src/cli.ts migrate --from cursor --to claude --t
   2>&1 | sed 's/^/    /'
 
 assert_file_exists "$MACHINE/.claude/CLAUDE.md"
-grep -q "$CURSOR_RULES_BODY" "$MACHINE/.claude/CLAUDE.md" \
+grep -Fq "$CURSOR_RULES_BODY" "$MACHINE/.claude/CLAUDE.md" \
   || fail "migrated CLAUDE.md missing canary rules body"
-grep -q "migrated from Cursor" "$MACHINE/.claude/CLAUDE.md" \
+grep -Fq "migrated from Cursor" "$MACHINE/.claude/CLAUDE.md" \
   || fail "migrated CLAUDE.md missing 'migrated from Cursor' heading"
 
 # Source must be byte-identical — the prior bug clobbered settings.json with
