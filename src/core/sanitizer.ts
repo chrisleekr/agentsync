@@ -11,6 +11,11 @@ export const NEVER_SYNC_PATTERNS = [
   "**/.claude/settings.local.json",
   "**/agentsync.toml",
   "**/*.age",
+  // Pull writes ".bak" beside overwritten files. Without this exclusion the
+  // next push would carry stale backup copies back into the vault. Editor
+  // tilde-suffix temp files are the same risk class.
+  "**/*.bak",
+  "**/*~",
 ] as const;
 
 /**
