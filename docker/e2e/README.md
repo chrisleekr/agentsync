@@ -124,7 +124,7 @@ back to the local `homedir()` on pull (B24).
 | 14 | `14-dry-run.sh` | `push --dry-run` lists intended changes but produces no commit |
 | 15 | `15-plugin-marketplace.sh` | Plugin subpath round-trip (`.claude-plugin/plugin.json`, `commands/`, `agents/`, `skills/`, `hooks/`, `.mcp.json`) + `syncMarketplace` toggle (B4, B5) |
 | 16 | `16-vscode-non-mcp.sh` | Pin (B6): VS Code adapter syncs **only** `mcp.json.mcpServers`; settings/keybindings/snippets stay local |
-| 17 | `17-git-protocol.sh` | `git://` transport via the `git-daemon` compose profile (B7) |
+| 17 | `17-git-protocol.sh` | `git://` transport via an in-container `git daemon` on 127.0.0.1:9418 (B7) |
 | 18 | `18-copilot.sh` | Pin/verify canonical `copilot-instructions.md` filename (B16) + single-file `.agent.md` shape (B15); pin not-synced state of `lsp-config.json`, `settings.json`, `mcp-config.json` (B13, B14, B23) |
 | 19 | `19-codex-overrides.sh` | `AGENTS.override.md` precedence (B17); `~/.agents/skills` canonical + legacy fallback (B22); `themes/**` absence (B25); `~/.codex/rules/` intent pin (B18) |
 | 20 | `20-home-portability.sh` | **Headline.** HOME=`/tmp/alpha` push → HOME=`/tmp/beta` pull; every JSON/TOML absolute-HOME path rewrites to `/tmp/beta/…`; `/etc/hosts` and `/opt/foo` left verbatim; markdown bodies left verbatim |
@@ -183,20 +183,18 @@ bun run e2e:all
 ```bash
 bun run e2e:all                            # full sweep (20 scenarios)
 SCENARIOS="smoke.sh 02-multi-machine.sh" bun run e2e:all
-SKIP="17-git-protocol.sh" bun run e2e:all  # skip git:// (needs compose profile)
 SCENARIO=18-copilot.sh bun run e2e:scenario  # one scenario
 bun run e2e:smoke                          # legacy single-up smoke
 bun run e2e:audit                          # decrypted-blob leak audit
 ```
 
-Scenario 17 requires the `git-daemon` compose profile up first:
+Scenario 17 (`git://` transport) is self-contained — it spawns `git daemon`
+inside the `machine` container on 127.0.0.1:9418, so no compose profile or
+sidecar service is required. Run it like any other scenario:
 
 ```bash
-docker compose -f docker/e2e/compose.yml --profile git-daemon up -d git-daemon
 SCENARIO=17-git-protocol.sh bun run e2e:scenario
 ```
-
-`bun run e2e:all` handles the profile lifecycle automatically.
 
 ## Layout
 
@@ -204,7 +202,7 @@ SCENARIO=17-git-protocol.sh bun run e2e:scenario
 docker/e2e/
 ├── README.md                  this file
 ├── Dockerfile.machine         node:24 + bun (latest) + claude/codex/cursor (@latest) + jq + rsync + netcat + age
-├── compose.yml                vault-init + machine + git-daemon (profile)
+├── compose.yml                vault-init + machine (scenario 17 runs git-daemon inside machine)
 ├── entrypoint.sh              rsync fixtures/home/ → /home/agent, drift-check CLIs, exec scenario
 ├── canary-isolation.sh        host-side leak verifier
 ├── run-all.sh                 local driver — iterates scenarios/*.sh

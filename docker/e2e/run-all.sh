@@ -11,7 +11,7 @@
 # Usage:
 #   bash docker/e2e/run-all.sh
 #   SCENARIOS="smoke.sh 02-multi-machine.sh" bash docker/e2e/run-all.sh
-#   SKIP="17-git-protocol.sh" bash docker/e2e/run-all.sh
+#   SKIP="11-daemon-ipc.sh" bash docker/e2e/run-all.sh
 
 set -euo pipefail
 
@@ -80,12 +80,6 @@ for scenario in "${active_scenarios[@]}"; do
     continue
   fi
 
-  # Scenario 17 wants the git-daemon profile up.
-  if [ "$scenario" = "17-git-protocol.sh" ]; then
-    yellow "▶ Bringing up git-daemon profile for $scenario"
-    docker compose -f "$COMPOSE_FILE" --profile git-daemon up -d git-daemon
-  fi
-
   yellow "▶ RUN  $scenario"
   if docker compose -f "$COMPOSE_FILE" run --rm \
        machine "/home/agent/scenarios/${scenario}"; then
@@ -94,10 +88,6 @@ for scenario in "${active_scenarios[@]}"; do
   else
     red "✗ FAIL $scenario"
     failed+=("$scenario")
-  fi
-
-  if [ "$scenario" = "17-git-protocol.sh" ]; then
-    docker compose -f "$COMPOSE_FILE" stop git-daemon >/dev/null 2>&1 || true
   fi
 done
 
