@@ -890,6 +890,152 @@ describe("integration", () => {
     expect(existsSync(join(vaultDir, "claude", "dry-cli.age"))).toBe(false);
   });
 
+  test("pushCommand.run with dryRun=true aborts when an artifact warning reports a literal secret", async () => {
+    // Dry-run is the canonical pre-flight gate. If it ever lets a literal
+    // credential through, users (and CI) will rely on it as a safe preview
+    // only to be surprised by a fatal on the real push. The CLI dry-run
+    // path must run the same Phase 1 abort that the non-dry-run path does.
+    fakeArtifacts.length = 0;
+    fakeArtifacts.push({
+      vaultPath: "claude/leaky-cli.age",
+      sourcePath: "/fake/.claude/leaky-cli.md",
+      plaintext: "# clean prompt body",
+      warnings: ["Detected literal secret for field anthropic_api_key in /fake/.claude/leaky.json"],
+    });
+    fakeLogs.error.length = 0;
+    fakeLogs.info.length = 0;
+    process.exitCode = 0;
+
+    await pushMod.pushCommand.run?.({
+      args: { agent: "claude", dryRun: true, message: undefined },
+      rawArgs: [],
+      cmd: {} as never,
+    } as never);
+
+    expect(process.exitCode).toBe(1);
+    expect(fakeLogs.error.some((message) => message.startsWith("Push aborted"))).toBe(true);
+    expect(fakeLogs.error.some((message) => message.includes("Detected literal secret"))).toBe(
+      true,
+    );
+    expect(existsSync(join(vaultDir, "claude", "leaky-cli.age"))).toBe(false);
+
+    fakeArtifacts.length = 0;
+    process.exitCode = 0;
+  });
+
+  test("pushCommand.run with dryRun=true emits one SKIP line per non-skill never-sync artifact", async () => {
+    // The dry-run SKIP signal must come through onPreview only. Previously
+    // allWarnings.push fired alongside onPreview for the same artifact, and
+    // the CLI rendered allWarnings via result.errors → log.warn, producing
+    // two near-duplicate lines per never-sync source. The skill-walker
+    // never-sync case fatals in Phase 1 (covered elsewhere); this test
+    // exercises the top-level-source path where shouldNeverSync matches an
+    // artifact an adapter happened to surface (e.g. **/auth.json).
+    fakeArtifacts.length = 0;
+    fakeArtifacts.push({
+      vaultPath: "claude/auth.json.age",
+      sourcePath: "/fake/.claude/auth.json",
+      plaintext: "{}",
+      warnings: [],
+    });
+    fakeLogs.info.length = 0;
+    fakeLogs.warn.length = 0;
+    fakeLogs.error.length = 0;
+    process.exitCode = 0;
+
+    await pushMod.pushCommand.run?.({
+      args: { agent: "claude", dryRun: true, message: undefined },
+      rawArgs: [],
+      cmd: {} as never,
+    } as never);
+
+    // Exactly one SKIP line via onPreview, no second "matches never-sync
+    // pattern" warning rendered from allWarnings.
+    const authJsonLines = fakeLogs.warn.filter((m) => m.includes("auth.json"));
+    expect(authJsonLines).toHaveLength(1);
+    expect(authJsonLines[0]).toContain("[dry-run]");
+    expect(authJsonLines[0]).toContain("SKIP");
+    expect(authJsonLines[0]).toContain("never-sync");
+    expect(fakeLogs.warn.some((m) => m.includes("matches never-sync pattern"))).toBe(false);
+    expect(existsSync(join(vaultDir, "claude", "auth.json.age"))).toBe(false);
+
+    fakeArtifacts.length = 0;
+  });
+
+  test("performPush with dryRun=true does not push the Skipped warning into result.errors for non-skill never-sync hits", async () => {
+    // API-level twin of the CLI test above: gate is at the performPush
+    // boundary, so the dry-run path must leave result.errors clean of the
+    // "matches never-sync pattern" line. A non-dry-run run on the same
+    // artifact still surfaces the warning via result.errors (covered by
+    // the next test) so the operator's post-run summary is unchanged.
+    fakeArtifacts.length = 0;
+    fakeArtifacts.push({
+      vaultPath: "claude/auth.json.age",
+      sourcePath: "/fake/.claude/auth.json",
+      plaintext: "{}",
+      warnings: [],
+    });
+
+    const previews: Array<{ sourcePath: string; skipped: boolean; skipReason?: string }> = [];
+    const result = await pushMod.performPush({
+      agent: "claude",
+      dryRun: true,
+      onPreview: (entry) => {
+        previews.push({
+          sourcePath: entry.sourcePath,
+          skipped: entry.skipped,
+          skipReason: entry.skipReason,
+        });
+      },
+    });
+
+    expect(result.fatal).toBe(false);
+    expect(result.pushed).toBe(0);
+    expect(result.errors.some((e) => e.includes("matches never-sync pattern"))).toBe(false);
+    // The SKIP signal must still reach the caller — just through onPreview only.
+    expect(previews).toHaveLength(1);
+    expect(previews[0]?.skipped).toBe(true);
+    expect(previews[0]?.skipReason).toBe("never-sync");
+    expect(previews[0]?.sourcePath).toBe("/fake/.claude/auth.json");
+
+    fakeArtifacts.length = 0;
+  });
+
+  test("performPush without dryRun still surfaces the Skipped warning for non-skill never-sync hits when other artifacts pushed", async () => {
+    // The real-push post-run summary must keep this warning. performPush
+    // returns allWarnings via result.errors only when at least one artifact
+    // was actually pushed (the `pushed === 0` branch returns early), so
+    // pair the never-sync artifact with a clean sibling to exercise the
+    // summary path.
+    fakeArtifacts.length = 0;
+    fakeArtifacts.push({
+      vaultPath: "claude/auth.json.age",
+      sourcePath: "/fake/.claude/auth.json",
+      plaintext: "{}",
+      warnings: [],
+    });
+    fakeArtifacts.push({
+      vaultPath: "claude/sibling.age",
+      sourcePath: "/fake/.claude/sibling.md",
+      plaintext: "# clean sibling",
+      warnings: [],
+    });
+
+    const result = await pushMod.performPush({ agent: "claude" });
+
+    expect(result.fatal).toBe(false);
+    expect(result.pushed).toBe(1);
+    expect(
+      result.errors.some(
+        (e) => e.includes("/fake/.claude/auth.json") && e.includes("matches never-sync pattern"),
+      ),
+    ).toBe(true);
+    expect(existsSync(join(vaultDir, "claude", "auth.json.age"))).toBe(false);
+    expect(existsSync(join(vaultDir, "claude", "sibling.age"))).toBe(true);
+
+    fakeArtifacts.length = 0;
+  });
+
   test("pushCommand.run without dryRun encrypts and pushes artifacts", async () => {
     fakeArtifacts.push({
       vaultPath: "claude/cli-push.age",
