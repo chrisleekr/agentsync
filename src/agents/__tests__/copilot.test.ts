@@ -437,30 +437,27 @@ describe("applyCopilotVault dryRun", () => {
   // must be rejected symmetrically with the skills/ loop above. Distinct
   // payload filename (`AGENT_LEAKED.md`) so a false positive can't be
   // mistaken for the skills-loop assertion's leakage.
-  test("applyCopilotVault skips adversarial agent filenames without traversal", async () => {
+  test("applyCopilotVault rejects a dotfile-named agent artifact via the validator", async () => {
     const { generateIdentity, identityToRecipient, encryptString } = await import(
       "../../core/encryptor"
     );
-    const { archiveDirectory } = await import("../../core/tar");
     const identity = await generateIdentity();
     const recipient = await identityToRecipient(identity);
 
-    const payloadSrc = join(tmpDir, "agent-payload-src");
-    mkdirSync(payloadSrc, { recursive: true });
-    writeFileSync(join(payloadSrc, "AGENT_LEAKED.md"), "LEAKED_AGENT_PAYLOAD", "utf8");
-    const tarBuffer = await archiveDirectory(payloadSrc);
-    const base64 = tarBuffer.toString("base64");
-    const encrypted = await encryptString(base64, [recipient]);
-
+    // The filename passes the `.agent.md.age` suffix gate so the dispatch loop
+    // reaches the validator, which then rejects on the leading dot and
+    // warn-and-skips. Single-file agents post-B15 have no tar layer, so the
+    // payload is plaintext markdown.
+    const encrypted = await encryptString("LEAKED_DOTFILE_PAYLOAD", [recipient]);
     const vaultDir = join(tmpDir, "vault-adversarial-agent");
     const agentsVaultDir = join(vaultDir, "copilot", "agents");
     mkdirSync(agentsVaultDir, { recursive: true });
-    writeFileSync(join(agentsVaultDir, "...tar.age"), encrypted, "utf8");
+    writeFileSync(join(agentsVaultDir, ".hidden.agent.md.age"), encrypted, "utf8");
 
     await copilotModule.applyCopilotVault(vaultDir, identity, false);
 
-    const escapedPayload = join(testCopilotPaths.agentsDir, "..", "AGENT_LEAKED.md");
-    const leakedExists = await Bun.file(escapedPayload).exists();
-    expect(leakedExists).toBeFalse();
+    const dotfileTarget = join(testCopilotPaths.agentsDir, ".hidden.agent.md");
+    const dotfileExists = await Bun.file(dotfileTarget).exists();
+    expect(dotfileExists).toBeFalse();
   });
 });
