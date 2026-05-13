@@ -28,6 +28,9 @@ step "Verify postgres-helper skill bundle tar.age in vault"
 assert_in_vault "$VAULT_PATH" "claude/skills/postgres-helper.tar.age"
 
 step "tar_age_extract — bundle content equals source tree"
+# Wipe the extraction target so a stale leftover from a previous local run
+# can't sneak files into the diff comparison.
+rm -rf /tmp/extracted-skill
 mkdir -p /tmp/extracted-skill
 tar_age_extract "$VAULT_PATH" "claude/skills/postgres-helper.tar.age" /tmp/extracted-skill "$KEY_A"
 diff -r "$MACHINE_A/.claude/skills/postgres-helper" /tmp/extracted-skill || \

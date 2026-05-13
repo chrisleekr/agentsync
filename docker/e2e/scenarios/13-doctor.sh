@@ -137,3 +137,4 @@ mv "$MACHINE/.claude/settings.json.bak" "$MACHINE/.claude/settings.json"
 # (push.ts only writes .age files). Positive `pass` row is asserted above.
 
 banner "DOCTOR"
+

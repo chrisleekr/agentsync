@@ -83,11 +83,15 @@ assert_field_eq "$MACHINE_A/.config/Cursor/User/settings.json" "$MACHINE_B/.conf
 step "VS Code mcp.json round-trips; settings/keybindings/snippets stay local-only"
 assert_field_eq "$MACHINE_A/.config/Code/User/mcp.json" "$MACHINE_B/.config/Code/User/mcp.json" ".mcpServers"
 # Pull on B does not write settings/keybindings/snippets unless they were in vault
-# (which they aren't — VS Code adapter only syncs mcp.json). assert that on B
-# the absence is fresh-machine reality (they weren't planted, won't be written):
-if [ -e "$MACHINE_B/.config/Code/User/settings.json" ]; then
-  fail "vscode settings.json leaked into B via pull"
-fi
+# (which they aren't — VS Code adapter only syncs mcp.json). Assert absence
+# for every file the step title claims stays local-only, so a future regression
+# that suddenly starts syncing settings.json (or keybindings, or snippets)
+# fails this scenario instead of slipping through.
+for local_only in settings.json keybindings.json snippets/typescript.json; do
+  if [ -e "$MACHINE_B/.config/Code/User/$local_only" ]; then
+    fail "vscode $local_only leaked into B via pull"
+  fi
+done
 pass "vscode non-MCP files correctly absent on B"
 
 banner "MULTI-MACHINE ROUND-TRIP"

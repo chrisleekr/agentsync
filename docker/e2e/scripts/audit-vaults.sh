@@ -46,17 +46,24 @@ for vault in "${vault_dirs[@]}"; do
   blobs=$(git --git-dir="$vault" ls-tree -r HEAD 2>/dev/null | awk '$4 ~ /\.age$/ {print $4}')
   [ -z "$blobs" ] && continue
 
+  tmp=$(mktemp)
   while IFS= read -r path; do
     [ -z "$path" ] && continue
-    plaintext=$(git --git-dir="$vault" show "HEAD:${path}" \
-                | age -d -i "$KEY_FILE" 2>/dev/null || true)
-    [ -z "$plaintext" ] && continue
+    # Decrypt to disk: binary plaintext (NUL bytes) survives intact, and we
+    # treat a decrypt failure as audit failure rather than silently skipping
+    # it (a swallowed error would under-count leaks).
+    if ! git --git-dir="$vault" show "HEAD:${path}" | age -d -i "$KEY_FILE" > "$tmp" 2>/dev/null; then
+      rm -f "$tmp"
+      red "audit: could not decrypt $vault::$path"
+      exit 1
+    fi
     for pat in "${PATTERNS[@]}"; do
-      if printf '%s' "$plaintext" | grep -Eq "$pat"; then
+      if grep -Eq "$pat" "$tmp"; then
         leaks+=("$vault::$path matched /$pat/")
       fi
     done
   done <<<"$blobs"
+  rm -f "$tmp"
 done
 
 if [ "${#leaks[@]}" -gt 0 ]; then

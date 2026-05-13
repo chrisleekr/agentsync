@@ -27,7 +27,7 @@ reset_machine() {
 # ── Subtest 1: claude → codex global-rules --dry-run ─────────────────────────
 step "Subtest 1: migrate --from claude --to codex --type global-rules --dry-run"
 reset_machine
-[ ! -f "$MACHINE/.codex/AGENTS.md" ] || rm -f "$MACHINE/.codex/AGENTS.md"
+rm -f "$MACHINE/.codex/AGENTS.md"
 with_machine "$MACHINE" bun run src/cli.ts migrate --from claude --to codex --type global-rules --dry-run \
   2>&1 | tee /tmp/migrate-dry.log | sed 's/^/    /'
 [ ! -f "$MACHINE/.codex/AGENTS.md" ] \

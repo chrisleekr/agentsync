@@ -23,11 +23,11 @@ machine HOME under `/tmp/<scenario>-<role>`.
 The bootstrap rsync target lives at `docker/e2e/fixtures/home/` and mirrors
 a real customer's `$HOME`:
 
-```
+```text
+.claude.json                          {oauthAccount, mcpServers, projects}
 .claude/
   CLAUDE.md
   settings.json                       {permissions, env, theme, statusLine, hooks}
-  .claude.json                        {oauthAccount, mcpServers, projects}   ← under HOME, not .claude/
   commands/{deploy.md, review.md}
   agents/{code-reviewer.md, test-writer.md}
   rules/{coding-style.md, review-checklist.md}     ← B19
@@ -200,7 +200,7 @@ SCENARIO=17-git-protocol.sh bun run e2e:scenario
 
 ## Layout
 
-```
+```text
 docker/e2e/
 ├── README.md                  this file
 ├── Dockerfile.machine         node:24 + bun (latest) + claude/codex/cursor (@latest) + jq + rsync + netcat + age

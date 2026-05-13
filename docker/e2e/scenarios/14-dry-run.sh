@@ -77,3 +77,4 @@ echo "$new_plaintext" | grep -qF "new section added between snapshots" \
 pass "real push committed ${pre_head:0:10} → ${post_real_head:0:10}"
 
 banner "DRY-RUN"
+

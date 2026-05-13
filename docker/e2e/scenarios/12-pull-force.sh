@@ -82,3 +82,4 @@ assert_contains "$CANARY" "LOCAL MUTATION ON B"
 pass "pull --dry-run left local mutation untouched"
 
 banner "PULL FORCE + DRY-RUN"
+

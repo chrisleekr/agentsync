@@ -103,7 +103,11 @@ jobs:
   audit:
     name: Vault leak audit
     runs-on: ubuntu-latest
+    # Run regardless of whether the scenarios job succeeded — a vault leak
+    # is a separate security signal that we don't want hidden behind an
+    # unrelated scenario failure.
     needs: [scenarios]
+    if: always()
     timeout-minutes: 10
     steps:
       - name: Checkout

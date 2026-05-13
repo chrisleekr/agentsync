@@ -82,10 +82,14 @@ elif [ "$rerun_exit" -eq 0 ] && [ "$head_before_rerun" != "$head_after_rerun" ];
     || fail "new key lost after second key add"
   pass "re-run still produced a multi-recipient vault"
 else
-  # Rejecting with non-zero exit + 'already' message is also acceptable.
+  # Rejecting with non-zero exit + 'already' message is also acceptable —
+  # but rejecting must NOT have advanced HEAD (a failed CLI shouldn't
+  # silently commit half-state into the vault).
   grep -qiE "already|exists|duplicate" /tmp/keyadd-rerun.log \
     || fail "re-run failed (exit $rerun_exit) but no 'already exists' message"
-  pass "re-run rejected duplicate with clear message (exit $rerun_exit)"
+  [ "$head_before_rerun" = "$head_after_rerun" ] \
+    || fail "duplicate-rejected re-run still advanced vault HEAD ${head_before_rerun:0:10} → ${head_after_rerun:0:10}"
+  pass "re-run rejected duplicate with clear message + vault HEAD unchanged"
 fi
 
 banner "KEY ADD (SECOND RECIPIENT)"

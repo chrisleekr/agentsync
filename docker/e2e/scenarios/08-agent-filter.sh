@@ -105,14 +105,16 @@ cp "$A/.config/agentsync/key.txt" "$B/.config/agentsync/key.txt"
 chmod 600 "$B/.config/agentsync/key.txt"
 with_machine "$B" bun run src/cli.ts init --remote "$VAULT_URL" --branch main
 
-# Snapshot the B tree (minus the agentsync vault clone + key) and compare after dry-run.
+# Snapshot the B tree (minus the agentsync vault clone + key) and compare
+# after dry-run. Include directories alongside files so a `pull --dry-run`
+# that creates or removes an empty directory is still caught.
 pre_snapshot=$(mktemp)
-( cd "$B" && find . -path './.config/agentsync' -prune -o -type f -print | sort ) > "$pre_snapshot"
+( cd "$B" && find . -path './.config/agentsync' -prune -o -print | sort ) > "$pre_snapshot"
 
 with_machine "$B" bun run src/cli.ts pull --dry-run 2>&1 | tee /tmp/agent-filter-dryrun.log
 
 post_snapshot=$(mktemp)
-( cd "$B" && find . -path './.config/agentsync' -prune -o -type f -print | sort ) > "$post_snapshot"
+( cd "$B" && find . -path './.config/agentsync' -prune -o -print | sort ) > "$post_snapshot"
 
 diff -q "$pre_snapshot" "$post_snapshot" \
   || fail "pull --dry-run created or removed files in B's tree"

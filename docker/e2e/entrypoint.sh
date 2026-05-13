@@ -28,8 +28,12 @@ cursor-agent --version >/dev/null
 # credential canary plant it explicitly from docker/e2e/fixtures/canaries.
 # We do still run `codex login --with-api-key` once with a stub so the
 # auth.json path exists for scenarios that exercise its never-sync behaviour.
-export OPENAI_API_KEY="${OPENAI_API_KEY:-sk-stub-for-bootstrap}"
-printf '%s' "$OPENAI_API_KEY" | codex login --with-api-key >/dev/null
+# Use a fixed literal — NEVER inherit the ambient OPENAI_API_KEY because a
+# developer or CI runner that exports a real key would otherwise leak it
+# into the test HOME's auth.json (the suite is supposed to exercise canaries
+# only, not real credentials).
+unset OPENAI_API_KEY
+printf '%s' 'sk-stub-for-bootstrap' | codex login --with-api-key >/dev/null
 
 # Fixture install. `rsync -a` is additive — it copies fixtures/home/* onto
 # HOME without touching siblings (.bun, .npm-global, fixtures, scenarios,

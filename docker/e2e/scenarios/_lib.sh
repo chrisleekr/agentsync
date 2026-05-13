@@ -86,24 +86,32 @@ assert_not_in_vault() {
   pass "vault absent: $needle"
 }
 
-# assert_no_literal_in_vault <vault-git-dir> <regex>
+# assert_no_literal_in_vault <vault-git-dir> <key-file> <regex>
 # Decrypts every .age blob with the given key file and greps each plaintext
 # against the regex. Any match fails the scenario. Used to catch issue #47
 # regressions where literal secrets travel through the encrypted artifact body.
+#
+# Plaintext lands on disk (not in shell vars) so binary payloads with NUL
+# bytes are preserved. Decrypt failures abort the audit — a swallowed
+# decrypt error would silently under-count leaks.
 assert_no_literal_in_vault() {
   local vault="$1" key_file="$2" regex="$3"
   [ -f "$key_file" ] || fail "key file missing: $key_file"
   local blobs
   blobs=$(git --git-dir="$vault" ls-tree -r HEAD | awk '$4 ~ /\.age$/ {print $4}')
-  local hit=""
+  local hit="" tmp
+  tmp=$(mktemp)
   while IFS= read -r path; do
     [ -z "$path" ] && continue
-    local plaintext
-    plaintext=$(git --git-dir="$vault" show "HEAD:${path}" | age -d -i "$key_file" 2>/dev/null || true)
-    if [ -n "$plaintext" ] && printf '%s' "$plaintext" | grep -Eq "$regex"; then
+    if ! git --git-dir="$vault" show "HEAD:${path}" | age -d -i "$key_file" > "$tmp" 2>/dev/null; then
+      rm -f "$tmp"
+      fail "could not decrypt $path (key mismatch or corrupt blob)"
+    fi
+    if grep -Eq "$regex" "$tmp"; then
       hit="${hit}${path} "
     fi
   done <<<"$blobs"
+  rm -f "$tmp"
   if [ -n "$hit" ]; then
     fail "literal regex '$regex' found inside vault blobs: $hit"
   fi

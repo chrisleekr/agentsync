@@ -47,17 +47,24 @@ if git --git-dir="$VAULT_PATH" show "HEAD:${sample}" | age -d -i /tmp/rotate-old
 fi
 pass "old key rejected on $sample"
 
-step "New key decrypts every blob; plaintext byte-equal to pre-rotation"
+step "Vault has the same blob set pre and post (rotation re-encrypts, doesn't add or drop)"
 post_blobs=$(git --git-dir="$VAULT_PATH" ls-tree -r HEAD | awk '$4 ~ /\.age$/ {print $4}')
+diff <(echo "$pre_blobs" | sort) <(echo "$post_blobs" | sort) \
+  || fail "blob path set drifted across rotation"
+pass "blob path set identical"
+
+step "New key decrypts every blob; plaintext byte-equal to pre-rotation"
+# Compare via files + cmp so binary plaintext (skill tar bundles, etc.) is
+# safe and we don't truncate at NUL in shell variables.
+mkdir -p /tmp/rotate-post
 while IFS= read -r path; do
   [ -z "$path" ] && continue
   safe=$(printf '%s' "$path" | tr '/' '_')
-  post=$(git --git-dir="$VAULT_PATH" show "HEAD:${path}" | age -d -i "$KEY" 2>/dev/null)
-  pre=$(cat "/tmp/rotate-pre/${safe}" 2>/dev/null || echo "MISSING")
-  if [ "$pre" != "$post" ]; then
-    fail "plaintext drift on $path after rotation"
-  fi
+  git --git-dir="$VAULT_PATH" show "HEAD:${path}" | age -d -i "$KEY" > "/tmp/rotate-post/${safe}" 2>/dev/null \
+    || fail "new key failed to decrypt $path"
+  cmp "/tmp/rotate-pre/${safe}" "/tmp/rotate-post/${safe}" >/dev/null \
+    || fail "plaintext drift on $path after rotation"
 done <<<"$post_blobs"
-pass "every blob decrypts under new key with identical plaintext"
+pass "every blob decrypts under new key with byte-identical plaintext"
 
 banner "KEY ROTATION"
