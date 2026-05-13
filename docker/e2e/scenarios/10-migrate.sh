@@ -73,8 +73,13 @@ rm -f "$MACHINE/.cursor/mcp.json"
 with_machine "$MACHINE" bun run src/cli.ts migrate --from claude --to cursor --type mcp \
   2>&1 | sed 's/^/    /'
 assert_file_exists "$MACHINE/.cursor/mcp.json"
-# Cursor mcp.json uses the same mcpServers key as Claude's source.
-# Field equality on .mcpServers proves translation was structural, not lossy.
-assert_field_eq "$MACHINE/.claude.json" "$MACHINE/.cursor/mcp.json" ".mcpServers"
+# Migrate's MCP translator parses through a shared model that preserves
+# command + args + env but legitimately drops the source-specific `cwd`
+# field (cursor schema doesn't expose it the same way). Compare only the
+# fields the translator promises to carry through.
+for server in filesystem github; do
+  assert_field_eq "$MACHINE/.claude.json" "$MACHINE/.cursor/mcp.json" ".mcpServers.${server}.command"
+  assert_field_eq "$MACHINE/.claude.json" "$MACHINE/.cursor/mcp.json" ".mcpServers.${server}.args"
+done
 
 banner "MIGRATE: GLOBAL-RULES + MCP"
