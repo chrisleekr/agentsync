@@ -38,12 +38,7 @@ jobs:
           - 14-dry-run.sh
           - 15-plugin-marketplace.sh
           - 16-vscode-non-mcp.sh
-          # 17-git-protocol.sh — deferred: `docker compose run --rm` does not
-          # reliably resolve the `git-daemon` service hostname even when the
-          # profile is active. Tracked separately; scenario file ships in the
-          # tree so the locally-running developer can exercise it via
-          # `bun run e2e:scenario SCENARIO=17-git-protocol.sh` after a manual
-          # `--profile git-daemon up -d git-daemon`.
+          - 17-git-protocol.sh
           - 18-copilot.sh
           - 19-codex-overrides.sh
           - 20-home-portability.sh
@@ -60,27 +55,14 @@ jobs:
       - name: Initialize vault
         run: docker compose -f docker/e2e/compose.yml up -d vault-init
 
-      # matrix.scenario is a static list literal in this file; not untrusted.
-      - name: Start git-daemon (only for scenario 17)
-        if: matrix.scenario == '17-git-protocol.sh'
-        run: docker compose -f docker/e2e/compose.yml --profile git-daemon up -d git-daemon
-
-      - name: Run scenario (non-git-daemon)
-        if: matrix.scenario != '17-git-protocol.sh'
+      - name: Run scenario
+        # matrix.scenario is a static list literal in this file (not
+        # untrusted), but route through env: anyway so future contributors
+        # can copy the pattern when wiring untrusted inputs.
         env:
           SCENARIO: ${{ matrix.scenario }}
         run: |
           docker compose -f docker/e2e/compose.yml run --rm \
-            machine "/home/agent/scenarios/$SCENARIO"
-
-      # Scenario 17 needs to share the git-daemon network — `docker compose run`
-      # only attaches to services in the active profile, so include it here.
-      - name: Run scenario 17 with git-daemon profile
-        if: matrix.scenario == '17-git-protocol.sh'
-        env:
-          SCENARIO: ${{ matrix.scenario }}
-        run: |
-          docker compose -f docker/e2e/compose.yml --profile git-daemon run --rm \
             machine "/home/agent/scenarios/$SCENARIO"
 
       - name: Capture logs on failure
