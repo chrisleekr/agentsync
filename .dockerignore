@@ -3,15 +3,13 @@ dist
 coverage
 .git
 .github
-# Anchored dot-dir excludes — they apply ONLY at the build-context root, not
-# to the nested `.claude/.cursor/.codex/.copilot/.vscode` paths the e2e
-# fixture tree uses. Without the leading slash these patterns would match
-# `docker/e2e/fixtures/**/.claude` and silently drop scenario coverage.
-/.claude
-/.cursor
-/.codex
-/.copilot
-/.vscode
+# Dot-dir excludes (.claude, .cursor, .codex, .copilot, .vscode) intentionally
+# absent: the e2e fixture tree uses those exact dotted directory names at
+# `docker/e2e/fixtures/**`, and BuildKit's `/`-anchored patterns did not
+# reliably exclude only the root copy in CI. Every COPY in Dockerfile.machine
+# names an explicit scoped path (`src`, `docker/e2e/fixtures`, etc.) so a
+# developer's root-level `.claude/` working directory cannot leak into the
+# image regardless.
 *.log
 .env
 .env.*
