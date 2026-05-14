@@ -15,10 +15,10 @@
         <link rel="canonical" href="https://chrisleekr.github.io/agentsync/architecture/">
       
       
-        <link rel="prev" href="../architecture-overview/">
+        <link rel="prev" href="..">
       
       
-        <link rel="next" href="../command-reference/">
+        <link rel="next" href="../commands/">
       
       
         
@@ -29,7 +29,7 @@
     
     
       
-        <title>Deep Dive - AgentSync</title>
+        <title>Architecture - AgentSync</title>
       
     
     
@@ -82,7 +82,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#architecture-guide" class="md-skip">
+        <a href="#architecture" class="md-skip">
           Skip to content
         </a>
       
@@ -115,7 +115,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Deep Dive
+              Architecture
             
           </span>
         </div>
@@ -250,15 +250,17 @@
   
   
   
+    
   
-    <li class="md-tabs__item">
-      <a href="../getting-started/" class="md-tabs__link">
+  
+    <li class="md-tabs__item md-tabs__item--active">
+      <a href="./" class="md-tabs__link">
         
   
   
     
   
-  Getting Started
+  Architecture
 
       </a>
     </li>
@@ -269,21 +271,18 @@
   
   
   
-    
+  
+    <li class="md-tabs__item">
+      <a href="../commands/" class="md-tabs__link">
+        
   
   
     
-    
-      <li class="md-tabs__item md-tabs__item--active">
-        <a href="../architecture-overview/" class="md-tabs__link">
-          
   
-  
-  Architecture
+  Commands
 
-        </a>
-      </li>
-    
+      </a>
+    </li>
   
 
       
@@ -292,18 +291,17 @@
   
   
   
-    
-    
-      <li class="md-tabs__item">
-        <a href="../command-reference/" class="md-tabs__link">
-          
+    <li class="md-tabs__item">
+      <a href="../migrate/" class="md-tabs__link">
+        
   
   
-  Usage
+    
+  
+  Migrate
 
-        </a>
-      </li>
-    
+      </a>
+    </li>
   
 
       
@@ -312,18 +310,17 @@
   
   
   
-    
-    
-      <li class="md-tabs__item">
-        <a href="../maintenance/" class="md-tabs__link">
-          
+    <li class="md-tabs__item">
+      <a href="../operations/" class="md-tabs__link">
+        
   
+  
+    
   
   Operations
 
-        </a>
-      </li>
-    
+      </a>
+    </li>
   
 
       
@@ -332,18 +329,17 @@
   
   
   
-    
-    
-      <li class="md-tabs__item">
-        <a href="../development/" class="md-tabs__link">
-          
+    <li class="md-tabs__item">
+      <a href="../contributing/" class="md-tabs__link">
+        
   
+  
+    
   
   Contributing
 
-        </a>
-      </li>
-    
+      </a>
+    </li>
   
 
       
@@ -422,118 +418,6 @@
       
   
   
-  
-  
-    <li class="md-nav__item">
-      <a href="../getting-started/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Getting Started
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-    
-      
-      
-  
-  
-    
-  
-  
-  
-    
-    
-    
-    
-      
-        
-        
-      
-      
-        
-      
-    
-    
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
-      
-        
-        
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
-        
-          
-          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
-            
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Architecture
-  
-
-    
-  </span>
-  
-  
-
-            <span class="md-nav__icon md-icon"></span>
-          </label>
-        
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_3">
-            <span class="md-nav__icon md-icon"></span>
-            
-  
-    Architecture
-  
-
-          </label>
-          <ul class="md-nav__list" data-md-scrollfix>
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../architecture-overview/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Overview
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
     
   
   
@@ -553,7 +437,7 @@
   <span class="md-ellipsis">
     
   
-    Deep Dive
+    Architecture
   
 
     
@@ -571,7 +455,7 @@
   <span class="md-ellipsis">
     
   
-    Deep Dive
+    Architecture
   
 
     
@@ -597,10 +481,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#purpose" class="md-nav__link">
+  <a href="#what-this-page-owns" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Purpose
+        What this page owns
       
     </span>
   </a>
@@ -608,10 +492,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#high-level-model" class="md-nav__link">
+  <a href="#system-context" class="md-nav__link">
     <span class="md-ellipsis">
       
-        High-level model
+        System context
       
     </span>
   </a>
@@ -619,10 +503,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#core-concepts" class="md-nav__link">
+  <a href="#the-push-pipeline" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Core concepts
+        The push pipeline
       
     </span>
   </a>
@@ -630,10 +514,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#reconciliation-flow" class="md-nav__link">
+  <a href="#the-pull-pipeline" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Reconciliation flow
+        The pull pipeline
       
     </span>
   </a>
@@ -641,88 +525,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#main-flow" class="md-nav__link">
+  <a href="#reconciliation-rule" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Main flow
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Main flow">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#push" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Push
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#pull" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Pull
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#status-and-doctor" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Status and doctor
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#skills-sync-flow" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Skills sync flow
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Skills sync flow">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#vault-removal-flow" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Vault-removal flow
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#claude-plugin-sync-flow" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Claude plugin sync flow
+        Reconciliation rule
       
     </span>
   </a>
@@ -730,10 +536,21 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#security-boundaries" class="md-nav__link">
+  <a href="#vault-layout" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Security boundaries
+        Vault layout
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#skills-and-plugins" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Skills and plugins
       
     </span>
   </a>
@@ -752,10 +569,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#platform-specific-paths" class="md-nav__link">
+  <a href="#security-boundaries" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Platform-specific paths
+        Security boundaries
       
     </span>
   </a>
@@ -763,10 +580,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#support-state-reminder" class="md-nav__link">
+  <a href="#path-resolution" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Support-state reminder
+        Path resolution
       
     </span>
   </a>
@@ -774,10 +591,21 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#related-docs" class="md-nav__link">
+  <a href="#vault-format-versioning" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Related docs
+        Vault format versioning
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#source-map" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Source map
       
     </span>
   </a>
@@ -791,82 +619,22 @@
     </li>
   
 
-              
-            
-          </ul>
-        </nav>
-      
-    </li>
-  
-
     
       
       
-  
-  
-  
-  
-    
-    
-    
-    
-      
-      
-        
-      
-    
-    
-    <li class="md-nav__item md-nav__item--nested">
-      
-        
-        
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
-        
-          
-          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
-            
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Usage
-  
-
-    
-  </span>
-  
-  
-
-            <span class="md-nav__icon md-icon"></span>
-          </label>
-        
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_4">
-            <span class="md-nav__icon md-icon"></span>
-            
-  
-    Usage
-  
-
-          </label>
-          <ul class="md-nav__list" data-md-scrollfix>
-            
-              
-                
   
   
   
   
     <li class="md-nav__item">
-      <a href="../command-reference/" class="md-nav__link">
+      <a href="../commands/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Command Reference
+    Commands
   
 
     
@@ -878,125 +646,9 @@
     </li>
   
 
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../daemon/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Daemon
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-          </ul>
-        </nav>
-      
-    </li>
-  
-
     
       
       
-  
-  
-  
-  
-    
-    
-    
-    
-      
-      
-        
-      
-    
-    
-    <li class="md-nav__item md-nav__item--nested">
-      
-        
-        
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
-        
-          
-          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
-            
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Operations
-  
-
-    
-  </span>
-  
-  
-
-            <span class="md-nav__icon md-icon"></span>
-          </label>
-        
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_5">
-            <span class="md-nav__icon md-icon"></span>
-            
-  
-    Operations
-  
-
-          </label>
-          <ul class="md-nav__list" data-md-scrollfix>
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../maintenance/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Maintenance
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
   
   
   
@@ -1009,7 +661,7 @@
   <span class="md-ellipsis">
     
   
-    Migrations
+    Migrate
   
 
     
@@ -1021,23 +673,22 @@
     </li>
   
 
-              
-            
-              
-                
+    
+      
+      
   
   
   
   
     <li class="md-nav__item">
-      <a href="../troubleshooting/" class="md-nav__link">
+      <a href="../operations/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Troubleshooting
+    Operations
   
 
     
@@ -1049,14 +700,6 @@
     </li>
   
 
-              
-            
-          </ul>
-        </nav>
-      
-    </li>
-  
-
     
       
       
@@ -1064,25 +707,9 @@
   
   
   
-    
-    
-    
-    
-      
-      
+    <li class="md-nav__item">
+      <a href="../contributing/" class="md-nav__link">
         
-      
-    
-    
-    <li class="md-nav__item md-nav__item--nested">
-      
-        
-        
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
-        
-          
-          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
-            
   
   
   <span class="md-ellipsis">
@@ -1096,51 +723,7 @@
   
   
 
-            <span class="md-nav__icon md-icon"></span>
-          </label>
-        
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_6">
-            <span class="md-nav__icon md-icon"></span>
-            
-  
-    Contributing
-  
-
-          </label>
-          <ul class="md-nav__list" data-md-scrollfix>
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../development/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Development
-  
-
-    
-  </span>
-  
-  
-
       </a>
-    </li>
-  
-
-              
-            
-          </ul>
-        </nav>
-      
     </li>
   
 
@@ -1172,10 +755,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#purpose" class="md-nav__link">
+  <a href="#what-this-page-owns" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Purpose
+        What this page owns
       
     </span>
   </a>
@@ -1183,10 +766,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#high-level-model" class="md-nav__link">
+  <a href="#system-context" class="md-nav__link">
     <span class="md-ellipsis">
       
-        High-level model
+        System context
       
     </span>
   </a>
@@ -1194,10 +777,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#core-concepts" class="md-nav__link">
+  <a href="#the-push-pipeline" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Core concepts
+        The push pipeline
       
     </span>
   </a>
@@ -1205,10 +788,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#reconciliation-flow" class="md-nav__link">
+  <a href="#the-pull-pipeline" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Reconciliation flow
+        The pull pipeline
       
     </span>
   </a>
@@ -1216,88 +799,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#main-flow" class="md-nav__link">
+  <a href="#reconciliation-rule" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Main flow
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Main flow">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#push" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Push
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#pull" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Pull
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#status-and-doctor" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Status and doctor
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#skills-sync-flow" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Skills sync flow
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Skills sync flow">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#vault-removal-flow" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Vault-removal flow
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#claude-plugin-sync-flow" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Claude plugin sync flow
+        Reconciliation rule
       
     </span>
   </a>
@@ -1305,10 +810,21 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#security-boundaries" class="md-nav__link">
+  <a href="#vault-layout" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Security boundaries
+        Vault layout
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#skills-and-plugins" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Skills and plugins
       
     </span>
   </a>
@@ -1327,10 +843,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#platform-specific-paths" class="md-nav__link">
+  <a href="#security-boundaries" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Platform-specific paths
+        Security boundaries
       
     </span>
   </a>
@@ -1338,10 +854,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#support-state-reminder" class="md-nav__link">
+  <a href="#path-resolution" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Support-state reminder
+        Path resolution
       
     </span>
   </a>
@@ -1349,10 +865,21 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#related-docs" class="md-nav__link">
+  <a href="#vault-format-versioning" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Related docs
+        Vault format versioning
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#source-map" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Source map
       
     </span>
   </a>
@@ -1384,228 +911,252 @@
   
 
 
-<h1 id="architecture-guide">Architecture Guide<a class="headerlink" href="#architecture-guide" title="Permanent link">&para;</a></h1>
-<h2 id="purpose">Purpose<a class="headerlink" href="#purpose" title="Permanent link">&para;</a></h2>
-<p>This guide explains how AgentSync moves local agent configuration into an encrypted vault and back again so contributors can reason about the system without reverse-engineering file paths and control flow.</p>
-<h2 id="high-level-model">High-level model<a class="headerlink" href="#high-level-model" title="Permanent link">&para;</a></h2>
-<p>AgentSync has three main layers:</p>
-<ol>
-<li>CLI commands under <code>src/commands/</code> that orchestrate user-facing workflows.</li>
-<li>Agent adapters under <code>src/agents/</code> that snapshot local config into vault artifacts and apply vault artifacts back onto the machine.</li>
-<li>Core services under <code>src/core/</code> and <code>src/config/</code> that handle encryption, sanitization, Git operations, IPC, tar archives, watchers, and platform path resolution.</li>
-</ol>
-<h2 id="core-concepts">Core concepts<a class="headerlink" href="#core-concepts" title="Permanent link">&para;</a></h2>
-<ul>
-<li><strong>Vault</strong>: A Git repository containing encrypted <code>.age</code> and <code>.tar.age</code> artifacts.</li>
-<li><strong>Snapshot</strong>: The read side that turns local config into <code>Artifact[]</code> plus warnings.</li>
-<li><strong>Apply</strong>: The write side that decrypts vault artifacts and upserts them onto the local machine.</li>
-<li><strong>Recipient</strong>: An age public key listed in <code>agentsync.toml</code>. The vault is encrypted for all configured recipients.</li>
-<li><strong>Never-sync patterns</strong>: Hard exclusions in <code>src/core/sanitizer.ts</code> that block sensitive files before encryption.</li>
-<li><strong>Redaction</strong>: Secret detection that aborts the push if literal credentials appear in supported config content.</li>
-<li><strong>Reconciliation policy</strong>: A shared fast-forward-only Git rule in <code>src/core/git.ts</code> that decides whether sync work may continue.</li>
-</ul>
-<h2 id="reconciliation-flow">Reconciliation flow<a class="headerlink" href="#reconciliation-flow" title="Permanent link">&para;</a></h2>
+<h1 id="architecture">Architecture<a class="headerlink" href="#architecture" title="Permanent link">&para;</a></h1>
+<p>How AgentSync moves bytes from your machine to a Git remote and back, encrypted end-to-end, with reconciliation that fails closed.</p>
+<h2 id="what-this-page-owns">What this page owns<a class="headerlink" href="#what-this-page-owns" title="Permanent link">&para;</a></h2>
+<p>This page owns the system model, the push and pull pipelines, the daemon model, the vault layout, the security boundaries, and the reconciliation rule. Command flags live in <a href="../commands/">Commands</a>; day-2 operational concerns live in <a href="../operations/">Operations</a>.</p>
+<h2 id="system-context">System context<a class="headerlink" href="#system-context" title="Permanent link">&para;</a></h2>
+<p>The diagram shows the major actors and the trust boundaries between them. <strong>Plaintext never crosses the network.</strong> The Git remote only ever sees ciphertext blobs and metadata.</p>
 <div class="agentsync-darknodes">
-<pre class="mermaid"><code>flowchart TD
-    InitNode[Command resolves runtime and vault repo]:::step
-    RemoteNode{Does remote branch&lt;br/&gt;already exist}:::decision
-    EmptyNode[Allow first-machine bootstrap&lt;br/&gt;and push upstream]:::step
-    JoinNode[Fetch remote branch and&lt;br/&gt;align local history first]:::step
-    SafeNode{Can local branch&lt;br/&gt;fast-forward or match remote}:::decision
-    WorkNode[Run init pull push key&lt;br/&gt;or daemon work]:::step
-    StopNode[Stop with recovery guidance&lt;br/&gt;and no success footer]:::error
+<pre class="mermaid"><code>flowchart LR
+    AgentsA["AI agents&lt;br/&gt;Machine A"]:::local
+    CliA["agentsync CLI&lt;br/&gt;and daemon"]:::local
+    KeyA["age keypair&lt;br/&gt;Machine A"]:::key
+    SanEncA["Sanitise&lt;br/&gt;and encrypt"]:::gate
+    VaultRemote[("Git remote&lt;br/&gt;vault")]:::remote
+    SanEncB["Decrypt&lt;br/&gt;and apply"]:::gate
+    KeyB["age keypair&lt;br/&gt;Machine B"]:::key
+    CliB["agentsync CLI&lt;br/&gt;and daemon"]:::local
+    AgentsB["AI agents&lt;br/&gt;Machine B"]:::local
 
-    InitNode --&gt; RemoteNode
-    RemoteNode -- no --&gt; EmptyNode --&gt; WorkNode
-    RemoteNode -- yes --&gt; JoinNode --&gt; SafeNode
-    SafeNode -- yes --&gt; WorkNode
-    SafeNode -- no --&gt; StopNode
+    AgentsA --&gt;|local read| CliA
+    CliA --&gt; SanEncA
+    KeyA -.recipient.-&gt; SanEncA
+    SanEncA --&gt;|ciphertext| VaultRemote
+    VaultRemote --&gt;|ciphertext| SanEncB
+    KeyB -.identity.-&gt; SanEncB
+    SanEncB --&gt; CliB
+    CliB --&gt;|local write| AgentsB
 
-    classDef step fill:#2c3e50,color:#ffffff,stroke:#1a252f,stroke-width:1.5px;
-    classDef decision fill:#78350f,color:#ffffff,stroke:#451a03,stroke-width:1.5px;
-    classDef error fill:#7f1d1d,color:#ffffff,stroke:#7f1d1d,stroke-width:1.5px;</code></pre>
+    classDef local fill:#2c3e50,color:#ffffff,stroke:#1a252f
+    classDef key fill:#7d3c98,color:#ffffff,stroke:#4a235a
+    classDef gate fill:#c0392b,color:#ffffff,stroke:#7b241c
+    classDef remote fill:#1e8449,color:#ffffff,stroke:#196f3d</code></pre>
 </div>
-<p><code>init</code> uses this flow to distinguish first-machine bootstrap from second-machine join behavior.
-<code>pull</code>, <code>push</code>, <code>key add</code>, <code>key rotate</code>, and daemon-triggered sync all reuse the same reconciliation check before they apply, encrypt, or rewrite vault content.</p>
-<h2 id="main-flow">Main flow<a class="headerlink" href="#main-flow" title="Permanent link">&para;</a></h2>
-<h3 id="push">Push<a class="headerlink" href="#push" title="Permanent link">&para;</a></h3>
+<p>The three things to internalise:</p>
 <ol>
-<li><code>src/commands/push.ts</code> resolves runtime paths and loads <code>agentsync.toml</code>.</li>
-<li>It snapshots enabled agents via the registry in <code>src/agents/registry.ts</code>.</li>
-<li>It aborts early if snapshot warnings show literal secrets.</li>
-<li>It encrypts each artifact with all configured recipients.</li>
-<li>It reconciles with the remote using the shared fast-forward-only rule in <code>src/core/git.ts</code>.</li>
-<li>It commits and pushes the resulting vault changes through <code>src/core/git.ts</code>.</li>
+<li>The CLI and daemon are the only components that ever hold plaintext.</li>
+<li>The age keypair lives only on its own machine. Adding a machine means adding its public key to the recipient list, not sharing private material.</li>
+<li>The Git remote is fully replaceable. Any host that can serve a Git repository works. The remote learns nothing about the configuration it stores.</li>
 </ol>
-<h3 id="pull">Pull<a class="headerlink" href="#pull" title="Permanent link">&para;</a></h3>
-<ol>
-<li><code>src/commands/pull.ts</code> resolves runtime paths, loads config, and reads the private key.</li>
-<li>It reconciles the local vault branch with the remote using the shared fast-forward-only rule.</li>
-<li>It dispatches agent apply functions through the registry.</li>
-<li>Each agent decrypts and writes only its own artifact set.</li>
-</ol>
-<p>If the local vault diverged from the remote, the command flow stops before any apply or encryption work begins.</p>
-<h3 id="status-and-doctor">Status and doctor<a class="headerlink" href="#status-and-doctor" title="Permanent link">&para;</a></h3>
-<ul>
-<li><code>status</code> compares local snapshot content with decrypted vault files to show drift.</li>
-<li><code>doctor</code> checks key presence, config validity, remote reachability, vault hygiene, and daemon installation state.</li>
-</ul>
-<h2 id="skills-sync-flow">Skills sync flow<a class="headerlink" href="#skills-sync-flow" title="Permanent link">&para;</a></h2>
-<p>AgentSync treats per-user <em>skills</em> — directories under <code>~/.claude/skills/</code>, <code>~/.codex/skills/</code>, <code>~/.cursor/skills/</code>, and <code>~/.copilot/skills/</code> — as first-class artifacts. They ride the vault through a single shared module: the skills walker at <code>src/agents/skills-walker.ts</code>.</p>
-<p>Every skill-bearing agent adapter calls <code>collectSkillArtifacts(agent, skillsDir)</code> and inherits the same five gates in the same order. Each gate is a safety rule that maps back to a specific requirement:</p>
-<ol>
-<li><strong>Dot-skip</strong> — any entry name starting with <code>.</code> is skipped silently. Protects vendor bundles like Codex's <code>.system/</code> directory (FR-017).</li>
-<li><strong>Root-symlink rejection</strong> — if the skills root itself is a symlink, the walker returns an empty result with no warnings. Protects against a vendored-pool tree being pointed at the skills directory by accident (FR-016 outer tier).</li>
-<li><strong>Sentinel verification</strong> — a skill directory must contain a <em>real</em> <code>SKILL.md</code> file. <code>lstat</code> is used so a symlinked sentinel fails naturally without a special case (FR-002 + FR-016 sentinel).</li>
-<li><strong>Never-sync interior scan</strong> — every file inside the skill is run through <code>shouldNeverSync</code> from <code>src/core/sanitizer.ts</code>. Any hit emits a <code>never-sync inside skill: &lt;path&gt;</code> warning which <code>src/commands/push.ts</code> escalates to a fatal abort, so the entire push fails before any encryption work begins (FR-006).</li>
-<li><strong>Symlink-filtered tar</strong> — the surviving skill tree is archived through <code>archiveDirectory(dir, { skipSymlinks: true })</code>. Symlinked files inside the skill are filtered out of the tar; the real files around them are archived normally (FR-016 inner tier).</li>
-</ol>
-<p>The filter's opt-in flag keeps the pre-existing Copilot agent-tarball code path bit-for-bit unchanged.</p>
+<h2 id="the-push-pipeline">The push pipeline<a class="headerlink" href="#the-push-pipeline" title="Permanent link">&para;</a></h2>
+<p>When you run <code>agentsync push</code> (or the daemon fires one), bytes flow through four gates in order. Any gate can abort the entire push. There is no partial state in the vault.</p>
 <div class="agentsync-darknodes">
-<pre class="mermaid"><code>flowchart TD
-    LocalDir["Local skills dir&lt;br/&gt;~/.agent/skills"]:::action
-    RootCheck{"Root is a&lt;br/&gt;real directory"}:::decision
-    DotCheck{"Entry name&lt;br/&gt;starts with dot"}:::decision
-    Sentinel{"Real SKILL.md&lt;br/&gt;sentinel present"}:::decision
-    NeverSync{"Interior matches&lt;br/&gt;never-sync pattern"}:::decision
-    TarStep["archiveDirectory&lt;br/&gt;skipSymlinks true"]:::keep
-    EncStep["encryptString&lt;br/&gt;age recipients"]:::keep
-    VaultEntry["Vault namespace&lt;br/&gt;agent/skills/name.tar.age"]:::vault
-    Pull["pull command&lt;br/&gt;decrypts artifact"]:::keep
-    Restore["extractArchive&lt;br/&gt;into ~/.agent/skills/name"]:::keep
-    SkipSilent["Skipped silently&lt;br/&gt;FR-016 outer or FR-017"]:::skip
-    SkipSentinel["Skipped silently&lt;br/&gt;FR-002 sentinel missing"]:::skip
-    Abort["Fatal abort&lt;br/&gt;push gate escalates"]:::fail
+<pre class="mermaid"><code>flowchart LR
+    Walk["Walk agent paths"]:::step
+    Sanitize["Sanitiser&lt;br/&gt;never-sync and literal secrets"]:::gate
+    Encrypt["Encryptor&lt;br/&gt;age recipients"]:::step
+    Reconcile["Reconciliation&lt;br/&gt;fast-forward only"]:::gate
+    Remote[("Git remote&lt;br/&gt;vault")]:::remote
+    Abort["push fails&lt;br/&gt;guidance printed"]:::abort
 
-    LocalDir --&gt; RootCheck
-    RootCheck -- no --&gt; SkipSilent
-    RootCheck -- yes --&gt; DotCheck
-    DotCheck -- yes --&gt; SkipSilent
-    DotCheck -- no --&gt; Sentinel
-    Sentinel -- no --&gt; SkipSentinel
-    Sentinel -- yes --&gt; NeverSync
-    NeverSync -- yes --&gt; Abort
-    NeverSync -- no --&gt; TarStep --&gt; EncStep --&gt; VaultEntry --&gt; Pull --&gt; Restore
+    Walk --&gt; Sanitize
+    Sanitize --&gt;|abort on hit| Abort
+    Sanitize --&gt; Encrypt
+    Encrypt --&gt; Reconcile
+    Reconcile --&gt;|diverged| Abort
+    Reconcile --&gt; Remote
 
-    classDef action fill:#1e3a8a,color:#ffffff,stroke:#0f1f4d,stroke-width:1.5px;
-    classDef decision fill:#78350f,color:#ffffff,stroke:#451a03,stroke-width:1.5px;
-    classDef keep fill:#14532d,color:#ffffff,stroke:#0a2d18,stroke-width:1.5px;
-    classDef vault fill:#3730a3,color:#ffffff,stroke:#1e1b6e,stroke-width:1.5px;
-    classDef skip fill:#78350f,color:#ffffff,stroke:#451a03,stroke-width:1.5px;
-    classDef fail fill:#7f1d1d,color:#ffffff,stroke:#7f1d1d,stroke-width:1.5px;</code></pre>
+    classDef step fill:#2c3e50,color:#ffffff,stroke:#1a252f
+    classDef gate fill:#c0392b,color:#ffffff,stroke:#7b241c
+    classDef remote fill:#1e8449,color:#ffffff,stroke:#196f3d
+    classDef abort fill:#d35400,color:#ffffff,stroke:#a04000</code></pre>
 </div>
-<h3 id="vault-removal-flow">Vault-removal flow<a class="headerlink" href="#vault-removal-flow" title="Permanent link">&para;</a></h3>
-<p>Skills are <strong>additive-by-default</strong> across the whole pipeline. A local delete never removes the vault entry — the only way to take a skill out of the vault is the explicit <code>agentsync skill remove &lt;agent&gt; &lt;name&gt;</code> verb at <code>src/commands/skill.ts</code>. That verb enforces two invariants: it only touches the vault file, never any local skill directory (FR-012); and any subsequent <code>pull</code> on another machine leaves that machine's local skill directory untouched because <code>applyXxxVault</code> is extract-only (FR-013).</p>
-<div class="agentsync-darknodes">
-<pre class="mermaid"><code>flowchart TD
-    UserReq["User runs&lt;br/&gt;agentsync skill remove agent name"]:::action
-    ValidateAgent{"Agent is&lt;br/&gt;claude cursor codex copilot"}:::decision
-    Reconcile["GitClient&lt;br/&gt;reconcileWithRemote"]:::vault
-    StatFile{"Vault file&lt;br/&gt;agent/skills/name.tar.age exists"}:::decision
-    Unlink["unlink vault file&lt;br/&gt;commit with skill remove message"]:::vault
-    Push["git push origin branch"]:::vault
-    LocalA["Local skills on machine A&lt;br/&gt;untouched FR-012"]:::local
-    MachineB["Machine B runs&lt;br/&gt;agentsync pull"]:::action
-    ApplyExtract["applyXxxVault&lt;br/&gt;extract-only no unlink"]:::vault
-    LocalB["Local skill on machine B&lt;br/&gt;still present FR-013"]:::local
-    NotFound["Exit code 1&lt;br/&gt;Skill not found"]:::fail
-    UnknownAgent["Exit code 1&lt;br/&gt;Unknown agent rejected"]:::fail
-
-    UserReq --&gt; ValidateAgent
-    ValidateAgent -- no --&gt; UnknownAgent
-    ValidateAgent -- yes --&gt; Reconcile --&gt; StatFile
-    StatFile -- no --&gt; NotFound
-    StatFile -- yes --&gt; Unlink --&gt; Push
-    Push --&gt; LocalA
-    Push --&gt; MachineB --&gt; ApplyExtract --&gt; LocalB
-
-    classDef action fill:#1e3a8a,color:#ffffff,stroke:#0f1f4d,stroke-width:1.5px;
-    classDef decision fill:#78350f,color:#ffffff,stroke:#451a03,stroke-width:1.5px;
-    classDef vault fill:#3730a3,color:#ffffff,stroke:#1e1b6e,stroke-width:1.5px;
-    classDef local fill:#14532d,color:#ffffff,stroke:#0a2d18,stroke-width:1.5px;
-    classDef fail fill:#7f1d1d,color:#ffffff,stroke:#7f1d1d,stroke-width:1.5px;</code></pre>
-</div>
-<p>This two-flow model is why AgentSync can add and remove skills independently on different machines without any central coordination — every removal is an intentional user action, and every pull is extract-only.</p>
-<h2 id="claude-plugin-sync-flow">Claude plugin sync flow<a class="headerlink" href="#claude-plugin-sync-flow" title="Permanent link">&para;</a></h2>
-<p>Claude Code organises optional capabilities — commands, sub-agents, hooks, MCP servers, and bundled skills — under <code>~/.claude/plugins/&lt;name&gt;/</code>. AgentSync rides each plugin through the vault as a self-contained subtree at <code>claude/plugins/&lt;name&gt;/</code>, so installing a plugin on one machine and pulling on another reproduces every artifact under the same plugin namespace.</p>
-<p>The plugin walker <code>collectClaudePlugins</code> at <code>src/agents/claude-plugins.ts</code> mirrors the skills-walker contract: it skips the plugins root if it is missing or a symlink, skips dot-prefixed entries silently, and rejects any entry whose name fails <code>validatePluginName</code> (the same defence that guards skill names against <code>..</code>, separators, control characters, and the <code>.</code>/<code>..</code> reserved names). A plugin must contain a real <code>.claude-plugin/plugin.json</code> file (lstat-checked so symlinked manifests are rejected) before any of its assets are emitted.</p>
-<p>Once a plugin is admitted, <code>snapshotClaude</code> emits per-artifact entries:</p>
+<p>Gate-by-gate:</p>
 <ul>
-<li><code>plugin.json.age</code> — sanitised through <code>sanitizeClaudePluginManifest</code> (full-tree secret redaction, structure preserved).</li>
-<li><code>commands/&lt;file&gt;.md.age</code> and <code>agents/&lt;file&gt;.md.age</code> — markdown bundles with sanitiser warnings surfacing redacted secrets.</li>
-<li><code>hooks/&lt;file&gt;.json.age</code> — sanitised through the existing hooks-only allowlist.</li>
-<li><code>mcp.json.age</code> — sanitised through <code>sanitizeClaudePluginMcp</code> (full structure preserved, secret literals redacted, walker warnings escalated to push aborts).</li>
-<li><code>skills/&lt;name&gt;.tar.age</code> — tar bundles produced by reusing <code>collectSkillArtifacts</code> against the plugin's own <code>skills/</code> dir, then re-namespaced into the plugin path.</li>
+<li><strong>Walk</strong>: the per-agent path resolver enumerates every artefact the agent owns on disk. Hidden entries, symlinked roots, and dot-prefixed names are filtered before any content is read.</li>
+<li><strong>Sanitiser</strong>: the single source of truth for never-sync paths and literal-secret detection. A hit is a hard stop. The push prints which file and which rule, and the vault is never touched.</li>
+<li><strong>Encryptor</strong>: every artefact is encrypted to the current recipient set using age. Plaintext exists only in process memory and is never serialised to disk after this point.</li>
+<li><strong>Reconciliation</strong>: fast-forward only. If the local vault has diverged from the remote branch, the push stops and prints a recovery path. AgentSync never merges silently.</li>
 </ul>
-<p>The opt-in <code>claudePlugins.syncMarketplace</code> flag in <code>agentsync.toml</code> adds <code>marketplace.json.age</code> (sanitised manifest of the global <code>~/.claude/.claude-plugin/marketplace.json</code>). The flag is off by default because the catalog can pin third-party sources — teams must opt in explicitly.</p>
-<p>On <code>pull</code>, <code>applyClaudePluginsDir</code> walks <code>claude/plugins/</code> in the decrypted vault, validates every directory name <em>before</em> any <code>path.join</code>, and routes each artifact back to its disk equivalent. Vault entries with names like <code>..</code> are rejected with a warning and never reach the filesystem.</p>
+<h2 id="the-pull-pipeline">The pull pipeline<a class="headerlink" href="#the-pull-pipeline" title="Permanent link">&para;</a></h2>
+<p>Pull is <strong>additive by construction</strong>. It can add files and update existing ones; it never deletes a local file the vault does not contain. Skill removal is explicit (<code>agentsync skill remove</code>) precisely so a misconfigured pull on a fresh machine cannot wipe local work.</p>
 <div class="agentsync-darknodes">
-<pre class="mermaid"><code>flowchart TD
-    LocalPlugins["Local plugins&lt;br/&gt;~/.claude/plugins/&lt;name&gt;"]:::action
-    WalkerGate{"Real dir + valid name&lt;br/&gt;+ real plugin.json"}:::decision
-    Manifest["plugin.json&lt;br/&gt;sanitizeClaudePluginManifest"]:::keep
-    Surfaces["commands agents hooks mcp&lt;br/&gt;per-file sanitisers"]:::keep
-    PluginSkills["plugin-local skills&lt;br/&gt;collectSkillArtifacts reused"]:::keep
-    Marketplace{"claudePlugins&lt;br/&gt;syncMarketplace true"}:::decision
-    MarketArt["marketplace.json.age&lt;br/&gt;opt-in only"]:::keep
-    Vault["Vault namespace&lt;br/&gt;claude/plugins/&lt;name&gt;/..."]:::vault
-    Pull["pull command&lt;br/&gt;applyClaudePluginsDir"]:::keep
-    NameGate{"validatePluginName&lt;br/&gt;before any path.join"}:::decision
-    Apply["restore manifest commands agents&lt;br/&gt;hooks mcp skills"]:::keep
-    SkipSilent["Skipped silently&lt;br/&gt;missing root or invalid"]:::skip
-    Reject["Warning emitted&lt;br/&gt;traversal name rejected"]:::fail
+<pre class="mermaid"><code>flowchart LR
+    Fetch["git fetch&lt;br/&gt;vault"]:::step
+    FF["Fast-forward&lt;br/&gt;or abort"]:::gate
+    Decrypt["Decryptor&lt;br/&gt;age identity"]:::step
+    Apply["Apply additively"]:::step
+    Local[("Local agent&lt;br/&gt;configs")]:::remote
+    Abort["pull fails&lt;br/&gt;guidance printed"]:::abort
 
-    LocalPlugins --&gt; WalkerGate
-    WalkerGate -- no --&gt; SkipSilent
-    WalkerGate -- yes --&gt; Manifest --&gt; Vault
-    WalkerGate --&gt; Surfaces --&gt; Vault
-    WalkerGate --&gt; PluginSkills --&gt; Vault
-    Marketplace -- yes --&gt; MarketArt --&gt; Vault
-    Vault --&gt; Pull --&gt; NameGate
-    NameGate -- no --&gt; Reject
-    NameGate -- yes --&gt; Apply
+    Fetch --&gt; FF
+    FF --&gt;|diverged| Abort
+    FF --&gt; Decrypt
+    Decrypt --&gt; Apply
+    Apply --&gt; Local
 
-    classDef action fill:#1e3a8a,color:#ffffff,stroke:#0f1f4d,stroke-width:1.5px;
-    classDef decision fill:#78350f,color:#ffffff,stroke:#451a03,stroke-width:1.5px;
-    classDef keep fill:#14532d,color:#ffffff,stroke:#0a2d18,stroke-width:1.5px;
-    classDef vault fill:#3730a3,color:#ffffff,stroke:#1e1b6e,stroke-width:1.5px;
-    classDef skip fill:#78350f,color:#ffffff,stroke:#451a03,stroke-width:1.5px;
-    classDef fail fill:#7f1d1d,color:#ffffff,stroke:#7f1d1d,stroke-width:1.5px;</code></pre>
+    classDef step fill:#2c3e50,color:#ffffff,stroke:#1a252f
+    classDef gate fill:#c0392b,color:#ffffff,stroke:#7b241c
+    classDef remote fill:#1e8449,color:#ffffff,stroke:#196f3d
+    classDef abort fill:#d35400,color:#ffffff,stroke:#a04000</code></pre>
 </div>
-<h2 id="security-boundaries">Security boundaries<a class="headerlink" href="#security-boundaries" title="Permanent link">&para;</a></h2>
+<p><code>status</code> and <code>doctor</code> ride on top of the same primitives but never write. <code>status</code> compares a fresh local snapshot to the decrypted vault state. <code>doctor</code> checks key presence, config validity, remote reachability, vault hygiene, and daemon installation state.</p>
+<h2 id="reconciliation-rule">Reconciliation rule<a class="headerlink" href="#reconciliation-rule" title="Permanent link">&para;</a></h2>
+<p>Reconciliation is fast-forward only and is the <strong>same rule</strong> used by <code>init</code>, <code>push</code>, <code>pull</code>, <code>key add</code>, <code>key rotate</code>, and the daemon. The contract:</p>
 <ul>
-<li><code>src/core/encryptor.ts</code> is the boundary for age identity generation, recipient derivation, and string/file encryption.</li>
-<li><code>src/core/sanitizer.ts</code> is the single source of truth for secret detection and never-sync path rules.</li>
-<li><code>src/core/tar.ts</code> exists because some agent assets are directory-shaped and need archive transport rather than line-by-line file sync.</li>
-<li>Private keys stay on disk in the local runtime directory and must never be committed or logged.</li>
+<li>If the local branch is identical to the remote branch, the operation continues.</li>
+<li>If the local branch is behind the remote, the operation fast-forwards the local before continuing.</li>
+<li>If the local branch is ahead of the remote, the operation pushes after the local step completes.</li>
+<li>If the local branch has diverged from the remote, the operation stops with a printed recovery path. AgentSync never merges or rebases automatically.</li>
 </ul>
+<p>The reasoning: a configuration vault is a flat record of intent. Three-way merge on encrypted blobs would either produce nonsense or require trust in a merge driver that has no way to inspect the plaintext. Failing closed forces the human to decide which branch is canonical.</p>
+<p>See <a href="../operations/#recover-from-divergence">Recover from divergence</a> for the runbook.</p>
+<h2 id="vault-layout">Vault layout<a class="headerlink" href="#vault-layout" title="Permanent link">&para;</a></h2>
+<p>The vault is a regular Git repository. Inside it, every artefact is suffixed with <code>.age</code> and is age-encrypted to the recipient set defined in <code>agentsync.toml</code>. The on-disk layout is namespaced per agent:</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>&lt;vault-root&gt;/
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>├── agentsync.toml                 # recipient list, branch, remote, sync options
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>├── claude/
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>│   ├── settings.json.age
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>│   ├── hooks.json.age
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>│   ├── mcp.json.age
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>│   ├── marketplace.json.age       # only when claudePlugins.syncMarketplace = true
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>│   ├── commands/
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>│   │   └── &lt;name&gt;.md.age
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>│   ├── skills/
+</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>│   │   └── &lt;name&gt;.tar.age         # tar bundle per skill
+</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>│   └── plugins/
+</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>│       └── &lt;name&gt;/                # one subtree per Claude plugin
+</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>│           ├── plugin.json.age
+</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>│           ├── commands/&lt;name&gt;.md.age
+</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>│           ├── agents/&lt;name&gt;.md.age
+</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>│           ├── hooks/&lt;name&gt;.json.age
+</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>│           └── mcp.json.age
+</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>├── codex/
+</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a>│   ├── AGENTS.md.age
+</span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a>│   └── skills/&lt;name&gt;.tar.age
+</span><span id="__span-0-22"><a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a>├── cursor/
+</span><span id="__span-0-23"><a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a>│   ├── settings.json.age
+</span><span id="__span-0-24"><a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a>│   ├── rules/&lt;name&gt;.mdc.age
+</span><span id="__span-0-25"><a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a>│   └── skills/&lt;name&gt;.tar.age
+</span><span id="__span-0-26"><a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a>└── copilot/
+</span><span id="__span-0-27"><a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a>    ├── instructions.md.age
+</span><span id="__span-0-28"><a id="__codelineno-0-28" name="__codelineno-0-28" href="#__codelineno-0-28"></a>    └── skills/&lt;name&gt;.tar.age
+</span></code></pre></div>
+<p>Skill bundles are tar archives so directory-shaped assets round-trip cleanly. Plugins under <code>claude/plugins/&lt;name&gt;/</code> are first-class subtrees so installing a Claude plugin on one machine and pulling on another reproduces every artefact under the same plugin namespace.</p>
+<p><code>marketplace.json.age</code> is only emitted, and only applied on pull, when <code>claudePlugins.syncMarketplace = true</code> is set in <code>agentsync.toml</code> on both machines. The default is false so a vault snapshot does not silently propagate a Claude marketplace opt-in.</p>
+<h2 id="skills-and-plugins">Skills and plugins<a class="headerlink" href="#skills-and-plugins" title="Permanent link">&para;</a></h2>
+<p>Skills and plugins follow the same walker contract on every agent:</p>
+<ul>
+<li>A missing or symlinked root is skipped silently (it is a legitimate "this agent has no skills directory" signal, not a failure).</li>
+<li>Dot-prefixed names are skipped silently (hidden directories belong to other tools).</li>
+<li>A name that fails validation (containing <code>..</code>, separators, control characters, or the reserved <code>.</code> / <code>..</code>) is rejected with a printed error. Validation guards every place a name becomes a filesystem path.</li>
+<li>A Claude plugin must contain a real <code>.claude-plugin/plugin.json</code> file (lstat-checked, so symlinked manifests are rejected) before any of its assets are emitted.</li>
+</ul>
+<p>Once admitted, each artefact is sanitised through the relevant rule set, encrypted, and emitted to its vault path. Sanitiser warnings about redacted secrets are surfaced in the push output so the user knows their literal credential was rejected rather than silently scrubbed.</p>
 <h2 id="daemon-model">Daemon model<a class="headerlink" href="#daemon-model" title="Permanent link">&para;</a></h2>
+<p>The daemon is a long-running process under platform supervision (launchd on macOS, systemd-user on Linux, Task Scheduler on Windows). It exposes <code>status</code>, <code>push</code>, and <code>pull</code> over a newline-delimited IPC protocol on a per-user socket.</p>
+<div class="agentsync-darknodes">
+<pre class="mermaid"><code>flowchart LR
+    Watcher["File watcher"]:::step
+    Debounce["Debounce&lt;br/&gt;quiet window"]:::step
+    Queue["Sync queue&lt;br/&gt;serialised"]:::gate
+    Push["push"]:::step
+    Pull["pull"]:::step
+    Timer["Periodic pull timer"]:::step
+    Ipc["IPC server"]:::step
+    Client["agentsync CLI"]:::local
+
+    Watcher --&gt; Debounce --&gt; Queue
+    Timer --&gt; Queue
+    Client --&gt;|status / push / pull| Ipc --&gt; Queue
+    Queue --&gt; Push
+    Queue --&gt; Pull
+
+    classDef local fill:#2c3e50,color:#ffffff,stroke:#1a252f
+    classDef step fill:#2c3e50,color:#ffffff,stroke:#1a252f
+    classDef gate fill:#c0392b,color:#ffffff,stroke:#7b241c</code></pre>
+</div>
+<p>Key invariants:</p>
 <ul>
-<li><code>src/daemon/index.ts</code> runs the background process.</li>
-<li>It exposes <code>status</code>, <code>push</code>, and <code>pull</code> over the newline-delimited IPC protocol in <code>src/core/ipc.ts</code>.</li>
-<li>It watches selected agent directories and auto-pushes after a debounce window.</li>
-<li>It also runs periodic pull on the configured interval.</li>
-<li>Platform installers in <code>src/daemon/installer-macos.ts</code>, <code>src/daemon/installer-linux.ts</code>, and <code>src/daemon/installer-windows.ts</code> create the service wrapper appropriate for each OS.</li>
+<li><strong>Only one daemon per user.</strong> Second-instance detection runs at startup and exits cleanly if a daemon is already up. A stale socket from an ungraceful prior exit is unlinked automatically.</li>
+<li><strong>One sync at a time.</strong> Every push and pull, whether file-watcher-driven, timer-driven, or IPC-driven, passes through the sync queue. Two operations can never race.</li>
+<li><strong>One automatic retry.</strong> A transient sync failure triggers one retry. If both attempts fail, the error is recorded and the daemon stays alive so the next change can trigger a fresh push. The daemon never silently gives up.</li>
+<li><strong>Hard shutdown timeout.</strong> On shutdown the queue is drained with a ten-second hard timeout. The IPC socket and watchers are released cleanly.</li>
 </ul>
-<h2 id="platform-specific-paths">Platform-specific paths<a class="headerlink" href="#platform-specific-paths" title="Permanent link">&para;</a></h2>
-<p>Path differences are centralized in <code>src/config/paths.ts</code>. That file maps supported agent locations and runtime paths for macOS, Linux, and Windows, including:</p>
+<p>Daemon installation paths per OS, log locations, and the configuration table live in <a href="../operations/#daemon">Operations</a>.</p>
+<h2 id="security-boundaries">Security boundaries<a class="headerlink" href="#security-boundaries" title="Permanent link">&para;</a></h2>
+<p>Three places own the security contract:</p>
 <ul>
-<li>Claude config and command directories</li>
-<li>Cursor MCP config and rules field location</li>
-<li>Codex home and rule directories</li>
-<li>Copilot instructions, prompts, skills, and agents directories</li>
-<li>VS Code MCP config path</li>
-<li>AgentSync runtime home and daemon socket path</li>
+<li><strong>Encryptor</strong>: the only path that generates age identities, derives recipients, and encrypts content. Plaintext never leaves this layer for any artefact going to disk or to the network.</li>
+<li><strong>Sanitiser</strong>: the only place that decides what is safe to encrypt. Never-sync paths and literal-secret detection are hard-coded rules, not opt-in policy. Loosening either requires a documented reason.</li>
+<li><strong>Tar bundler</strong>: exists because some agent assets are directory-shaped. The tar is built in memory before encryption so an intermediate plaintext archive never lands on disk.</li>
 </ul>
-<h2 id="support-state-reminder">Support-state reminder<a class="headerlink" href="#support-state-reminder" title="Permanent link">&para;</a></h2>
-<p>The current repo supports the local CLI and daemon model. It does not provide a hosted sync service, web administration surface, or conflict-resolution UI outside the command flow.</p>
-<h2 id="related-docs">Related docs<a class="headerlink" href="#related-docs" title="Permanent link">&para;</a></h2>
-<ul>
-<li><a href="../development/">development.md</a> for local setup and validation</li>
-<li><a href="../command-reference/">command-reference.md</a> for user-facing command behavior</li>
-<li><a href="../maintenance/">maintenance.md</a> for update rules and documentation gates</li>
-<li><a href="../troubleshooting/">troubleshooting.md</a> for setup and daemon failures</li>
-</ul>
+<p>Private keys stay on disk in the local runtime directory (<code>~/.config/agentsync/key.txt</code> by default on Unix, with restrictive permissions). They are never committed and never logged.</p>
+<h2 id="path-resolution">Path resolution<a class="headerlink" href="#path-resolution" title="Permanent link">&para;</a></h2>
+<p>Every agent path is resolved through a single resolver that maps <code>&lt;agent&gt;.&lt;dir&gt;</code> to an absolute path on the current OS. Tests and platform overrides drive the resolver through environment variables rather than rewriting paths inline. The consequence: AgentSync runs identically inside the Docker E2E harness, on a developer laptop, and in CI, with no platform-specific branches in the call sites.</p>
+<h2 id="vault-format-versioning">Vault format versioning<a class="headerlink" href="#vault-format-versioning" title="Permanent link">&para;</a></h2>
+<p>The vault has a format version recorded in <code>agentsync.toml</code>. Backwards-incompatible changes (a renamed namespace, a new sanitiser rule that would reject already-published content, a new encryption-recipient encoding) require a migration step. Each migration is recorded under <code>src/migrate/</code> and is documented in <a href="../migrate/">Migrate</a>. AgentSync refuses to push to a vault whose format version is newer than the CLI understands.</p>
+<h2 id="source-map">Source map<a class="headerlink" href="#source-map" title="Permanent link">&para;</a></h2>
+<p>If you are reading the code, this is the rough mapping from concept to module. Keep this list short and link by responsibility rather than file path so renames do not silently invalidate it.</p>
+<table>
+<thead>
+<tr>
+<th>Concept</th>
+<th>Owning module</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Encryption, identity, recipient derivation</td>
+<td><code>src/core/encryptor.ts</code></td>
+</tr>
+<tr>
+<td>Sanitiser rules and literal-secret detection</td>
+<td><code>src/core/sanitizer.ts</code></td>
+</tr>
+<tr>
+<td>Tar bundling for directory-shaped artefacts</td>
+<td><code>src/core/tar.ts</code></td>
+</tr>
+<tr>
+<td>Fast-forward reconciliation rule</td>
+<td><code>src/core/git.ts</code></td>
+</tr>
+<tr>
+<td>Sync queue and IPC protocol</td>
+<td><code>src/core/sync-queue.ts</code>, <code>src/core/ipc.ts</code></td>
+</tr>
+<tr>
+<td>File watcher</td>
+<td><code>src/core/watcher.ts</code></td>
+</tr>
+<tr>
+<td>Daemon entry point</td>
+<td><code>src/daemon/index.ts</code></td>
+</tr>
+<tr>
+<td>Per-OS daemon installers</td>
+<td><code>src/daemon/installer-macos.ts</code>, <code>installer-linux.ts</code>, <code>installer-windows.ts</code></td>
+</tr>
+<tr>
+<td>Per-agent snapshot and apply</td>
+<td><code>src/agents/&lt;agent&gt;/</code></td>
+</tr>
+<tr>
+<td>Path resolution</td>
+<td><code>src/config/paths.ts</code></td>
+</tr>
+<tr>
+<td>Config schema (<code>agentsync.toml</code>)</td>
+<td><code>src/config/schema.ts</code></td>
+</tr>
+<tr>
+<td>Vault format migrations</td>
+<td><code>src/migrate/</code></td>
+</tr>
+</tbody>
+</table>
 
 
 
@@ -1641,7 +1192,7 @@
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
         
           
-          <a href="../architecture-overview/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Overview">
+          <a href=".." class="md-footer__link md-footer__link--prev" aria-label="Previous: Home">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
@@ -1651,20 +1202,20 @@
                 Previous
               </span>
               <div class="md-ellipsis">
-                Overview
+                Home
               </div>
             </div>
           </a>
         
         
           
-          <a href="../command-reference/" class="md-footer__link md-footer__link--next" aria-label="Next: Command Reference">
+          <a href="../commands/" class="md-footer__link md-footer__link--next" aria-label="Next: Commands">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                Command Reference
+                Commands
               </div>
             </div>
             <div class="md-footer__button md-icon">

@@ -5,31 +5,15 @@
          <lastmod>2026-05-14</lastmod>
     </url>
     <url>
-         <loc>https://chrisleekr.github.io/agentsync/architecture-overview/</loc>
-         <lastmod>2026-05-14</lastmod>
-    </url>
-    <url>
          <loc>https://chrisleekr.github.io/agentsync/architecture/</loc>
          <lastmod>2026-05-14</lastmod>
     </url>
     <url>
-         <loc>https://chrisleekr.github.io/agentsync/command-reference/</loc>
+         <loc>https://chrisleekr.github.io/agentsync/commands/</loc>
          <lastmod>2026-05-14</lastmod>
     </url>
     <url>
-         <loc>https://chrisleekr.github.io/agentsync/daemon/</loc>
-         <lastmod>2026-05-14</lastmod>
-    </url>
-    <url>
-         <loc>https://chrisleekr.github.io/agentsync/development/</loc>
-         <lastmod>2026-05-14</lastmod>
-    </url>
-    <url>
-         <loc>https://chrisleekr.github.io/agentsync/getting-started/</loc>
-         <lastmod>2026-05-14</lastmod>
-    </url>
-    <url>
-         <loc>https://chrisleekr.github.io/agentsync/maintenance/</loc>
+         <loc>https://chrisleekr.github.io/agentsync/contributing/</loc>
          <lastmod>2026-05-14</lastmod>
     </url>
     <url>
@@ -37,7 +21,7 @@
          <lastmod>2026-05-14</lastmod>
     </url>
     <url>
-         <loc>https://chrisleekr.github.io/agentsync/troubleshooting/</loc>
+         <loc>https://chrisleekr.github.io/agentsync/operations/</loc>
          <lastmod>2026-05-14</lastmod>
     </url>
 </urlset>
