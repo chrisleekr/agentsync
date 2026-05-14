@@ -47,9 +47,6 @@ theme:
 
 plugins:
   - search
-  # Privacy plugin downloads external assets (fonts, images) into the build
-  # so the deployed site has zero third-party requests. CI-only because it
-  # adds a few seconds and needs network access at build time.
   - privacy:
       enabled: !ENV [CI, false]
 
@@ -87,19 +84,11 @@ markdown_extensions:
 
 nav:
   - Home: index.md
-  - Getting Started: getting-started.md
-  - Architecture:
-      - Overview: architecture-overview.md
-      - Deep Dive: architecture.md
-  - Usage:
-      - Command Reference: command-reference.md
-      - Daemon: daemon.md
-  - Operations:
-      - Maintenance: maintenance.md
-      - Migrations: migrate.md
-      - Troubleshooting: troubleshooting.md
-  - Contributing:
-      - Development: development.md
+  - Architecture: architecture.md
+  - Commands: commands.md
+  - Migrate: migrate.md
+  - Operations: operations.md
+  - Contributing: contributing.md
 
 extra:
   social:

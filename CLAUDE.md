@@ -34,7 +34,7 @@ src/
   lib/                    Shared utilities (logging, debug)
   migrate/                Vault format migrations
   test-helpers/           Shared test fixtures
-docs/                     Architecture, command reference, daemon, troubleshooting
+docs/                     Architecture, commands, migrate, operations, contributing
 specs/                    speckit feature specs and plans
 scripts/                  Build / packaging scripts
 ```

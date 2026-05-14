@@ -1,263 +1,255 @@
-# Architecture Guide
+# Architecture
 
-## Purpose
+How AgentSync moves bytes from your machine to a Git remote and back, encrypted end-to-end, with reconciliation that fails closed.
 
-This guide explains how AgentSync moves local agent configuration into an encrypted vault and back again so contributors can reason about the system without reverse-engineering file paths and control flow.
+## What this page owns
 
-## High-level model
+This page owns the system model, the push and pull pipelines, the daemon model, the vault layout, the security boundaries, and the reconciliation rule. Command flags live in [Commands](commands.md); day-2 operational concerns live in [Operations](operations.md).
 
-AgentSync has three main layers:
+## System context
 
-1. CLI commands under `src/commands/` that orchestrate user-facing workflows.
-2. Agent adapters under `src/agents/` that snapshot local config into vault artifacts and apply vault artifacts back onto the machine.
-3. Core services under `src/core/` and `src/config/` that handle encryption, sanitization, Git operations, IPC, tar archives, watchers, and platform path resolution.
-
-## Core concepts
-
-- **Vault**: A Git repository containing encrypted `.age` and `.tar.age` artifacts.
-- **Snapshot**: The read side that turns local config into `Artifact[]` plus warnings.
-- **Apply**: The write side that decrypts vault artifacts and upserts them onto the local machine.
-- **Recipient**: An age public key listed in `agentsync.toml`. The vault is encrypted for all configured recipients.
-- **Never-sync patterns**: Hard exclusions in `src/core/sanitizer.ts` that block sensitive files before encryption.
-- **Redaction**: Secret detection that aborts the push if literal credentials appear in supported config content.
-- **Reconciliation policy**: A shared fast-forward-only Git rule in `src/core/git.ts` that decides whether sync work may continue.
-
-## Reconciliation flow
+The diagram shows the major actors and the trust boundaries between them. **Plaintext never crosses the network.** The Git remote only ever sees ciphertext blobs and metadata.
 
 <div class="agentsync-darknodes" markdown>
 
 ```mermaid
-flowchart TD
-	InitNode[Command resolves runtime and vault repo]:::step
-	RemoteNode{Does remote branch<br/>already exist}:::decision
-	EmptyNode[Allow first-machine bootstrap<br/>and push upstream]:::step
-	JoinNode[Fetch remote branch and<br/>align local history first]:::step
-	SafeNode{Can local branch<br/>fast-forward or match remote}:::decision
-	WorkNode[Run init pull push key<br/>or daemon work]:::step
-	StopNode[Stop with recovery guidance<br/>and no success footer]:::error
+flowchart LR
+    AgentsA["AI agents<br/>Machine A"]:::local
+    CliA["agentsync CLI<br/>and daemon"]:::local
+    KeyA["age keypair<br/>Machine A"]:::key
+    SanEncA["Sanitise<br/>and encrypt"]:::gate
+    VaultRemote[("Git remote<br/>vault")]:::remote
+    SanEncB["Decrypt<br/>and apply"]:::gate
+    KeyB["age keypair<br/>Machine B"]:::key
+    CliB["agentsync CLI<br/>and daemon"]:::local
+    AgentsB["AI agents<br/>Machine B"]:::local
 
-	InitNode --> RemoteNode
-	RemoteNode -- no --> EmptyNode --> WorkNode
-	RemoteNode -- yes --> JoinNode --> SafeNode
-	SafeNode -- yes --> WorkNode
-	SafeNode -- no --> StopNode
+    AgentsA -->|local read| CliA
+    CliA --> SanEncA
+    KeyA -.recipient.-> SanEncA
+    SanEncA -->|ciphertext| VaultRemote
+    VaultRemote -->|ciphertext| SanEncB
+    KeyB -.identity.-> SanEncB
+    SanEncB --> CliB
+    CliB -->|local write| AgentsB
 
-	classDef step fill:#2c3e50,color:#ffffff,stroke:#1a252f,stroke-width:1.5px;
-	classDef decision fill:#78350f,color:#ffffff,stroke:#451a03,stroke-width:1.5px;
-	classDef error fill:#7f1d1d,color:#ffffff,stroke:#7f1d1d,stroke-width:1.5px;
+    classDef local fill:#2c3e50,color:#ffffff,stroke:#1a252f
+    classDef key fill:#7d3c98,color:#ffffff,stroke:#4a235a
+    classDef gate fill:#c0392b,color:#ffffff,stroke:#7b241c
+    classDef remote fill:#1e8449,color:#ffffff,stroke:#196f3d
 ```
 
 </div>
 
-`init` uses this flow to distinguish first-machine bootstrap from second-machine join behavior.
-`pull`, `push`, `key add`, `key rotate`, and daemon-triggered sync all reuse the same reconciliation check before they apply, encrypt, or rewrite vault content.
+The three things to internalise:
 
-## Main flow
+1. The CLI and daemon are the only components that ever hold plaintext.
+2. The age keypair lives only on its own machine. Adding a machine means adding its public key to the recipient list, not sharing private material.
+3. The Git remote is fully replaceable. Any host that can serve a Git repository works. The remote learns nothing about the configuration it stores.
 
-### Push
+## The push pipeline
 
-1. `src/commands/push.ts` resolves runtime paths and loads `agentsync.toml`.
-2. It snapshots enabled agents via the registry in `src/agents/registry.ts`.
-3. It aborts early if snapshot warnings show literal secrets.
-4. It encrypts each artifact with all configured recipients.
-5. It reconciles with the remote using the shared fast-forward-only rule in `src/core/git.ts`.
-6. It commits and pushes the resulting vault changes through `src/core/git.ts`.
-
-### Pull
-
-1. `src/commands/pull.ts` resolves runtime paths, loads config, and reads the private key.
-2. It reconciles the local vault branch with the remote using the shared fast-forward-only rule.
-3. It dispatches agent apply functions through the registry.
-4. Each agent decrypts and writes only its own artifact set.
-
-If the local vault diverged from the remote, the command flow stops before any apply or encryption work begins.
-
-### Status and doctor
-
-- `status` compares local snapshot content with decrypted vault files to show drift.
-- `doctor` checks key presence, config validity, remote reachability, vault hygiene, and daemon installation state.
-
-## Skills sync flow
-
-AgentSync treats per-user *skills* — directories under `~/.claude/skills/`, `~/.codex/skills/`, `~/.cursor/skills/`, and `~/.copilot/skills/` — as first-class artifacts. They ride the vault through a single shared module: the skills walker at `src/agents/skills-walker.ts`.
-
-Every skill-bearing agent adapter calls `collectSkillArtifacts(agent, skillsDir)` and inherits the same five gates in the same order. Each gate is a safety rule that maps back to a specific requirement:
-
-1. **Dot-skip** — any entry name starting with `.` is skipped silently. Protects vendor bundles like Codex's `.system/` directory (FR-017).
-2. **Root-symlink rejection** — if the skills root itself is a symlink, the walker returns an empty result with no warnings. Protects against a vendored-pool tree being pointed at the skills directory by accident (FR-016 outer tier).
-3. **Sentinel verification** — a skill directory must contain a *real* `SKILL.md` file. `lstat` is used so a symlinked sentinel fails naturally without a special case (FR-002 + FR-016 sentinel).
-4. **Never-sync interior scan** — every file inside the skill is run through `shouldNeverSync` from `src/core/sanitizer.ts`. Any hit emits a `never-sync inside skill: <path>` warning which `src/commands/push.ts` escalates to a fatal abort, so the entire push fails before any encryption work begins (FR-006).
-5. **Symlink-filtered tar** — the surviving skill tree is archived through `archiveDirectory(dir, { skipSymlinks: true })`. Symlinked files inside the skill are filtered out of the tar; the real files around them are archived normally (FR-016 inner tier).
-
-The filter's opt-in flag keeps the pre-existing Copilot agent-tarball code path bit-for-bit unchanged.
+When you run `agentsync push` (or the daemon fires one), bytes flow through four gates in order. Any gate can abort the entire push. There is no partial state in the vault.
 
 <div class="agentsync-darknodes" markdown>
 
 ```mermaid
-flowchart TD
-	LocalDir["Local skills dir<br/>~/.agent/skills"]:::action
-	RootCheck{"Root is a<br/>real directory"}:::decision
-	DotCheck{"Entry name<br/>starts with dot"}:::decision
-	Sentinel{"Real SKILL.md<br/>sentinel present"}:::decision
-	NeverSync{"Interior matches<br/>never-sync pattern"}:::decision
-	TarStep["archiveDirectory<br/>skipSymlinks true"]:::keep
-	EncStep["encryptString<br/>age recipients"]:::keep
-	VaultEntry["Vault namespace<br/>agent/skills/name.tar.age"]:::vault
-	Pull["pull command<br/>decrypts artifact"]:::keep
-	Restore["extractArchive<br/>into ~/.agent/skills/name"]:::keep
-	SkipSilent["Skipped silently<br/>FR-016 outer or FR-017"]:::skip
-	SkipSentinel["Skipped silently<br/>FR-002 sentinel missing"]:::skip
-	Abort["Fatal abort<br/>push gate escalates"]:::fail
+flowchart LR
+    Walk["Walk agent paths"]:::step
+    Sanitize["Sanitiser<br/>never-sync and literal secrets"]:::gate
+    Encrypt["Encryptor<br/>age recipients"]:::step
+    Reconcile["Reconciliation<br/>fast-forward only"]:::gate
+    Remote[("Git remote<br/>vault")]:::remote
+    Abort["push fails<br/>guidance printed"]:::abort
 
-	LocalDir --> RootCheck
-	RootCheck -- no --> SkipSilent
-	RootCheck -- yes --> DotCheck
-	DotCheck -- yes --> SkipSilent
-	DotCheck -- no --> Sentinel
-	Sentinel -- no --> SkipSentinel
-	Sentinel -- yes --> NeverSync
-	NeverSync -- yes --> Abort
-	NeverSync -- no --> TarStep --> EncStep --> VaultEntry --> Pull --> Restore
+    Walk --> Sanitize
+    Sanitize -->|abort on hit| Abort
+    Sanitize --> Encrypt
+    Encrypt --> Reconcile
+    Reconcile -->|diverged| Abort
+    Reconcile --> Remote
 
-	classDef action fill:#1e3a8a,color:#ffffff,stroke:#0f1f4d,stroke-width:1.5px;
-	classDef decision fill:#78350f,color:#ffffff,stroke:#451a03,stroke-width:1.5px;
-	classDef keep fill:#14532d,color:#ffffff,stroke:#0a2d18,stroke-width:1.5px;
-	classDef vault fill:#3730a3,color:#ffffff,stroke:#1e1b6e,stroke-width:1.5px;
-	classDef skip fill:#78350f,color:#ffffff,stroke:#451a03,stroke-width:1.5px;
-	classDef fail fill:#7f1d1d,color:#ffffff,stroke:#7f1d1d,stroke-width:1.5px;
+    classDef step fill:#2c3e50,color:#ffffff,stroke:#1a252f
+    classDef gate fill:#c0392b,color:#ffffff,stroke:#7b241c
+    classDef remote fill:#1e8449,color:#ffffff,stroke:#196f3d
+    classDef abort fill:#d35400,color:#ffffff,stroke:#a04000
 ```
 
 </div>
 
-### Vault-removal flow
+Gate-by-gate:
 
-Skills are **additive-by-default** across the whole pipeline. A local delete never removes the vault entry — the only way to take a skill out of the vault is the explicit `agentsync skill remove <agent> <name>` verb at `src/commands/skill.ts`. That verb enforces two invariants: it only touches the vault file, never any local skill directory (FR-012); and any subsequent `pull` on another machine leaves that machine's local skill directory untouched because `applyXxxVault` is extract-only (FR-013).
+- **Walk**: the per-agent path resolver enumerates every artefact the agent owns on disk. Hidden entries, symlinked roots, and dot-prefixed names are filtered before any content is read.
+- **Sanitiser**: the single source of truth for never-sync paths and literal-secret detection. A hit is a hard stop. The push prints which file and which rule, and the vault is never touched.
+- **Encryptor**: every artefact is encrypted to the current recipient set using age. Plaintext exists only in process memory and is never serialised to disk after this point.
+- **Reconciliation**: fast-forward only. If the local vault has diverged from the remote branch, the push stops and prints a recovery path. AgentSync never merges silently.
+
+## The pull pipeline
+
+Pull is **additive by construction**. It can add files and update existing ones; it never deletes a local file the vault does not contain. Skill removal is explicit (`agentsync skill remove`) precisely so a misconfigured pull on a fresh machine cannot wipe local work.
 
 <div class="agentsync-darknodes" markdown>
 
 ```mermaid
-flowchart TD
-	UserReq["User runs<br/>agentsync skill remove agent name"]:::action
-	ValidateAgent{"Agent is<br/>claude cursor codex copilot"}:::decision
-	Reconcile["GitClient<br/>reconcileWithRemote"]:::vault
-	StatFile{"Vault file<br/>agent/skills/name.tar.age exists"}:::decision
-	Unlink["unlink vault file<br/>commit with skill remove message"]:::vault
-	Push["git push origin branch"]:::vault
-	LocalA["Local skills on machine A<br/>untouched FR-012"]:::local
-	MachineB["Machine B runs<br/>agentsync pull"]:::action
-	ApplyExtract["applyXxxVault<br/>extract-only no unlink"]:::vault
-	LocalB["Local skill on machine B<br/>still present FR-013"]:::local
-	NotFound["Exit code 1<br/>Skill not found"]:::fail
-	UnknownAgent["Exit code 1<br/>Unknown agent rejected"]:::fail
+flowchart LR
+    Fetch["git fetch<br/>vault"]:::step
+    FF["Fast-forward<br/>or abort"]:::gate
+    Decrypt["Decryptor<br/>age identity"]:::step
+    Apply["Apply additively"]:::step
+    Local[("Local agent<br/>configs")]:::remote
+    Abort["pull fails<br/>guidance printed"]:::abort
 
-	UserReq --> ValidateAgent
-	ValidateAgent -- no --> UnknownAgent
-	ValidateAgent -- yes --> Reconcile --> StatFile
-	StatFile -- no --> NotFound
-	StatFile -- yes --> Unlink --> Push
-	Push --> LocalA
-	Push --> MachineB --> ApplyExtract --> LocalB
+    Fetch --> FF
+    FF -->|diverged| Abort
+    FF --> Decrypt
+    Decrypt --> Apply
+    Apply --> Local
 
-	classDef action fill:#1e3a8a,color:#ffffff,stroke:#0f1f4d,stroke-width:1.5px;
-	classDef decision fill:#78350f,color:#ffffff,stroke:#451a03,stroke-width:1.5px;
-	classDef vault fill:#3730a3,color:#ffffff,stroke:#1e1b6e,stroke-width:1.5px;
-	classDef local fill:#14532d,color:#ffffff,stroke:#0a2d18,stroke-width:1.5px;
-	classDef fail fill:#7f1d1d,color:#ffffff,stroke:#7f1d1d,stroke-width:1.5px;
+    classDef step fill:#2c3e50,color:#ffffff,stroke:#1a252f
+    classDef gate fill:#c0392b,color:#ffffff,stroke:#7b241c
+    classDef remote fill:#1e8449,color:#ffffff,stroke:#196f3d
+    classDef abort fill:#d35400,color:#ffffff,stroke:#a04000
 ```
 
 </div>
 
-This two-flow model is why AgentSync can add and remove skills independently on different machines without any central coordination — every removal is an intentional user action, and every pull is extract-only.
+`status` and `doctor` ride on top of the same primitives but never write. `status` compares a fresh local snapshot to the decrypted vault state. `doctor` checks key presence, config validity, remote reachability, vault hygiene, and daemon installation state.
 
-## Claude plugin sync flow
+## Reconciliation rule
 
-Claude Code organises optional capabilities — commands, sub-agents, hooks, MCP servers, and bundled skills — under `~/.claude/plugins/<name>/`. AgentSync rides each plugin through the vault as a self-contained subtree at `claude/plugins/<name>/`, so installing a plugin on one machine and pulling on another reproduces every artifact under the same plugin namespace.
+Reconciliation is fast-forward only and is the **same rule** used by `init`, `push`, `pull`, `key add`, `key rotate`, and the daemon. The contract:
 
-The plugin walker `collectClaudePlugins` at `src/agents/claude-plugins.ts` mirrors the skills-walker contract: it skips the plugins root if it is missing or a symlink, skips dot-prefixed entries silently, and rejects any entry whose name fails `validatePluginName` (the same defence that guards skill names against `..`, separators, control characters, and the `.`/`..` reserved names). A plugin must contain a real `.claude-plugin/plugin.json` file (lstat-checked so symlinked manifests are rejected) before any of its assets are emitted.
+- If the local branch is identical to the remote branch, the operation continues.
+- If the local branch is behind the remote, the operation fast-forwards the local before continuing.
+- If the local branch is ahead of the remote, the operation pushes after the local step completes.
+- If the local branch has diverged from the remote, the operation stops with a printed recovery path. AgentSync never merges or rebases automatically.
 
-Once a plugin is admitted, `snapshotClaude` emits per-artifact entries:
+The reasoning: a configuration vault is a flat record of intent. Three-way merge on encrypted blobs would either produce nonsense or require trust in a merge driver that has no way to inspect the plaintext. Failing closed forces the human to decide which branch is canonical.
 
-- `plugin.json.age` — sanitised through `sanitizeClaudePluginManifest` (full-tree secret redaction, structure preserved).
-- `commands/<file>.md.age` and `agents/<file>.md.age` — markdown bundles with sanitiser warnings surfacing redacted secrets.
-- `hooks/<file>.json.age` — sanitised through the existing hooks-only allowlist.
-- `mcp.json.age` — sanitised through `sanitizeClaudePluginMcp` (full structure preserved, secret literals redacted, walker warnings escalated to push aborts).
-- `skills/<name>.tar.age` — tar bundles produced by reusing `collectSkillArtifacts` against the plugin's own `skills/` dir, then re-namespaced into the plugin path.
+See [Recover from divergence](operations.md#recover-from-divergence) for the runbook.
 
-The opt-in `claudePlugins.syncMarketplace` flag in `agentsync.toml` adds `marketplace.json.age` (sanitised manifest of the global `~/.claude/.claude-plugin/marketplace.json`). The flag is off by default because the catalog can pin third-party sources — teams must opt in explicitly.
+## Vault layout
 
-On `pull`, `applyClaudePluginsDir` walks `claude/plugins/` in the decrypted vault, validates every directory name *before* any `path.join`, and routes each artifact back to its disk equivalent. Vault entries with names like `..` are rejected with a warning and never reach the filesystem.
+The vault is a regular Git repository. Inside it, every artefact is suffixed with `.age` and is age-encrypted to the recipient set defined in `agentsync.toml`. The on-disk layout is namespaced per agent:
 
-<div class="agentsync-darknodes" markdown>
-
-```mermaid
-flowchart TD
-	LocalPlugins["Local plugins<br/>~/.claude/plugins/<name>"]:::action
-	WalkerGate{"Real dir + valid name<br/>+ real plugin.json"}:::decision
-	Manifest["plugin.json<br/>sanitizeClaudePluginManifest"]:::keep
-	Surfaces["commands agents hooks mcp<br/>per-file sanitisers"]:::keep
-	PluginSkills["plugin-local skills<br/>collectSkillArtifacts reused"]:::keep
-	Marketplace{"claudePlugins<br/>syncMarketplace true"}:::decision
-	MarketArt["marketplace.json.age<br/>opt-in only"]:::keep
-	Vault["Vault namespace<br/>claude/plugins/<name>/..."]:::vault
-	Pull["pull command<br/>applyClaudePluginsDir"]:::keep
-	NameGate{"validatePluginName<br/>before any path.join"}:::decision
-	Apply["restore manifest commands agents<br/>hooks mcp skills"]:::keep
-	SkipSilent["Skipped silently<br/>missing root or invalid"]:::skip
-	Reject["Warning emitted<br/>traversal name rejected"]:::fail
-
-	LocalPlugins --> WalkerGate
-	WalkerGate -- no --> SkipSilent
-	WalkerGate -- yes --> Manifest --> Vault
-	WalkerGate --> Surfaces --> Vault
-	WalkerGate --> PluginSkills --> Vault
-	Marketplace -- yes --> MarketArt --> Vault
-	Vault --> Pull --> NameGate
-	NameGate -- no --> Reject
-	NameGate -- yes --> Apply
-
-	classDef action fill:#1e3a8a,color:#ffffff,stroke:#0f1f4d,stroke-width:1.5px;
-	classDef decision fill:#78350f,color:#ffffff,stroke:#451a03,stroke-width:1.5px;
-	classDef keep fill:#14532d,color:#ffffff,stroke:#0a2d18,stroke-width:1.5px;
-	classDef vault fill:#3730a3,color:#ffffff,stroke:#1e1b6e,stroke-width:1.5px;
-	classDef skip fill:#78350f,color:#ffffff,stroke:#451a03,stroke-width:1.5px;
-	classDef fail fill:#7f1d1d,color:#ffffff,stroke:#7f1d1d,stroke-width:1.5px;
+```
+<vault-root>/
+├── agentsync.toml                 # recipient list, branch, remote, sync options
+├── claude/
+│   ├── settings.json.age
+│   ├── hooks.json.age
+│   ├── mcp.json.age
+│   ├── marketplace.json.age       # only when claudePlugins.syncMarketplace = true
+│   ├── commands/
+│   │   └── <name>.md.age
+│   ├── skills/
+│   │   └── <name>.tar.age         # tar bundle per skill
+│   └── plugins/
+│       └── <name>/                # one subtree per Claude plugin
+│           ├── plugin.json.age
+│           ├── commands/<name>.md.age
+│           ├── agents/<name>.md.age
+│           ├── hooks/<name>.json.age
+│           └── mcp.json.age
+├── codex/
+│   ├── AGENTS.md.age
+│   └── skills/<name>.tar.age
+├── cursor/
+│   ├── settings.json.age
+│   ├── rules/<name>.mdc.age
+│   └── skills/<name>.tar.age
+└── copilot/
+    ├── instructions.md.age
+    └── skills/<name>.tar.age
 ```
 
-</div>
+Skill bundles are tar archives so directory-shaped assets round-trip cleanly. Plugins under `claude/plugins/<name>/` are first-class subtrees so installing a Claude plugin on one machine and pulling on another reproduces every artefact under the same plugin namespace.
 
-## Security boundaries
+`marketplace.json.age` is only emitted, and only applied on pull, when `claudePlugins.syncMarketplace = true` is set in `agentsync.toml` on both machines. The default is false so a vault snapshot does not silently propagate a Claude marketplace opt-in.
 
-- `src/core/encryptor.ts` is the boundary for age identity generation, recipient derivation, and string/file encryption.
-- `src/core/sanitizer.ts` is the single source of truth for secret detection and never-sync path rules.
-- `src/core/tar.ts` exists because some agent assets are directory-shaped and need archive transport rather than line-by-line file sync.
-- Private keys stay on disk in the local runtime directory and must never be committed or logged.
+## Skills and plugins
+
+Skills and plugins follow the same walker contract on every agent:
+
+- A missing or symlinked root is skipped silently (it is a legitimate "this agent has no skills directory" signal, not a failure).
+- Dot-prefixed names are skipped silently (hidden directories belong to other tools).
+- A name that fails validation (containing `..`, separators, control characters, or the reserved `.` / `..`) is rejected with a printed error. Validation guards every place a name becomes a filesystem path.
+- A Claude plugin must contain a real `.claude-plugin/plugin.json` file (lstat-checked, so symlinked manifests are rejected) before any of its assets are emitted.
+
+Once admitted, each artefact is sanitised through the relevant rule set, encrypted, and emitted to its vault path. Sanitiser warnings about redacted secrets are surfaced in the push output so the user knows their literal credential was rejected rather than silently scrubbed.
 
 ## Daemon model
 
-- `src/daemon/index.ts` runs the background process.
-- It exposes `status`, `push`, and `pull` over the newline-delimited IPC protocol in `src/core/ipc.ts`.
-- It watches selected agent directories and auto-pushes after a debounce window.
-- It also runs periodic pull on the configured interval.
-- Platform installers in `src/daemon/installer-macos.ts`, `src/daemon/installer-linux.ts`, and `src/daemon/installer-windows.ts` create the service wrapper appropriate for each OS.
+The daemon is a long-running process under platform supervision (launchd on macOS, systemd-user on Linux, Task Scheduler on Windows). It exposes `status`, `push`, and `pull` over a newline-delimited IPC protocol on a per-user socket.
 
-## Platform-specific paths
+<div class="agentsync-darknodes" markdown>
 
-Path differences are centralized in `src/config/paths.ts`. That file maps supported agent locations and runtime paths for macOS, Linux, and Windows, including:
+```mermaid
+flowchart LR
+    Watcher["File watcher"]:::step
+    Debounce["Debounce<br/>quiet window"]:::step
+    Queue["Sync queue<br/>serialised"]:::gate
+    Push["push"]:::step
+    Pull["pull"]:::step
+    Timer["Periodic pull timer"]:::step
+    Ipc["IPC server"]:::step
+    Client["agentsync CLI"]:::local
 
-- Claude config and command directories
-- Cursor MCP config and rules field location
-- Codex home and rule directories
-- Copilot instructions, prompts, skills, and agents directories
-- VS Code MCP config path
-- AgentSync runtime home and daemon socket path
+    Watcher --> Debounce --> Queue
+    Timer --> Queue
+    Client -->|status / push / pull| Ipc --> Queue
+    Queue --> Push
+    Queue --> Pull
 
-## Support-state reminder
+    classDef local fill:#2c3e50,color:#ffffff,stroke:#1a252f
+    classDef step fill:#2c3e50,color:#ffffff,stroke:#1a252f
+    classDef gate fill:#c0392b,color:#ffffff,stroke:#7b241c
+```
 
-The current repo supports the local CLI and daemon model. It does not provide a hosted sync service, web administration surface, or conflict-resolution UI outside the command flow.
+</div>
 
-## Related docs
+Key invariants:
 
-- [development.md](development.md) for local setup and validation
-- [command-reference.md](command-reference.md) for user-facing command behavior
-- [maintenance.md](maintenance.md) for update rules and documentation gates
-- [troubleshooting.md](troubleshooting.md) for setup and daemon failures
+- **Only one daemon per user.** Second-instance detection runs at startup and exits cleanly if a daemon is already up. A stale socket from an ungraceful prior exit is unlinked automatically.
+- **One sync at a time.** Every push and pull, whether file-watcher-driven, timer-driven, or IPC-driven, passes through the sync queue. Two operations can never race.
+- **One automatic retry.** A transient sync failure triggers one retry. If both attempts fail, the error is recorded and the daemon stays alive so the next change can trigger a fresh push. The daemon never silently gives up.
+- **Hard shutdown timeout.** On shutdown the queue is drained with a ten-second hard timeout. The IPC socket and watchers are released cleanly.
+
+Daemon installation paths per OS, log locations, and the configuration table live in [Operations](operations.md#daemon).
+
+## Security boundaries
+
+Three places own the security contract:
+
+- **Encryptor**: the only path that generates age identities, derives recipients, and encrypts content. Plaintext never leaves this layer for any artefact going to disk or to the network.
+- **Sanitiser**: the only place that decides what is safe to encrypt. Never-sync paths and literal-secret detection are hard-coded rules, not opt-in policy. Loosening either requires a documented reason.
+- **Tar bundler**: exists because some agent assets are directory-shaped. The tar is built in memory before encryption so an intermediate plaintext archive never lands on disk.
+
+Private keys stay on disk in the local runtime directory (`~/.config/agentsync/key.txt` by default on Unix, with restrictive permissions). They are never committed and never logged.
+
+## Path resolution
+
+Every agent path is resolved through a single resolver that maps `<agent>.<dir>` to an absolute path on the current OS. Tests and platform overrides drive the resolver through environment variables rather than rewriting paths inline. The consequence: AgentSync runs identically inside the Docker E2E harness, on a developer laptop, and in CI, with no platform-specific branches in the call sites.
+
+## Vault format versioning
+
+The vault has a format version recorded in `agentsync.toml`. Backwards-incompatible changes (a renamed namespace, a new sanitiser rule that would reject already-published content, a new encryption-recipient encoding) require a migration step. Each migration is recorded under `src/migrate/` and is documented in [Migrate](migrate.md). AgentSync refuses to push to a vault whose format version is newer than the CLI understands.
+
+## Source map
+
+If you are reading the code, this is the rough mapping from concept to module. Keep this list short and link by responsibility rather than file path so renames do not silently invalidate it.
+
+| Concept | Owning module |
+|---|---|
+| Encryption, identity, recipient derivation | `src/core/encryptor.ts` |
+| Sanitiser rules and literal-secret detection | `src/core/sanitizer.ts` |
+| Tar bundling for directory-shaped artefacts | `src/core/tar.ts` |
+| Fast-forward reconciliation rule | `src/core/git.ts` |
+| Sync queue and IPC protocol | `src/core/sync-queue.ts`, `src/core/ipc.ts` |
+| File watcher | `src/core/watcher.ts` |
+| Daemon entry point | `src/daemon/index.ts` |
+| Per-OS daemon installers | `src/daemon/installer-macos.ts`, `installer-linux.ts`, `installer-windows.ts` |
+| Per-agent snapshot and apply | `src/agents/<agent>/` |
+| Path resolution | `src/config/paths.ts` |
+| Config schema (`agentsync.toml`) | `src/config/schema.ts` |
+| Vault format migrations | `src/migrate/` |
