@@ -17,7 +17,7 @@ agentsync migrate --from <agent> --to <agent|all> [--type <type>] [--name <file>
 | `--from` | yes | claude, cursor, codex, copilot, vscode | Source agent |
 | `--to` | yes | claude, cursor, codex, copilot, vscode, all | Target agent(s) |
 | `--type` | no | global-rules, mcp, commands, skills, rules | Filter to one config type |
-| `--name` | no | filename (requires --type) | Migrate a single artefact. Hard-errors if not found. |
+| `--name` | no | artefact name (requires --type) | Migrate a single artefact (file or skill/rules dir name). Hard-errors if not found. |
 | `--dry-run` | no | — | Preview without writing |
 
 ## Config Type Support Matrix

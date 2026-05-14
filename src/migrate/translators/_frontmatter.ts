@@ -57,12 +57,11 @@ export function parseFrontmatter(input: string): Frontmatter {
       fields[key] = false;
     } else {
       // Strip surrounding quotes if present (single or double).
-      const unquoted =
-        (valueRaw.startsWith('"') && valueRaw.endsWith('"')) ||
-        (valueRaw.startsWith("'") && valueRaw.endsWith("'"))
-          ? valueRaw.slice(1, -1)
-          : valueRaw;
-      fields[key] = unquoted;
+      const needsUnquoting =
+        valueRaw.length >= 2 &&
+        ((valueRaw.startsWith('"') && valueRaw.endsWith('"')) ||
+          (valueRaw.startsWith("'") && valueRaw.endsWith("'")));
+      fields[key] = needsUnquoting ? valueRaw.slice(1, -1) : valueRaw;
     }
   }
 

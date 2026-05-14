@@ -137,6 +137,14 @@ export async function applyCursorMcp(mcpJsonContent: string): Promise<void> {
  * The migrate `rules` ConfigType uses this for cross-agent passthrough.
  */
 export async function applyCursorRule(ruleName: string, content: string): Promise<void> {
+  if (
+    ruleName.length === 0 ||
+    ruleName !== basename(ruleName) ||
+    ruleName.startsWith(".") ||
+    ruleName.includes("\0")
+  ) {
+    throw new Error(`Invalid Cursor rule filename: ${ruleName}`);
+  }
   const target = join(AgentPaths.cursor.rulesDir, ruleName);
   await mkdir(AgentPaths.cursor.rulesDir, { recursive: true });
   await atomicWrite(target, content);

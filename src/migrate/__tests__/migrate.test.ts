@@ -763,8 +763,8 @@ describe("performMigrate rules", () => {
     // Source has nothing — exercises the "no translator registered" path
     // for the unregistered direction.
     const result = await performMigrate({
-      from: "claude",
-      to: "copilot",
+      from: "copilot",
+      to: "cursor",
       type: "rules",
       dryRun: false,
     });

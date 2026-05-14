@@ -162,7 +162,15 @@ export async function applyCopilotMcp(mcpJsonContent: string): Promise<void> {
   const existingRaw = await readIfExists(AgentPaths.copilot.mcpConfigJson);
   const existing = existingRaw ? (JSON.parse(existingRaw) as Record<string, unknown>) : {};
   const incoming = JSON.parse(mcpJsonContent) as Record<string, unknown>;
-  existing.mcpServers = (incoming.mcpServers ?? {}) as Record<string, unknown>;
+  const existingServers =
+    typeof existing.mcpServers === "object" && existing.mcpServers !== null
+      ? (existing.mcpServers as Record<string, unknown>)
+      : {};
+  const incomingServers =
+    typeof incoming.mcpServers === "object" && incoming.mcpServers !== null
+      ? (incoming.mcpServers as Record<string, unknown>)
+      : {};
+  existing.mcpServers = { ...existingServers, ...incomingServers };
   await mkdir(dirname(AgentPaths.copilot.mcpConfigJson), { recursive: true });
   await atomicWrite(AgentPaths.copilot.mcpConfigJson, `${JSON.stringify(existing, null, 2)}\n`);
 }
