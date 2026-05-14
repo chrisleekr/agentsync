@@ -182,7 +182,7 @@ export function sanitizeAndNormalizeJson(
   fieldName: string,
   home: string = homedir(),
 ): RedactionResult<string> {
-  const parsed = JSON.parse(raw);
+  const parsed: unknown = JSON.parse(raw);
   const normalized = normalizeForVault(parsed, home);
   const redacted = redactSecretLiterals(normalized, fieldName);
   return {

@@ -18,10 +18,14 @@ import type { RedactionResult } from "../core/sanitizer";
 export async function ensureCommandBackup(path: string): Promise<void> {
   try {
     await stat(path);
-    await writeFile(`${path}.bak`, await readFile(path, "utf8"), "utf8");
-  } catch {
-    // No existing file to backup.
+  } catch (err) {
+    // No existing file → nothing to back up. Any other stat error
+    // (permission denied, I/O failure) propagates because it signals a
+    // real problem the caller needs to see.
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return;
+    throw err;
   }
+  await writeFile(`${path}.bak`, await readFile(path, "utf8"), "utf8");
 }
 
 // ─── Canonical snapshot types ────────────────────────────────────────────────

@@ -27,7 +27,7 @@ export interface Frontmatter {
   hasFrontmatter: boolean;
 }
 
-const FRONTMATTER_OPEN = /^---\s*\n/;
+const FRONTMATTER_OPEN = /^---\s*\r?\n/;
 
 /**
  * Parse YAML frontmatter from a markdown document.
@@ -41,7 +41,7 @@ export function parseFrontmatter(input: string): Frontmatter {
   // Match `\n---` only when followed by newline or end-of-string. Without this
   // guard, `\n----` or `\n---trailing` would parse as a closing marker and the
   // body would start with bogus dashes.
-  const closeRe = /\n---(?:\r?\n|$)/;
+  const closeRe = /\r?\n---(?:\r?\n|$)/;
   const closeMatch = afterOpen.match(closeRe);
   if (!closeMatch || closeMatch.index === undefined) {
     return { fields: {}, body: input, hasFrontmatter: false };

@@ -16,7 +16,11 @@
 
 import { homedir } from "node:os";
 import { normalizeForVault } from "../../core/path-portability";
-import { type RedactionResult, redactSecretLiterals } from "../../core/sanitizer";
+import {
+  type RedactionResult,
+  redactSecretLiterals,
+  sanitizeAndNormalizeJson,
+} from "../../core/sanitizer";
 
 /**
  * Keep only Claude hook settings and redact any embedded literal secrets.
@@ -71,13 +75,7 @@ export function sanitizeClaudePluginManifest(
   rawJson: string,
   home: string = homedir(),
 ): RedactionResult<string> {
-  const parsed = JSON.parse(rawJson) as unknown;
-  const normalized = normalizeForVault(parsed, home);
-  const redacted = redactSecretLiterals(normalized, "plugin");
-  return {
-    value: `${JSON.stringify(redacted.value, null, 2)}\n`,
-    warnings: redacted.warnings,
-  };
+  return sanitizeAndNormalizeJson(rawJson, "plugin", home);
 }
 
 /**
@@ -91,11 +89,5 @@ export function sanitizeClaudePluginMcp(
   rawJson: string,
   home: string = homedir(),
 ): RedactionResult<string> {
-  const parsed = JSON.parse(rawJson) as unknown;
-  const normalized = normalizeForVault(parsed, home);
-  const redacted = redactSecretLiterals(normalized, "pluginMcp");
-  return {
-    value: `${JSON.stringify(redacted.value, null, 2)}\n`,
-    warnings: redacted.warnings,
-  };
+  return sanitizeAndNormalizeJson(rawJson, "pluginMcp", home);
 }
