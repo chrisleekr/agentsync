@@ -208,5 +208,5 @@ agentsync migrate --from claude --to codex --type commands
 
 ## Related docs
 
-- [command-reference.md](command-reference.md)
-- [architecture.md](architecture.md)
+- [Commands](commands.md)
+- [Architecture](architecture.md)

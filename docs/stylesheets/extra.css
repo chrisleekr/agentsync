@@ -54,3 +54,33 @@
   --md-mermaid-label-fg-color: #ffffff;
   --md-mermaid-node-fg-color: #ffffff;
 }
+
+/* Logo-matching header and nav. The logo is a violet-to-cyan gradient.
+   Material's named palettes do not expose that combination, so we
+   override the foreground colour variables and paint the header bar
+   with the gradient directly. The right end of the gradient stops at
+   cyan-700 rather than cyan-400 so the header text on narrow viewports
+   (where the search box and icons crowd the right edge) keeps WCAG AA
+   contrast against white. Light and dark schemes use the same palette
+   so the brand identity stays consistent across the toggle. */
+:root,
+[data-md-color-scheme="default"],
+[data-md-color-scheme="slate"] {
+  --md-primary-fg-color: #4f46e5;
+  --md-primary-fg-color--light: #818cf8;
+  --md-primary-fg-color--dark: #3730a3;
+  --md-accent-fg-color: #0e7490;
+  --md-accent-fg-color--transparent: rgba(14, 116, 144, 0.1);
+}
+
+.md-header {
+  background: linear-gradient(90deg, #6d28d9 0%, #4f46e5 55%, #0e7490 100%);
+}
+
+.md-tabs {
+  background-color: #4f46e5;
+}
+
+[data-md-color-scheme="slate"] .md-tabs {
+  background-color: #3730a3;
+}

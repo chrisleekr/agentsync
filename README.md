@@ -12,167 +12,82 @@
 	<a href="https://github.com/chrisleekr/agentsync/releases/latest"><img src="https://img.shields.io/github/v/release/chrisleekr/agentsync" alt="Latest Release"/></a>
 	<a href="https://github.com/chrisleekr/agentsync/stargazers"><img src="https://img.shields.io/github/stars/chrisleekr/agentsync?style=social" alt="GitHub stars"/></a>
 	<a href="https://github.com/chrisleekr/agentsync/blob/main/LICENSE"><img src="https://img.shields.io/github/license/chrisleekr/agentsync" alt="License"/></a>
-	<a href="./docs/development.md"><img src="https://img.shields.io/badge/docs-in_repo-blue" alt="Documentation"/></a>
+	<a href="https://chrisleekr.github.io/agentsync/"><img src="https://img.shields.io/badge/docs-online-blue" alt="Documentation"/></a>
 </p>
 
-AgentSync is a Bun-based CLI and background daemon that snapshots AI agent configuration from your machine, encrypts it with age recipients, and stores it in a Git-backed vault so you can pull the same setup onto another machine.
+AgentSync is a Bun-based CLI and background daemon that snapshots AI agent configuration from your machine, encrypts it with [age](https://age-encryption.org/) recipients, and stores it in a Git-backed vault so you can pull the same setup onto another machine.
 
 It is for people who keep global agent configuration in tools like Claude, Cursor, Codex, Copilot, and VS Code and want one encrypted source of truth instead of manually copying files between laptops.
 
-## Released CLI path
+## Install
 
-Use the published package path only after a tagged GitHub Release and npm publish have both completed for the version you want.
+Global install with [Bun](https://bun.sh) 1.3.9 or later:
 
-Use this path when you are evaluating or operating a published AgentSync release.
-If you are developing from a local clone or testing unreleased changes, use the contributor-from-source workflow instead.
+```bash
+bun install -g @chrisleekr/agentsync
+agentsync --version
+```
 
-Prerequisites for the released CLI path:
-
-- Bun 1.3.9 or later
-- A published AgentSync package for the version you want to run
-
-First-run verification command for the published CLI:
+Without a global install, run via `bunx`:
 
 ```bash
 bunx --package @chrisleekr/agentsync agentsync --version
 ```
 
-Run the published CLI with `bunx` when you do not want a separate global install:
+## Quickstart
 
 ```bash
-bunx --package @chrisleekr/agentsync agentsync <command> [options]
+# Initialise a vault and the local machine key
+agentsync init --remote git@github.com:<you>/agentsync-vault.git --branch main
+
+# Push local agent configuration into the encrypted vault
+agentsync push
+
+# On another machine, after running init with the same remote
+agentsync pull
 ```
 
-Common `bunx` examples:
+The full quickstart, command reference, and architecture model live at the documentation site: **<https://chrisleekr.github.io/agentsync/>**.
+
+## Commands
+
+| Command | Why you run it |
+|---|---|
+| `init` | Create the local vault workspace, machine key, config, and initial remote state. |
+| `push` | Snapshot local agent configs, sanitise secrets, encrypt artefacts, and push to Git. |
+| `pull` | Pull the latest vault state and apply decrypted artefacts locally. |
+| `status` | Compare local files with the vault and surface drift. |
+| `doctor` | Run environment, key, vault, and daemon diagnostics. |
+| `daemon` | Install and manage the background auto-sync daemon. |
+| `key` | Add recipients or rotate the local machine key. |
+| `skill` | Remove a skill from the vault explicitly. |
+| `migrate` | Translate configuration between agent formats locally. |
+
+Full flag tables and caveats: [Commands](https://chrisleekr.github.io/agentsync/commands/).
+
+## Documentation
+
+The full documentation is hosted at <https://chrisleekr.github.io/agentsync/> and lives in [`docs/`](./docs):
+
+- **[Architecture](./docs/architecture.md)** — system model, push and pull pipelines, daemon model, security boundaries.
+- **[Commands](./docs/commands.md)** — every subcommand, flag, outcome, and caveat.
+- **[Migrate](./docs/migrate.md)** — translate config between Claude, Cursor, Codex, Copilot, and VS Code.
+- **[Operations](./docs/operations.md)** — daemon install per OS, key rotation, troubleshooting catalogue.
+- **[Contributing](./docs/contributing.md)** — develop from source, run the test suite, release discipline, doc ownership.
+
+## Contributing
+
+Clone, verify, and read the contributor guide:
 
 ```bash
-# Verify the published CLI resolves correctly
-bunx --package @chrisleekr/agentsync agentsync --version
-
-# Initialize a vault from the published package
-bunx --package @chrisleekr/agentsync agentsync init --remote git@github.com:<you>/agentsync-vault.git --branch main
-
-# Push local agent config into the encrypted vault
-bunx --package @chrisleekr/agentsync agentsync push
-
-# Pull the latest vault state onto this machine
-bunx --package @chrisleekr/agentsync agentsync pull
-```
-
-Use the GitHub Release record as the canonical place to see:
-
-- which version you are installing
-- what changed in that release
-
-Start here:
-
-- [Latest release](https://github.com/chrisleekr/agentsync/releases/latest)
-- [All releases](https://github.com/chrisleekr/agentsync/releases)
-
-## What a vault means here
-
-The vault is a normal Git repository that stores encrypted artifacts such as `claude/CLAUDE.md.age`, `claude/skills/<name>.tar.age`, `codex/skills/<name>.tar.age`, `cursor/skills/<name>.tar.age`, and `copilot/skills/<name>.tar.age`. Claude Code plugins under `~/.claude/plugins/<name>/` round-trip as self-contained subtrees at `claude/plugins/<name>/` (manifest, commands, agents, hooks, MCP servers, and plugin-local skills). AgentSync never pushes plaintext configs. Files that match hard never-sync patterns or contain literal secrets abort the push before encryption.
-
-AgentSync never silently removes vault skills — removal is always an explicit user action via `agentsync skill remove <agent> <name>`. Local deletes, pulls, and status checks are all additive by construction, so no background operation can take a skill out of the vault.
-
-When you point a second machine at an existing vault, `init` now joins the remote history before writing machine-specific config. Sync commands also use one explicit fast-forward-only reconciliation rule, so divergent local history stops with recovery guidance instead of silently merging or printing a success-style footer.
-
-## Current implementation status
-
-Currently supported:
-
-- Local config loading, schema validation, and vault path resolution
-- age recipient management for machine-based encryption
-- Push, pull, status, doctor, daemon, and key CLI entry points
-- Agent snapshot and apply flows for Claude, Cursor, Codex, Copilot, and VS Code
-- Secret redaction and never-sync enforcement before artifacts reach the vault
-- Existing-vault bootstrap for second-machine setup when the remote branch already has history
-- Shared fast-forward-only reconciliation across `init`, `pull`, `push`, `key`, and daemon sync
-
-Not yet positioned as a full hosted service:
-
-- No remote conflict UI beyond the CLI flow
-- No web dashboard or multi-user admin surface
-- No runtime API server outside the local daemon IPC channel
-
-## Prerequisites
-
-- Bun 1.3.9 or later
-- A Git remote you control for the encrypted vault
-- An age keypair managed by AgentSync or migrated into the local key path
-- One or more supported agent config directories on the machine you are syncing
-- macOS, Linux, or Windows for daemon installation paths described in the docs
-
-## Contributor setup from source
-
-This is the contributor workflow for developing from a clone of the repository. It is separate from the published CLI path above.
-
-Do not use this section when you are trying to run a published release from npm.
-For released usage, start with the released CLI path above and continue in [docs/command-reference.md](docs/command-reference.md).
-
-If your change follows the spec-kit workflow, start with [docs/speckit.md](docs/speckit.md).
-If you are maintaining the repo-local speckit setup itself, use
-[docs/speckit-local-development.md](docs/speckit-local-development.md).
-
-Install dependencies and verify the repo first:
-
-```bash
+git clone git@github.com:chrisleekr/agentsync.git
+cd agentsync
 bun install
 bun run check
 ```
 
-Initialize a vault and machine key:
+The contributor workflow, the speckit feature flow, release discipline, and doc ownership all live in [Contributing](./docs/contributing.md).
 
-```bash
-bun run src/cli.ts init --remote git@github.com:<you>/agentsync-vault.git --branch main
-```
+## License
 
-Run that same `init` command on another machine against the same remote when you want that machine to join the existing vault. If the local vault already diverged from the remote, AgentSync stops with recovery guidance rather than merging histories implicitly.
-
-Push local agent configs into the encrypted vault:
-
-```bash
-bun run src/cli.ts push
-```
-
-Pull the vault back onto this machine or a new one:
-
-```bash
-bun run src/cli.ts pull
-```
-
-## Command summary
-
-| Command  | Why you run it                                                                   |
-| -------- | -------------------------------------------------------------------------------- |
-| `init`   | Create the local vault workspace, key, config, and initial remote state          |
-| `push`   | Snapshot local agent configs, redact secrets, encrypt artifacts, and push to Git |
-| `pull`   | Pull the latest vault state and apply decrypted artifacts locally                |
-| `status` | Compare local files with the vault and surface drift                             |
-| `doctor` | Run environment, key, vault, and daemon diagnostics                              |
-| `daemon` | Install or manage background auto-sync                                           |
-| `key`    | Add recipients or rotate the local machine key                                   |
-
-## Documentation
-
-- [Speckit guide](docs/speckit.md): start or continue feature work through the repo's spec-kit workflow
-- [Speckit local development guide](docs/speckit-local-development.md): prompt-file locations, active-feature detection, timestamp branches, and workflow upkeep rules
-- [Development guide](docs/development.md): contributor setup, local workflow, and verification steps
-- [Architecture guide](docs/architecture.md): module map, sync flow, security boundaries, and daemon design
-- [Maintenance guide](docs/maintenance.md): release upkeep, OIDC-only publish rules, and documentation/JSDoc change policy
-- [Command reference](docs/command-reference.md): released CLI install path, command usage, prerequisites, caveats, and release-info lookup
-- [Troubleshooting guide](docs/troubleshooting.md): common setup, key, remote, and daemon failures with next actions
-
-## Safety notes
-
-- Treat the private key file as recoverability-critical material. Back it up outside the vault.
-- Do not paste literal API keys or tokens into synced config. AgentSync aborts pushes when it detects them.
-- Use the command reference and troubleshooting guide when a workflow is partially supported or platform-specific instead of assuming parity across all agents.
-
-## Next steps
-
-If you are evaluating the released CLI path, start with the [latest release](https://github.com/chrisleekr/agentsync/releases/latest) and then [docs/command-reference.md](docs/command-reference.md).
-If you are developing from source, start with [docs/development.md](docs/development.md).
-If you are doing feature planning or workflow work through spec-kit, start with [docs/speckit.md](docs/speckit.md).
-If you want the system model before changing code, read [docs/architecture.md](docs/architecture.md).
-If you are modifying commands or agent integrations, read [docs/maintenance.md](docs/maintenance.md) before opening a PR.
+[MIT](./LICENSE).
