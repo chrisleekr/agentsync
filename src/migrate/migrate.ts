@@ -6,8 +6,8 @@
  * and writes to target agent config files.
  */
 
-import { readdir, readFile } from "node:fs/promises";
-import { basename, join } from "node:path";
+import { mkdir, readdir, readFile, stat } from "node:fs/promises";
+import { basename, join, relative } from "node:path";
 import * as TOML from "@iarna/toml";
 import { atomicWrite, readIfExists } from "../agents/_utils";
 import { applyClaudeMd } from "../agents/claude";
@@ -15,12 +15,112 @@ import { applyCodexAgentsMd } from "../agents/codex";
 import { applyCopilotInstructions } from "../agents/copilot";
 import { applyCursorRules } from "../agents/cursor";
 import type { AgentName } from "../agents/registry";
+import { InvalidSkillNameError, validateSkillName } from "../agents/skills-walker";
 import { AgentPaths } from "../config/paths";
 import { redactSecretLiterals } from "../core/sanitizer";
 import { getTranslator } from "./registry";
-import type { ConfigType, MigratedArtifact, MigrateOptions, MigrateResult } from "./types";
+import type {
+  ConfigType,
+  ExtraFile,
+  MigratedArtifact,
+  MigrateOptions,
+  MigrateResult,
+} from "./types";
 
-const ALL_CONFIG_TYPES: ConfigType[] = ["global-rules", "mcp", "commands"];
+const ALL_CONFIG_TYPES: ConfigType[] = ["global-rules", "mcp", "commands", "skills", "rules"];
+
+/** Heuristic: well-known text suffixes are utf8, everything else base64. */
+const TEXT_EXTENSIONS = new Set([
+  ".md",
+  ".mdc",
+  ".markdown",
+  ".txt",
+  ".json",
+  ".yaml",
+  ".yml",
+  ".toml",
+  ".sh",
+  ".bash",
+  ".zsh",
+  ".js",
+  ".ts",
+  ".py",
+  ".rb",
+  ".go",
+  ".rs",
+  ".html",
+  ".css",
+]);
+
+function looksLikeText(filename: string): boolean {
+  const dot = filename.lastIndexOf(".");
+  if (dot === -1) return false;
+  return TEXT_EXTENSIONS.has(filename.slice(dot).toLowerCase());
+}
+
+/**
+ * Pick the right skills directory for an agent.
+ * Codex prefers `~/.agents/skills/` (current spec, cites agentskills.io)
+ * with `~/.codex/skills/` as legacy fallback when the former is absent.
+ */
+async function resolveSkillsSourceDir(agent: AgentName): Promise<string | null> {
+  if (agent === "claude") return AgentPaths.claude.skillsDir;
+  if (agent === "cursor") return AgentPaths.cursor.skillsDir;
+  if (agent === "copilot") return AgentPaths.copilot.skillsDir;
+  if (agent === "codex") {
+    const preferred = AgentPaths.codex.userSkillsDir;
+    try {
+      await stat(preferred);
+      return preferred;
+    } catch {
+      return AgentPaths.codex.skillsDir;
+    }
+  }
+  return null;
+}
+
+function resolveSkillsTargetDir(agent: AgentName): string | null {
+  if (agent === "claude") return AgentPaths.claude.skillsDir;
+  if (agent === "cursor") return AgentPaths.cursor.skillsDir;
+  if (agent === "copilot") return AgentPaths.copilot.skillsDir;
+  if (agent === "codex") return AgentPaths.codex.userSkillsDir;
+  return null;
+}
+
+function resolveRulesDir(agent: AgentName): string | null {
+  if (agent === "claude") return AgentPaths.claude.rulesDir;
+  if (agent === "cursor") return AgentPaths.cursor.rulesDir;
+  if (agent === "codex") return AgentPaths.codex.rulesDir;
+  return null;
+}
+
+/** Read a single skill directory's supporting files (everything except SKILL.md). */
+async function readSkillSidecars(skillDir: string): Promise<ExtraFile[]> {
+  const sidecars: ExtraFile[] = [];
+  async function walk(dir: string): Promise<void> {
+    const entries = await readdir(dir, { withFileTypes: true }).catch(() => []);
+    for (const entry of entries) {
+      if (entry.name.startsWith(".")) continue;
+      const full = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        await walk(full);
+        continue;
+      }
+      if (!entry.isFile()) continue;
+      const rel = relative(skillDir, full);
+      if (rel === "SKILL.md") continue;
+      const buf = await readFile(full).catch(() => null);
+      if (!buf) continue;
+      if (looksLikeText(entry.name)) {
+        sidecars.push({ relPath: rel, content: buf.toString("utf8") });
+      } else {
+        sidecars.push({ relPath: rel, content: buf.toString("base64"), encoding: "base64" });
+      }
+    }
+  }
+  await walk(skillDir);
+  return sidecars;
+}
 const ALL_AGENTS: AgentName[] = ["claude", "cursor", "codex", "copilot", "vscode"];
 
 /**
@@ -34,17 +134,27 @@ export async function readSourceArtefacts(
   agent: AgentName,
   type: ConfigType,
   filterName?: string,
-): Promise<Array<{ content: string; name: string }>> {
-  const results: Array<{ content: string; name: string }> = [];
+): Promise<Array<{ content: string; name: string; sourcePath: string; sidecars?: ExtraFile[] }>> {
+  const results: Array<{
+    content: string;
+    name: string;
+    sourcePath: string;
+    sidecars?: ExtraFile[];
+  }> = [];
 
   if (type === "global-rules") {
     if (agent === "cursor") {
-      const raw = await readIfExists(AgentPaths.cursor.settingsJson);
+      const settingsPath = AgentPaths.cursor.settingsJson;
+      const raw = await readIfExists(settingsPath);
       if (raw) {
         try {
           const parsed = JSON.parse(raw) as Record<string, unknown>;
           if (typeof parsed.rules === "string" && parsed.rules.trim()) {
-            results.push({ content: parsed.rules, name: "__cursor_rules__" });
+            results.push({
+              content: parsed.rules,
+              name: "__cursor_rules__",
+              sourcePath: settingsPath,
+            });
           }
         } catch {
           /* skip malformed settings.json */
@@ -60,7 +170,7 @@ export async function readSourceArtefacts(
       if (filePath) {
         const content = await readIfExists(filePath);
         if (content) {
-          results.push({ content, name: basename(filePath) });
+          results.push({ content, name: basename(filePath), sourcePath: filePath });
         }
       }
     }
@@ -72,13 +182,14 @@ export async function readSourceArtefacts(
       cursor: AgentPaths.cursor.mcpGlobal,
       codex: AgentPaths.codex.configToml,
       vscode: AgentPaths.vscode.mcpJson,
+      copilot: AgentPaths.copilot.mcpConfigJson,
     };
     const filePath = pathMap[agent];
     if (filePath) {
       const content = await readIfExists(filePath);
       if (content) {
         const name = basename(filePath) || "mcp";
-        results.push({ content, name });
+        results.push({ content, name, sourcePath: filePath });
       }
     }
   }
@@ -87,8 +198,8 @@ export async function readSourceArtefacts(
     const dirMap: Partial<Record<AgentName, { dir: string; ext: string }>> = {
       claude: { dir: AgentPaths.claude.commandsDir, ext: ".md" },
       cursor: { dir: AgentPaths.cursor.commandsDir, ext: ".md" },
-      codex: { dir: AgentPaths.codex.rulesDir, ext: ".md" },
       copilot: { dir: AgentPaths.copilot.promptsDir, ext: ".prompt.md" },
+      // Codex has no slash-command surface — `commands` is target-only.
     };
     const entry = dirMap[agent];
     if (entry) {
@@ -97,11 +208,49 @@ export async function readSourceArtefacts(
         for (const f of files) {
           if (!f.endsWith(entry.ext)) continue;
           if (filterName && f !== filterName) continue;
-          const content = await readFile(join(entry.dir, f), "utf8").catch(() => null);
-          if (content) results.push({ content, name: f });
+          const filePath = join(entry.dir, f);
+          const content = await readFile(filePath, "utf8").catch(() => null);
+          if (content) results.push({ content, name: f, sourcePath: filePath });
         }
       } catch {
         /* directory missing — return empty */
+      }
+    }
+  }
+
+  if (type === "skills") {
+    const skillsDir = await resolveSkillsSourceDir(agent);
+    if (skillsDir) {
+      const entries = await readdir(skillsDir, { withFileTypes: true }).catch(() => []);
+      for (const entry of entries) {
+        if (!entry.isDirectory() || entry.name.startsWith(".")) continue;
+        try {
+          validateSkillName(entry.name);
+        } catch (err) {
+          if (err instanceof InvalidSkillNameError) continue;
+          throw err;
+        }
+        if (filterName && entry.name !== filterName) continue;
+        const skillDir = join(skillsDir, entry.name);
+        const skillMdPath = join(skillDir, "SKILL.md");
+        const skillMd = await readIfExists(skillMdPath);
+        if (!skillMd) continue;
+        const sidecars = await readSkillSidecars(skillDir);
+        results.push({ content: skillMd, name: entry.name, sourcePath: skillMdPath, sidecars });
+      }
+    }
+  }
+
+  if (type === "rules") {
+    const dir = resolveRulesDir(agent);
+    if (dir) {
+      const files = await readdir(dir).catch(() => [] as string[]);
+      for (const f of files) {
+        if (!(f.endsWith(".md") || f.endsWith(".mdc"))) continue;
+        if (filterName && f !== filterName) continue;
+        const filePath = join(dir, f);
+        const content = await readFile(filePath, "utf8").catch(() => null);
+        if (content) results.push({ content, name: f, sourcePath: filePath });
       }
     }
   }
@@ -124,7 +273,14 @@ export async function applyMigrated(
   targetName: string,
   content: string,
   dryRun: boolean,
+  extraFiles: ExtraFile[] = [],
+  from?: AgentName,
+  sourcePath?: string,
 ): Promise<MigratedArtifact | null> {
+  // Compose `${from} → ${to}: <kind>` when caller threads source info;
+  // fall back to bare `<kind>` when invoked directly (e.g. unit tests).
+  const arrow = from ? `${from} → ${to}: ` : "";
+  const src = sourcePath ?? "";
   if (type === "global-rules") {
     // The cursor-rules sentinel only routes to cursor's settings.json when the
     // declared target is cursor. Without this gate, a translator that
@@ -137,8 +293,9 @@ export async function applyMigrated(
       if (!dryRun) await applyCursorRules(content);
       return {
         targetPath,
+        sourcePath: src,
         content,
-        description: `Cursor rules field in ${targetPath}`,
+        description: `${arrow}cursor rules field`,
       };
     }
     const pathMap: Partial<Record<AgentName, string>> = {
@@ -159,8 +316,9 @@ export async function applyMigrated(
     if (!dryRun) await applyFn(content);
     return {
       targetPath,
+      sourcePath: src,
       content,
-      description: `${to} global rules written to ${targetPath}`,
+      description: `${arrow}global rules`,
     };
   }
 
@@ -170,6 +328,7 @@ export async function applyMigrated(
       cursor: AgentPaths.cursor.mcpGlobal,
       codex: AgentPaths.codex.configToml,
       vscode: AgentPaths.vscode.mcpJson,
+      copilot: AgentPaths.copilot.mcpConfigJson,
     };
     const targetPath = pathMap[to];
     if (!targetPath) return null;
@@ -244,16 +403,36 @@ export async function applyMigrated(
     }
     return {
       targetPath,
+      sourcePath: src,
       content,
-      description: `${to} MCP servers written to ${targetPath}`,
+      description: `${arrow}MCP servers`,
     };
   }
 
   if (type === "commands") {
+    // Codex commands wrap as SKILL.md (Codex has no native slash-command
+    // surface; skills are user-invokable as `/<name>`). Translator emits
+    // `<basename>/SKILL.md` as targetName; orchestrator writes under
+    // ~/.agents/skills/. Other agents write the plain command file.
+    if (to === "codex" && targetName.endsWith("/SKILL.md")) {
+      const skillName = targetName.slice(0, -"/SKILL.md".length);
+      validateSkillName(skillName);
+      const targetPath = join(AgentPaths.codex.userSkillsDir, skillName, "SKILL.md");
+      if (!dryRun) {
+        await mkdir(join(AgentPaths.codex.userSkillsDir, skillName), { recursive: true });
+        await atomicWrite(targetPath, content);
+      }
+      return {
+        targetPath,
+        sourcePath: src,
+        content,
+        description: `${arrow}command "${skillName}" wrapped as skill`,
+      };
+    }
+
     const dirMap: Partial<Record<AgentName, string>> = {
       claude: AgentPaths.claude.commandsDir,
       cursor: AgentPaths.cursor.commandsDir,
-      codex: AgentPaths.codex.rulesDir,
       copilot: AgentPaths.copilot.promptsDir,
     };
     const dir = dirMap[to];
@@ -263,8 +442,51 @@ export async function applyMigrated(
     if (!dryRun) await atomicWrite(targetPath, content);
     return {
       targetPath,
+      sourcePath: src,
       content,
-      description: `${to} command written to ${targetPath}`,
+      description: `${arrow}command "${targetName}"`,
+    };
+  }
+
+  if (type === "skills") {
+    // targetName is the skill directory name (validated). Write SKILL.md
+    // plus all extraFiles (sidecars carried from source) under it.
+    const targetDir = resolveSkillsTargetDir(to);
+    if (!targetDir) return null;
+    validateSkillName(targetName);
+    const skillRoot = join(targetDir, targetName);
+    const skillMdPath = join(skillRoot, "SKILL.md");
+    if (!dryRun) {
+      await mkdir(skillRoot, { recursive: true });
+      await atomicWrite(skillMdPath, content);
+      for (const extra of extraFiles) {
+        const isBase64 = extra.encoding === "base64";
+        const buf = isBase64 ? Buffer.from(extra.content, "base64") : extra.content;
+        const extraPath = join(skillRoot, extra.relPath);
+        await atomicWrite(extraPath, buf);
+      }
+    }
+    return {
+      targetPath: skillMdPath,
+      sourcePath: src,
+      content,
+      description:
+        extraFiles.length > 0
+          ? `${arrow}skill "${targetName}" (+${extraFiles.length} supporting files)`
+          : `${arrow}skill "${targetName}"`,
+    };
+  }
+
+  if (type === "rules") {
+    const dir = resolveRulesDir(to);
+    if (!dir) return null;
+    const targetPath = join(dir, targetName);
+    if (!dryRun) await atomicWrite(targetPath, content);
+    return {
+      targetPath,
+      sourcePath: src,
+      content,
+      description: `${arrow}rule "${targetName}"`,
     };
   }
 
@@ -297,6 +519,14 @@ export async function performMigrate(options: MigrateOptions): Promise<MigrateRe
   for (const type of typesToMigrate) {
     const sources = await readSourceArtefacts(options.from, type, options.name);
     if (sources.length === 0) {
+      // Hard-error when the user explicitly named an artefact that doesn't
+      // exist — silent skip would hide typos. Matches secret-detection abort.
+      if (options.name) {
+        result.errors.push(
+          `Source artefact '${options.name}' not found in ${options.from} ${type}`,
+        );
+        return result;
+      }
       for (const target of targetAgents) {
         result.skipped.push({
           reason: "No source artefacts found",
@@ -316,7 +546,7 @@ export async function performMigrate(options: MigrateOptions): Promise<MigrateRe
         continue;
       }
 
-      for (const { content, name } of sources) {
+      for (const { content, name, sourcePath, sidecars = [] } of sources) {
         const translated = translator(content, name);
         if (!translated) {
           result.skipped.push({
@@ -363,18 +593,30 @@ export async function performMigrate(options: MigrateOptions): Promise<MigrateRe
                 return result;
               }
             } catch {
-              // If TOML parsing also fails, content is malformed — skip secret check
+              // Translators emit content we control; unparseable bytes here mean
+              // a translator bug. Fail closed so a future broken translator can't
+              // smuggle secrets past the redaction gate.
+              result.errors.push(
+                `MCP content for ${options.from} → ${target} is neither valid JSON nor TOML — secret scan cannot run; aborting`,
+              );
+              return result;
             }
           }
         }
 
         try {
+          // Combine translator-emitted extras (rare) with source sidecars
+          // (skills' supporting files travel from source dir verbatim).
+          const allExtras = [...(translated.extraFiles ?? []), ...sidecars];
           const artifact = await applyMigrated(
             target,
             type,
             translated.targetName,
             finalContent,
             options.dryRun ?? false,
+            allExtras,
+            options.from,
+            sourcePath,
           );
           if (artifact) {
             result.migrated.push(artifact);

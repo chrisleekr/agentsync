@@ -493,16 +493,25 @@ export const translateMcp = {
   claudeToCursor: mcpToMcpServers(parseMcpServersJson),
   claudeToVsCode: mcpToVsCode(parseMcpServersJson),
   claudeToCodex: mcpToCodex(parseMcpServersJson),
+  claudeToCopilot: mcpToMcpServers(parseMcpServersJson),
   // Cursor as source ----------------------------------------------------------
   cursorToClaude: mcpToMcpServers(parseMcpServersJson),
   cursorToVsCode: mcpToVsCode(parseMcpServersJson),
   cursorToCodex: mcpToCodex(parseMcpServersJson),
+  cursorToCopilot: mcpToMcpServers(parseMcpServersJson),
   // VS Code as source ---------------------------------------------------------
   vsCodeToClaude: mcpToMcpServers(parseVsCodeMcp),
   vsCodeToCursor: mcpToMcpServers(parseVsCodeMcp),
   vsCodeToCodex: mcpToCodex(parseVsCodeMcp),
+  vsCodeToCopilot: mcpToMcpServers(parseVsCodeMcp),
   // Codex as source -----------------------------------------------------------
   codexToClaude: mcpToMcpServers(parseCodexMcp),
   codexToCursor: mcpToMcpServers(parseCodexMcp),
   codexToVsCode: mcpToVsCode(parseCodexMcp),
+  codexToCopilot: mcpToMcpServers(parseCodexMcp),
+  // Copilot as source ---------------------------------------------------------
+  copilotToClaude: mcpToMcpServers(parseMcpServersJson),
+  copilotToCursor: mcpToMcpServers(parseMcpServersJson),
+  copilotToVsCode: mcpToVsCode(parseMcpServersJson),
+  copilotToCodex: mcpToCodex(parseMcpServersJson),
 };

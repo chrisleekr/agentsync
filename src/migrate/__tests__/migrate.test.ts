@@ -62,17 +62,25 @@ beforeEach(() => {
   testClaude.mcpJson = join(tmpDir, "claude", ".claude.json");
   testClaude.commandsDir = join(tmpDir, "claude", "commands");
   testClaude.settingsJson = join(tmpDir, "claude", "settings.json");
+  testClaude.skillsDir = join(tmpDir, "claude", "skills");
+  testClaude.rulesDir = join(tmpDir, "claude", "rules");
 
   testCursor.settingsJson = join(tmpDir, "cursor", "settings.json");
   testCursor.mcpGlobal = join(tmpDir, "cursor", "mcp.json");
   testCursor.commandsDir = join(tmpDir, "cursor", "commands");
+  testCursor.skillsDir = join(tmpDir, "cursor", "skills");
+  testCursor.rulesDir = join(tmpDir, "cursor", "rules");
 
   testCodex.agentsMd = join(tmpDir, "codex", "AGENTS.md");
   testCodex.configToml = join(tmpDir, "codex", "config.toml");
   testCodex.rulesDir = join(tmpDir, "codex", "rules");
+  testCodex.skillsDir = join(tmpDir, "codex", "skills");
+  testCodex.userSkillsDir = join(tmpDir, "agents", "skills");
 
   testCopilot.instructionsFile = join(tmpDir, "copilot", "instructions");
   testCopilot.promptsDir = join(tmpDir, "copilot", "prompts");
+  testCopilot.skillsDir = join(tmpDir, "copilot", "skills");
+  testCopilot.mcpConfigJson = join(tmpDir, "copilot", "mcp-config.json");
 
   testVscode.mcpJson = join(tmpDir, "vscode", "mcp.json");
 });
@@ -627,5 +635,224 @@ describe("performMigrate", () => {
 
     // Restore permissions for cleanup
     chmodSync(testCursor.commandsDir, 0o755);
+  });
+});
+
+// ── Skills (NEW) ─────────────────────────────────────────────────────────────
+
+describe("performMigrate skills", () => {
+  test("claude → cursor copies SKILL.md and supporting files byte-for-byte", async () => {
+    const skillDir = join(testClaude.skillsDir, "lint");
+    writeFixture(
+      join(skillDir, "SKILL.md"),
+      "---\nname: lint\ndescription: Lint things\n---\n\nLint the project.",
+    );
+    writeFixture(join(skillDir, "reference.md"), "# Reference\n\nDetails.");
+    writeFixture(join(skillDir, "scripts", "run.sh"), "#!/bin/sh\necho hi\n");
+
+    const result = await performMigrate({
+      from: "claude",
+      to: "cursor",
+      type: "skills",
+      dryRun: false,
+    });
+
+    expect(result.errors).toEqual([]);
+    expect(result.migrated.length).toBeGreaterThan(0);
+    const skillMd = await Bun.file(join(testCursor.skillsDir, "lint", "SKILL.md")).text();
+    expect(skillMd).toContain("name: lint");
+    const ref = await Bun.file(join(testCursor.skillsDir, "lint", "reference.md")).text();
+    expect(ref).toBe("# Reference\n\nDetails.");
+    const scriptPath = join(testCursor.skillsDir, "lint", "scripts", "run.sh");
+    const script = await Bun.file(scriptPath).text();
+    expect(script).toBe("#!/bin/sh\necho hi\n");
+  });
+
+  test("claude → codex writes to userSkillsDir (~/.agents/skills)", async () => {
+    const skillDir = join(testClaude.skillsDir, "lint");
+    writeFixture(join(skillDir, "SKILL.md"), "---\nname: lint\ndescription: Lint\n---\n\nbody");
+    const result = await performMigrate({
+      from: "claude",
+      to: "codex",
+      type: "skills",
+      dryRun: false,
+    });
+    expect(result.migrated[0]?.targetPath).toContain(testCodex.userSkillsDir);
+  });
+
+  test("claude → copilot emits best-effort warning", async () => {
+    writeFixture(
+      join(testClaude.skillsDir, "lint", "SKILL.md"),
+      "---\nname: lint\ndescription: Lint\n---\n\nbody",
+    );
+    const result = await performMigrate({
+      from: "claude",
+      to: "copilot",
+      type: "skills",
+      dryRun: false,
+    });
+    expect(result.warnings.join("\n")).toContain("Copilot CLI has no documented SKILL.md loader");
+  });
+
+  test("vscode source returns no skills (no SKILL.md surface)", async () => {
+    const result = await performMigrate({
+      from: "vscode",
+      to: "claude",
+      type: "skills",
+      dryRun: false,
+    });
+    // Either skipped (no source) or no translator registered. No errors.
+    expect(result.errors).toEqual([]);
+    expect(result.migrated).toEqual([]);
+  });
+
+  test("dry-run reports artefacts without writing", async () => {
+    writeFixture(
+      join(testClaude.skillsDir, "lint", "SKILL.md"),
+      "---\nname: lint\ndescription: Lint\n---\n\nbody",
+    );
+    writeFixture(join(testClaude.skillsDir, "lint", "reference.md"), "ref");
+    const result = await performMigrate({
+      from: "claude",
+      to: "cursor",
+      type: "skills",
+      dryRun: true,
+    });
+    expect(result.errors).toEqual([]);
+    expect(result.migrated[0]?.description).toContain("supporting files");
+    // Confirm nothing was written.
+    expect(await Bun.file(join(testCursor.skillsDir, "lint", "SKILL.md")).exists()).toBe(false);
+  });
+});
+
+// ── Rules (NEW) ──────────────────────────────────────────────────────────────
+
+describe("performMigrate rules", () => {
+  test("claude → codex byte-equal markdown passthrough", async () => {
+    writeFixture(join(testClaude.rulesDir, "mermaid.md"), "Use classDef.");
+    const result = await performMigrate({
+      from: "claude",
+      to: "codex",
+      type: "rules",
+      dryRun: false,
+    });
+    expect(result.errors).toEqual([]);
+    expect(result.migrated.length).toBe(1);
+    const written = await Bun.file(join(testCodex.rulesDir, "mermaid.md")).text();
+    expect(written.trim()).toBe("Use classDef.");
+  });
+
+  test("cursor → claude strips .mdc frontmatter and rewrites filename", async () => {
+    writeFixture(
+      join(testCursor.rulesDir, "x.mdc"),
+      "---\ndescription: x\nglobs: src/**/*.ts\nalwaysApply: false\n---\n\nbody",
+    );
+    const result = await performMigrate({
+      from: "cursor",
+      to: "claude",
+      type: "rules",
+      dryRun: false,
+    });
+    expect(result.warnings.join("\n")).toContain("description, globs, alwaysApply");
+    const written = await Bun.file(join(testClaude.rulesDir, "x.md")).text();
+    expect(written.trim()).toBe("body");
+    expect(written).not.toContain("globs:");
+  });
+
+  test("copilot → cursor: registry returns null (workspace-only), recorded as skip", async () => {
+    // Source has nothing — exercises the "no translator registered" path
+    // for the unregistered direction.
+    const result = await performMigrate({
+      from: "copilot",
+      to: "cursor",
+      type: "rules",
+      dryRun: false,
+    });
+    expect(result.errors).toEqual([]);
+    expect(result.skipped.length).toBeGreaterThan(0);
+  });
+});
+
+// ── Copilot MCP (NEW endpoint) ───────────────────────────────────────────────
+
+describe("performMigrate copilot mcp endpoint", () => {
+  test("claude → copilot writes mcp-config.json with mcpServers", async () => {
+    writeFixture(
+      testClaude.mcpJson,
+      JSON.stringify({ mcpServers: { local: { command: "npx", args: ["foo"] } } }),
+    );
+    const result = await performMigrate({
+      from: "claude",
+      to: "copilot",
+      type: "mcp",
+      dryRun: false,
+    });
+    expect(result.errors).toEqual([]);
+    expect(result.migrated[0]?.targetPath).toBe(testCopilot.mcpConfigJson);
+    const written = JSON.parse(await Bun.file(testCopilot.mcpConfigJson).text()) as {
+      mcpServers?: Record<string, unknown>;
+    };
+    expect(written.mcpServers?.local).toBeDefined();
+  });
+
+  test("copilot → claude round-trips a stdio server", async () => {
+    writeFixture(
+      testCopilot.mcpConfigJson,
+      JSON.stringify({ mcpServers: { local: { command: "npx", args: ["foo"] } } }),
+    );
+    const result = await performMigrate({
+      from: "copilot",
+      to: "claude",
+      type: "mcp",
+      dryRun: false,
+    });
+    expect(result.errors).toEqual([]);
+    const written = JSON.parse(await Bun.file(testClaude.mcpJson).text()) as {
+      mcpServers?: Record<string, unknown>;
+    };
+    expect(written.mcpServers?.local).toBeDefined();
+  });
+});
+
+// ── Commands → Codex skill wrap (BEHAVIOUR CHANGE) ───────────────────────────
+
+describe("performMigrate commands → codex (wraps as SKILL.md)", () => {
+  test("writes <basename>/SKILL.md under userSkillsDir, not legacy rulesDir", async () => {
+    mkdirSync(testClaude.commandsDir, { recursive: true });
+    writeFileSync(join(testClaude.commandsDir, "lint.md"), "# Lint\n\nDo lint things.");
+    const result = await performMigrate({
+      from: "claude",
+      to: "codex",
+      type: "commands",
+      dryRun: false,
+    });
+    expect(result.errors).toEqual([]);
+    const skillMdPath = join(testCodex.userSkillsDir, "lint", "SKILL.md");
+    expect(await Bun.file(skillMdPath).exists()).toBe(true);
+    const skillMd = await Bun.file(skillMdPath).text();
+    expect(skillMd).toContain("name: lint");
+    expect(skillMd).toContain("description:");
+    expect(skillMd).toContain("Do lint things.");
+    // Did NOT write to legacy rulesDir.
+    expect(await Bun.file(join(testCodex.rulesDir, "lint.md")).exists()).toBe(false);
+  });
+});
+
+// ── Hard-error name-miss (BEHAVIOUR CHANGE) ──────────────────────────────────
+
+describe("performMigrate --name miss is a hard error", () => {
+  test("named artefact not found returns error and aborts", async () => {
+    mkdirSync(testClaude.commandsDir, { recursive: true });
+    // Don't create the file.
+    const result = await performMigrate({
+      from: "claude",
+      to: "codex",
+      type: "commands",
+      name: "does-not-exist.md",
+      dryRun: false,
+    });
+    expect(result.errors.length).toBeGreaterThan(0);
+    expect(result.errors[0]).toContain("does-not-exist.md");
+    expect(result.migrated).toEqual([]);
   });
 });

@@ -7,8 +7,8 @@
 
 import type { AgentName } from "../agents/registry";
 
-/** Translatable configuration categories. Skills are out of scope for this feature. */
-export type ConfigType = "global-rules" | "mcp" | "commands";
+/** Translatable configuration categories. */
+export type ConfigType = "global-rules" | "mcp" | "commands" | "skills" | "rules";
 
 /** Identifies a specific directional translation between two agents for one config type. */
 export interface MigrationPair {
@@ -21,9 +21,11 @@ export interface MigrationPair {
 export interface MigratedArtifact {
   /** Absolute destination path on disk. */
   targetPath: string;
+  /** Absolute source path on disk (the file this artefact was translated from). */
+  sourcePath: string;
   /** Transformed content ready to write. */
   content: string;
-  /** Human-readable summary of the transformation applied. */
+  /** Human-readable summary of the transformation applied (e.g. "claude → codex: global rules"). */
   description: string;
 }
 
@@ -39,6 +41,15 @@ export interface MigrateResult {
   errors: string[];
 }
 
+/** Sidecar file emitted alongside a primary translator output (used by skills with supporting files). */
+export interface ExtraFile {
+  /** Path relative to the artefact root (e.g. "reference.md", "scripts/build.sh"). */
+  relPath: string;
+  /** File content. utf8 (default) for text, base64 for binary. */
+  content: string;
+  encoding?: "utf8" | "base64";
+}
+
 /**
  * Pure function that converts source content to target format.
  *
@@ -48,7 +59,9 @@ export interface MigrateResult {
  *   partial transformations (e.g., dropped HTTP/SSE transport fields). When `skipWrite`
  *   is set the orchestrator surfaces `warnings` but does not write the file — used when
  *   every server in the source was dropped by the target schema and writing an empty
- *   stub would create misleading state. null when the input is empty or untranslatable.
+ *   stub would create misleading state. `extraFiles` lets a translator emit additional
+ *   files alongside the primary one (used by skills to carry SKILL.md plus
+ *   reference.md / scripts / assets). null when the input is empty or untranslatable.
  */
 export type Translator = (
   sourceContent: string,
@@ -58,6 +71,7 @@ export type Translator = (
   targetName: string;
   warnings?: string[];
   skipWrite?: boolean;
+  extraFiles?: ExtraFile[];
 } | null;
 
 // MigrateOptions is defined by the Zod schema in src/config/schema.ts

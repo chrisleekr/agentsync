@@ -84,9 +84,24 @@ describe("MigrateOptionsSchema", () => {
     const result = MigrateOptionsSchema.safeParse({
       from: "claude",
       to: "cursor",
-      type: "skills",
+      type: "extensions",
     });
     expect(result.success).toBe(false);
+  });
+
+  test("accepts the new skills and rules ConfigType values", () => {
+    const skills = MigrateOptionsSchema.safeParse({
+      from: "claude",
+      to: "cursor",
+      type: "skills",
+    });
+    expect(skills.success).toBe(true);
+    const rules = MigrateOptionsSchema.safeParse({
+      from: "claude",
+      to: "codex",
+      type: "rules",
+    });
+    expect(rules.success).toBe(true);
   });
 
   test("defaults dryRun to false", () => {

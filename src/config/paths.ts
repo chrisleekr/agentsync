@@ -10,6 +10,10 @@ export const AgentPaths = {
     mcpGlobal: join(HOME, ".cursor", "mcp.json"),
     commandsDir: join(HOME, ".cursor", "commands"),
     skillsDir: join(HOME, ".cursor", "skills"),
+    // ~/.cursor/rules/*.{md,mdc} — global rules folder (companion to Cursor's
+    // workspace-relative .cursor/rules/*.mdc Project Rules). Used by the
+    // migrate `rules` ConfigType for cross-agent passthrough.
+    rulesDir: join(HOME, ".cursor", "rules"),
     settingsJson: (() => {
       if (PLATFORM === "darwin") {
         return join(HOME, "Library", "Application Support", "Cursor", "User", "settings.json");
@@ -65,6 +69,10 @@ export const AgentPaths = {
     instructionsDir: join(HOME, ".copilot", "instructions"),
     skillsDir: join(HOME, ".copilot", "skills"),
     promptsDir: join(HOME, ".copilot", "prompts"),
+    // GitHub Copilot CLI MCP config. Same `mcpServers{}` JSON shape as Claude.
+    // Managed via `/mcp add|edit|delete` in interactive Copilot CLI mode.
+    // https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-mcp-servers
+    mcpConfigJson: join(HOME, ".copilot", "mcp-config.json"),
     // Copilot agents live as single ~/.copilot/agents/<name>.agent.md files,
     // not per-agent directories.
     agentsDir: join(HOME, ".copilot", "agents"),

@@ -87,7 +87,7 @@ export type DaemonStatus = z.infer<typeof DaemonStatusSchema>;
 const AgentNameEnum = z.enum(["claude", "cursor", "codex", "copilot", "vscode"]);
 
 /** Valid config types for the migrate command's --type flag. */
-const ConfigTypeEnum = z.enum(["global-rules", "mcp", "commands"]);
+const ConfigTypeEnum = z.enum(["global-rules", "mcp", "commands", "skills", "rules"]);
 
 /**
  * Schema for the `migrate` command's CLI arguments.

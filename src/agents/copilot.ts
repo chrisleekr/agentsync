@@ -1,5 +1,5 @@
 import { mkdir, readdir } from "node:fs/promises";
-import { basename, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { log } from "@clack/prompts";
 import { AgentPaths } from "../config/paths";
 import { shouldNeverSync } from "../core/sanitizer";
@@ -151,6 +151,28 @@ export async function applyCopilotPrompt(fileName: string, content: string): Pro
   const target = join(AgentPaths.copilot.promptsDir, fileName);
   await mkdir(AgentPaths.copilot.promptsDir, { recursive: true });
   await atomicWrite(target, content);
+}
+
+/**
+ * Merge incoming mcpServers into ~/.copilot/mcp-config.json.
+ * Mirrors the Claude MCP local-merge but skips vault denormalization
+ * since migrate writes directly between local agents.
+ */
+export async function applyCopilotMcp(mcpJsonContent: string): Promise<void> {
+  const existingRaw = await readIfExists(AgentPaths.copilot.mcpConfigJson);
+  const existing = existingRaw ? (JSON.parse(existingRaw) as Record<string, unknown>) : {};
+  const incoming = JSON.parse(mcpJsonContent) as Record<string, unknown>;
+  const existingServers =
+    typeof existing.mcpServers === "object" && existing.mcpServers !== null
+      ? (existing.mcpServers as Record<string, unknown>)
+      : {};
+  const incomingServers =
+    typeof incoming.mcpServers === "object" && incoming.mcpServers !== null
+      ? (incoming.mcpServers as Record<string, unknown>)
+      : {};
+  existing.mcpServers = { ...existingServers, ...incomingServers };
+  await mkdir(dirname(AgentPaths.copilot.mcpConfigJson), { recursive: true });
+  await atomicWrite(AgentPaths.copilot.mcpConfigJson, `${JSON.stringify(existing, null, 2)}\n`);
 }
 
 /** Extract one archived Copilot skill directory into the local skills folder. */

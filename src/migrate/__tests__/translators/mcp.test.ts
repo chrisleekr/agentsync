@@ -291,4 +291,64 @@ describe("VS Code MCP translators (official servers/inputs schema)", () => {
     expect(w).toContain('Server "github"');
     expect(w).toMatch(/envFile|sandbox|sandboxEnabled|dev/);
   });
+
+  describe("Copilot CLI as fifth MCP endpoint", () => {
+    // Copilot CLI's mcp-config.json is Claude-shape; the parser is strict
+    // about extra fields, so we keep this fixture to the canonical stdio
+    // subset (`command`/`args`/`env`). The `type: "local"`/`tools: ["*"]`
+    // fields the Copilot UI writes are non-spec extras the parser drops
+    // with a warning — covered separately by the existing extras tests.
+    const COPILOT_FIXTURE = JSON.stringify({
+      mcpServers: {
+        playwright: {
+          command: "npx",
+          args: ["@playwright/mcp@latest"],
+          env: {},
+        },
+      },
+    });
+
+    test("copilot → claude: round-trip stdio servers identically", () => {
+      const result = translateMcp.copilotToClaude(COPILOT_FIXTURE);
+      expect(result).not.toBeNull();
+      const parsed = JSON.parse(result?.content ?? "{}") as {
+        mcpServers?: Record<string, unknown>;
+      };
+      expect(parsed.mcpServers?.playwright).toBeDefined();
+    });
+
+    test("claude → copilot: drops HTTP servers with named warning", () => {
+      const claudeMixed = JSON.stringify({
+        mcpServers: {
+          remote: { type: "http", url: "https://example.com/mcp" },
+          local: { command: "npx", args: ["foo"] },
+        },
+      });
+      const result = translateMcp.claudeToCopilot(claudeMixed);
+      expect(result).not.toBeNull();
+      const w = (result?.warnings ?? []).join("\n");
+      expect(w).toContain("remote");
+    });
+
+    test("vscode → copilot: works (Copilot uses Claude-shape mcpServers)", () => {
+      const vscodeFixture = JSON.stringify({
+        servers: {
+          local: { command: "npx", args: ["foo"] },
+        },
+      });
+      const result = translateMcp.vsCodeToCopilot(vscodeFixture);
+      expect(result).not.toBeNull();
+      expect(result?.targetName).toBe("mcp.json");
+      const parsed = JSON.parse(result?.content ?? "{}") as {
+        mcpServers?: Record<string, unknown>;
+      };
+      expect(parsed.mcpServers?.local).toBeDefined();
+    });
+
+    test("copilot → codex: emits TOML [mcp.servers]", () => {
+      const result = translateMcp.copilotToCodex(COPILOT_FIXTURE);
+      expect(result).not.toBeNull();
+      expect(result?.content).toContain("[mcp.servers.playwright]");
+    });
+  });
 });

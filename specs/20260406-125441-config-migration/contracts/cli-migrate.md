@@ -15,8 +15,8 @@ agentsync migrate --from <agent> --to <agent|all> [--type <config-type>] [--name
 |------|------|----------|--------|-------------|
 | `--from` | string | yes | `claude`, `cursor`, `codex`, `copilot`, `vscode` | Source agent to read configuration from |
 | `--to` | string | yes | `claude`, `cursor`, `codex`, `copilot`, `vscode`, `all` | Target agent(s) to write configuration to |
-| `--type` | string | no | `global-rules`, `mcp`, `commands` | Filter to a single config type. Omit to migrate all types. |
-| `--name` | string | no | Filename (e.g., `review.md`) | Migrate a single named artefact. Requires `--type`. |
+| `--type` | string | no | `global-rules`, `mcp`, `commands`, `skills`, `rules` | Filter to a single config type. Omit to migrate all types. |
+| `--name` | string | no | Filename (e.g., `review.md`) or skill dir name | Migrate a single named artefact. Requires `--type`. Hard-errors when not found. |
 | `--dry-run` | boolean | no | — | Preview changes without writing to disk |
 
 ## Validation Rules
@@ -68,6 +68,14 @@ agentsync migrate --from <agent> --to <agent|all> [--type <config-type>] [--name
 ✖  Literal secret detected in MCP server "github", field "env.GITHUB_TOKEN"
 ✖  Migration aborted. Remove secret literals from source config and retry.
 ```
+
+### Error — `--name` artefact not found (exit code 1)
+
+```text
+✖  Source artefact 'does-not-exist.md' not found in claude commands
+```
+
+This replaces the previous silent-skip behaviour. Catches typos in `--name`.
 
 ## Return Type (programmatic)
 

@@ -8,13 +8,14 @@ describe("getTranslator", () => {
   });
 
   test("returns null for an unregistered pair", () => {
-    const t = getTranslator("vscode", "copilot", "mcp");
+    // VS Code ↔ skills isn't registered (VS Code has no SKILL.md surface).
+    const t = getTranslator("vscode", "claude", "skills");
     expect(t).toBeNull();
   });
 
-  test("returns null for skills (out of scope)", () => {
-    const t = getTranslator("claude", "cursor", "skills" as "mcp");
-    expect(t).toBeNull();
+  test("returns a translator for skills (claude → cursor)", () => {
+    const t = getTranslator("claude", "cursor", "skills");
+    expect(t).toBeFunction();
   });
 });
 
@@ -22,16 +23,26 @@ describe("getSupportedPairs", () => {
   test("returns all pairs when no type filter is given", () => {
     const pairs = getSupportedPairs();
     expect(pairs.length).toBeGreaterThan(0);
-    // 12 global-rules + 12 mcp + 12 commands = 36 total
-    expect(pairs.length).toBe(36);
+    // 12 global-rules + 20 mcp + 12 commands + 12 skills + 6 rules = 62 total
+    expect(pairs.length).toBe(62);
   });
 
   test("filters by config type", () => {
     const mcpPairs = getSupportedPairs("mcp");
-    expect(mcpPairs.length).toBe(12);
+    expect(mcpPairs.length).toBe(20);
     for (const p of mcpPairs) {
       expect(p.type).toBe("mcp");
     }
+  });
+
+  test("filters by config type for skills", () => {
+    const skillPairs = getSupportedPairs("skills");
+    expect(skillPairs.length).toBe(12);
+  });
+
+  test("filters by config type for rules", () => {
+    const rulePairs = getSupportedPairs("rules");
+    expect(rulePairs.length).toBe(6);
   });
 
   test("returns correct from/to for a known pair", () => {
