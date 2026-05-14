@@ -416,12 +416,7 @@ export async function applyMigrated(
     // ~/.agents/skills/. Other agents write the plain command file.
     if (to === "codex" && targetName.endsWith("/SKILL.md")) {
       const skillName = targetName.slice(0, -"/SKILL.md".length);
-      try {
-        validateSkillName(skillName);
-      } catch (err) {
-        if (err instanceof InvalidSkillNameError) return null;
-        throw err;
-      }
+      validateSkillName(skillName);
       const targetPath = join(AgentPaths.codex.userSkillsDir, skillName, "SKILL.md");
       if (!dryRun) {
         await mkdir(join(AgentPaths.codex.userSkillsDir, skillName), { recursive: true });
@@ -458,12 +453,7 @@ export async function applyMigrated(
     // plus all extraFiles (sidecars carried from source) under it.
     const targetDir = resolveSkillsTargetDir(to);
     if (!targetDir) return null;
-    try {
-      validateSkillName(targetName);
-    } catch (err) {
-      if (err instanceof InvalidSkillNameError) return null;
-      throw err;
-    }
+    validateSkillName(targetName);
     const skillRoot = join(targetDir, targetName);
     const skillMdPath = join(skillRoot, "SKILL.md");
     if (!dryRun) {
@@ -603,7 +593,13 @@ export async function performMigrate(options: MigrateOptions): Promise<MigrateRe
                 return result;
               }
             } catch {
-              // If TOML parsing also fails, content is malformed — skip secret check
+              // Translators emit content we control; unparseable bytes here mean
+              // a translator bug. Fail closed so a future broken translator can't
+              // smuggle secrets past the redaction gate.
+              result.errors.push(
+                `MCP content for ${options.from} → ${target} is neither valid JSON nor TOML — secret scan cannot run; aborting`,
+              );
+              return result;
             }
           }
         }

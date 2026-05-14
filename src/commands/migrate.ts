@@ -81,6 +81,9 @@ export const migrateCommand = defineCommand({
           `[dry-run] skipped (${s.reason}): ${s.pair.from}\u2192${s.pair.to} ${s.pair.type}`,
         );
       }
+      for (const w of result.warnings) {
+        log.warn(w);
+      }
       if (result.migrated.length === 0) {
         log.info("Dry run complete. Nothing would be written.");
       } else {
@@ -103,6 +106,9 @@ export const migrateCommand = defineCommand({
       for (const s of result.skipped) {
         log.warn(`Skipped (${s.reason}): ${s.pair.from}\u2192${s.pair.to} ${s.pair.type}`);
       }
+    }
+    for (const w of result.warnings) {
+      log.warn(w);
     }
     if (hasErrors) process.exitCode = 1;
   },

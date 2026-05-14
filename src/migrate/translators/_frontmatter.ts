@@ -35,12 +35,17 @@ export function parseFrontmatter(input: string): Frontmatter {
     return { fields: {}, body: input, hasFrontmatter: false };
   }
   const afterOpen = input.replace(FRONTMATTER_OPEN, "");
-  const closeIdx = afterOpen.indexOf("\n---");
-  if (closeIdx === -1) {
+  // Match `\n---` only when followed by newline or end-of-string. Without this
+  // guard, `\n----` or `\n---trailing` would parse as a closing marker and the
+  // body would start with bogus dashes.
+  const closeRe = /\n---(?:\r?\n|$)/;
+  const closeMatch = afterOpen.match(closeRe);
+  if (!closeMatch || closeMatch.index === undefined) {
     return { fields: {}, body: input, hasFrontmatter: false };
   }
+  const closeIdx = closeMatch.index;
   const fmBlock = afterOpen.slice(0, closeIdx);
-  const body = afterOpen.slice(closeIdx + 4).replace(/^\n/, "");
+  const body = afterOpen.slice(closeIdx + closeMatch[0].length);
 
   const fields: Record<string, string | boolean> = {};
   for (const rawLine of fmBlock.split("\n")) {
