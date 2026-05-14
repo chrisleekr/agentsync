@@ -3,9 +3,9 @@ import { mkdirSync, symlinkSync, writeFileSync } from "node:fs";
 import { mkdir, readdir, rm, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { join } from "node:path";
-import { AgentPaths } from "../../config/paths";
-import { archiveDirectory, extractArchive } from "../../core/tar";
-import { createAgeIdentity, createTmpDir } from "../../test-helpers/fixtures";
+import { AgentPaths } from "../../../config/paths";
+import { archiveDirectory, extractArchive } from "../../../core/tar";
+import { createAgeIdentity, createTmpDir } from "../../../test-helpers/fixtures";
 
 {
   const require = createRequire(import.meta.url);
@@ -27,11 +27,11 @@ const testCursorPaths = AgentPaths.cursor as MutableCursorPaths;
 // bleed this guards against.
 const originalCursorPaths: MutableCursorPaths = { ...testCursorPaths };
 
-type CursorModule = typeof import("../cursor");
+type CursorModule = typeof import("..");
 let cursorModule: CursorModule;
 
 beforeAll(async () => {
-  cursorModule = await import("../cursor");
+  cursorModule = await import("..");
 });
 
 afterAll(() => {
@@ -323,7 +323,7 @@ describe("applyCursorVault dryRun", () => {
 
   test("dryRun=true does not write any local files", async () => {
     const { applyCursorVault } = cursorModule;
-    const { encryptString } = await import("../../core/encryptor");
+    const { encryptString } = await import("../../../core/encryptor");
     const { identity, recipient } = await createAgeIdentity();
 
     const vaultDir = join(tmpDir, "vault");
@@ -343,7 +343,7 @@ describe("applyCursorVault dryRun", () => {
 
   test("applyCursorVault restores a Cursor skill from an encrypted vault artifact", async () => {
     const { applyCursorVault } = cursorModule;
-    const { encryptString } = await import("../../core/encryptor");
+    const { encryptString } = await import("../../../core/encryptor");
     const { identity, recipient } = await createAgeIdentity();
 
     const srcSkill = join(tmpDir, "src", "round-trip-skill");
@@ -373,7 +373,7 @@ describe("applyCursorVault dryRun", () => {
 
   test("applyCursorVault dryRun=true does not extract skill artifacts", async () => {
     const { applyCursorVault } = cursorModule;
-    const { encryptString } = await import("../../core/encryptor");
+    const { encryptString } = await import("../../../core/encryptor");
     const { identity, recipient } = await createAgeIdentity();
 
     const srcSkill = join(tmpDir, "src", "dry-run-skill");
@@ -400,7 +400,7 @@ describe("applyCursorVault dryRun", () => {
 
   test("applyCursorSkill rejects traversal and hidden skill names", async () => {
     const { applyCursorSkill } = cursorModule;
-    const { InvalidSkillNameError } = await import("../skills-walker");
+    const { InvalidSkillNameError } = await import("../../skills-walker");
     const badNames = ["", ".", "..", "../foo", "foo/bar", "foo\\bar", ".hidden", "foo\x00bar"];
     for (const bad of badNames) {
       await expect(applyCursorSkill(bad, "")).rejects.toBeInstanceOf(InvalidSkillNameError);
@@ -409,7 +409,7 @@ describe("applyCursorVault dryRun", () => {
 
   test("applyCursorVault skips adversarial vault filenames without traversal", async () => {
     const { applyCursorVault } = cursorModule;
-    const { encryptString } = await import("../../core/encryptor");
+    const { encryptString } = await import("../../../core/encryptor");
     const { identity, recipient } = await createAgeIdentity();
 
     const payloadSrc = join(tmpDir, "payload-src");
@@ -460,7 +460,7 @@ describe("applyCursorVault unknown .age file warning", () => {
 
   test("logs warning when encountering unrecognised .age file in cursor vault", async () => {
     const { applyCursorVault } = cursorModule;
-    const { encryptString } = await import("../../core/encryptor");
+    const { encryptString } = await import("../../../core/encryptor");
     const { identity, recipient } = await createAgeIdentity();
 
     const vaultDir = join(tmpDir, "vault");

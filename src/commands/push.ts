@@ -2,7 +2,6 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { log } from "@clack/prompts";
 import { defineCommand } from "citty";
-import { applyClaudeVault, type ClaudeSyncOptions, snapshotClaude } from "../agents/claude";
 import { type AgentDefinition, type AgentName, Agents } from "../agents/registry";
 import { NEVER_SYNC_WARNING_PREFIX, WALKER_SECRET_WARNING_PREFIX } from "../agents/skills-walker";
 import { encryptString } from "../core/encryptor";
@@ -14,23 +13,6 @@ let agentDefinitions: AgentDefinition[] = Agents;
 
 export function __setPushAgentsForTesting(agents: AgentDefinition[] | null): void {
   agentDefinitions = agents ?? Agents;
-}
-
-const REGISTRY_CLAUDE = Agents.find((a) => a.name === "claude");
-
-/**
- * Replace the registry's default Claude entry with one that knows about the
- * Claude plugin/marketplace opt-in flag from agentsync.toml. Test fakes
- * installed via `__setPushAgentsForTesting` are different object references
- * and pass through unchanged so the registry contract stays narrow.
- */
-function withClaudeOptions(agent: AgentDefinition, claudeOpts: ClaudeSyncOptions): AgentDefinition {
-  if (agent !== REGISTRY_CLAUDE) return agent;
-  return {
-    ...agent,
-    snapshot: () => snapshotClaude(claudeOpts),
-    apply: (vaultDir, key, dryRun) => applyClaudeVault(vaultDir, key, dryRun, claudeOpts),
-  };
 }
 
 /** Preview entry emitted to onPreview callbacks during a dry-run push. */
@@ -70,15 +52,10 @@ export async function performPush(
   }
 
   const requestedAgent = options.agent as AgentName | undefined;
-  const claudeOpts: ClaudeSyncOptions = {
-    syncMarketplace: config.claudePlugins?.syncMarketplace ?? false,
-  };
-  const agentsToSync = agentDefinitions
-    .filter((a) => {
-      if (requestedAgent) return a.name === requestedAgent;
-      return config.agents[a.name] === true;
-    })
-    .map((a) => withClaudeOptions(a, claudeOpts));
+  const agentsToSync = agentDefinitions.filter((a) => {
+    if (requestedAgent) return a.name === requestedAgent;
+    return config.agents[a.name] === true;
+  });
 
   if (agentsToSync.length === 0) {
     return { pushed, errors, fatal };
@@ -113,7 +90,7 @@ export async function performPush(
   const secretErrors: string[] = [];
 
   for (const agent of agentsToSync) {
-    const snapshot = await agent.snapshot();
+    const snapshot = await agent.snapshot(config);
     allSnapshots.push({ agent, snapshot });
     for (const artifact of snapshot.artifacts) {
       for (const w of artifact.warnings) {

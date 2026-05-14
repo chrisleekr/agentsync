@@ -2,40 +2,33 @@ import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { log } from "@clack/prompts";
-import { AgentPaths } from "../config/paths";
-import { decryptString } from "../core/encryptor";
-import { denormalizeStringFromVault, normalizeForVault } from "../core/path-portability";
-import { redactSecretLiterals } from "../core/sanitizer";
+import { AgentPaths } from "../../config/paths";
+import type { AgentSyncConfig } from "../../config/schema";
+import { decryptString } from "../../core/encryptor";
+import { denormalizeStringFromVault } from "../../core/path-portability";
+import { sanitizeAndNormalizeJson } from "../../core/sanitizer";
 import {
   atomicWrite,
   collect,
   readIfExists,
   type SnapshotArtifact,
   type SnapshotResult,
-} from "./_utils";
+} from "../_utils";
 
 /** Snapshot payload for the VS Code adapter. */
 export type VsCodeSnapshotResult = SnapshotResult;
 
 /** Collect the VS Code MCP configuration that AgentSync manages. */
-export async function snapshotVsCode(): Promise<SnapshotResult> {
+export async function snapshotVsCode(_config?: AgentSyncConfig): Promise<SnapshotResult> {
   const artifacts: SnapshotArtifact[] = [];
   const warnings: string[] = [];
 
   const mcpRaw = await readIfExists(AgentPaths.vscode.mcpJson);
   if (mcpRaw !== null) {
-    const normalized = normalizeForVault(JSON.parse(mcpRaw), homedir());
-    const redacted = redactSecretLiterals(normalized, "vscode_mcp");
-    const artifact = collect(
-      {
-        value: `${JSON.stringify(redacted.value, null, 2)}\n`,
-        warnings: redacted.warnings,
-      },
-      AgentPaths.vscode.mcpJson,
-      "vscode/mcp.json.age",
-    );
+    const sanitized = sanitizeAndNormalizeJson(mcpRaw, "vscode_mcp");
+    const artifact = collect(sanitized, AgentPaths.vscode.mcpJson, "vscode/mcp.json.age");
     artifacts.push(artifact);
-    warnings.push(...redacted.warnings);
+    warnings.push(...sanitized.warnings);
   }
 
   return { artifacts, warnings };
@@ -72,6 +65,7 @@ export async function applyVsCodeVault(
   vaultDir: string,
   key: string,
   dryRun: boolean,
+  _config?: AgentSyncConfig,
 ): Promise<void> {
   const vsCodeDir = join(vaultDir, "vscode");
   const files = await readAgeFiles(vsCodeDir);

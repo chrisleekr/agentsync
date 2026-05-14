@@ -1,18 +1,21 @@
 /**
- * src/migrate/translators/_frontmatter.ts
+ * Internal to `src/migrate/translators`.
  *
  * Minimal YAML frontmatter parser/serializer shared by skills, rules,
  * and commands-to-skills translators. Handles the small subset of YAML
  * that AI agents use in their config frontmatter:
  *   - Top-level scalar key/value pairs
  *   - Quoted and unquoted string values
- *   - Boolean values (true/false)
- *   - Comma-separated lists (kept as raw string)
+ *   - Boolean values true/false
+ *   - Comma-separated lists, kept as raw string
  *
- * Not a full YAML parser by design — pulling in `js-yaml` for what the
- * spec actually uses would be overkill and adds a dependency. If the
+ * Not a full YAML parser by design — pulling in `js-yaml` for what these
+ * configs actually use would be overkill and adds a dependency. If the
  * frontmatter has nested structures, we fall back to preserving the
  * raw block as-is.
+ *
+ * Used by: commands.ts, rules.ts, skills.ts.
+ * Not used by: global-rules.ts, mcp.ts.
  */
 
 export interface Frontmatter {
@@ -24,7 +27,7 @@ export interface Frontmatter {
   hasFrontmatter: boolean;
 }
 
-const FRONTMATTER_OPEN = /^---\s*\n/;
+const FRONTMATTER_OPEN = /^---\s*\r?\n/;
 
 /**
  * Parse YAML frontmatter from a markdown document.
@@ -38,7 +41,7 @@ export function parseFrontmatter(input: string): Frontmatter {
   // Match `\n---` only when followed by newline or end-of-string. Without this
   // guard, `\n----` or `\n---trailing` would parse as a closing marker and the
   // body would start with bogus dashes.
-  const closeRe = /\n---(?:\r?\n|$)/;
+  const closeRe = /\r?\n---(?:\r?\n|$)/;
   const closeMatch = afterOpen.match(closeRe);
   if (!closeMatch || closeMatch.index === undefined) {
     return { fields: {}, body: input, hasFrontmatter: false };

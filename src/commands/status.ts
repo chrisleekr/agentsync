@@ -102,7 +102,7 @@ export const statusCommand = defineCommand({
     for (const agent of enabledAgents) {
       let artifacts: SnapshotArtifact[] = [];
       try {
-        const result = await agent.snapshot();
+        const result = await agent.snapshot(config);
         artifacts = result.artifacts;
       } catch (err) {
         rows.push({

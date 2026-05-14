@@ -7,7 +7,30 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { stringify as tomlStringify } from "@iarna/toml";
+import type { AgentSyncConfig } from "../config/schema";
 import { generateIdentity, identityToRecipient } from "../core/encryptor";
+
+/**
+ * Build a fully-defaulted `AgentSyncConfig` for tests that need to call the
+ * snapshot/apply contract without loading agentsync.toml from disk. Mirrors
+ * the schema's declared defaults; override any field you need for a specific
+ * test. Schema-side `.default()` chains live on individual scalar fields
+ * (`debounceMs`, `branch`, etc.) but the schema requires the parent objects
+ * to be present, so a hand-rolled baseline is the simpler shape here.
+ */
+export function createTestAgentSyncConfig(
+  overrides: Partial<AgentSyncConfig> = {},
+): AgentSyncConfig {
+  return {
+    version: "1",
+    recipients: {},
+    agents: { cursor: true, claude: true, codex: true, copilot: true, vscode: true },
+    remote: { url: "test://vault", branch: "main" },
+    sync: { debounceMs: 300, autoPush: true, autoPull: true, pullIntervalMs: 300_000 },
+    claudePlugins: { syncMarketplace: false },
+    ...overrides,
+  };
+}
 
 const DEFAULT_AGENTS = {
   cursor: false,

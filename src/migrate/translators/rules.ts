@@ -17,8 +17,8 @@
  * `.github/instructions/` — out of scope for this global-artefact migration.
  */
 
-import type { Translator } from "../types";
-import { parseFrontmatter } from "./_frontmatter";
+import { defineTranslator, type Translator } from "../types";
+import { parseFrontmatter } from "./frontmatter";
 
 const STRIPPED_MDC_FIELDS = ["description", "globs", "alwaysApply"] as const;
 
@@ -32,10 +32,10 @@ function rewriteToMd(name: string): string {
  * alwaysApply have no equivalent in plain markdown rules), rewrite filename
  * to `.md`. Body byte-passthrough.
  */
-const cursorToPlainMd: Translator = (content, sourceName) => {
+const cursorToPlainMd: Translator = defineTranslator((trimmed, sourceName) => {
   if (!sourceName) return null;
-  const { fields, body, hasFrontmatter } = parseFrontmatter(content);
-  const targetBody = (hasFrontmatter ? body : content).trim();
+  const { fields, body, hasFrontmatter } = parseFrontmatter(trimmed);
+  const targetBody = (hasFrontmatter ? body : trimmed).trim();
   if (!targetBody) return null;
 
   const dropped = STRIPPED_MDC_FIELDS.filter((f) => f in fields);
@@ -49,29 +49,25 @@ const cursorToPlainMd: Translator = (content, sourceName) => {
     targetName: rewriteToMd(sourceName),
     ...(warnings.length > 0 ? { warnings } : {}),
   };
-};
+});
 
 /**
  * Claude/Codex rules → Cursor: body-passthrough as plain `.md`. We don't
  * synthesise `globs`/`alwaysApply` frontmatter because the source has no
  * scoping information. Cursor will load these files as always-apply rules.
  */
-const plainMdToCursor: Translator = (content, sourceName) => {
+const plainMdToCursor: Translator = defineTranslator((trimmed, sourceName) => {
   if (!sourceName) return null;
-  const trimmed = content.trim();
-  if (!trimmed) return null;
   // If the source happens to have a `.mdc` extension (unlikely for
   // claude/codex but defensive), normalise to `.md` since target reads both.
   return { content: `${trimmed}\n`, targetName: rewriteToMd(sourceName) };
-};
+});
 
 /** Plain markdown passthrough (claude ↔ codex). */
-const plainMdPassthrough: Translator = (content, sourceName) => {
+const plainMdPassthrough: Translator = defineTranslator((trimmed, sourceName) => {
   if (!sourceName) return null;
-  const trimmed = content.trim();
-  if (!trimmed) return null;
   return { content: `${trimmed}\n`, targetName: rewriteToMd(sourceName) };
-};
+});
 
 /**
  * Rules translators indexed by direction. Six entries: claude↔cursor,

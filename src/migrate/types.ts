@@ -77,3 +77,20 @@ export type Translator = (
 // MigrateOptions is defined by the Zod schema in src/config/schema.ts
 // and re-exported here for convenience.
 export type { MigrateOptions } from "../config/schema";
+
+/**
+ * Build a translator that delegates empty-content handling to the wrapper.
+ * Every translator must return `null` for empty input so the orchestrator
+ * skips writing a stub file; centralising the trim+empty check eliminates
+ * the same two lines repeated across every translator and prevents drift
+ * when a new translator forgets the guard.
+ */
+export function defineTranslator(
+  fn: (trimmed: string, sourceName: string | undefined) => ReturnType<Translator>,
+): Translator {
+  return (content, sourceName) => {
+    const trimmed = content.trim();
+    if (!trimmed) return null;
+    return fn(trimmed, sourceName);
+  };
+}

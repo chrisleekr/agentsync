@@ -2,22 +2,19 @@ import { mkdir, readdir, readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
 import { log } from "@clack/prompts";
-import { AgentPaths } from "../config/paths";
-import {
-  denormalizeStringFromVault,
-  normalizeForVault,
-  normalizeStringForVault,
-} from "../core/path-portability";
-import { redactSecretLiterals, shouldNeverSync } from "../core/sanitizer";
-import { extractArchive } from "../core/tar";
+import { AgentPaths } from "../../config/paths";
+import type { AgentSyncConfig } from "../../config/schema";
+import { denormalizeStringFromVault, normalizeStringForVault } from "../../core/path-portability";
+import { sanitizeAndNormalizeJson, shouldNeverSync } from "../../core/sanitizer";
+import { extractArchive } from "../../core/tar";
 import {
   atomicWrite,
   collect,
   readIfExists,
   type SnapshotArtifact,
   type SnapshotResult,
-} from "./_utils";
-import { collectSkillArtifacts, InvalidSkillNameError, validateSkillName } from "./skills-walker";
+} from "../_utils";
+import { collectSkillArtifacts, InvalidSkillNameError, validateSkillName } from "../skills-walker";
 
 /** Snapshot payload for the Cursor adapter. */
 export type CursorSnapshotResult = SnapshotResult;
@@ -41,7 +38,7 @@ async function readCursorRules(): Promise<string | null> {
 }
 
 /** Collect Cursor rules, MCP config, and commands that are safe to sync. */
-export async function snapshotCursor(): Promise<SnapshotResult> {
+export async function snapshotCursor(_config?: AgentSyncConfig): Promise<SnapshotResult> {
   const artifacts: SnapshotArtifact[] = [];
   const warnings: string[] = [];
 
@@ -57,18 +54,10 @@ export async function snapshotCursor(): Promise<SnapshotResult> {
 
   const mcpRaw = await readIfExists(AgentPaths.cursor.mcpGlobal);
   if (mcpRaw !== null) {
-    const normalized = normalizeForVault(JSON.parse(mcpRaw), homedir());
-    const redacted = redactSecretLiterals(normalized, "cursor_mcp");
-    const artifact = collect(
-      {
-        value: `${JSON.stringify(redacted.value, null, 2)}\n`,
-        warnings: redacted.warnings,
-      },
-      AgentPaths.cursor.mcpGlobal,
-      "cursor/mcp.json.age",
-    );
+    const sanitized = sanitizeAndNormalizeJson(mcpRaw, "cursor_mcp");
+    const artifact = collect(sanitized, AgentPaths.cursor.mcpGlobal, "cursor/mcp.json.age");
     artifacts.push(artifact);
-    warnings.push(...redacted.warnings);
+    warnings.push(...sanitized.warnings);
   }
 
   try {
@@ -178,7 +167,7 @@ export async function applyCursorSkill(skillName: string, base64Tar: string): Pr
 
 // ─── Apply (pull side) ────────────────────────────────────────────────────────
 
-import { decryptString } from "../core/encryptor";
+import { decryptString } from "../../core/encryptor";
 
 /** Read encrypted files from a vault subdirectory, ignoring missing directories. */
 async function readAgeFiles(dir: string): Promise<{ name: string; fullPath: string }[]> {
@@ -200,6 +189,7 @@ export async function applyCursorVault(
   vaultDir: string,
   key: string,
   dryRun: boolean,
+  _config?: AgentSyncConfig,
 ): Promise<void> {
   const cursorDir = join(vaultDir, "cursor");
   const files = await readAgeFiles(cursorDir);

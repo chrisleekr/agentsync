@@ -25,7 +25,7 @@
 
 import { lstat, readdir } from "node:fs/promises";
 import { join } from "node:path";
-import { resolveClaudePluginPaths } from "../config/paths";
+import { resolveClaudePluginPaths } from "../../config/paths";
 
 /** One discovered Claude Code plugin. */
 export interface ClaudePluginEntry {

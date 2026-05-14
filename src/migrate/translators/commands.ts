@@ -11,37 +11,34 @@
  *   - Copilot: *.prompt.md
  */
 
-import type { Translator } from "../types";
-import { firstNonEmptyParagraph, parseFrontmatter, serializeFrontmatter } from "./_frontmatter";
+import { defineTranslator, type Translator } from "../types";
+import { firstNonEmptyParagraph, parseFrontmatter, serializeFrontmatter } from "./frontmatter";
 
 /** Pass-through translator for agents with identical .md conventions. */
-const mdToMd: Translator = (content, sourceName) => {
-  const trimmed = content.trim();
-  if (!trimmed || !sourceName) return null;
+const mdToMd: Translator = defineTranslator((trimmed, sourceName) => {
+  if (!sourceName) return null;
   return { content: `${trimmed}\n`, targetName: sourceName };
-};
+});
 
 /** Convert .md command to Copilot's .prompt.md convention. */
-const mdToPromptMd: Translator = (content, sourceName) => {
-  const trimmed = content.trim();
-  if (!trimmed || !sourceName) return null;
+const mdToPromptMd: Translator = defineTranslator((trimmed, sourceName) => {
+  if (!sourceName) return null;
   const base = sourceName.endsWith(".prompt.md")
     ? sourceName.slice(0, -".prompt.md".length)
     : sourceName.endsWith(".md")
       ? sourceName.slice(0, -3)
       : sourceName;
   return { content: `${trimmed}\n`, targetName: `${base}.prompt.md` };
-};
+});
 
 /** Convert Copilot's .prompt.md back to standard .md convention. */
-const promptMdToMd: Translator = (content, sourceName) => {
-  const trimmed = content.trim();
-  if (!trimmed || !sourceName) return null;
+const promptMdToMd: Translator = defineTranslator((trimmed, sourceName) => {
+  if (!sourceName) return null;
   const base = sourceName.endsWith(".prompt.md")
     ? sourceName.slice(0, -".prompt.md".length)
     : sourceName;
   return { content: `${trimmed}\n`, targetName: `${base}.md` };
-};
+});
 
 /**
  * Wrap a command as a Codex skill: synthesise SKILL.md frontmatter
@@ -61,10 +58,8 @@ function fromName(sourceName: string): string {
 
 const COMPATIBLE_FRONTMATTER_KEYS = ["allowed-tools", "argument-hint", "model"] as const;
 
-const cmdToCodexSkill: Translator = (content, sourceName) => {
+const cmdToCodexSkill: Translator = defineTranslator((trimmed, sourceName) => {
   if (!sourceName) return null;
-  const trimmed = content.trim();
-  if (!trimmed) return null;
   const base = fromName(sourceName);
   if (!base) return null;
 
@@ -92,7 +87,7 @@ const cmdToCodexSkill: Translator = (content, sourceName) => {
       "wrapped as Codex skill at ~/.agents/skills/ — Codex has no native slash-command surface",
     ],
   };
-};
+});
 
 /**
  * All commands translators indexed by direction for registry registration.

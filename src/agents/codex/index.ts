@@ -3,18 +3,19 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { log } from "@clack/prompts";
 import * as TOML from "@iarna/toml";
-import { AgentPaths } from "../config/paths";
-import { denormalizeFromVault, normalizeForVault } from "../core/path-portability";
-import { type RedactionResult, redactSecretLiterals, shouldNeverSync } from "../core/sanitizer";
-import { extractArchive } from "../core/tar";
+import { AgentPaths } from "../../config/paths";
+import type { AgentSyncConfig } from "../../config/schema";
+import { denormalizeFromVault, normalizeForVault } from "../../core/path-portability";
+import { type RedactionResult, redactSecretLiterals, shouldNeverSync } from "../../core/sanitizer";
+import { extractArchive } from "../../core/tar";
 import {
   atomicWrite,
   collect,
   readIfExists,
   type SnapshotArtifact,
   type SnapshotResult,
-} from "./_utils";
-import { collectSkillArtifacts, InvalidSkillNameError, validateSkillName } from "./skills-walker";
+} from "../_utils";
+import { collectSkillArtifacts, InvalidSkillNameError, validateSkillName } from "../skills-walker";
 
 /** Snapshot payload for the Codex adapter. */
 export type CodexSnapshotResult = SnapshotResult;
@@ -45,7 +46,7 @@ function sanitizeCodexConfig(raw: string, home: string = homedir()): RedactionRe
 }
 
 /** Collect Codex instructions, rules, and config that are safe to sync. */
-export async function snapshotCodex(): Promise<SnapshotResult> {
+export async function snapshotCodex(_config?: AgentSyncConfig): Promise<SnapshotResult> {
   const artifacts: SnapshotArtifact[] = [];
   const warnings: string[] = [];
 
@@ -204,7 +205,7 @@ export async function applyCodexSkill(skillName: string, base64Tar: string): Pro
 // ─── Apply (pull side) ────────────────────────────────────────────────────────
 
 import { basename } from "node:path";
-import { decryptString } from "../core/encryptor";
+import { decryptString } from "../../core/encryptor";
 
 /** Read encrypted files from a vault subdirectory, ignoring missing directories. */
 async function readAgeFiles(dir: string): Promise<{ name: string; fullPath: string }[]> {
@@ -226,6 +227,7 @@ export async function applyCodexVault(
   vaultDir: string,
   key: string,
   dryRun: boolean,
+  _config?: AgentSyncConfig,
 ): Promise<void> {
   const codexDir = join(vaultDir, "codex");
   const files = await readAgeFiles(codexDir);

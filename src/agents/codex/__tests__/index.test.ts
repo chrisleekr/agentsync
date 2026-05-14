@@ -3,10 +3,10 @@ import { mkdirSync, symlinkSync, writeFileSync } from "node:fs";
 import { mkdir, readdir, rm, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { join } from "node:path";
-import { AgentPaths } from "../../config/paths";
-import { AGENTSYNC_HOME_PLACEHOLDER } from "../../core/path-portability";
-import { archiveDirectory, extractArchive } from "../../core/tar";
-import { createTmpDir } from "../../test-helpers/fixtures";
+import { AgentPaths } from "../../../config/paths";
+import { AGENTSYNC_HOME_PLACEHOLDER } from "../../../core/path-portability";
+import { archiveDirectory, extractArchive } from "../../../core/tar";
+import { createTmpDir } from "../../../test-helpers/fixtures";
 
 {
   const require = createRequire(import.meta.url);
@@ -32,11 +32,11 @@ const testCodexPaths = AgentPaths.codex as MutableCodexPaths;
 // bleed this guards against.
 const originalCodexPaths: MutableCodexPaths = { ...testCodexPaths };
 
-type CodexModule = typeof import("../codex");
+type CodexModule = typeof import("..");
 let codexModule: CodexModule;
 
 beforeAll(async () => {
-  codexModule = await import("../codex");
+  codexModule = await import("..");
 });
 
 afterAll(() => {
@@ -281,7 +281,7 @@ describe("applyCodexVault dryRun", () => {
 
   test("dryRun=true does not write any files", async () => {
     const { generateIdentity, identityToRecipient, encryptString } = await import(
-      "../../core/encryptor"
+      "../../../core/encryptor"
     );
     const identity = await generateIdentity();
     const recipient = await identityToRecipient(identity);
@@ -302,7 +302,7 @@ describe("applyCodexVault dryRun", () => {
 
   test("applyCodexVault restores a Codex skill from an encrypted vault artifact", async () => {
     const { generateIdentity, identityToRecipient, encryptString } = await import(
-      "../../core/encryptor"
+      "../../../core/encryptor"
     );
     const identity = await generateIdentity();
     const recipient = await identityToRecipient(identity);
@@ -334,7 +334,7 @@ describe("applyCodexVault dryRun", () => {
 
   test("applyCodexVault dryRun=true does not extract skill artifacts", async () => {
     const { generateIdentity, identityToRecipient, encryptString } = await import(
-      "../../core/encryptor"
+      "../../../core/encryptor"
     );
     const identity = await generateIdentity();
     const recipient = await identityToRecipient(identity);
@@ -362,7 +362,7 @@ describe("applyCodexVault dryRun", () => {
   // Phase 8 M6 — adversarial filename regression for Codex.
 
   test("applyCodexSkill rejects traversal and hidden skill names", async () => {
-    const { InvalidSkillNameError } = await import("../skills-walker");
+    const { InvalidSkillNameError } = await import("../../skills-walker");
     const badNames = ["", ".", "..", "../foo", "foo/bar", "foo\\bar", ".hidden", "foo\x00bar"];
     for (const bad of badNames) {
       await expect(codexModule.applyCodexSkill(bad, "")).rejects.toBeInstanceOf(
@@ -373,7 +373,7 @@ describe("applyCodexVault dryRun", () => {
 
   test("applyCodexVault skips adversarial vault filenames without traversal", async () => {
     const { generateIdentity, identityToRecipient, encryptString } = await import(
-      "../../core/encryptor"
+      "../../../core/encryptor"
     );
     const identity = await generateIdentity();
     const recipient = await identityToRecipient(identity);
@@ -476,7 +476,7 @@ describe("Codex AGENTS.override.md precedence (B17)", () => {
 
   test("applyCodexVault restores both AGENTS.md and AGENTS.override.md", async () => {
     const { generateIdentity, identityToRecipient, encryptString } = await import(
-      "../../core/encryptor"
+      "../../../core/encryptor"
     );
     const identity = await generateIdentity();
     const recipient = await identityToRecipient(identity);

@@ -2,12 +2,8 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdirSync, symlinkSync, writeFileSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { join } from "node:path";
-import { createTmpDir } from "../../test-helpers/fixtures";
-import {
-  collectClaudePlugins,
-  InvalidPluginNameError,
-  validatePluginName,
-} from "../claude-plugins";
+import { createTmpDir } from "../../../test-helpers/fixtures";
+import { collectClaudePlugins, InvalidPluginNameError, validatePluginName } from "../plugins";
 
 describe("validatePluginName", () => {
   test("accepts a typical plugin name", () => {

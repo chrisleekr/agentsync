@@ -7,95 +7,74 @@
  * inline string in settings.json, not a standalone file.
  */
 
-import type { Translator } from "../types";
+import { defineTranslator, type Translator } from "../types";
 
 /** Sentinel target name consumed by the orchestrator to route through applyCursorRules(). */
 const CURSOR_RULES_SENTINEL = "__cursor_rules__";
 
 // ── To/from Cursor (inline string in settings.json) ──────────────────────────
 
-const toCursor: Translator = (content) => {
-  const trimmed = content.trim();
-  if (!trimmed) return null;
-  return { content: trimmed, targetName: CURSOR_RULES_SENTINEL };
-};
+const toCursor: Translator = defineTranslator((trimmed) => ({
+  content: trimmed,
+  targetName: CURSOR_RULES_SENTINEL,
+}));
 
-const cursorToClaude: Translator = (content) => {
-  const trimmed = content.trim();
-  if (!trimmed) return null;
-  return {
-    content: `# Rules (migrated from Cursor)\n\n${trimmed}\n`,
-    targetName: "CLAUDE.md",
-  };
-};
+const cursorToClaude: Translator = defineTranslator((trimmed) => ({
+  content: `# Rules (migrated from Cursor)\n\n${trimmed}\n`,
+  targetName: "CLAUDE.md",
+}));
 
 // ── Between file-based agents (Claude, Codex, Copilot) ───────────────────────
 
-const claudeToCodex: Translator = (content) => {
-  const trimmed = content.trim();
-  if (!trimmed) return null;
-  return { content: trimmed, targetName: "AGENTS.md" };
-};
+const claudeToCodex: Translator = defineTranslator((trimmed) => ({
+  content: trimmed,
+  targetName: "AGENTS.md",
+}));
 
-const codexToClaude: Translator = (content) => {
-  const trimmed = content.trim();
-  if (!trimmed) return null;
-  return { content: trimmed, targetName: "CLAUDE.md" };
-};
+const codexToClaude: Translator = defineTranslator((trimmed) => ({
+  content: trimmed,
+  targetName: "CLAUDE.md",
+}));
 
-const claudeToCopilot: Translator = (content) => {
-  const trimmed = content.trim();
-  if (!trimmed) return null;
-  return { content: trimmed, targetName: "instructions.md" };
-};
+const claudeToCopilot: Translator = defineTranslator((trimmed) => ({
+  content: trimmed,
+  targetName: "instructions.md",
+}));
 
-const copilotToClaude: Translator = (content) => {
-  const trimmed = content.trim();
-  if (!trimmed) return null;
-  return { content: trimmed, targetName: "CLAUDE.md" };
-};
+const copilotToClaude: Translator = defineTranslator((trimmed) => ({
+  content: trimmed,
+  targetName: "CLAUDE.md",
+}));
 
-const cursorToCodex: Translator = (content) => {
-  const trimmed = content.trim();
-  if (!trimmed) return null;
-  return {
-    content: `# Rules (migrated from Cursor)\n\n${trimmed}\n`,
-    targetName: "AGENTS.md",
-  };
-};
+const cursorToCodex: Translator = defineTranslator((trimmed) => ({
+  content: `# Rules (migrated from Cursor)\n\n${trimmed}\n`,
+  targetName: "AGENTS.md",
+}));
 
-const codexToCursor: Translator = (content) => {
-  const trimmed = content.trim();
-  if (!trimmed) return null;
-  return { content: trimmed, targetName: CURSOR_RULES_SENTINEL };
-};
+const codexToCursor: Translator = defineTranslator((trimmed) => ({
+  content: trimmed,
+  targetName: CURSOR_RULES_SENTINEL,
+}));
 
-const cursorToCopilot: Translator = (content) => {
-  const trimmed = content.trim();
-  if (!trimmed) return null;
-  return {
-    content: `# Rules (migrated from Cursor)\n\n${trimmed}\n`,
-    targetName: "instructions.md",
-  };
-};
+const cursorToCopilot: Translator = defineTranslator((trimmed) => ({
+  content: `# Rules (migrated from Cursor)\n\n${trimmed}\n`,
+  targetName: "instructions.md",
+}));
 
-const copilotToCursor: Translator = (content) => {
-  const trimmed = content.trim();
-  if (!trimmed) return null;
-  return { content: trimmed, targetName: CURSOR_RULES_SENTINEL };
-};
+const copilotToCursor: Translator = defineTranslator((trimmed) => ({
+  content: trimmed,
+  targetName: CURSOR_RULES_SENTINEL,
+}));
 
-const codexToCopilot: Translator = (content) => {
-  const trimmed = content.trim();
-  if (!trimmed) return null;
-  return { content: trimmed, targetName: "instructions.md" };
-};
+const codexToCopilot: Translator = defineTranslator((trimmed) => ({
+  content: trimmed,
+  targetName: "instructions.md",
+}));
 
-const copilotToCodex: Translator = (content) => {
-  const trimmed = content.trim();
-  if (!trimmed) return null;
-  return { content: trimmed, targetName: "AGENTS.md" };
-};
+const copilotToCodex: Translator = defineTranslator((trimmed) => ({
+  content: trimmed,
+  targetName: "AGENTS.md",
+}));
 
 /**
  * All global-rules translators indexed by direction for registry registration.

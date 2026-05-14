@@ -18,6 +18,7 @@ import {
   createAgeIdentity,
   createBareRepo,
   createMachineFixture,
+  createTestAgentSyncConfig,
   createTmpDir,
   runGit,
   seedVaultRepo,
@@ -1242,7 +1243,7 @@ describe("skills sync integration guarantees", () => {
     await writeFileAsync(vaultFile, encrypted, "utf8");
 
     // First pull: populates the local ~/.claude/skills/my-skill/ directory.
-    await claude.applyClaudeVault(machine.vaultDir, identity, false);
+    await claude.applyClaudeVault(machine.vaultDir, identity, false, createTestAgentSyncConfig());
 
     const localSkillDir = join(mutableClaudePaths.skillsDir, "my-skill");
     expect(existsSync(join(localSkillDir, "SKILL.md"))).toBe(true);
@@ -1255,7 +1256,7 @@ describe("skills sync integration guarantees", () => {
     // Second pull against the now-empty vault. The local skill directory
     // MUST remain intact, no file added, no file removed: vault delete is
     // additive-only on the pull side.
-    await claude.applyClaudeVault(machine.vaultDir, identity, false);
+    await claude.applyClaudeVault(machine.vaultDir, identity, false, createTestAgentSyncConfig());
 
     expect(existsSync(join(localSkillDir, "SKILL.md"))).toBe(true);
     expect(existsSync(join(localSkillDir, "notes.md"))).toBe(true);
