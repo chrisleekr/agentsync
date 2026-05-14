@@ -3,10 +3,10 @@ import { mkdirSync, symlinkSync, writeFileSync } from "node:fs";
 import { mkdir, readdir, rm, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { join } from "node:path";
-import { AgentPaths } from "../../config/paths";
-import { AGENTSYNC_HOME_PLACEHOLDER } from "../../core/path-portability";
-import { archiveDirectory, extractArchive } from "../../core/tar";
-import { createTestAgentSyncConfig, createTmpDir } from "../../test-helpers/fixtures";
+import { AgentPaths } from "../../../config/paths";
+import { AGENTSYNC_HOME_PLACEHOLDER } from "../../../core/path-portability";
+import { archiveDirectory, extractArchive } from "../../../core/tar";
+import { createTestAgentSyncConfig, createTmpDir } from "../../../test-helpers/fixtures";
 
 const TEST_CONFIG = createTestAgentSyncConfig();
 const TEST_CONFIG_WITH_MARKETPLACE = createTestAgentSyncConfig({
@@ -43,11 +43,11 @@ const testClaudePaths = AgentPaths.claude as MutableClaudePaths;
 // hidden on macOS depending on which file happens to run first.
 const originalClaudePaths: MutableClaudePaths = { ...testClaudePaths };
 
-type ClaudeModule = typeof import("../claude");
+type ClaudeModule = typeof import("..");
 let claudeModule: ClaudeModule;
 
 beforeAll(async () => {
-  claudeModule = await import("../claude");
+  claudeModule = await import("..");
 });
 
 afterAll(() => {
@@ -374,7 +374,7 @@ describe("applyClaudeVault dryRun", () => {
 
   test("dryRun=true does not write any files to disk", async () => {
     const { generateIdentity, identityToRecipient, encryptString } = await import(
-      "../../core/encryptor"
+      "../../../core/encryptor"
     );
     const identity = await generateIdentity();
     const recipient = await identityToRecipient(identity);
@@ -397,7 +397,7 @@ describe("applyClaudeVault dryRun", () => {
 
   test("applyClaudeVault restores a Claude skill from an encrypted vault artifact", async () => {
     const { generateIdentity, identityToRecipient, encryptString } = await import(
-      "../../core/encryptor"
+      "../../../core/encryptor"
     );
     const identity = await generateIdentity();
     const recipient = await identityToRecipient(identity);
@@ -431,7 +431,7 @@ describe("applyClaudeVault dryRun", () => {
 
   test("applyClaudeVault dryRun=true does not extract skill artifacts", async () => {
     const { generateIdentity, identityToRecipient, encryptString } = await import(
-      "../../core/encryptor"
+      "../../../core/encryptor"
     );
     const identity = await generateIdentity();
     const recipient = await identityToRecipient(identity);
@@ -462,7 +462,7 @@ describe("applyClaudeVault dryRun", () => {
   // be rejected by validateSkillName before any filesystem write occurs.
 
   test("applyClaudeSkill rejects traversal and hidden skill names", async () => {
-    const { InvalidSkillNameError } = await import("../skills-walker");
+    const { InvalidSkillNameError } = await import("../../skills-walker");
     const badNames = ["", ".", "..", "../foo", "foo/bar", "foo\\bar", ".hidden", "foo\x00bar"];
     for (const bad of badNames) {
       await expect(claudeModule.applyClaudeSkill(bad, "")).rejects.toBeInstanceOf(
@@ -473,7 +473,7 @@ describe("applyClaudeVault dryRun", () => {
 
   test("applyClaudeVault skips adversarial vault filenames without traversal", async () => {
     const { generateIdentity, identityToRecipient, encryptString } = await import(
-      "../../core/encryptor"
+      "../../../core/encryptor"
     );
     const identity = await generateIdentity();
     const recipient = await identityToRecipient(identity);
@@ -671,7 +671,7 @@ describe("Claude plugin sync", () => {
 
   test("plugin round-trip: snapshot → encrypt → decrypt → applyClaudeVault restores every surface", async () => {
     const { generateIdentity, identityToRecipient, encryptString } = await import(
-      "../../core/encryptor"
+      "../../../core/encryptor"
     );
     const identity = await generateIdentity();
     const recipient = await identityToRecipient(identity);
@@ -719,7 +719,7 @@ describe("Claude plugin sync", () => {
 
   test("applyClaudeVault rejects an adversarial plugin name without traversal", async () => {
     const { generateIdentity, identityToRecipient, encryptString } = await import(
-      "../../core/encryptor"
+      "../../../core/encryptor"
     );
     const identity = await generateIdentity();
     const recipient = await identityToRecipient(identity);
@@ -740,7 +740,7 @@ describe("Claude plugin sync", () => {
 
   test("applyClaudeVault dryRun does not touch the plugin tree", async () => {
     const { generateIdentity, identityToRecipient, encryptString } = await import(
-      "../../core/encryptor"
+      "../../../core/encryptor"
     );
     const identity = await generateIdentity();
     const recipient = await identityToRecipient(identity);
@@ -761,7 +761,7 @@ describe("Claude plugin sync", () => {
 
   test("applyClaudeVault ignores marketplace.json.age when syncMarketplace is off", async () => {
     const { generateIdentity, identityToRecipient, encryptString } = await import(
-      "../../core/encryptor"
+      "../../../core/encryptor"
     );
     const identity = await generateIdentity();
     const recipient = await identityToRecipient(identity);
@@ -836,7 +836,7 @@ describe("Claude plugin hook HOME portability (B24)", () => {
       null,
       2,
     )}\n`;
-    const { applyClaudePluginHook } = await import("../claude-plugin-apply");
+    const { applyClaudePluginHook } = await import("../plugin-apply");
     await applyClaudePluginHook("hooky", "pre-commit.json", incoming);
     const written = await Bun.file(
       join(testClaudePaths.pluginsDir, "hooky", "hooks", "pre-commit.json"),
@@ -906,7 +906,7 @@ describe("Claude rules sync (B19)", () => {
 
   test("applyClaudeVault dispatches claude/rules/*.md.age to applyClaudeRule", async () => {
     const { generateIdentity, identityToRecipient, encryptString } = await import(
-      "../../core/encryptor"
+      "../../../core/encryptor"
     );
     const identity = await generateIdentity();
     const recipient = await identityToRecipient(identity);

@@ -2,19 +2,19 @@ import { mkdir, readdir, readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
 import { log } from "@clack/prompts";
-import { AgentPaths } from "../config/paths";
-import type { AgentSyncConfig } from "../config/schema";
-import { denormalizeStringFromVault, normalizeStringForVault } from "../core/path-portability";
-import { sanitizeAndNormalizeJson, shouldNeverSync } from "../core/sanitizer";
-import { extractArchive } from "../core/tar";
+import { AgentPaths } from "../../config/paths";
+import type { AgentSyncConfig } from "../../config/schema";
+import { denormalizeStringFromVault, normalizeStringForVault } from "../../core/path-portability";
+import { sanitizeAndNormalizeJson, shouldNeverSync } from "../../core/sanitizer";
+import { extractArchive } from "../../core/tar";
 import {
   atomicWrite,
   collect,
   readIfExists,
   type SnapshotArtifact,
   type SnapshotResult,
-} from "./_utils";
-import { collectSkillArtifacts, InvalidSkillNameError, validateSkillName } from "./skills-walker";
+} from "../_utils";
+import { collectSkillArtifacts, InvalidSkillNameError, validateSkillName } from "../skills-walker";
 
 /** Snapshot payload for the Cursor adapter. */
 export type CursorSnapshotResult = SnapshotResult;
@@ -167,7 +167,7 @@ export async function applyCursorSkill(skillName: string, base64Tar: string): Pr
 
 // ─── Apply (pull side) ────────────────────────────────────────────────────────
 
-import { decryptString } from "../core/encryptor";
+import { decryptString } from "../../core/encryptor";
 
 /** Read encrypted files from a vault subdirectory, ignoring missing directories. */
 async function readAgeFiles(dir: string): Promise<{ name: string; fullPath: string }[]> {

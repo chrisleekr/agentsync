@@ -2,18 +2,18 @@ import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { log } from "@clack/prompts";
-import { AgentPaths } from "../config/paths";
-import type { AgentSyncConfig } from "../config/schema";
-import { decryptString } from "../core/encryptor";
-import { denormalizeStringFromVault } from "../core/path-portability";
-import { sanitizeAndNormalizeJson } from "../core/sanitizer";
+import { AgentPaths } from "../../config/paths";
+import type { AgentSyncConfig } from "../../config/schema";
+import { decryptString } from "../../core/encryptor";
+import { denormalizeStringFromVault } from "../../core/path-portability";
+import { sanitizeAndNormalizeJson } from "../../core/sanitizer";
 import {
   atomicWrite,
   collect,
   readIfExists,
   type SnapshotArtifact,
   type SnapshotResult,
-} from "./_utils";
+} from "../_utils";
 
 /** Snapshot payload for the VS Code adapter. */
 export type VsCodeSnapshotResult = SnapshotResult;

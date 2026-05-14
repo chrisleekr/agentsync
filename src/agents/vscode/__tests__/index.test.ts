@@ -2,8 +2,8 @@ import { afterEach, beforeAll, beforeEach, describe, expect, mock, test } from "
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { join } from "node:path";
-import { AgentPaths } from "../../config/paths";
-import { createAgeIdentity, createTmpDir } from "../../test-helpers/fixtures";
+import { AgentPaths } from "../../../config/paths";
+import { createAgeIdentity, createTmpDir } from "../../../test-helpers/fixtures";
 
 {
   const require = createRequire(import.meta.url);
@@ -17,11 +17,11 @@ type MutableVsCodePaths = {
 
 const testVsCodePaths = AgentPaths.vscode as MutableVsCodePaths;
 
-type VsCodeModule = typeof import("../vscode");
+type VsCodeModule = typeof import("..");
 let vsCodeModule: VsCodeModule;
 
 beforeAll(async () => {
-  vsCodeModule = await import("../vscode");
+  vsCodeModule = await import("..");
 });
 
 // ── snapshotVsCode ─────────────────────────────────────────────────────
@@ -160,7 +160,7 @@ describe("applyVsCodeVault dryRun", () => {
 
   test("dryRun=true does not write any local files", async () => {
     const { applyVsCodeVault } = vsCodeModule;
-    const { encryptString } = await import("../../core/encryptor");
+    const { encryptString } = await import("../../../core/encryptor");
     const { identity, recipient } = await createAgeIdentity();
 
     const vaultDir = join(tmpDir, "vault");

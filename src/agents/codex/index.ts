@@ -3,19 +3,19 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { log } from "@clack/prompts";
 import * as TOML from "@iarna/toml";
-import { AgentPaths } from "../config/paths";
-import type { AgentSyncConfig } from "../config/schema";
-import { denormalizeFromVault, normalizeForVault } from "../core/path-portability";
-import { type RedactionResult, redactSecretLiterals, shouldNeverSync } from "../core/sanitizer";
-import { extractArchive } from "../core/tar";
+import { AgentPaths } from "../../config/paths";
+import type { AgentSyncConfig } from "../../config/schema";
+import { denormalizeFromVault, normalizeForVault } from "../../core/path-portability";
+import { type RedactionResult, redactSecretLiterals, shouldNeverSync } from "../../core/sanitizer";
+import { extractArchive } from "../../core/tar";
 import {
   atomicWrite,
   collect,
   readIfExists,
   type SnapshotArtifact,
   type SnapshotResult,
-} from "./_utils";
-import { collectSkillArtifacts, InvalidSkillNameError, validateSkillName } from "./skills-walker";
+} from "../_utils";
+import { collectSkillArtifacts, InvalidSkillNameError, validateSkillName } from "../skills-walker";
 
 /** Snapshot payload for the Codex adapter. */
 export type CodexSnapshotResult = SnapshotResult;
@@ -205,7 +205,7 @@ export async function applyCodexSkill(skillName: string, base64Tar: string): Pro
 // ─── Apply (pull side) ────────────────────────────────────────────────────────
 
 import { basename } from "node:path";
-import { decryptString } from "../core/encryptor";
+import { decryptString } from "../../core/encryptor";
 
 /** Read encrypted files from a vault subdirectory, ignoring missing directories. */
 async function readAgeFiles(dir: string): Promise<{ name: string; fullPath: string }[]> {

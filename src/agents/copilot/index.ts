@@ -1,12 +1,12 @@
 import { mkdir, readdir } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import { log } from "@clack/prompts";
-import { AgentPaths } from "../config/paths";
-import type { AgentSyncConfig } from "../config/schema";
-import { shouldNeverSync } from "../core/sanitizer";
-import { extractArchive } from "../core/tar";
-import { atomicWrite, readIfExists, type SnapshotArtifact, type SnapshotResult } from "./_utils";
-import { collectSkillArtifacts, InvalidSkillNameError, validateSkillName } from "./skills-walker";
+import { AgentPaths } from "../../config/paths";
+import type { AgentSyncConfig } from "../../config/schema";
+import { shouldNeverSync } from "../../core/sanitizer";
+import { extractArchive } from "../../core/tar";
+import { atomicWrite, readIfExists, type SnapshotArtifact, type SnapshotResult } from "../_utils";
+import { collectSkillArtifacts, InvalidSkillNameError, validateSkillName } from "../skills-walker";
 
 /**
  * Reject Copilot agent filenames that could escape `agentsDir`, smuggle in
@@ -196,7 +196,7 @@ export async function applyCopilotAgent(fileName: string, content: string): Prom
 // ─── Apply (pull side) ────────────────────────────────────────────────────────
 
 import { readdir as _readdir, readFile } from "node:fs/promises";
-import { decryptString } from "../core/encryptor";
+import { decryptString } from "../../core/encryptor";
 
 /** Read encrypted files from a vault subdirectory, ignoring missing directories. */
 async function readAgeFiles(dir: string): Promise<{ name: string; fullPath: string }[]> {

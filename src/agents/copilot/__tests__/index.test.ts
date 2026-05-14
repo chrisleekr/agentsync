@@ -3,9 +3,9 @@ import { mkdirSync, symlinkSync, writeFileSync } from "node:fs";
 import { readdir, rm } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
-import { AgentPaths } from "../../config/paths";
-import { extractArchive } from "../../core/tar";
-import { createTmpDir } from "../../test-helpers/fixtures";
+import { AgentPaths } from "../../../config/paths";
+import { extractArchive } from "../../../core/tar";
+import { createTmpDir } from "../../../test-helpers/fixtures";
 
 {
   const require = createRequire(import.meta.url);
@@ -30,11 +30,11 @@ const testCopilotPaths = AgentPaths.copilot as MutableCopilotPaths;
 // bleed this guards against.
 const originalCopilotPaths: MutableCopilotPaths = { ...testCopilotPaths };
 
-type CopilotModule = typeof import("../copilot");
+type CopilotModule = typeof import("..");
 let copilotModule: CopilotModule;
 
 beforeAll(async () => {
-  copilotModule = await import("../copilot");
+  copilotModule = await import("..");
 });
 
 afterAll(() => {
@@ -262,7 +262,7 @@ describe("apply* functions", () => {
   });
 
   test("applyCopilotSkill extracts a tar archive into skills dir", async () => {
-    const { archiveDirectory } = await import("../../core/tar");
+    const { archiveDirectory } = await import("../../../core/tar");
     // Create a source skill dir to archive
     const srcSkill = join(tmpDir, "src-skill");
     mkdirSync(srcSkill, { recursive: true });
@@ -339,7 +339,7 @@ describe("applyCopilotVault dryRun", () => {
 
   test("dryRun=true does not write instructions file", async () => {
     const { generateIdentity, identityToRecipient, encryptString } = await import(
-      "../../core/encryptor"
+      "../../../core/encryptor"
     );
     const identity = await generateIdentity();
     const recipient = await identityToRecipient(identity);
@@ -358,7 +358,7 @@ describe("applyCopilotVault dryRun", () => {
 
   test("dryRun=false writes instructions.md.age content", async () => {
     const { generateIdentity, identityToRecipient, encryptString } = await import(
-      "../../core/encryptor"
+      "../../../core/encryptor"
     );
     const identity = await generateIdentity();
     const recipient = await identityToRecipient(identity);
@@ -377,7 +377,7 @@ describe("applyCopilotVault dryRun", () => {
 
   test("dryRun=false applies instructions/ subdir files", async () => {
     const { generateIdentity, identityToRecipient, encryptString } = await import(
-      "../../core/encryptor"
+      "../../../core/encryptor"
     );
     const identity = await generateIdentity();
     const recipient = await identityToRecipient(identity);
@@ -399,7 +399,7 @@ describe("applyCopilotVault dryRun", () => {
   // Phase 8 M6 — adversarial filename regression for Copilot.
 
   test("applyCopilotSkill rejects traversal and hidden skill names", async () => {
-    const { InvalidSkillNameError } = await import("../skills-walker");
+    const { InvalidSkillNameError } = await import("../../skills-walker");
     const badNames = ["", ".", "..", "../foo", "foo/bar", "foo\\bar", ".hidden", "foo\x00bar"];
     for (const bad of badNames) {
       await expect(copilotModule.applyCopilotSkill(bad, "")).rejects.toBeInstanceOf(
@@ -410,9 +410,9 @@ describe("applyCopilotVault dryRun", () => {
 
   test("applyCopilotVault skips adversarial vault filenames without traversal", async () => {
     const { generateIdentity, identityToRecipient, encryptString } = await import(
-      "../../core/encryptor"
+      "../../../core/encryptor"
     );
-    const { archiveDirectory } = await import("../../core/tar");
+    const { archiveDirectory } = await import("../../../core/tar");
     const identity = await generateIdentity();
     const recipient = await identityToRecipient(identity);
 
@@ -441,7 +441,7 @@ describe("applyCopilotVault dryRun", () => {
   // mistaken for the skills-loop assertion's leakage.
   test("applyCopilotVault rejects a dotfile-named agent artifact via the validator", async () => {
     const { generateIdentity, identityToRecipient, encryptString } = await import(
-      "../../core/encryptor"
+      "../../../core/encryptor"
     );
     const identity = await generateIdentity();
     const recipient = await identityToRecipient(identity);

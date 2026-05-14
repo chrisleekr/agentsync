@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { AGENTSYNC_HOME_PLACEHOLDER } from "../../core/path-portability";
+import { AGENTSYNC_HOME_PLACEHOLDER } from "../../../core/path-portability";
 import {
   sanitizeClaudeHooks,
   sanitizeClaudeMcp,
   sanitizeClaudePluginManifest,
   sanitizeClaudePluginMcp,
-} from "../claude-sanitize";
+} from "../sanitize";
 
 describe("claude-sanitize", () => {
   test("extracts hooks only from claude settings", () => {

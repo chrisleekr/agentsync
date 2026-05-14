@@ -15,8 +15,8 @@
  */
 
 import { homedir } from "node:os";
-import { normalizeForVault } from "../core/path-portability";
-import { type RedactionResult, redactSecretLiterals } from "../core/sanitizer";
+import { normalizeForVault } from "../../core/path-portability";
+import { type RedactionResult, redactSecretLiterals } from "../../core/sanitizer";
 
 /**
  * Keep only Claude hook settings and redact any embedded literal secrets.

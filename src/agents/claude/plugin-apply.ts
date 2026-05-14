@@ -17,13 +17,13 @@ import { mkdir, readdir, readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
 import { log } from "@clack/prompts";
-import { AgentPaths } from "../config/paths";
-import { decryptString } from "../core/encryptor";
-import { denormalizeStringFromVault } from "../core/path-portability";
-import { extractArchive } from "../core/tar";
-import { atomicWrite, ensureCommandBackup } from "./_utils";
-import { InvalidPluginNameError, validatePluginName } from "./claude-plugins";
-import { InvalidSkillNameError, validateSkillName } from "./skills-walker";
+import { AgentPaths } from "../../config/paths";
+import { decryptString } from "../../core/encryptor";
+import { denormalizeStringFromVault } from "../../core/path-portability";
+import { extractArchive } from "../../core/tar";
+import { atomicWrite, ensureCommandBackup } from "../_utils";
+import { InvalidSkillNameError, validateSkillName } from "../skills-walker";
+import { InvalidPluginNameError, validatePluginName } from "./plugins";
 
 async function readAgeFiles(dir: string): Promise<{ name: string; fullPath: string }[]> {
   try {
