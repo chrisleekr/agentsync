@@ -132,7 +132,7 @@ See [Recover from divergence](operations.md#recover-from-divergence) for the run
 
 The vault is a regular Git repository. Inside it, every artefact is suffixed with `.age` and is age-encrypted to the recipient set defined in `agentsync.toml`. The on-disk layout is namespaced per agent:
 
-```
+```text
 <vault-root>/
 ├── agentsync.toml                 # recipient list, branch, remote, sync options
 ├── claude/

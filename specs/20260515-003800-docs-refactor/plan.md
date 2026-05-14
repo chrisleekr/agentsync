@@ -28,7 +28,7 @@ A consolidated, MkDocs-rendered docs surface where:
 
 ## Final shape
 
-```
+```text
 docs/
   index.md            MkDocs home: pitch, install (bun -g primary, bunx alt), nav cards, project status
   architecture.md     System model, reconcile rule, push/pull, daemon, security, vault format, source map
@@ -155,7 +155,7 @@ CI rule (`scripts/check-docs-mirror.ts`, called from existing `bun run check`):
 - `docs/` contains exactly the six markdown files in "Final shape", plus the existing assets.
 - `mkdocs build --strict` succeeds locally and in CI.
 - Every link from README, CLAUDE.md, and every doc resolves.
-- README and `docs/index.md` lead with `bun install -g agentsync`, then `bunx agentsync` as an alternative.
+- README and `docs/index.md` lead with `bun install -g @chrisleekr/agentsync`, then `bunx --package @chrisleekr/agentsync agentsync` as an alternative.
 - Header and tab strip render in the logo-matching palette in both light and dark modes, with white text at WCAG AA contrast.
 - `bun run check` runs `scripts/check-docs-mirror.ts` and exits non-zero when ownership-table drift is introduced.
 - No file under `docs/` references `FR-###`, `SC-###`, `US#`, `T###`, `NC-#`, or `(research R#)`-style spec IDs (project convention from `CLAUDE.md`).

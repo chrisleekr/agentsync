@@ -59,8 +59,11 @@ async function scanDocLinks(filePath: string): Promise<string[]> {
   let text: string;
   try {
     text = await readFile(filePath, "utf8");
-  } catch {
-    return [];
+  } catch (err) {
+    if (err && typeof err === "object" && "code" in err && err.code === "ENOENT") {
+      return [];
+    }
+    throw err;
   }
   const links = new Set<string>();
   const re = /\bdocs\/([A-Za-z0-9._-]+\.md)(?:#[A-Za-z0-9._-]+)?/g;

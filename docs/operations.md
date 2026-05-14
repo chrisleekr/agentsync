@@ -194,7 +194,7 @@ Steps:
 Common causes:
 
 - The remote URL has a typo (a URL without `:` or `/` is rejected immediately).
-- The branch does not exist on the remote — `init` does not create remote branches.
+- The remote **repository** does not exist on the host yet. `init` creates the branch via `--set-upstream` on first push, but it cannot create the repository itself.
 - Git authentication is not set up for the remote. AgentSync uses your existing Git credentials.
 
 Run `agentsync doctor` for a focused report, then re-run `init`.
