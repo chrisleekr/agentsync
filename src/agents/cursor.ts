@@ -132,6 +132,16 @@ export async function applyCursorMcp(mcpJsonContent: string): Promise<void> {
 }
 
 /** Restore one Cursor command markdown file from the vault. */
+/**
+ * Write one Cursor rules-folder file to ~/.cursor/rules/<name>.
+ * The migrate `rules` ConfigType uses this for cross-agent passthrough.
+ */
+export async function applyCursorRule(ruleName: string, content: string): Promise<void> {
+  const target = join(AgentPaths.cursor.rulesDir, ruleName);
+  await mkdir(AgentPaths.cursor.rulesDir, { recursive: true });
+  await atomicWrite(target, content);
+}
+
 export async function applyCursorCommand(commandName: string, content: string): Promise<void> {
   const target = join(AgentPaths.cursor.commandsDir, commandName);
   await mkdir(AgentPaths.cursor.commandsDir, { recursive: true });

@@ -59,6 +59,8 @@ export function __clearRegistryForTesting(): void {
 import { translateCommand } from "./translators/commands";
 import { translateGlobalRules } from "./translators/global-rules";
 import { translateMcp } from "./translators/mcp";
+import { translateRule } from "./translators/rules";
+import { translateSkill } from "./translators/skills";
 
 // Global Rules (4 agents: Claude, Cursor, Codex, Copilot — VS Code excluded)
 register("claude", "cursor", "global-rules", translateGlobalRules.claudeToCursor);
@@ -74,19 +76,27 @@ register("copilot", "cursor", "global-rules", translateGlobalRules.copilotToCurs
 register("codex", "copilot", "global-rules", translateGlobalRules.codexToCopilot);
 register("copilot", "codex", "global-rules", translateGlobalRules.copilotToCodex);
 
-// MCP (4 agents: Claude, Cursor, Codex, VS Code — Copilot excluded)
+// MCP (5 agents: Claude, Cursor, Codex, VS Code, Copilot CLI)
 register("claude", "cursor", "mcp", translateMcp.claudeToCursor);
 register("claude", "vscode", "mcp", translateMcp.claudeToVsCode);
+register("claude", "codex", "mcp", translateMcp.claudeToCodex);
+register("claude", "copilot", "mcp", translateMcp.claudeToCopilot);
 register("cursor", "claude", "mcp", translateMcp.cursorToClaude);
 register("cursor", "vscode", "mcp", translateMcp.cursorToVsCode);
+register("cursor", "codex", "mcp", translateMcp.cursorToCodex);
+register("cursor", "copilot", "mcp", translateMcp.cursorToCopilot);
 register("vscode", "claude", "mcp", translateMcp.vsCodeToClaude);
 register("vscode", "cursor", "mcp", translateMcp.vsCodeToCursor);
-register("claude", "codex", "mcp", translateMcp.claudeToCodex);
-register("cursor", "codex", "mcp", translateMcp.cursorToCodex);
 register("vscode", "codex", "mcp", translateMcp.vsCodeToCodex);
+register("vscode", "copilot", "mcp", translateMcp.vsCodeToCopilot);
 register("codex", "claude", "mcp", translateMcp.codexToClaude);
 register("codex", "cursor", "mcp", translateMcp.codexToCursor);
 register("codex", "vscode", "mcp", translateMcp.codexToVsCode);
+register("codex", "copilot", "mcp", translateMcp.codexToCopilot);
+register("copilot", "claude", "mcp", translateMcp.copilotToClaude);
+register("copilot", "cursor", "mcp", translateMcp.copilotToCursor);
+register("copilot", "vscode", "mcp", translateMcp.copilotToVsCode);
+register("copilot", "codex", "mcp", translateMcp.copilotToCodex);
 
 // Commands (4 agents: Claude, Cursor, Codex, Copilot — VS Code excluded)
 register("claude", "cursor", "commands", translateCommand.claudeToCursor);
@@ -101,3 +111,25 @@ register("codex", "copilot", "commands", translateCommand.codexToCopilot);
 register("copilot", "claude", "commands", translateCommand.copilotToClaude);
 register("copilot", "cursor", "commands", translateCommand.copilotToCursor);
 register("copilot", "codex", "commands", translateCommand.copilotToCodex);
+
+// Skills (4 skill-bearing agents: Claude, Cursor, Codex, Copilot CLI — VS Code excluded)
+register("claude", "cursor", "skills", translateSkill.claudeToCursor);
+register("claude", "codex", "skills", translateSkill.claudeToCodex);
+register("claude", "copilot", "skills", translateSkill.claudeToCopilot);
+register("cursor", "claude", "skills", translateSkill.cursorToClaude);
+register("cursor", "codex", "skills", translateSkill.cursorToCodex);
+register("cursor", "copilot", "skills", translateSkill.cursorToCopilot);
+register("codex", "claude", "skills", translateSkill.codexToClaude);
+register("codex", "cursor", "skills", translateSkill.codexToCursor);
+register("codex", "copilot", "skills", translateSkill.codexToCopilot);
+register("copilot", "claude", "skills", translateSkill.copilotToClaude);
+register("copilot", "cursor", "skills", translateSkill.copilotToCursor);
+register("copilot", "codex", "skills", translateSkill.copilotToCodex);
+
+// Rules (3-way passthrough: Claude, Cursor, Codex — Copilot/VS Code workspace-only)
+register("claude", "cursor", "rules", translateRule.claudeToCursor);
+register("claude", "codex", "rules", translateRule.claudeToCodex);
+register("cursor", "claude", "rules", translateRule.cursorToClaude);
+register("cursor", "codex", "rules", translateRule.cursorToCodex);
+register("codex", "claude", "rules", translateRule.codexToClaude);
+register("codex", "cursor", "rules", translateRule.codexToCursor);

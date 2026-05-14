@@ -30,7 +30,8 @@ export const migrateCommand = defineCommand({
     },
     type: {
       type: "string",
-      description: "Config type to migrate (global-rules|mcp|commands). Omit to migrate all.",
+      description:
+        "Config type to migrate (global-rules|mcp|commands|skills|rules). Omit to migrate all.",
     },
     name: {
       type: "string",
@@ -73,7 +74,7 @@ export const migrateCommand = defineCommand({
     // Dry-run output
     if (options.dryRun) {
       for (const m of result.migrated) {
-        log.info(`[dry-run] \u2192 ${m.targetPath}: ${m.description}`);
+        log.info(`[dry-run] ${m.description}\n  ${m.sourcePath} \u2192 ${m.targetPath}`);
       }
       for (const s of result.skipped) {
         log.warn(
@@ -94,7 +95,7 @@ export const migrateCommand = defineCommand({
       log.info("Nothing to migrate.");
     } else {
       for (const m of result.migrated) {
-        log.success(`\u2192 ${m.targetPath}`);
+        log.success(`${m.description}\n  ${m.sourcePath} \u2192 ${m.targetPath}`);
       }
       log.success(`Migrated ${result.migrated.length} artefact(s).`);
     }
