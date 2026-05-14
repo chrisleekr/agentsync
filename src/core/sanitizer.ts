@@ -173,81 +173,18 @@ export function redactSecretLiterals(
 }
 
 /**
- * Keep only Claude hook settings and redact any embedded literal secrets.
- * HOME-rooted string values are rewritten to the AGENTSYNC_HOME placeholder so
- * the vault round-trips across machines with different home directories.
- * Pass `home: ""` to disable normalization in tests.
+ * Parse JSON, rewrite home-prefixed paths to the vault placeholder, and redact
+ * secret-looking literals. Returns the serialized result with collected warnings.
+ * Used by every adapter that snapshots a JSON config file the same way.
  */
-export function sanitizeClaudeHooks(
-  rawSettingsJson: string,
+export function sanitizeAndNormalizeJson(
+  raw: string,
+  fieldName: string,
   home: string = homedir(),
 ): RedactionResult<string> {
-  const parsed = JSON.parse(rawSettingsJson) as Record<string, unknown>;
-  const hooksOnly = { hooks: parsed.hooks ?? {} };
-  const normalized = normalizeForVault(hooksOnly, home);
-  const redacted = redactSecretLiterals(normalized, "hooks");
-  return {
-    value: `${JSON.stringify(redacted.value, null, 2)}\n`,
-    warnings: redacted.warnings,
-  };
-}
-
-/**
- * Keep only Claude MCP settings and redact any embedded literal secrets.
- * Path-portability rules match {@link sanitizeClaudeHooks}.
- */
-export function sanitizeClaudeMcp(
-  rawClaudeJson: string,
-  home: string = homedir(),
-): RedactionResult<string> {
-  const parsed = JSON.parse(rawClaudeJson) as Record<string, unknown>;
-  const mcpOnly = { mcpServers: parsed.mcpServers ?? {} };
-  const normalized = normalizeForVault(mcpOnly, home);
-  const redacted = redactSecretLiterals(normalized, "mcpServers");
-  return {
-    value: `${JSON.stringify(redacted.value, null, 2)}\n`,
-    warnings: redacted.warnings,
-  };
-}
-
-/**
- * Sanitize a Claude Code plugin manifest (`.claude-plugin/plugin.json`).
- *
- * Unlike `sanitizeClaudeHooks` / `sanitizeClaudeMcp` — which discard everything
- * outside one allow-listed key — plugin manifests need their full metadata
- * preserved (name, version, description, author, command/agent/hook lists,
- * etc.) so that the apply side can restore an equivalent manifest. The only
- * transformation is `redactSecretLiterals` over the entire object, which
- * replaces obvious credential strings with the standard placeholder while
- * leaving structural fields untouched.
- */
-export function sanitizeClaudePluginManifest(
-  rawJson: string,
-  home: string = homedir(),
-): RedactionResult<string> {
-  const parsed = JSON.parse(rawJson) as unknown;
+  const parsed = JSON.parse(raw);
   const normalized = normalizeForVault(parsed, home);
-  const redacted = redactSecretLiterals(normalized, "plugin");
-  return {
-    value: `${JSON.stringify(redacted.value, null, 2)}\n`,
-    warnings: redacted.warnings,
-  };
-}
-
-/**
- * Sanitize a plugin-scoped `.mcp.json`. Mirrors {@link sanitizeClaudeMcp} but
- * preserves the file's full top-level shape because plugin MCP files do not
- * follow the user-level `.claude.json` schema — they are a bare server
- * descriptor that the plugin owner controls. Literal secret redaction still
- * runs over every value.
- */
-export function sanitizeClaudePluginMcp(
-  rawJson: string,
-  home: string = homedir(),
-): RedactionResult<string> {
-  const parsed = JSON.parse(rawJson) as unknown;
-  const normalized = normalizeForVault(parsed, home);
-  const redacted = redactSecretLiterals(normalized, "pluginMcp");
+  const redacted = redactSecretLiterals(normalized, fieldName);
   return {
     value: `${JSON.stringify(redacted.value, null, 2)}\n`,
     warnings: redacted.warnings,

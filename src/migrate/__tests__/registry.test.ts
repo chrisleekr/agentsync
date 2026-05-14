@@ -1,5 +1,36 @@
 import { describe, expect, test } from "bun:test";
 import { getSupportedPairs, getTranslator } from "../registry";
+import { defineTranslator } from "../types";
+
+describe("defineTranslator", () => {
+  test("returns null when content is empty or whitespace-only", () => {
+    const t = defineTranslator((trimmed, sourceName) => ({
+      content: trimmed,
+      targetName: sourceName ?? "out",
+    }));
+    expect(t("", "src.md")).toBeNull();
+    expect(t("   \n\t  ", "src.md")).toBeNull();
+  });
+
+  test("delegates to inner fn for non-empty content with trimmed input", () => {
+    const t = defineTranslator((trimmed, sourceName) => ({
+      content: trimmed,
+      targetName: sourceName ?? "out",
+    }));
+    const result = t("  hello  ", "src.md");
+    expect(result).toEqual({ content: "hello", targetName: "src.md" });
+  });
+
+  test("inner fn receives undefined sourceName when caller omits it", () => {
+    let captured: string | undefined = "<unset>";
+    const t = defineTranslator((trimmed, sourceName) => {
+      captured = sourceName;
+      return { content: trimmed, targetName: "x" };
+    });
+    t("hi");
+    expect(captured).toBeUndefined();
+  });
+});
 
 describe("getTranslator", () => {
   test("returns a function for a registered pair", () => {

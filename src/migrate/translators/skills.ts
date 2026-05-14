@@ -17,8 +17,8 @@
  * and merged with translator-emitted extraFiles before write.
  */
 
-import type { Translator } from "../types";
-import { parseFrontmatter } from "./_frontmatter";
+import { defineTranslator, type Translator } from "../types";
+import { parseFrontmatter } from "./frontmatter";
 
 /**
  * Identity translator for SKILL.md content. Validates that the input has the
@@ -26,10 +26,8 @@ import { parseFrontmatter } from "./_frontmatter";
  * recommended; `name` defaults to the parent directory name). Emits a warning
  * if `description` is missing rather than rejecting — matches Claude's stance.
  */
-const passthroughSkill: Translator = (content, sourceName) => {
+const passthroughSkill: Translator = defineTranslator((trimmed, sourceName) => {
   if (!sourceName) return null;
-  const trimmed = content.trim();
-  if (!trimmed) return null;
   const { fields, hasFrontmatter } = parseFrontmatter(trimmed);
   const warnings: string[] = [];
   if (!hasFrontmatter) {
@@ -42,7 +40,7 @@ const passthroughSkill: Translator = (content, sourceName) => {
     targetName: sourceName,
     ...(warnings.length > 0 ? { warnings } : {}),
   };
-};
+});
 
 /**
  * Wraps `passthroughSkill` with a one-line warning that Copilot CLI has no

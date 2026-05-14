@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { log } from "@clack/prompts";
 import * as TOML from "@iarna/toml";
 import { AgentPaths } from "../config/paths";
+import type { AgentSyncConfig } from "../config/schema";
 import { denormalizeFromVault, normalizeForVault } from "../core/path-portability";
 import { type RedactionResult, redactSecretLiterals, shouldNeverSync } from "../core/sanitizer";
 import { extractArchive } from "../core/tar";
@@ -45,7 +46,7 @@ function sanitizeCodexConfig(raw: string, home: string = homedir()): RedactionRe
 }
 
 /** Collect Codex instructions, rules, and config that are safe to sync. */
-export async function snapshotCodex(): Promise<SnapshotResult> {
+export async function snapshotCodex(_config?: AgentSyncConfig): Promise<SnapshotResult> {
   const artifacts: SnapshotArtifact[] = [];
   const warnings: string[] = [];
 
@@ -226,6 +227,7 @@ export async function applyCodexVault(
   vaultDir: string,
   key: string,
   dryRun: boolean,
+  _config?: AgentSyncConfig,
 ): Promise<void> {
   const codexDir = join(vaultDir, "codex");
   const files = await readAgeFiles(codexDir);

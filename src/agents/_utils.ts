@@ -6,9 +6,23 @@
  */
 
 import { mkdirSync, writeFileSync } from "node:fs";
-import { readFile } from "node:fs/promises";
+import { readFile, stat, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import type { RedactionResult } from "../core/sanitizer";
+
+/**
+ * Preserve the previous file content next to the original as `<path>.bak`
+ * before an overwrite. Called by every adapter's apply path so a destructive
+ * pull leaves an undo handle on disk. No-op when the file doesn't yet exist.
+ */
+export async function ensureCommandBackup(path: string): Promise<void> {
+  try {
+    await stat(path);
+    await writeFile(`${path}.bak`, await readFile(path, "utf8"), "utf8");
+  } catch {
+    // No existing file to backup.
+  }
+}
 
 // ─── Canonical snapshot types ────────────────────────────────────────────────
 

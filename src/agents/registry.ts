@@ -1,3 +1,4 @@
+import type { AgentSyncConfig } from "../config/schema";
 import type { SnapshotArtifact, SnapshotResult } from "./_utils";
 import type { ClaudeSnapshotResult } from "./claude";
 import { applyClaudeVault, snapshotClaude } from "./claude";
@@ -16,15 +17,22 @@ export type AgentName = "cursor" | "claude" | "codex" | "copilot" | "vscode";
 // Re-export canonical snapshot types so callers only need to import from registry.
 export type { SnapshotArtifact, SnapshotResult };
 
-/** Common contract that every agent adapter must satisfy. */
+/**
+ * Common contract that every agent adapter must satisfy.
+ *
+ * `config` carries the validated `agentsync.toml`. Most adapters ignore it;
+ * adapters with opt-in behaviour read their own section (e.g. claude reads
+ * `config.claudePlugins.syncMarketplace`). Threading the full config through
+ * the contract keeps push/pull from special-casing any single agent.
+ */
 export interface AgentDefinition {
   name: AgentName;
-  snapshot: () => Promise<SnapshotResult>;
+  snapshot: (config: AgentSyncConfig) => Promise<SnapshotResult>;
   /**
    * Decrypt vault artifacts and apply them to the local machine.
    * This is the counterpart to `snapshot()` and drives the pull pipeline.
    */
-  apply: (vaultDir: string, key: string, dryRun: boolean) => Promise<void>;
+  apply: (vaultDir: string, key: string, dryRun: boolean, config: AgentSyncConfig) => Promise<void>;
 }
 
 /** Ordered registry used by commands to iterate over every supported agent adapter. */

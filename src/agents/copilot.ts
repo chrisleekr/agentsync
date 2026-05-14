@@ -2,6 +2,7 @@ import { mkdir, readdir } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import { log } from "@clack/prompts";
 import { AgentPaths } from "../config/paths";
+import type { AgentSyncConfig } from "../config/schema";
 import { shouldNeverSync } from "../core/sanitizer";
 import { extractArchive } from "../core/tar";
 import { atomicWrite, readIfExists, type SnapshotArtifact, type SnapshotResult } from "./_utils";
@@ -30,7 +31,7 @@ function validateCopilotAgentFileName(fileName: string): void {
 export type CopilotSnapshotResult = SnapshotResult;
 
 /** Collect Copilot instructions, prompts, skills, and agents into vault artifacts. */
-export async function snapshotCopilot(): Promise<SnapshotResult> {
+export async function snapshotCopilot(_config?: AgentSyncConfig): Promise<SnapshotResult> {
   const artifacts: SnapshotArtifact[] = [];
   const warnings: string[] = [];
 
@@ -217,6 +218,7 @@ export async function applyCopilotVault(
   vaultDir: string,
   key: string,
   dryRun: boolean,
+  _config?: AgentSyncConfig,
 ): Promise<void> {
   const copilotDir = join(vaultDir, "copilot");
   const files = await readAgeFiles(copilotDir);
