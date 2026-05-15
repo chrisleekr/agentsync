@@ -2,9 +2,18 @@
 
 ## Overview
 
-The `agentsync migrate` command translates configuration from one AI agent's format to another. It reads local agent config files, transforms them through format-specific translators, and writes the result to the target agent's config location.
+Translate configuration from one AI agent's format to another. The migrator reads local agent config files, transforms them through format-specific translators, and writes the result to the target agent's config location.
 
-No vault initialisation is required — `migrate` operates on local files only.
+No vault initialisation is required — migration operates on local files only.
+
+## Two ways to run a migration
+
+- **Interactive (TUI)**: run `agentsync`, press `4` for the Migrate tab,
+  pick From / To / Type, press Shift-P to preview, then Shift-A to apply.
+  Apply is disabled until a preview that matches the current form has been
+  rendered, so an accidental keystroke cannot trigger an unreviewed write.
+- **Scripted (CLI)**: use the flags below from a shell or CI. The TUI
+  calls the same planner internally, so the dry-run output is identical.
 
 ## Command
 

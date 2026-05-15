@@ -37,7 +37,7 @@
     "access": "public"
   },
   "scripts": {
-    "build": "bun build --compile src/cli.ts --outfile dist/agentsync",
+    "build": "bun run scripts/build.ts",
     "build:package": "bun run scripts/build-package.ts",
     "pack:dry-run": "bun run build:package && npm pack --dry-run --json --ignore-scripts",
     "typecheck": "bunx tsc --noEmit",
@@ -63,6 +63,7 @@
   "dependencies": {
     "@clack/prompts": "^1.2.0",
     "@iarna/toml": "^2.2.5",
+    "@opentui/core": "^0.2.10",
     "age-encryption": "^0.3.0",
     "citty": "^0.2.2",
     "picocolors": "^1.1.1",

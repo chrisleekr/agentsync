@@ -25,9 +25,11 @@ system model.
 
 ```text
 src/
-  cli.ts                  CLI entry — wires citty commands
+  cli.ts                  CLI entry — wires citty commands; bare invocation opens the TUI
   agents/                 Per-agent adapters (claude, cursor, codex, copilot, vscode)
   commands/               User-facing commands (init, push, pull, status, daemon, key, skill, …)
+    destroy.ts            CLI vault teardown — local rm, remote commit, or both
+    tui/                  Interactive TUI: app loop, tab modules, IPC client, render panes
   config/                 Path resolution + agentsync.toml schema
   core/                   encryptor, git, sanitizer, tar, watcher, sync-queue, ipc
   daemon/                 Long-running process + per-OS installers
@@ -36,7 +38,7 @@ src/
   test-helpers/           Shared test fixtures
 docs/                     Architecture, commands, migrate, operations, contributing
 specs/                    speckit feature specs and plans
-scripts/                  Build / packaging scripts
+scripts/                  Build / packaging scripts (build.ts, build-package.ts)
 ```
 
 Tests live in co-located `__tests__/` directories beside the code under test
@@ -71,6 +73,18 @@ bun run check:act     # run CI workflow locally via nektos/act
 - **Path resolution**: always resolve agent paths through `AgentPaths` in
   `src/config/paths.ts` rather than hardcoding `~/.claude`, `~/.cursor`,
   etc. — this keeps the test harness and platform overrides working.
+- **TUI reuses command logic, never duplicates it**: the TUI wizards and
+  the Migrate tab call `performInit`, `performKeyAdd`, `performKeyRotate`,
+  `performMigrate`, and `performSkillRemove` directly. Adding new TUI
+  features must not fork business logic — encryption, reconciliation,
+  sanitiser, and migration invariants live in one place.
+- **`destroy` never imports `AgentPaths`**: the agent-files-never-touched
+  invariant for `agentsync destroy` is enforced by construction (no
+  `AgentPaths.*` reference anywhere in `src/commands/destroy.ts`) and by
+  test (three sha256+mtime assertions in `destroy.test.ts` covering each
+  scope). A future PR that adds that import without a documented reason
+  should be rejected at review — the invariant is the entire safety story
+  for that command.
 - **Errors over fallbacks**: prefer surfacing reconciliation, encryption,
   or daemon-IPC failures with actionable guidance over silent retries or
   defaults.

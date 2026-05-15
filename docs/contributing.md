@@ -80,6 +80,42 @@ Rules:
 
 Versioning is semver. The pre-1.0 caveat in [Home](index.md#project-status) applies until 1.0 lands.
 
+## Working on the TUI
+
+The interactive TUI lives in `src/commands/tui/`. The boundary is strict:
+
+- `app.ts` owns the renderer lifecycle, the tab router, and the global key
+  router. Tabs and wizards do not touch the renderer directly.
+- Each tab module exposes `renderXxx(renderer, host, state)` and, where it
+  is interactive, `onXxxKey(key, state): boolean` — `true` means the state
+  changed and a rerender is needed.
+- All business logic is reused from the existing command modules
+  (`performInit`, `performKeyAdd`, `performKeyRotate`, `performMigrate`,
+  `performSkillRemove`). The TUI must not fork encryption, reconciliation,
+  sanitiser, or migration rules.
+
+Local development:
+
+```bash
+bun run src/cli.ts          # bare invocation opens the TUI
+bun run src/cli.ts tui      # explicit alias
+echo '' | bun run src/cli.ts # forces the non-TTY fallback (status text)
+```
+
+Compiled binary verification (`dist/agentsync`):
+
+```bash
+bun run build               # runs scripts/build.ts (with --os=* --cpu=*)
+./dist/agentsync            # macOS Gatekeeper may kill an unsigned binary;
+                            #   prefer `bun install -g @chrisleekr/agentsync`
+                            #   or run via source for development.
+```
+
+The npm-published bundle (`dist/cli.js`) externalises `@opentui/core` so
+the single-file bundle stays a single file. Consumers pick up the native
+TUI dependency from the `dependencies` block in `package.json` at install
+time.
+
 ## Doc ownership
 
 Single source of truth for which file owns which concept. The docs-mirror CI check (`scripts/check-docs-mirror.ts`, wired into `bun run check`) parses this table and fails the PR if drift appears.

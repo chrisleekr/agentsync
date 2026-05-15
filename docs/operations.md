@@ -6,6 +6,20 @@ Run AgentSync in production for your own laptops: install the daemon, rotate key
 
 This page owns day-2 concerns. It is the single home for the daemon install procedure on each OS, the key-rotation runbook, and the troubleshooting catalogue. The architectural model behind these flows lives in [Architecture](architecture.md); the command flag reference lives in [Commands](commands.md).
 
+## Daily ops in the TUI
+
+Run `agentsync` with no arguments for an interactive view of daemon health,
+vault state, agent file deltas, and pending sync activity. The TUI keeps a
+1.5-second poll on the daemon IPC `status` command, so the dashboard reflects
+live state without you re-running `agentsync status`.
+
+The flag-driven equivalents still work when you need scripted output:
+
+- `agentsync status` — text comparison of local files vs the decrypted
+  vault.
+- `agentsync daemon status` — daemon health only.
+- `agentsync doctor` — local environment, key, vault, and daemon checks.
+
 ## Daemon
 
 The daemon is a long-running process that watches your enabled agent paths and pushes on change. It debounces rapid edits, serialises sync operations through a queue so two pushes can never race, and runs periodic pulls at a configurable interval.
@@ -129,6 +143,42 @@ If `pull` cannot decrypt or `doctor` reports a missing key:
 
 If the key is gone and was never backed up, the vault cannot be recovered for that machine. Generate a new identity with `init`, have the new public key added by an existing machine, then `pull`.
 
+### Reset a vault
+
+When you want to throw away vault state and start over, reach for
+[`agentsync destroy`](commands.md#destroy) rather than `rm -rf`.
+
+> **Agent files are never touched.** Every `agentsync destroy` scope
+> leaves `~/.claude/`, `~/.cursor/`, `~/.codex/`, `~/.copilot/`, and your
+> VS Code user directory byte-for-byte unchanged. This is guaranteed by
+> code and asserted by test — `destroy` only ever operates on the vault
+> directory and the configured remote.
+
+Decide the scope first:
+
+- **Local clone is corrupted, remote is fine** → `agentsync destroy`
+  (default `--scope=local`). Removes `~/.agentsync/vault/`, keeps
+  `key.txt`. Then re-init from the same remote.
+- **You want every machine to start fresh, including the remote** →
+  `agentsync destroy --scope=remote`. Adds a commit to the remote that
+  removes every tracked file (not a force-push — history is preserved
+  and other recipients can `git revert` if they still have a copy).
+- **Both** → `agentsync destroy --scope=all`. Remote is wiped first so a
+  failed push does not leave you with a wiped local that cannot reach
+  the remote.
+
+Before running, back the vault up if you might still want it:
+
+```bash
+cp -r ~/.agentsync/vault ~/.agentsync/vault.bak.$(date +%s)
+```
+
+Three confirmation gates must pass: preview prompt → typed phrase
+(`DESTROY` for local, `DESTROY <branch>@<remote-fragment>` for remote /
+all) → final y/n. The command refuses to run in a non-TTY shell without
+`--yes`. See [Commands → destroy](commands.md#destroy) for the full flag
+and behaviour reference.
+
 ## Troubleshooting catalogue
 
 ### `status` shows local-only or vault-only entries
@@ -198,3 +248,33 @@ Common causes:
 - Git authentication is not set up for the remote. AgentSync uses your existing Git credentials.
 
 Run `agentsync doctor` for a focused report, then re-run `init`.
+
+### TUI does not open / falls back to text output
+
+Bare `agentsync` deliberately falls back to printing `status` output when
+stdout is not a TTY. This happens under `nohup`, inside `script(1)`, when
+piped to another process, or in CI runners. Force the TUI from a
+non-interactive context by running `agentsync tui` with a real terminal
+allocated by the shell (e.g. `script -q /dev/null agentsync tui`); the
+fallback exists specifically to protect scripts that depend on text output.
+
+### Terminal looks broken after the TUI crashed
+
+The TUI installs SIGINT / SIGTERM / exit handlers that restore the terminal
+on shutdown. A hard kill (`kill -9` on the bun process) can bypass that and
+leave the terminal in raw mode. Recover with:
+
+```bash
+reset
+# or, if `reset` is unavailable:
+tput reset
+```
+
+### `dist/agentsync` exits 137 on macOS
+
+This is the macOS Gatekeeper killing the unsigned compiled binary on first
+launch. It is a pre-existing issue with the compiled distribution and is
+not caused by the TUI dependency. The supported install method is `bun
+install -g @chrisleekr/agentsync`, which ships the bundled `dist/cli.js`
+through Bun and is not subject to Gatekeeper. Code signing for the
+compiled binary is tracked separately from the TUI work.

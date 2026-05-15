@@ -1,6 +1,5 @@
 import { mkdir, readdir } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
-import { log } from "@clack/prompts";
 import { AgentPaths } from "../../config/paths";
 import type { AgentSyncConfig } from "../../config/schema";
 import { shouldNeverSync } from "../../core/sanitizer";
@@ -195,23 +194,7 @@ export async function applyCopilotAgent(fileName: string, content: string): Prom
 
 // ─── Apply (pull side) ────────────────────────────────────────────────────────
 
-import { readdir as _readdir, readFile } from "node:fs/promises";
-import { decryptString } from "../../core/encryptor";
-
-/** Read encrypted files from a vault subdirectory, ignoring missing directories. */
-async function readAgeFiles(dir: string): Promise<{ name: string; fullPath: string }[]> {
-  try {
-    const names = await _readdir(dir);
-    return names
-      .filter((name) => name.endsWith(".age"))
-      .map((name) => ({
-        name,
-        fullPath: join(dir, name),
-      }));
-  } catch {
-    return [];
-  }
-}
+import { type ApplyPlan, defineFileArtifact, runApplyPlan } from "../_apply";
 
 /** Decrypt and apply all Copilot vault artifacts to the local machine. */
 export async function applyCopilotVault(
@@ -220,90 +203,65 @@ export async function applyCopilotVault(
   dryRun: boolean,
   _config?: AgentSyncConfig,
 ): Promise<void> {
-  const copilotDir = join(vaultDir, "copilot");
-  const files = await readAgeFiles(copilotDir);
-
-  for (const { name, fullPath } of files) {
-    const encrypted = await readFile(fullPath, "utf8");
-    const decrypted = await decryptString(encrypted, key);
-
-    if (name === "instructions.md.age") {
-      if (dryRun) {
-        log.info("[dry-run] [copilot] would apply instructions");
-        continue;
-      }
-      await applyCopilotInstructions(decrypted);
-    }
-  }
-
-  // instructions/ sub-directory
-  const instrFiles = await readAgeFiles(join(copilotDir, "instructions"));
-  for (const { name, fullPath } of instrFiles) {
-    if (!name.endsWith(".instructions.md.age")) continue;
-    const encrypted = await readFile(fullPath, "utf8");
-    const decrypted = await decryptString(encrypted, key);
-    const fileName = basename(name, ".age");
-    if (dryRun) {
-      log.info(`[dry-run] [copilot] would write instruction: ${fileName}`);
-      continue;
-    }
-    await applyCopilotInstructionFile(fileName, decrypted);
-  }
-
-  // prompts/ sub-directory
-  const promptFiles = await readAgeFiles(join(copilotDir, "prompts"));
-  for (const { name, fullPath } of promptFiles) {
-    if (!name.endsWith(".prompt.md.age")) continue;
-    const encrypted = await readFile(fullPath, "utf8");
-    const decrypted = await decryptString(encrypted, key);
-    const fileName = basename(name, ".age");
-    if (dryRun) {
-      log.info(`[dry-run] [copilot] would write prompt: ${fileName}`);
-      continue;
-    }
-    await applyCopilotPrompt(fileName, decrypted);
-  }
-
-  // skills/ sub-directory — stored as <name>.tar.age
-  const skillFiles = await readAgeFiles(join(copilotDir, "skills"));
-  for (const { name, fullPath } of skillFiles) {
-    if (!name.endsWith(".tar.age")) continue;
-    const skillName = basename(name, ".tar.age");
-    try {
-      validateSkillName(skillName);
-    } catch (err) {
-      if (err instanceof InvalidSkillNameError) {
-        log.warn(`[copilot] Skipping vault skill with invalid name '${name}': ${err.reason}`);
-        continue;
-      }
-      throw err;
-    }
-    const encrypted = await readFile(fullPath, "utf8");
-    const decrypted = await decryptString(encrypted, key);
-    if (dryRun) {
-      log.info(`[dry-run] [copilot] would extract skill: ${skillName}`);
-      continue;
-    }
-    await applyCopilotSkill(skillName, decrypted);
-  }
-
-  // agents/ sub-directory — stored as <name>.agent.md.age
-  const agentFiles = await readAgeFiles(join(copilotDir, "agents"));
-  for (const { name, fullPath } of agentFiles) {
-    if (!name.endsWith(".agent.md.age")) continue;
-    const fileName = basename(name, ".age");
-    try {
-      validateCopilotAgentFileName(fileName);
-    } catch {
-      log.warn(`[copilot] Skipping vault agent with invalid name '${name}'`);
-      continue;
-    }
-    const encrypted = await readFile(fullPath, "utf8");
-    const decrypted = await decryptString(encrypted, key);
-    if (dryRun) {
-      log.info(`[dry-run] [copilot] would write agent: ${fileName}`);
-      continue;
-    }
-    await applyCopilotAgent(fileName, decrypted);
-  }
+  const plan: ApplyPlan = {
+    agent: "copilot",
+    directives: [
+      defineFileArtifact({
+        vaultName: "instructions.md.age",
+        dryRunLabel: "[dry-run] [copilot] would apply instructions",
+        apply: applyCopilotInstructions,
+      }),
+      {
+        kind: "dir",
+        subdir: "instructions",
+        suffix: ".age",
+        match: (name) => name.endsWith(".instructions.md.age"),
+        dryRunVerb: "would write instruction:",
+        apply: applyCopilotInstructionFile,
+      },
+      {
+        kind: "dir",
+        subdir: "prompts",
+        suffix: ".age",
+        match: (name) => name.endsWith(".prompt.md.age"),
+        dryRunVerb: "would write prompt:",
+        apply: applyCopilotPrompt,
+      },
+      {
+        kind: "dir",
+        subdir: "skills",
+        suffix: ".tar.age",
+        dryRunVerb: "would extract skill:",
+        apply: applyCopilotSkill,
+        filter: (name) => {
+          try {
+            validateSkillName(name);
+            return null;
+          } catch (err) {
+            if (err instanceof InvalidSkillNameError) {
+              return { reason: `invalid skill name — ${err.reason}` };
+            }
+            throw err;
+          }
+        },
+      },
+      {
+        kind: "dir",
+        subdir: "agents",
+        suffix: ".age",
+        match: (name) => name.endsWith(".agent.md.age"),
+        dryRunVerb: "would write agent:",
+        apply: applyCopilotAgent,
+        filter: (name) => {
+          try {
+            validateCopilotAgentFileName(name);
+            return null;
+          } catch {
+            return { reason: "invalid copilot agent filename" };
+          }
+        },
+      },
+    ],
+  };
+  await runApplyPlan(plan, vaultDir, key, dryRun);
 }

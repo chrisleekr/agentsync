@@ -36,6 +36,21 @@ bunx --package @chrisleekr/agentsync agentsync --version
 
 ## Quickstart
 
+The fastest way in is the interactive TUI. Running `agentsync` with no
+arguments opens a tabbed dashboard that lets you browse the vault, inspect
+local agent content per agent, trigger push/pull, and migrate configuration
+between agents:
+
+```bash
+# Open the TUI (or use the explicit alias `agentsync tui`)
+agentsync
+```
+
+In a non-interactive shell (CI, piped output) bare `agentsync` falls back to
+the `status` text output so scripts are not broken.
+
+The flag-driven CLI is still the canonical scripting surface:
+
 ```bash
 # Initialise a vault and the local machine key
 agentsync init --remote git@github.com:<you>/agentsync-vault.git --branch main
@@ -53,6 +68,7 @@ The full quickstart, command reference, and architecture model live at the docum
 
 | Command | Why you run it |
 |---|---|
+| *(bare)* / `tui` | Open the interactive TUI: vault browser, per-agent local view, push/pull, and migrate. |
 | `init` | Create the local vault workspace, machine key, config, and initial remote state. |
 | `push` | Snapshot local agent configs, sanitise secrets, encrypt artefacts, and push to Git. |
 | `pull` | Pull the latest vault state and apply decrypted artefacts locally. |
@@ -62,6 +78,7 @@ The full quickstart, command reference, and architecture model live at the docum
 | `key` | Add recipients or rotate the local machine key. |
 | `skill` | Remove a skill from the vault explicitly. |
 | `migrate` | Translate configuration between agent formats locally. |
+| `destroy` | Wipe the local vault clone (default) or the remote vault contents via a normal commit. **Local agent files (`~/.claude`, `~/.cursor`, …) are never touched.** |
 
 Full flag tables and caveats: [Commands](https://chrisleekr.github.io/agentsync/commands/).
 

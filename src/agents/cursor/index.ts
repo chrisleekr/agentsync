@@ -1,7 +1,6 @@
 import { mkdir, readdir, readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
-import { log } from "@clack/prompts";
 import { AgentPaths } from "../../config/paths";
 import type { AgentSyncConfig } from "../../config/schema";
 import { denormalizeStringFromVault, normalizeStringForVault } from "../../core/path-portability";
@@ -167,22 +166,7 @@ export async function applyCursorSkill(skillName: string, base64Tar: string): Pr
 
 // ─── Apply (pull side) ────────────────────────────────────────────────────────
 
-import { decryptString } from "../../core/encryptor";
-
-/** Read encrypted files from a vault subdirectory, ignoring missing directories. */
-async function readAgeFiles(dir: string): Promise<{ name: string; fullPath: string }[]> {
-  try {
-    const names = await readdir(dir);
-    return names
-      .filter((name) => name.endsWith(".age"))
-      .map((name) => ({
-        name,
-        fullPath: join(dir, name),
-      }));
-  } catch {
-    return [];
-  }
-}
+import { type ApplyPlan, defineFileArtifact, runApplyPlan } from "../_apply";
 
 /** Decrypt and apply all Cursor vault artifacts to the local machine. */
 export async function applyCursorVault(
@@ -191,68 +175,46 @@ export async function applyCursorVault(
   dryRun: boolean,
   _config?: AgentSyncConfig,
 ): Promise<void> {
-  const cursorDir = join(vaultDir, "cursor");
-  const files = await readAgeFiles(cursorDir);
-
-  for (const { name, fullPath } of files) {
-    const encrypted = await readFile(fullPath, "utf8");
-    const decrypted = await decryptString(encrypted, key);
-
-    if (name === "user-rules.md.age") {
-      if (dryRun) {
-        log.info("[dry-run] [cursor] would apply user-rules");
-        continue;
-      }
-      await applyCursorRules(decrypted);
-    } else if (name === "mcp.json.age") {
-      if (dryRun) {
-        log.info("[dry-run] [cursor] would apply mcp.json");
-        continue;
-      }
-      await applyCursorMcp(decrypted);
-    } else {
-      log.warn(`[cursor] Unrecognised vault file skipped: ${name}`);
-    }
-  }
-
-  // Commands sub-directory
-  const commandFiles = await readAgeFiles(join(cursorDir, "commands"));
-  for (const { name, fullPath } of commandFiles) {
-    if (!name.endsWith(".md.age")) continue;
-    const encrypted = await readFile(fullPath, "utf8");
-    const decrypted = await decryptString(encrypted, key);
-    const commandName = basename(name, ".age");
-    if (dryRun) {
-      log.info(`[dry-run] [cursor] would write command: ${commandName}`);
-    } else {
-      await applyCursorCommand(commandName, decrypted);
-    }
-  }
-
-  // Skills sub-directory — stored as <name>.tar.age. Mirrors the
-  // Claude/Codex/Copilot apply path: each entry is decrypted, then the inner
-  // base64 tar is extracted into ~/.cursor/skills/<name>/ via applyCursorSkill.
-  // The top-level unrecognised-file warning above is inspecting only top-level
-  // cursor/*.age files, so cursor/skills/*.tar.age never triggers it.
-  const skillFiles = await readAgeFiles(join(cursorDir, "skills"));
-  for (const { name, fullPath } of skillFiles) {
-    if (!name.endsWith(".tar.age")) continue;
-    const skillName = basename(name, ".tar.age");
-    try {
-      validateSkillName(skillName);
-    } catch (err) {
-      if (err instanceof InvalidSkillNameError) {
-        log.warn(`[cursor] Skipping vault skill with invalid name '${name}': ${err.reason}`);
-        continue;
-      }
-      throw err;
-    }
-    const encrypted = await readFile(fullPath, "utf8");
-    const decrypted = await decryptString(encrypted, key);
-    if (dryRun) {
-      log.info(`[dry-run] [cursor] would extract skill: ${skillName}`);
-      continue;
-    }
-    await applyCursorSkill(skillName, decrypted);
-  }
+  const plan: ApplyPlan = {
+    agent: "cursor",
+    warnOnUnknownTopLevel: true,
+    directives: [
+      defineFileArtifact({
+        vaultName: "user-rules.md.age",
+        dryRunLabel: "[dry-run] [cursor] would apply user-rules",
+        apply: applyCursorRules,
+      }),
+      defineFileArtifact({
+        vaultName: "mcp.json.age",
+        dryRunLabel: "[dry-run] [cursor] would apply mcp.json",
+        apply: applyCursorMcp,
+      }),
+      {
+        kind: "dir",
+        subdir: "commands",
+        suffix: ".age",
+        dryRunVerb: "would write command:",
+        apply: applyCursorCommand,
+      },
+      {
+        kind: "dir",
+        subdir: "skills",
+        suffix: ".tar.age",
+        dryRunVerb: "would extract skill:",
+        apply: applyCursorSkill,
+        filter: (name) => {
+          try {
+            validateSkillName(name);
+            return null;
+          } catch (err) {
+            if (err instanceof InvalidSkillNameError) {
+              return { reason: `invalid skill name — ${err.reason}` };
+            }
+            throw err;
+          }
+        },
+      },
+    ],
+  };
+  await runApplyPlan(plan, vaultDir, key, dryRun);
 }

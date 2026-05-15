@@ -5,11 +5,18 @@ const packageEntry = join(process.cwd(), "dist", "cli.js");
 const packageEntryTmp = `${packageEntry}.tmp`;
 const shebang = "#!/usr/bin/env bun\n";
 
+// `@opentui/core` ships a native Zig core loaded via bun:ffi from
+// platform-specific optionalDependencies (.dylib / .so / .dll). Bundling
+// the JS into a single `dist/cli.js` would force Bun to copy those native
+// files as adjacent outputs, breaking the single-file npm contract. Mark
+// it external so npm pulls it in at install time alongside the bundle.
 const buildResult = Bun.spawnSync([
   process.execPath,
   "build",
   "--target",
   "bun",
+  "--external",
+  "@opentui/core",
   "src/cli.ts",
   "--outfile",
   packageEntryTmp,

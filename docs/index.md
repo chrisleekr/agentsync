@@ -37,6 +37,10 @@ The GitHub Release record is the canonical source for the version you are instal
 
 Five steps from zero to a working sync.
 
+> Tip: once you have run `init` once, running `agentsync` with no arguments
+> opens an interactive TUI that covers vault browsing, per-agent local view,
+> push/pull, and migrate. See [Commands → tui](commands.md#tui).
+
 1. **Create an empty Git repo** to act as the vault. A private GitHub or GitLab repo works. Nothing in it will ever contain plaintext.
 2. **Initialise on the first machine.** `agentsync init` generates an age keypair, registers it as a recipient, writes `agentsync.toml`, and clones the empty vault.
 
@@ -72,6 +76,7 @@ Detailed flag, outcome, and caveat tables live in [Commands](commands.md).
 - **Fast-forward only.** Reconciliation never merges silently. If two machines diverge, AgentSync stops and prints a recovery path.
 - **Sanitiser is a hard gate.** Literal secrets and never-sync paths abort the push before any bytes leave the machine.
 - **Skill removal is explicit.** `pull` is additive by design so an in-progress local edit cannot be wiped by a remote that omits it. `agentsync skill remove` is the only command that deletes vault entries.
+- **Interactive TUI.** Running `agentsync` with no subcommand opens a tabbed UI to browse the vault, inspect per-agent local content, trigger push/pull, and migrate config — without memorising flags.
 
 ## Where to go next
 

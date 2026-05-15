@@ -1,7 +1,6 @@
 import { mkdir, readdir, readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { log } from "@clack/prompts";
 import { AgentPaths } from "../../config/paths";
 import type { AgentSyncConfig } from "../../config/schema";
 import { denormalizeFromVault, denormalizeStringFromVault } from "../../core/path-portability";
@@ -396,23 +395,7 @@ export async function applyClaudeMarketplace(content: string): Promise<void> {
 
 // ─── Apply (pull side) ────────────────────────────────────────────────────────
 
-import { basename } from "node:path";
-import { decryptString } from "../../core/encryptor";
-
-/** Read encrypted files from a vault subdirectory, ignoring missing directories. */
-async function readAgeFiles(dir: string): Promise<{ name: string; fullPath: string }[]> {
-  try {
-    const names = await readdir(dir);
-    return names
-      .filter((name) => name.endsWith(".age"))
-      .map((name) => ({
-        name,
-        fullPath: join(dir, name),
-      }));
-  } catch {
-    return [];
-  }
-}
+import { type ApplyPlan, defineFileArtifact, runApplyPlan } from "../_apply";
 
 /** Decrypt and apply all Claude vault artifacts to the local machine. */
 export async function applyClaudeVault(
@@ -422,120 +405,79 @@ export async function applyClaudeVault(
   config: AgentSyncConfig,
 ): Promise<void> {
   const syncMarketplace = config.claudePlugins?.syncMarketplace ?? false;
-  const claudeDir = join(vaultDir, "claude");
-  const files = await readAgeFiles(claudeDir);
-
-  for (const { name, fullPath } of files) {
-    const encrypted = await readFile(fullPath, "utf8");
-    const decrypted = await decryptString(encrypted, key);
-
-    if (name === "CLAUDE.md.age") {
-      if (dryRun) {
-        log.info("[dry-run] [claude] would apply CLAUDE.md");
-        continue;
-      }
-      await applyClaudeMd(decrypted);
-    } else if (name === "settings.hooks.json.age") {
-      if (dryRun) {
-        log.info("[dry-run] [claude] would apply claude/settings.hooks.json");
-        continue;
-      }
-      await applyClaudeHooks(decrypted);
-    } else if (name === "claude.json.age") {
-      if (dryRun) {
-        log.info("[dry-run] [claude] would apply ~/.claude.json mcpServers");
-        continue;
-      }
-      await applyClaudeMcp(decrypted);
-    } else if (name === "marketplace.json.age") {
-      // Symmetric to the snapshot side: only apply when the user has opted in.
-      // A vault that contains a marketplace.json.age is silently ignored on
-      // any machine where syncMarketplace is not set, so opting out is the
-      // safe default and never blocks pulls.
-      if (!syncMarketplace) {
-        continue;
-      }
-      if (dryRun) {
-        log.info("[dry-run] [claude] would apply ~/.claude/.claude-plugin/marketplace.json");
-        continue;
-      }
-      await applyClaudeMarketplace(decrypted);
-    }
-  }
-
-  // Commands sub-directory
-  const commandFiles = await readAgeFiles(join(claudeDir, "commands"));
-  for (const { name, fullPath } of commandFiles) {
-    if (!name.endsWith(".md.age")) continue;
-    const encrypted = await readFile(fullPath, "utf8");
-    const decrypted = await decryptString(encrypted, key);
-    const commandName = basename(name, ".age");
-    if (dryRun) {
-      log.info(`[dry-run] [claude] would write command: ${commandName}`);
-    } else {
-      await applyClaudeCommand(commandName, decrypted);
-    }
-  }
-
-  // Agents sub-directory
-  const agentFiles = await readAgeFiles(join(claudeDir, "agents"));
-  for (const { name, fullPath } of agentFiles) {
-    if (!name.endsWith(".md.age")) continue;
-    const encrypted = await readFile(fullPath, "utf8");
-    const decrypted = await decryptString(encrypted, key);
-    const agentName = basename(name, ".age");
-    if (dryRun) {
-      log.info(`[dry-run] [claude] would write agent: ${agentName}`);
-    } else {
-      await applyClaudeAgent(agentName, decrypted);
-    }
-  }
-
-  // Rules sub-directory — mirrors commands/agents handling.
-  const ruleFiles = await readAgeFiles(join(claudeDir, "rules"));
-  for (const { name, fullPath } of ruleFiles) {
-    if (!name.endsWith(".md.age")) continue;
-    const encrypted = await readFile(fullPath, "utf8");
-    const decrypted = await decryptString(encrypted, key);
-    const ruleName = basename(name, ".age");
-    if (dryRun) {
-      log.info(`[dry-run] [claude] would write rule: ${ruleName}`);
-    } else {
-      await applyClaudeRule(ruleName, decrypted);
-    }
-  }
-
-  // Skills sub-directory — stored as <name>.tar.age. Mirrors the
-  // Copilot apply path: each entry is decrypted, then the inner base64 tar
-  // is extracted into ~/.claude/skills/<name>/ via applyClaudeSkill.
-  const skillFiles = await readAgeFiles(join(claudeDir, "skills"));
-  for (const { name, fullPath } of skillFiles) {
-    if (!name.endsWith(".tar.age")) continue;
-    const skillName = basename(name, ".tar.age");
-    try {
-      validateSkillName(skillName);
-    } catch (err) {
-      if (err instanceof InvalidSkillNameError) {
-        log.warn(`[claude] Skipping vault skill with invalid name '${name}': ${err.reason}`);
-        continue;
-      }
-      throw err;
-    }
-    const encrypted = await readFile(fullPath, "utf8");
-    const decrypted = await decryptString(encrypted, key);
-    if (dryRun) {
-      log.info(`[dry-run] [claude] would extract skill: ${skillName}`);
-      continue;
-    }
-    await applyClaudeSkill(skillName, decrypted);
-  }
-
-  // Plugins sub-tree (issue #31). Vault layout:
-  //   claude/plugins/<plugin>/plugin.json.age
-  //   claude/plugins/<plugin>/commands/<file>.md.age
-  //   claude/plugins/<plugin>/agents/<file>.md.age
-  //   claude/plugins/<plugin>/hooks/<file>.json.age
-  //   claude/plugins/<plugin>/mcp.json.age
-  //   claude/plugins/<plugin>/skills/<skill>.tar.age
-  await applyClaudePluginsDir(join(claudeDir, "plugins"), key, dryRun);
+  const plan: ApplyPlan = {
+    agent: "claude",
+    directives: [
+      defineFileArtifact({
+        vaultName: "CLAUDE.md.age",
+        dryRunLabel: "[dry-run] [claude] would apply CLAUDE.md",
+        apply: applyClaudeMd,
+      }),
+      defineFileArtifact({
+        vaultName: "settings.hooks.json.age",
+        dryRunLabel: "[dry-run] [claude] would apply claude/settings.hooks.json",
+        apply: applyClaudeHooks,
+      }),
+      defineFileArtifact({
+        vaultName: "claude.json.age",
+        dryRunLabel: "[dry-run] [claude] would apply ~/.claude.json mcpServers",
+        apply: applyClaudeMcp,
+      }),
+      defineFileArtifact({
+        vaultName: "marketplace.json.age",
+        dryRunLabel: "[dry-run] [claude] would apply ~/.claude/.claude-plugin/marketplace.json",
+        apply: applyClaudeMarketplace,
+        // Symmetric to snapshot: opting out silently ignores a vault entry on
+        // machines that haven't enabled syncMarketplace.
+        enabled: () => syncMarketplace,
+      }),
+      {
+        kind: "dir",
+        subdir: "commands",
+        suffix: ".age",
+        dryRunVerb: "would write command:",
+        apply: applyClaudeCommand,
+      },
+      {
+        kind: "dir",
+        subdir: "agents",
+        suffix: ".age",
+        dryRunVerb: "would write agent:",
+        apply: applyClaudeAgent,
+      },
+      {
+        kind: "dir",
+        subdir: "rules",
+        suffix: ".age",
+        dryRunVerb: "would write rule:",
+        apply: applyClaudeRule,
+      },
+      {
+        kind: "dir",
+        subdir: "skills",
+        suffix: ".tar.age",
+        dryRunVerb: "would extract skill:",
+        apply: applyClaudeSkill,
+        filter: (name) => {
+          try {
+            validateSkillName(name);
+            return null;
+          } catch (err) {
+            if (err instanceof InvalidSkillNameError) {
+              return { reason: `invalid skill name — ${err.reason}` };
+            }
+            throw err;
+          }
+        },
+      },
+      {
+        kind: "custom",
+        // Plugins live in a nested per-plugin tree (commands/, agents/, hooks/,
+        // mcp.json, skills/) so they don't fit the file/dir directive shape.
+        run: (agentVaultDir, decKey, dry) =>
+          applyClaudePluginsDir(join(agentVaultDir, "plugins"), decKey, dry),
+      },
+    ],
+  };
+  await runApplyPlan(plan, vaultDir, key, dryRun);
 }
