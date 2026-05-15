@@ -1,4 +1,4 @@
-import { readdir, rm, stat } from "node:fs/promises";
+import { lstat, readdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { createInterface } from "node:readline";
 import { log } from "@clack/prompts";
@@ -128,7 +128,7 @@ export async function performDestroy(options: DestroyOptions): Promise<DestroyRe
   // "not-found" so destroy is a no-op when the user has never run init.
   let vaultExists = false;
   try {
-    const info = await stat(runtime.vaultDir);
+    const info = await lstat(runtime.vaultDir);
     vaultExists = info.isDirectory();
   } catch (err) {
     if (!isFileNotFoundError(err)) {
@@ -412,8 +412,17 @@ async function unlinkAllTrackedContent(vaultDir: string): Promise<void> {
     for (const name of entries) {
       if (name === ".git") continue;
       const full = join(dir, name);
-      const info = await stat(full).catch(() => null);
+      // lstat (not stat) so a symlink in the vault tree is identified as a
+      // symlink and unlinked in place — never followed. Following a symlink
+      // would let a malicious vault entry escape the subtree and delete
+      // files anywhere on disk, breaking the agent-files-never-touched
+      // invariant that the entire destroy command exists to uphold.
+      const info = await lstat(full).catch(() => null);
       if (!info) continue;
+      if (info.isSymbolicLink()) {
+        await rm(full, { force: true });
+        continue;
+      }
       if (info.isDirectory()) {
         await walk(full);
         // Best-effort remove the now-empty directory so `git status` sees a

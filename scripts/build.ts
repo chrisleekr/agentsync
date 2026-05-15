@@ -4,6 +4,9 @@ import pkg from "../package.json";
 
 const opentuiVersion = pkg.dependencies["@opentui/core"];
 if (!opentuiVersion) {
+  console.error(
+    "build failed: @opentui/core is missing from package.json dependencies; add it before building.",
+  );
   process.exit(1);
 }
 

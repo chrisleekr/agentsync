@@ -156,9 +156,10 @@ export function ensureAgentsLoaded(store: Store): void {
       draft.agents.nodes = nodes as AgentNode[];
       draft.agents.phase = "ready";
     },
-    onError: (draft) => {
+    onError: (draft, err) => {
       draft.agents.nodes = [];
       draft.agents.phase = "error";
+      draft.agents.error = err.message;
     },
   });
 }

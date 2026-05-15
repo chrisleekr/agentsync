@@ -79,6 +79,11 @@ export function createStore(initial: AppState): Store {
     opFn: () => Promise<R>,
     opts: RunOpOptions<R> = {},
   ): string {
+    if (closed) {
+      // No-op: never invoke opFn after dispose so side effects can't outlive
+      // teardown. Returns a stable sentinel id callers can ignore safely.
+      return "op-disposed";
+    }
     const id = newOpId();
     const startedAt = Date.now();
     const op: OperationStatus = {

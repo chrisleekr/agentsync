@@ -1,11 +1,12 @@
 import type { CliRenderer, KeyEvent } from "@opentui/core";
 import { BoxRenderable, TextRenderable } from "@opentui/core";
+import type { MigrateOptions } from "../../../config/schema";
 import { performMigrate } from "../../../migrate/migrate";
+import type { MigrateResult } from "../../../migrate/types";
 import {
   AGENTS,
   type AgentName,
   type AppState,
-  type ConfigType,
   MIGRATE_TYPES,
   type MigrateField,
   migrateSignature,
@@ -179,16 +180,32 @@ function cycleValue(store: Store, forward: boolean): boolean {
   }
 }
 
-function migrateArgs(
+/**
+ * `performMigrate` accepts a single agent or "all", not a comma list, so the
+ * multi-select Migrate tab fans out one call per target and merges results.
+ * Returns the aggregated MigrateResult (migrated/skipped/errors concatenated).
+ */
+async function runMigrateForSelection(
   m: AppState["migrate"],
   dryRun: boolean,
-): { from: AgentName; to: string; type: ConfigType; dryRun: boolean } {
-  return {
-    from: m.from,
-    to: m.toSet.size === AGENTS.length ? "all" : [...m.toSet].sort().join(","),
-    type: m.type,
-    dryRun,
-  };
+): Promise<MigrateResult> {
+  const aggregate: MigrateResult = { migrated: [], skipped: [], errors: [], warnings: [] };
+  const targets: ("all" | AgentName)[] =
+    m.toSet.size === AGENTS.length ? ["all"] : [...m.toSet].sort();
+  for (const target of targets) {
+    const options: MigrateOptions = {
+      from: m.from,
+      to: target,
+      type: m.type,
+      dryRun,
+    };
+    const r = await performMigrate(options);
+    aggregate.migrated.push(...r.migrated);
+    aggregate.skipped.push(...r.skipped);
+    aggregate.errors.push(...r.errors);
+    aggregate.warnings.push(...r.warnings);
+  }
+  return aggregate;
 }
 
 function runPreview(store: Store): void {
@@ -198,23 +215,18 @@ function runPreview(store: Store): void {
     return;
   }
   const sig = migrateSignature(m);
-  store.runOperation(
+  store.runOperation<MigrateResult>(
     "migrate-preview",
     `preview ${sig}`,
-    () => performMigrate(migrateArgs(m, true) as never),
+    () => runMigrateForSelection(m, true),
     {
       meta: { sig },
       activityKind: "preview",
       onSuccess: (draft, result) => {
         const lines: string[] = [];
-        const r = result as {
-          migrated: { targetPath: string }[];
-          skipped: { reason: string }[];
-          errors: string[];
-        };
-        for (const x of r.migrated) lines.push(`  + ${x.targetPath}`);
-        for (const s of r.skipped) lines.push(`  ~ skipped (${s.reason})`);
-        for (const e of r.errors) lines.push(`  ! ${e}`);
+        for (const x of result.migrated) lines.push(`  + ${x.targetPath}`);
+        for (const s of result.skipped) lines.push(`  ~ skipped (${s.reason})`);
+        for (const e of result.errors) lines.push(`  ! ${e}`);
         if (lines.length === 0) lines.push("  Nothing to migrate.");
         draft.migrate.preview = lines.join("\n");
         draft.migrate.previewKey = sig;
@@ -240,21 +252,16 @@ function runApply(store: Store): void {
     store.dispatch((d) => setToast(d, "Already applied. Change form to migrate again.", "info"));
     return;
   }
-  store.runOperation(
+  store.runOperation<MigrateResult>(
     "migrate",
     `apply ${sig}`,
-    () => performMigrate(migrateArgs(m, false) as never),
+    () => runMigrateForSelection(m, false),
     {
       meta: { sig },
       activityKind: "migrate",
       onSuccess: (draft, result) => {
-        const r = result as {
-          migrated: unknown[];
-          skipped: unknown[];
-          errors: string[];
-        };
-        const okMsg = `Applied: ${r.migrated.length} written, ${r.skipped.length} skipped`;
-        setToast(draft, okMsg, r.errors.length === 0 ? "success" : "error");
+        const okMsg = `Applied: ${result.migrated.length} written, ${result.skipped.length} skipped`;
+        setToast(draft, okMsg, result.errors.length === 0 ? "success" : "error");
         draft.migrate.appliedSignature = sig;
       },
       errorToastPrefix: "Apply",

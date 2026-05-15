@@ -1,5 +1,6 @@
 import type { CliRenderer, KeyEvent } from "@opentui/core";
 import { BoxRenderable, createCliRenderer, TextRenderable } from "@opentui/core";
+import { version as pkgVersion } from "../../../package.json";
 import { TuiIpcClient } from "./lib/ipc-client";
 import {
   type AppState,
@@ -60,7 +61,12 @@ export async function runApp(): Promise<void> {
   }
 
   const renderer = await createCliRenderer({
-    exitOnCtrlC: true,
+    // false: route Ctrl+C through the manual SIGINT handler so `quitResolver`
+    // fires, the `finally` block runs `teardown(renderer)` + `store.dispose()`,
+    // and pending eviction timers are cancelled. With `true` here, OpenTUI's
+    // own SIGINT handler can call `renderer.destroy()` and `process.exit()`
+    // before the finally block, leaking the store's pendingTimers set.
+    exitOnCtrlC: false,
     targetFps: 30,
     backgroundColor: PALETTE.bg,
   });
@@ -309,7 +315,7 @@ function makeTitleBar(renderer: CliRenderer): TextRenderable {
 function renderTitleBar(host: TextRenderable, _state: AppState): void {
   const now = new Date();
   const time = now.toTimeString().slice(0, 8);
-  host.content = ` agentsync · v0.1.6 · ${time}`;
+  host.content = ` agentsync · v${pkgVersion} · ${time}`;
 }
 
 function makeTabBar(renderer: CliRenderer): TextRenderable {

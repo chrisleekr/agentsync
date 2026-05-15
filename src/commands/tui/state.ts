@@ -81,6 +81,7 @@ export interface AgentsSlice {
   phase: LoadablePhase;
   nodes: AgentNode[];
   cursor: number;
+  error: string | null;
 }
 
 export interface MigrateSlice {
@@ -128,7 +129,7 @@ export function createInitialState(): AppState {
     toast: null,
     helpOpen: false,
     vault: { phase: "idle", entries: [], cursor: 0, error: null },
-    agents: { phase: "idle", nodes: [], cursor: 0 },
+    agents: { phase: "idle", nodes: [], cursor: 0, error: null },
     migrate: {
       from: "claude",
       toSet: new Set<AgentName>(["cursor"]),
