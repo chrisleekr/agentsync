@@ -642,6 +642,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#working-on-the-tui" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Working on the TUI
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#doc-ownership" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -764,6 +775,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#working-on-the-tui" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Working on the TUI
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#doc-ownership" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -878,6 +900,34 @@
 <li>Before merging any release-surface change verify: <code>.nvmrc</code>, the <code>package.json</code> Volta pin, and the CI workflow Node version still align; <code>release-please.yml</code> grants <code>id-token: write</code> and <code>contents: read</code> to the publish job; <code>bun run build:package</code>, <code>bun run pack:dry-run</code>, and <code>bun run check</code> all pass.</li>
 </ul>
 <p>Versioning is semver. The pre-1.0 caveat in <a href="../#project-status">Home</a> applies until 1.0 lands.</p>
+<h2 id="working-on-the-tui">Working on the TUI<a class="headerlink" href="#working-on-the-tui" title="Permanent link">&para;</a></h2>
+<p>The interactive TUI lives in <code>src/commands/tui/</code>. The boundary is strict:</p>
+<ul>
+<li><code>app.ts</code> owns the renderer lifecycle, the tab router, and the global key
+  router. Tabs and wizards do not touch the renderer directly.</li>
+<li>Each tab module exposes <code>renderXxx(renderer, host, state)</code> and, where it
+  is interactive, <code>onXxxKey(key, state): boolean</code> — <code>true</code> means the state
+  changed and a rerender is needed.</li>
+<li>All business logic is reused from the existing command modules
+  (<code>performInit</code>, <code>performKeyAdd</code>, <code>performKeyRotate</code>, <code>performMigrate</code>,
+  <code>performSkillRemove</code>). The TUI must not fork encryption, reconciliation,
+  sanitiser, or migration rules.</li>
+</ul>
+<p>Local development:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>bun<span class="w"> </span>run<span class="w"> </span>src/cli.ts<span class="w">          </span><span class="c1"># bare invocation opens the TUI</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>bun<span class="w"> </span>run<span class="w"> </span>src/cli.ts<span class="w"> </span>tui<span class="w">      </span><span class="c1"># explicit alias</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="nb">echo</span><span class="w"> </span><span class="s1">&#39;&#39;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>bun<span class="w"> </span>run<span class="w"> </span>src/cli.ts<span class="w"> </span><span class="c1"># forces the non-TTY fallback (status text)</span>
+</span></code></pre></div>
+<p>Compiled binary verification (<code>dist/agentsync</code>):</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>bun<span class="w"> </span>run<span class="w"> </span>build<span class="w">               </span><span class="c1"># runs scripts/build.ts (with --os=* --cpu=*)</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>./dist/agentsync<span class="w">            </span><span class="c1"># macOS Gatekeeper may kill an unsigned binary;</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">                            </span><span class="c1">#   prefer `bun install -g @chrisleekr/agentsync`</span>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">                            </span><span class="c1">#   or run via source for development.</span>
+</span></code></pre></div>
+<p>The npm-published bundle (<code>dist/cli.js</code>) externalises <code>@opentui/core</code> so
+the single-file bundle stays a single file. Consumers pick up the native
+TUI dependency from the <code>dependencies</code> block in <code>package.json</code> at install
+time.</p>
 <h2 id="doc-ownership">Doc ownership<a class="headerlink" href="#doc-ownership" title="Permanent link">&para;</a></h2>
 <p>Single source of truth for which file owns which concept. The docs-mirror CI check (<code>scripts/check-docs-mirror.ts</code>, wired into <code>bun run check</code>) parses this table and fails the PR if drift appears.</p>
 <table>

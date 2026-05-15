@@ -612,6 +612,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#compiled-binary-packaging" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Compiled-binary packaging
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -886,6 +897,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#compiled-binary-packaging" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Compiled-binary packaging
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -1065,11 +1087,14 @@
     Pull["pull"]:::step
     Timer["Periodic pull timer"]:::step
     Ipc["IPC server"]:::step
-    Client["agentsync CLI"]:::local
+    Cli["agentsync CLI"]:::local
+    Tui["agentsync TUI"]:::local
 
     Watcher --&gt; Debounce --&gt; Queue
     Timer --&gt; Queue
-    Client --&gt;|status / push / pull| Ipc --&gt; Queue
+    Cli --&gt;|status / push / pull| Ipc
+    Tui --&gt;|status poll 1.5s, push, pull| Ipc
+    Ipc --&gt; Queue
     Queue --&gt; Push
     Queue --&gt; Pull
 
@@ -1077,6 +1102,9 @@
     classDef step fill:#2c3e50,color:#ffffff,stroke:#1a252f
     classDef gate fill:#c0392b,color:#ffffff,stroke:#7b241c</code></pre>
 </div>
+<p>The IPC server accepts multiple concurrent clients. A TUI session and a
+flag-driven CLI invocation can be open at the same time without conflicting
+because every request goes through the same sync queue.</p>
 <p>Key invariants:</p>
 <ul>
 <li><strong>Only one daemon per user.</strong> Second-instance detection runs at startup and exits cleanly if a daemon is already up. A stale socket from an ungraceful prior exit is unlinked automatically.</li>
@@ -1155,8 +1183,29 @@
 <td>Vault format migrations</td>
 <td><code>src/migrate/</code></td>
 </tr>
+<tr>
+<td>Interactive TUI (bare <code>agentsync</code>)</td>
+<td><code>src/commands/tui/</code></td>
+</tr>
 </tbody>
 </table>
+<h2 id="compiled-binary-packaging">Compiled-binary packaging<a class="headerlink" href="#compiled-binary-packaging" title="Permanent link">&para;</a></h2>
+<p>The TUI uses <a href="https://github.com/anomalyco/opentui">OpenTUI</a>, whose
+TypeScript wrapper around a native Zig core is loaded through <code>bun:ffi</code> at
+runtime. Three packaging consequences follow:</p>
+<ul>
+<li><code>bun run build</code> (the compiled binary at <code>dist/agentsync</code>) runs through
+  <code>scripts/build.ts</code>, which first executes <code>bun install --os="*" --cpu="*"
+  @opentui/core@&lt;v&gt;</code> so every platform's optional native dependency is
+  resolved into <code>node_modules</code> before <code>bun build --compile</code> embeds the
+  matching one into bunfs.</li>
+<li><code>bun run build:package</code> (the npm-published bundle at <code>dist/cli.js</code>)
+  externalises <code>@opentui/core</code> so the single-file bundle stays a single
+  file. npm consumers receive <code>@opentui/core</code> as a runtime dependency
+  declared in <code>package.json</code>.</li>
+<li>Local development (<code>bun run src/cli.ts</code>) needs neither step — Bun
+  resolves the native lib for the host platform on first import.</li>
+</ul>
 
 
 

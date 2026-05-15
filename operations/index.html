@@ -573,6 +573,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#daily-ops-in-the-tui" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Daily ops in the TUI
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#daemon" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -717,6 +728,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#reset-a-vault" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reset a vault
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -805,6 +827,39 @@
     <span class="md-ellipsis">
       
         Vault clone is reachable but init fails
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tui-does-not-open-falls-back-to-text-output" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TUI does not open / falls back to text output
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#terminal-looks-broken-after-the-tui-crashed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Terminal looks broken after the TUI crashed
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#distagentsync-exits-137-on-macos" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        dist/agentsync exits 137 on macOS
       
     </span>
   </a>
@@ -889,6 +944,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#daily-ops-in-the-tui" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Daily ops in the TUI
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#daemon" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1033,6 +1099,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#reset-a-vault" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reset a vault
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1127,6 +1204,39 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#tui-does-not-open-falls-back-to-text-output" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TUI does not open / falls back to text output
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#terminal-looks-broken-after-the-tui-crashed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Terminal looks broken after the TUI crashed
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#distagentsync-exits-137-on-macos" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        dist/agentsync exits 137 on macOS
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1161,6 +1271,18 @@
 <p>Run AgentSync in production for your own laptops: install the daemon, rotate keys, recover from divergence, and diagnose every common failure.</p>
 <h2 id="what-this-page-owns">What this page owns<a class="headerlink" href="#what-this-page-owns" title="Permanent link">&para;</a></h2>
 <p>This page owns day-2 concerns. It is the single home for the daemon install procedure on each OS, the key-rotation runbook, and the troubleshooting catalogue. The architectural model behind these flows lives in <a href="../architecture/">Architecture</a>; the command flag reference lives in <a href="../commands/">Commands</a>.</p>
+<h2 id="daily-ops-in-the-tui">Daily ops in the TUI<a class="headerlink" href="#daily-ops-in-the-tui" title="Permanent link">&para;</a></h2>
+<p>Run <code>agentsync</code> with no arguments for an interactive view of daemon health,
+vault state, agent file deltas, and pending sync activity. The TUI keeps a
+1.5-second poll on the daemon IPC <code>status</code> command, so the dashboard reflects
+live state without you re-running <code>agentsync status</code>.</p>
+<p>The flag-driven equivalents still work when you need scripted output:</p>
+<ul>
+<li><code>agentsync status</code> — text comparison of local files vs the decrypted
+  vault.</li>
+<li><code>agentsync daemon status</code> — daemon health only.</li>
+<li><code>agentsync doctor</code> — local environment, key, vault, and daemon checks.</li>
+</ul>
 <h2 id="daemon">Daemon<a class="headerlink" href="#daemon" title="Permanent link">&para;</a></h2>
 <p>The daemon is a long-running process that watches your enabled agent paths and pushes on change. It debounces rapid edits, serialises sync operations through a queue so two pushes can never race, and runs periodic pulls at a configurable interval.</p>
 <h3 id="install-per-os">Install per OS<a class="headerlink" href="#install-per-os" title="Permanent link">&para;</a></h3>
@@ -1291,6 +1413,37 @@
 <li>Ensure permissions are restrictive: on Unix, <code>chmod 600 ~/.config/agentsync/key.txt</code>.</li>
 </ol>
 <p>If the key is gone and was never backed up, the vault cannot be recovered for that machine. Generate a new identity with <code>init</code>, have the new public key added by an existing machine, then <code>pull</code>.</p>
+<h3 id="reset-a-vault">Reset a vault<a class="headerlink" href="#reset-a-vault" title="Permanent link">&para;</a></h3>
+<p>When you want to throw away vault state and start over, reach for
+<a href="../commands/#destroy"><code>agentsync destroy</code></a> rather than <code>rm -rf</code>.</p>
+<blockquote>
+<p><strong>Agent files are never touched.</strong> Every <code>agentsync destroy</code> scope
+leaves <code>~/.claude/</code>, <code>~/.cursor/</code>, <code>~/.codex/</code>, <code>~/.copilot/</code>, and your
+VS Code user directory byte-for-byte unchanged. This is guaranteed by
+code and asserted by test — <code>destroy</code> only ever operates on the vault
+directory and the configured remote.</p>
+</blockquote>
+<p>Decide the scope first:</p>
+<ul>
+<li><strong>Local clone is corrupted, remote is fine</strong> → <code>agentsync destroy</code>
+  (default <code>--scope=local</code>). Removes <code>~/.agentsync/vault/</code>, keeps
+  <code>key.txt</code>. Then re-init from the same remote.</li>
+<li><strong>You want every machine to start fresh, including the remote</strong> →
+  <code>agentsync destroy --scope=remote</code>. Adds a commit to the remote that
+  removes every tracked file (not a force-push — history is preserved
+  and other recipients can <code>git revert</code> if they still have a copy).</li>
+<li><strong>Both</strong> → <code>agentsync destroy --scope=all</code>. Remote is wiped first so a
+  failed push does not leave you with a wiped local that cannot reach
+  the remote.</li>
+</ul>
+<p>Before running, back the vault up if you might still want it:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>cp<span class="w"> </span>-r<span class="w"> </span>~/.agentsync/vault<span class="w"> </span>~/.agentsync/vault.bak.<span class="k">$(</span>date<span class="w"> </span>+%s<span class="k">)</span>
+</span></code></pre></div>
+<p>Three confirmation gates must pass: preview prompt → typed phrase
+(<code>DESTROY</code> for local, <code>DESTROY &lt;branch&gt;@&lt;remote-fragment&gt;</code> for remote /
+all) → final y/n. The command refuses to run in a non-TTY shell without
+<code>--yes</code>. See <a href="../commands/#destroy">Commands → destroy</a> for the full flag
+and behaviour reference.</p>
 <h2 id="troubleshooting-catalogue">Troubleshooting catalogue<a class="headerlink" href="#troubleshooting-catalogue" title="Permanent link">&para;</a></h2>
 <h3 id="status-shows-local-only-or-vault-only-entries"><code>status</code> shows local-only or vault-only entries<a class="headerlink" href="#status-shows-local-only-or-vault-only-entries" title="Permanent link">&para;</a></h3>
 <ul>
@@ -1320,7 +1473,7 @@
 <ul>
 <li>
 <p><strong>Whole-skill removal</strong>: run <code>agentsync skill remove &lt;agent&gt; &lt;name&gt;</code> on one machine to remove the vault entry, then delete the local directory on every other machine manually:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>rm<span class="w"> </span>-rf<span class="w"> </span>~/.claude/skills/&lt;name&gt;<span class="w">     </span><span class="c1"># or ~/.cursor/skills, ~/.codex/skills, ~/.copilot/skills</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>rm<span class="w"> </span>-rf<span class="w"> </span>~/.claude/skills/&lt;name&gt;<span class="w">     </span><span class="c1"># or ~/.cursor/skills, ~/.codex/skills, ~/.copilot/skills</span>
 </span></code></pre></div>
 </li>
 <li>
@@ -1347,6 +1500,28 @@
 <li>Git authentication is not set up for the remote. AgentSync uses your existing Git credentials.</li>
 </ul>
 <p>Run <code>agentsync doctor</code> for a focused report, then re-run <code>init</code>.</p>
+<h3 id="tui-does-not-open-falls-back-to-text-output">TUI does not open / falls back to text output<a class="headerlink" href="#tui-does-not-open-falls-back-to-text-output" title="Permanent link">&para;</a></h3>
+<p>Bare <code>agentsync</code> deliberately falls back to printing <code>status</code> output when
+stdout is not a TTY. This happens under <code>nohup</code>, inside <code>script(1)</code>, when
+piped to another process, or in CI runners. Force the TUI from a
+non-interactive context by running <code>agentsync tui</code> with a real terminal
+allocated by the shell (e.g. <code>script -q /dev/null agentsync tui</code>); the
+fallback exists specifically to protect scripts that depend on text output.</p>
+<h3 id="terminal-looks-broken-after-the-tui-crashed">Terminal looks broken after the TUI crashed<a class="headerlink" href="#terminal-looks-broken-after-the-tui-crashed" title="Permanent link">&para;</a></h3>
+<p>The TUI installs SIGINT / SIGTERM / exit handlers that restore the terminal
+on shutdown. A hard kill (<code>kill -9</code> on the bun process) can bypass that and
+leave the terminal in raw mode. Recover with:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>reset
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="c1"># or, if `reset` is unavailable:</span>
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>tput<span class="w"> </span>reset
+</span></code></pre></div>
+<h3 id="distagentsync-exits-137-on-macos"><code>dist/agentsync</code> exits 137 on macOS<a class="headerlink" href="#distagentsync-exits-137-on-macos" title="Permanent link">&para;</a></h3>
+<p>This is the macOS Gatekeeper killing the unsigned compiled binary on first
+launch. It is a pre-existing issue with the compiled distribution and is
+not caused by the TUI dependency. The supported install method is <code>bun
+install -g @chrisleekr/agentsync</code>, which ships the bundled <code>dist/cli.js</code>
+through Bun and is not subject to Gatekeeper. Code signing for the
+compiled binary is tracked separately from the TUI work.</p>
 
 
 

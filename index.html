@@ -800,6 +800,11 @@
 <p>The GitHub Release record is the canonical source for the version you are installing and what changed in it. Start at the <a href="https://github.com/chrisleekr/agentsync/releases/latest">latest release</a>.</p>
 <h2 id="quickstart">Quickstart<a class="headerlink" href="#quickstart" title="Permanent link">&para;</a></h2>
 <p>Five steps from zero to a working sync.</p>
+<blockquote>
+<p>Tip: once you have run <code>init</code> once, running <code>agentsync</code> with no arguments
+opens an interactive TUI that covers vault browsing, per-agent local view,
+push/pull, and migrate. See <a href="commands/#tui">Commands → tui</a>.</p>
+</blockquote>
 <ol>
 <li><strong>Create an empty Git repo</strong> to act as the vault. A private GitHub or GitLab repo works. Nothing in it will ever contain plaintext.</li>
 <li>
@@ -832,6 +837,7 @@
 <li><strong>Fast-forward only.</strong> Reconciliation never merges silently. If two machines diverge, AgentSync stops and prints a recovery path.</li>
 <li><strong>Sanitiser is a hard gate.</strong> Literal secrets and never-sync paths abort the push before any bytes leave the machine.</li>
 <li><strong>Skill removal is explicit.</strong> <code>pull</code> is additive by design so an in-progress local edit cannot be wiped by a remote that omits it. <code>agentsync skill remove</code> is the only command that deletes vault entries.</li>
+<li><strong>Interactive TUI.</strong> Running <code>agentsync</code> with no subcommand opens a tabbed UI to browse the vault, inspect per-agent local content, trigger push/pull, and migrate config — without memorising flags.</li>
 </ul>
 <h2 id="where-to-go-next">Where to go next<a class="headerlink" href="#where-to-go-next" title="Permanent link">&para;</a></h2>
 <div class="grid cards">

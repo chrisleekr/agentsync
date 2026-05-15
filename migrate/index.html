@@ -546,6 +546,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#two-ways-to-run-a-migration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Two ways to run a migration
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#command" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -877,6 +888,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#two-ways-to-run-a-migration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Two ways to run a migration
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#command" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1135,8 +1157,17 @@
 
 <h1 id="cross-agent-configuration-migration">Cross-Agent Configuration Migration<a class="headerlink" href="#cross-agent-configuration-migration" title="Permanent link">&para;</a></h1>
 <h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
-<p>The <code>agentsync migrate</code> command translates configuration from one AI agent's format to another. It reads local agent config files, transforms them through format-specific translators, and writes the result to the target agent's config location.</p>
-<p>No vault initialisation is required — <code>migrate</code> operates on local files only.</p>
+<p>Translate configuration from one AI agent's format to another. The migrator reads local agent config files, transforms them through format-specific translators, and writes the result to the target agent's config location.</p>
+<p>No vault initialisation is required — migration operates on local files only.</p>
+<h2 id="two-ways-to-run-a-migration">Two ways to run a migration<a class="headerlink" href="#two-ways-to-run-a-migration" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Interactive (TUI)</strong>: run <code>agentsync</code>, press <code>4</code> for the Migrate tab,
+  pick From / To / Type, press Shift-P to preview, then Shift-A to apply.
+  Apply is disabled until a preview that matches the current form has been
+  rendered, so an accidental keystroke cannot trigger an unreviewed write.</li>
+<li><strong>Scripted (CLI)</strong>: use the flags below from a shell or CI. The TUI
+  calls the same planner internally, so the dry-run output is identical.</li>
+</ul>
 <h2 id="command">Command<a class="headerlink" href="#command" title="Permanent link">&para;</a></h2>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>agentsync<span class="w"> </span>migrate<span class="w"> </span>--from<span class="w"> </span>&lt;agent&gt;<span class="w"> </span>--to<span class="w"> </span>&lt;agent<span class="p">|</span>all&gt;<span class="w"> </span><span class="o">[</span>--type<span class="w"> </span>&lt;type&gt;<span class="o">]</span><span class="w"> </span><span class="o">[</span>--name<span class="w"> </span>&lt;file&gt;<span class="o">]</span><span class="w"> </span><span class="o">[</span>--dry-run<span class="o">]</span>
 </span></code></pre></div>
