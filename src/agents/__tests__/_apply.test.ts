@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdir, readdir, writeFile } from "node:fs/promises";
+import { mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { encryptString, generateIdentity, identityToRecipient } from "../../core/encryptor";
 import { type ApplyPlan, defineFileArtifact, readAgeFiles, runApplyPlan } from "../_apply";
 
@@ -15,22 +15,21 @@ async function setupKey(): Promise<void> {
 }
 
 async function writeEncrypted(absPath: string, plaintext: string): Promise<void> {
-  await mkdir(absPath.replace(/[^/]+$/, ""), { recursive: true });
+  mkdirSync(dirname(absPath), { recursive: true });
   const armored = await encryptString(plaintext, [recipient]);
-  await writeFile(absPath, armored, "utf8");
+  writeFileSync(absPath, armored, "utf8");
 }
 
 beforeEach(async () => {
   workDir = join(tmpdir(), `agentsync-apply-${Date.now()}-${Math.random().toString(36).slice(2)}`);
-  await mkdir(workDir, { recursive: true });
+  mkdirSync(workDir, { recursive: true });
   await setupKey();
 });
 
-afterEach(async () => {
+afterEach(() => {
   // Best-effort cleanup; OS temp will reclaim if this fails.
-  const { rm } = await import("node:fs/promises");
   try {
-    await rm(workDir, { recursive: true, force: true });
+    rmSync(workDir, { recursive: true, force: true });
   } catch {
     // ignore
   }
@@ -43,9 +42,9 @@ describe("readAgeFiles", () => {
   });
 
   test("filters non-matching suffixes", async () => {
-    await writeFile(join(workDir, "a.age"), "x");
-    await writeFile(join(workDir, "b.txt"), "y");
-    await writeFile(join(workDir, "c.tar.age"), "z");
+    writeFileSync(join(workDir, "a.age"), "x");
+    writeFileSync(join(workDir, "b.txt"), "y");
+    writeFileSync(join(workDir, "c.tar.age"), "z");
     const ageOnly = await readAgeFiles(workDir, ".age");
     expect(ageOnly.map((f) => f.name).sort()).toEqual(["a.age", "c.tar.age"]);
     const tarOnly = await readAgeFiles(workDir, ".tar.age");
@@ -234,7 +233,7 @@ describe("runApplyPlan DirArtifact", () => {
 describe("runApplyPlan EscapeHatch", () => {
   test("custom directive receives the resolved agent vault dir", async () => {
     const vaultDir = workDir;
-    await mkdir(join(vaultDir, "demo", "plugins"), { recursive: true });
+    mkdirSync(join(vaultDir, "demo", "plugins"), { recursive: true });
     let captured = "";
     const plan: ApplyPlan = {
       agent: "demo",
@@ -292,7 +291,7 @@ describe("runApplyPlan warnOnUnknownTopLevel", () => {
     // exception when the unknown file co-exists).
     await runApplyPlan(plan, vaultDir, identity, false);
     // sanity: vault still contains both files (we didn't accidentally write or remove)
-    const remaining = await readdir(join(vaultDir, "demo"));
+    const remaining = readdirSync(join(vaultDir, "demo"));
     expect(remaining.sort()).toEqual(["known.age", "unknown.age"]);
   });
 });
