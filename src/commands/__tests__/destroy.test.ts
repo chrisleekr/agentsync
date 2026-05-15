@@ -10,8 +10,24 @@
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
-import { mkdirSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { stat } from "node:fs/promises";
+import { existsSync, mkdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+
+/**
+ * Async-shaped stat-via-fs (NOT fs/promises) so this test's fs probes do not
+ * resolve through any node:fs/promises mock that other test files may have
+ * registered (e.g. installer-linux.test.ts). Existing call sites use
+ * `await stat(...).catch(() => null)` — preserve that shape by returning a
+ * promise; throw on ENOENT so the .catch() branch handles missing paths.
+ */
+async function stat(path: string): Promise<{ isDirectory: () => boolean; isFile: () => boolean }> {
+  if (!existsSync(path)) {
+    const err = new Error(`ENOENT: ${path}`) as NodeJS.ErrnoException;
+    err.code = "ENOENT";
+    throw err;
+  }
+  return statSync(path);
+}
+
 import { join } from "node:path";
 import { Writable } from "node:stream";
 import {
