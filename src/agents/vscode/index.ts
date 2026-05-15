@@ -1,12 +1,9 @@
-import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { join } from "node:path";
-import { log } from "@clack/prompts";
 import { AgentPaths } from "../../config/paths";
 import type { AgentSyncConfig } from "../../config/schema";
-import { decryptString } from "../../core/encryptor";
 import { denormalizeStringFromVault } from "../../core/path-portability";
 import { sanitizeAndNormalizeJson } from "../../core/sanitizer";
+import { type ApplyPlan, defineFileArtifact, runApplyPlan } from "../_apply";
 import {
   atomicWrite,
   collect,
@@ -44,22 +41,6 @@ export async function applyVsCodeMcp(mcpJsonContent: string): Promise<void> {
 
 // ─── Apply (pull side) ────────────────────────────────────────────────────────
 
-/** Read encrypted files from a vault subdirectory, ignoring missing directories. */
-async function readAgeFiles(dir: string): Promise<{ name: string; fullPath: string }[]> {
-  try {
-    const { readdir } = await import("node:fs/promises");
-    const names = await readdir(dir);
-    return names
-      .filter((name) => name.endsWith(".age"))
-      .map((name) => ({
-        name,
-        fullPath: join(dir, name),
-      }));
-  } catch {
-    return [];
-  }
-}
-
 /** Decrypt and apply all VS Code vault artifacts to the local machine. */
 export async function applyVsCodeVault(
   vaultDir: string,
@@ -67,19 +48,15 @@ export async function applyVsCodeVault(
   dryRun: boolean,
   _config?: AgentSyncConfig,
 ): Promise<void> {
-  const vsCodeDir = join(vaultDir, "vscode");
-  const files = await readAgeFiles(vsCodeDir);
-
-  for (const { name, fullPath } of files) {
-    const encrypted = await readFile(fullPath, "utf8");
-    const decrypted = await decryptString(encrypted, key);
-
-    if (name === "mcp.json.age") {
-      if (dryRun) {
-        log.info("[dry-run] [vscode] would apply mcp.json");
-        continue;
-      }
-      await applyVsCodeMcp(decrypted);
-    }
-  }
+  const plan: ApplyPlan = {
+    agent: "vscode",
+    directives: [
+      defineFileArtifact({
+        vaultName: "mcp.json.age",
+        dryRunLabel: "[dry-run] [vscode] would apply mcp.json",
+        apply: applyVsCodeMcp,
+      }),
+    ],
+  };
+  await runApplyPlan(plan, vaultDir, key, dryRun);
 }

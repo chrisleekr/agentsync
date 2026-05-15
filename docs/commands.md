@@ -23,10 +23,19 @@ bunx --package @chrisleekr/agentsync agentsync <command> [options]
 
 When developing from source, replace the binary call with `bun run src/cli.ts`. The flags are identical.
 
+## Two ways to use agentsync
+
+- **Interactive**: run `agentsync` (no subcommand) to open the [TUI](#tui). It
+  is the right entry point for everyday browsing, sync, and migration.
+- **Scripted**: every subcommand below runs unchanged from a shell, CI, or a
+  wrapper script. Bare `agentsync` in a non-TTY context falls back to
+  `status` text output so existing pipelines are not affected.
+
 ## Command index
 
 | Command | Purpose |
 |---|---|
+| [*(bare)* / `tui`](#tui) | Open the interactive tab-based TUI. |
 | [`init`](#init) | Bootstrap the vault, machine key, and config. |
 | [`push`](#push) | Snapshot, sanitise, encrypt, and fast-forward to the vault. |
 | [`pull`](#pull) | Fetch the vault, decrypt, and apply locally. |
@@ -36,6 +45,57 @@ When developing from source, replace the binary call with `bun run src/cli.ts`. 
 | [`key`](#key) | Add a recipient or rotate the current machine key. |
 | [`skill`](#skill) | Remove a skill from the vault. |
 | [`migrate`](#migrate) | Translate configuration between agent formats. |
+| [`destroy`](#destroy) | Wipe the local vault clone or the remote vault contents (via commit). |
+
+## tui
+
+**Why**: Browse the vault, inspect what each local agent has on disk, trigger
+push / pull, and run cross-agent migrations from a single interactive screen.
+
+**Usage**:
+
+```bash
+agentsync           # bare invocation opens the TUI on a real terminal
+agentsync tui       # explicit alias, same behaviour
+```
+
+**Tabs**:
+
+| Tab | What it shows |
+|---|---|
+| 1 Dashboard | Daemon health (pid, uptime, last error), vault state, agent summary, init / key-rotate launchers. |
+| 2 Vault | All encrypted entries grouped by agent. Multi-select skills with `space`; bulk-remove with `x`. |
+| 3 Agents | Per-agent local file tree (`~/.claude`, `~/.cursor`, `~/.codex`, `~/.copilot`, VS Code user dir). |
+| 4 Migrate | From / To / Type form. Preview is mandatory before Apply enables. |
+| 5 Activity | Session-only ring buffer of TUI actions. |
+
+**Global keys** (any tab):
+
+| Key | Action |
+|---|---|
+| `1` – `5` | Jump to tab |
+| `Tab` / `Shift-Tab` | Cycle tabs |
+| `p` | Push vault (queues an IPC `push` to the daemon) |
+| `l` | Pull vault |
+| `r` | Refresh current tab |
+| `?` | Toggle the keymap overlay |
+| `q` / `Ctrl-C` | Quit, restoring the terminal |
+
+**Outcome**: every state change is additive on the same data the CLI
+subcommands operate on. Push / pull go through the same daemon IPC the
+`status` and `daemon` subcommands use; migrate calls the same planner as
+`agentsync migrate`; bulk skill removal calls the same `performSkillRemove`
+that `agentsync skill remove` does, once per selected skill.
+
+**Caveats**:
+
+- The TUI is interactive-only. In a non-TTY context (piped stdin/stdout,
+  `nohup`, CI runners) bare `agentsync` deliberately falls back to text
+  `status` output so existing scripts continue to work.
+- The activity log is session-scoped — closing the TUI discards history.
+- Push / pull require the daemon to be running. If the daemon is offline,
+  the footer shows `daemon ● offline` and `p` / `l` surface an inline
+  notice rather than queueing a request that cannot be served.
 
 ## Conventions
 
@@ -269,6 +329,70 @@ agentsync migrate --from <agent> --to <agent|all> [--type <type>] [--name <file>
 
 - `migrate` operates on **local files only**. No vault initialisation is required.
 - See [Migrate](migrate.md) for the full support matrix per config type, MCP transport translation rules, and per-agent quirks.
+
+## destroy
+
+**Why**: Reset vault state when you want to start over — either by removing
+the local clone (`--scope=local`), wiping the remote contents via a normal
+commit (`--scope=remote`), or both (`--scope=all`).
+
+> **Agent files are never touched.** `agentsync destroy` does not read,
+> modify, or delete a single byte under `~/.claude/`, `~/.cursor/`,
+> `~/.codex/`, `~/.copilot/`, or your VS Code user directory, regardless
+> of scope. This guarantee is enforced by code (no `AgentPaths.*` import
+> in `src/commands/destroy.ts`) and by test (three sha256+mtime
+> invariants in `destroy.test.ts`).
+
+**Usage**:
+
+```bash
+agentsync destroy                       # local-only, default
+agentsync destroy --scope=remote        # wipe remote via commit
+agentsync destroy --scope=all           # both
+```
+
+**Flags**:
+
+| Flag | Default | Description |
+|---|---|---|
+| `--scope` | `local` | One of `local`, `remote`, `all`. `local` removes the local vault dir. `remote` pushes a commit that `git rm -rf`s every tracked file on the remote — not a force-push, so history stays intact and `git revert` recovers the data on machines that still have it. `all` does both, remote first. |
+| `--force` | `false` | Bypass the agentsync.toml safety check. Use when destroying a half-initialised vault that never got a config file written. Does **not** bypass the three confirmation gates. |
+| `--yes` | `false` | Skip all three confirmation gates. Intended for scripted use; the command otherwise requires an interactive TTY. |
+
+**Confirmation gates** (when `--yes` is not passed):
+
+1. **Preview** — prints the exact paths that will be removed and lists
+   every category of file that will **not** be touched (including local
+   agent installations). Press `y` to advance, anything else to abort.
+2. **Typed phrase** — type the exact string the preview tells you to:
+   - `--scope=local`: type `DESTROY`.
+   - `--scope=remote` / `--scope=all`: type `DESTROY <branch>@<remote-fragment>`,
+     where the fragment is the last two path segments of the remote URL
+     (e.g. `DESTROY main@chrisleekr/agentsync-vault`). This forces you to
+     read the remote URL off the preview before you can confirm.
+3. **Final y/n** — last chance. Anything other than `y` aborts.
+
+**Outcome**:
+
+| Scope | After destroy |
+|---|---|
+| `local` | `~/.agentsync/vault/` is gone. `~/.agentsync/key.txt`, the daemon, the remote, and every `~/.<agent>/` directory are unchanged. Re-init from the same remote restores the clone. |
+| `remote` | Remote branch has a new commit, `destroy: clear vault content`, that removes every previously-tracked file. Local vault dir keeps its `.git/` history. Other machines that still have the data can `git revert <sha>` to recover. |
+| `all` | Both of the above. Remote is wiped first so a failed push does not leave you with a wiped local that cannot reach the remote. |
+
+**Caveats**:
+
+- Other recipients are affected by `--scope=remote` / `--scope=all`. Their
+  next `agentsync pull` will see an empty vault and lose their
+  `agentsync.toml` config — they will need to re-init.
+- The daemon stays running after a local destroy. Its next sync attempt
+  will fail until re-init. Run `agentsync daemon stop` if you want it
+  quiet in the meantime.
+- `key.txt` is preserved across every scope. Re-init from the same remote
+  reuses the existing identity so you stay a recipient. Delete the key
+  manually (`rm ~/.agentsync/key.txt`) if you really need a key wipe.
+- Refuses to run in a non-TTY context without `--yes`, to protect against
+  accidental destroys from piped scripts.
 
 ## Exit codes
 

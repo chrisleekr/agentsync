@@ -67,7 +67,15 @@ mock.module("node:child_process", () => ({
   execFile: execFileMock,
 }));
 
+// Spread the real fs/promises so unrelated exports (stat, readdir, etc.)
+// remain available to modules loaded in other test files that share Bun's
+// module cache during a multi-file run. Without this, the mock returns a
+// 4-key object and any subsequent `import { stat } from "node:fs/promises"`
+// (e.g. from src/commands/destroy.test.ts) errors with
+// `Export named 'stat' not found`.
+const actualFsPromises = require("node:fs/promises") as typeof import("node:fs/promises");
 mock.module("node:fs/promises", () => ({
+  ...actualFsPromises,
   mkdir: async () => {},
   writeFile: async (path: string, content: string | Uint8Array) => {
     fsWrites.set(path, typeof content === "string" ? content : (content as Buffer).toString());
@@ -96,6 +104,13 @@ beforeAll(async () => {
 });
 
 afterAll(() => {
+  // Re-mock back to the real implementations BEFORE mock.restore() so any
+  // test file loaded later in the same Bun run sees an unmocked fs/promises.
+  // mock.restore() alone leaves the cached fs/promises pointing at our
+  // override, which breaks unrelated tests that call readFile/stat
+  // (e.g. destroy.test.ts going through loadConfig).
+  mock.module("node:fs/promises", () => actualFsPromises);
+  mock.module("node:child_process", () => actualChildProcess);
   mock.restore();
 });
 

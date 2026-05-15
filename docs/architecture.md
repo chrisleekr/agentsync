@@ -193,11 +193,14 @@ flowchart LR
     Pull["pull"]:::step
     Timer["Periodic pull timer"]:::step
     Ipc["IPC server"]:::step
-    Client["agentsync CLI"]:::local
+    Cli["agentsync CLI"]:::local
+    Tui["agentsync TUI"]:::local
 
     Watcher --> Debounce --> Queue
     Timer --> Queue
-    Client -->|status / push / pull| Ipc --> Queue
+    Cli -->|status / push / pull| Ipc
+    Tui -->|status poll 1.5s, push, pull| Ipc
+    Ipc --> Queue
     Queue --> Push
     Queue --> Pull
 
@@ -207,6 +210,10 @@ flowchart LR
 ```
 
 </div>
+
+The IPC server accepts multiple concurrent clients. A TUI session and a
+flag-driven CLI invocation can be open at the same time without conflicting
+because every request goes through the same sync queue.
 
 Key invariants:
 
@@ -253,3 +260,22 @@ If you are reading the code, this is the rough mapping from concept to module. K
 | Path resolution | `src/config/paths.ts` |
 | Config schema (`agentsync.toml`) | `src/config/schema.ts` |
 | Vault format migrations | `src/migrate/` |
+| Interactive TUI (bare `agentsync`) | `src/commands/tui/` |
+
+## Compiled-binary packaging
+
+The TUI uses [OpenTUI](https://github.com/anomalyco/opentui), whose
+TypeScript wrapper around a native Zig core is loaded through `bun:ffi` at
+runtime. Three packaging consequences follow:
+
+- `bun run build` (the compiled binary at `dist/agentsync`) runs through
+  `scripts/build.ts`, which first executes `bun install --os="*" --cpu="*"
+  @opentui/core@<v>` so every platform's optional native dependency is
+  resolved into `node_modules` before `bun build --compile` embeds the
+  matching one into bunfs.
+- `bun run build:package` (the npm-published bundle at `dist/cli.js`)
+  externalises `@opentui/core` so the single-file bundle stays a single
+  file. npm consumers receive `@opentui/core` as a runtime dependency
+  declared in `package.json`.
+- Local development (`bun run src/cli.ts`) needs neither step — Bun
+  resolves the native lib for the host platform on first import.

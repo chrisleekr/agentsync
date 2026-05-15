@@ -1,7 +1,6 @@
 import { mkdir, readdir, readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { log } from "@clack/prompts";
 import * as TOML from "@iarna/toml";
 import { AgentPaths } from "../../config/paths";
 import type { AgentSyncConfig } from "../../config/schema";
@@ -204,23 +203,7 @@ export async function applyCodexSkill(skillName: string, base64Tar: string): Pro
 
 // ─── Apply (pull side) ────────────────────────────────────────────────────────
 
-import { basename } from "node:path";
-import { decryptString } from "../../core/encryptor";
-
-/** Read encrypted files from a vault subdirectory, ignoring missing directories. */
-async function readAgeFiles(dir: string): Promise<{ name: string; fullPath: string }[]> {
-  try {
-    const names = await readdir(dir);
-    return names
-      .filter((name) => name.endsWith(".age"))
-      .map((name) => ({
-        name,
-        fullPath: join(dir, name),
-      }));
-  } catch {
-    return [];
-  }
-}
+import { type ApplyPlan, defineFileArtifact, runApplyPlan } from "../_apply";
 
 /** Decrypt and apply all Codex vault artifacts to the local machine. */
 export async function applyCodexVault(
@@ -229,69 +212,50 @@ export async function applyCodexVault(
   dryRun: boolean,
   _config?: AgentSyncConfig,
 ): Promise<void> {
-  const codexDir = join(vaultDir, "codex");
-  const files = await readAgeFiles(codexDir);
-
-  for (const { name, fullPath } of files) {
-    const encrypted = await readFile(fullPath, "utf8");
-    const decrypted = await decryptString(encrypted, key);
-
-    if (name === "AGENTS.md.age") {
-      if (dryRun) {
-        log.info("[dry-run] [codex] would apply AGENTS.md");
-        continue;
-      }
-      await applyCodexAgentsMd(decrypted);
-    } else if (name === "AGENTS.override.md.age") {
-      if (dryRun) {
-        log.info("[dry-run] [codex] would apply AGENTS.override.md");
-        continue;
-      }
-      await applyCodexAgentsOverrideMd(decrypted);
-    } else if (name === "config.toml.age") {
-      if (dryRun) {
-        log.info("[dry-run] [codex] would apply config.toml");
-        continue;
-      }
-      await applyCodexConfig(decrypted);
-    }
-  }
-
-  const ruleFiles = await readAgeFiles(join(codexDir, "rules"));
-  for (const { name, fullPath } of ruleFiles) {
-    if (!name.endsWith(".md.age")) continue;
-    const encrypted = await readFile(fullPath, "utf8");
-    const decrypted = await decryptString(encrypted, key);
-    const ruleName = basename(name, ".age");
-    if (dryRun) {
-      log.info(`[dry-run] [codex] would write rule: ${ruleName}`);
-    } else {
-      await applyCodexRule(ruleName, decrypted);
-    }
-  }
-
-  // Skills sub-directory — stored as <name>.tar.age. Mirrors the
-  // Claude/Copilot apply path: each entry is decrypted, then the inner base64
-  // tar is extracted into ~/.codex/skills/<name>/ via applyCodexSkill.
-  const skillFiles = await readAgeFiles(join(codexDir, "skills"));
-  for (const { name, fullPath } of skillFiles) {
-    if (!name.endsWith(".tar.age")) continue;
-    const skillName = basename(name, ".tar.age");
-    try {
-      validateSkillName(skillName);
-    } catch (err) {
-      if (err instanceof InvalidSkillNameError) {
-        log.warn(`[codex] Skipping vault skill with invalid name '${name}': ${err.reason}`);
-        continue;
-      }
-      throw err;
-    }
-    const encrypted = await readFile(fullPath, "utf8");
-    const decrypted = await decryptString(encrypted, key);
-    if (dryRun) {
-      log.info(`[dry-run] [codex] would extract skill: ${skillName}`);
-      continue;
-    }
-    await applyCodexSkill(skillName, decrypted);
-  }
+  const plan: ApplyPlan = {
+    agent: "codex",
+    directives: [
+      defineFileArtifact({
+        vaultName: "AGENTS.md.age",
+        dryRunLabel: "[dry-run] [codex] would apply AGENTS.md",
+        apply: applyCodexAgentsMd,
+      }),
+      defineFileArtifact({
+        vaultName: "AGENTS.override.md.age",
+        dryRunLabel: "[dry-run] [codex] would apply AGENTS.override.md",
+        apply: applyCodexAgentsOverrideMd,
+      }),
+      defineFileArtifact({
+        vaultName: "config.toml.age",
+        dryRunLabel: "[dry-run] [codex] would apply config.toml",
+        apply: applyCodexConfig,
+      }),
+      {
+        kind: "dir",
+        subdir: "rules",
+        suffix: ".age",
+        dryRunVerb: "would write rule:",
+        apply: applyCodexRule,
+      },
+      {
+        kind: "dir",
+        subdir: "skills",
+        suffix: ".tar.age",
+        dryRunVerb: "would extract skill:",
+        apply: applyCodexSkill,
+        filter: (name) => {
+          try {
+            validateSkillName(name);
+            return null;
+          } catch (err) {
+            if (err instanceof InvalidSkillNameError) {
+              return { reason: `invalid skill name — ${err.reason}` };
+            }
+            throw err;
+          }
+        },
+      },
+    ],
+  };
+  await runApplyPlan(plan, vaultDir, key, dryRun);
 }

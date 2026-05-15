@@ -86,7 +86,13 @@ export async function createAgeIdentity(): Promise<{
  */
 export async function createBareRepo(dir: string): Promise<string> {
   const repoPath = join(dir, "remote.git");
-  const result = Bun.spawnSync(["git", "init", "--bare", repoPath]);
+  // Pin the initial branch so the bare repo's HEAD symref matches whatever
+  // the seed pushes regardless of the host git's init.defaultBranch
+  // (varies between Ubuntu CI and macOS local). Without this, `git rev-parse
+  // HEAD` on the bare repo can return the literal string "HEAD" instead of
+  // a resolved sha, surfacing as confusing "Expected: not HEAD" test
+  // failures only on CI.
+  const result = Bun.spawnSync(["git", "init", "--bare", "--initial-branch=main", repoPath]);
   if (result.exitCode !== 0) {
     throw new Error(`git init --bare failed: ${new TextDecoder().decode(result.stderr)}`);
   }
