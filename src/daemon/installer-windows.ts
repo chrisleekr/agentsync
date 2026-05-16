@@ -14,6 +14,25 @@ const execFileAsync = promisify(execFile);
 
 const TASK_NAME = "AgentSync";
 
+// Public-function override slot — see installer-linux.ts for the rationale.
+const FN_SLOT = "__agentsyncInstallerWindowsPublicOverrides";
+type PublicOverrides = Partial<{
+  installWindows: typeof installWindows;
+  uninstallWindows: typeof uninstallWindows;
+  startWindows: typeof startWindows;
+  stopWindows: typeof stopWindows;
+  isInstalledWindows: typeof isInstalledWindows;
+}>;
+
+function getOverride<K extends keyof PublicOverrides>(name: K): PublicOverrides[K] | undefined {
+  return (globalThis as unknown as Record<string, PublicOverrides | undefined>)[FN_SLOT]?.[name];
+}
+
+/** @internal Test-only hook. Pass `{}` to clear overrides. */
+export function __setInstallerWindowsOverridesForTests(overrides: PublicOverrides): void {
+  (globalThis as unknown as Record<string, PublicOverrides>)[FN_SLOT] = overrides;
+}
+
 /** Escape a string for use in XML attribute and text content. */
 function escapeXml(value: string): string {
   return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -84,6 +103,8 @@ export function buildXml(args: string[]): string {
  * `args[0]` is the binary; remaining args plus `daemon _run` go into `<Arguments>`.
  */
 export async function installWindows(args: string[]): Promise<void> {
+  const override = getOverride("installWindows");
+  if (override) return override(args);
   const xml = buildXml(args);
   const tmpXml = `${process.env.TEMP ?? "C:\\Temp"}\\agentsync-task.xml`;
 
@@ -111,6 +132,8 @@ export async function installWindows(args: string[]): Promise<void> {
 
 /** Stop and delete the Windows scheduled task if it exists. */
 export async function uninstallWindows(): Promise<void> {
+  const override = getOverride("uninstallWindows");
+  if (override) return override();
   try {
     await execFileAsync("schtasks", ["/End", "/TN", TASK_NAME]);
   } catch {
@@ -126,6 +149,8 @@ export async function uninstallWindows(): Promise<void> {
  * Uses `isInstalledWindows()` as the registration check; applies a 10-second timeout.
  */
 export async function startWindows(): Promise<void> {
+  const override = getOverride("startWindows");
+  if (override) return override();
   if (!(await isInstalledWindows())) {
     throw new Error("Service not bootstrapped — run `agentsync daemon install` first.");
   }
@@ -145,11 +170,15 @@ export async function startWindows(): Promise<void> {
 
 /** Stop the running Windows scheduled task instance. */
 export async function stopWindows(): Promise<void> {
+  const override = getOverride("stopWindows");
+  if (override) return override();
   await execFileAsync("schtasks", ["/End", "/TN", TASK_NAME]);
 }
 
 /** Check whether the Windows scheduled task already exists. */
 export async function isInstalledWindows(): Promise<boolean> {
+  const override = getOverride("isInstalledWindows");
+  if (override) return override();
   try {
     await execFileAsync("schtasks", ["/Query", "/TN", TASK_NAME]);
     return true;

@@ -4,29 +4,11 @@
  * Covers getExecutableArgs() and the daemon subcommands (install, start, stop, status, uninstall).
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, mock, spyOn, test } from "bun:test";
-import { createRequire } from "node:module";
 import { log } from "@clack/prompts";
 import { IpcClient } from "../../core/ipc";
-
-// Capture the real per-platform installer modules BEFORE the mock.module
-// calls below replace them with stubs. Bun's `mock.restore()` is a no-op for
-// mock.module() registrations, so without an explicit re-mock in afterAll the
-// stubs persist into later test files (notably installer-linux.test.ts) and
-// shadow real exports such as `buildUnit` — surfacing as "m.buildUnit is not
-// a function" once CI ordering puts daemon.test.ts before installer-linux.
-const requireFromHere = createRequire(import.meta.url);
-const realInstallerMacos = requireFromHere("../../daemon/installer-macos") as Record<
-  string,
-  unknown
->;
-const realInstallerLinux = requireFromHere("../../daemon/installer-linux") as Record<
-  string,
-  unknown
->;
-const realInstallerWindows = requireFromHere("../../daemon/installer-windows") as Record<
-  string,
-  unknown
->;
+import { __setInstallerLinuxOverridesForTests } from "../../daemon/installer-linux";
+import { __setInstallerMacOsOverridesForTests } from "../../daemon/installer-macos";
+import { __setInstallerWindowsOverridesForTests } from "../../daemon/installer-windows";
 
 // ── getExecutableArgs tests ────────────────────────────────────────────────────
 
@@ -97,33 +79,35 @@ const mockStop = mock(async () => {});
 const mockIsInstalled = mock(async () => true);
 const mockIsRegistered = mock(async () => true);
 
-// Mock all platform installer modules so tests pass on any OS
-mock.module("../../daemon/installer-macos", () => ({
+// Stub all platform installer modules via their globalThis-backed
+// override slots so tests pass on any OS. Avoids mock.module() entirely —
+// the cached installer modules are NOT replaced, so other test files
+// loaded later in the same Bun run see the real exports (buildUnit,
+// quoteSystemdArg, etc.) intact. See installer-linux.ts for the
+// mechanism rationale.
+__setInstallerMacOsOverridesForTests({
   installMacOs: mockInstall,
   uninstallMacOs: mockUninstall,
   startMacOs: mockStart,
   stopMacOs: mockStop,
   isInstalledMacOs: mockIsInstalled,
   isRegisteredMacOs: mockIsRegistered,
-}));
-
-mock.module("../../daemon/installer-linux", () => ({
+});
+__setInstallerLinuxOverridesForTests({
   installLinux: mockInstall,
   uninstallLinux: mockUninstall,
   startLinux: mockStart,
   stopLinux: mockStop,
   isInstalledLinux: mockIsInstalled,
   isRegisteredLinux: mockIsRegistered,
-}));
-
-mock.module("../../daemon/installer-windows", () => ({
+});
+__setInstallerWindowsOverridesForTests({
   installWindows: mockInstall,
   uninstallWindows: mockUninstall,
   startWindows: mockStart,
   stopWindows: mockStop,
   isInstalledWindows: mockIsInstalled,
-  isRegisteredWindows: mockIsRegistered,
-}));
+});
 
 const successLogs: string[] = [];
 const errorLogs: string[] = [];
@@ -152,14 +136,11 @@ afterAll(() => {
   errorSpy.mockRestore();
   warnSpy.mockRestore();
   ipcClientSendSpy.mockRestore();
-  // Re-mock the platform installers back to the real implementations BEFORE
-  // mock.restore() so any test file loaded later in the same Bun run sees the
-  // real `buildUnit`, `quoteSystemdArg`, etc. mock.restore() alone leaves the
-  // cached modules pointing at the stubs above. Same pattern as
-  // installer-linux.test.ts uses for node:fs/promises.
-  mock.module("../../daemon/installer-macos", () => realInstallerMacos);
-  mock.module("../../daemon/installer-linux", () => realInstallerLinux);
-  mock.module("../../daemon/installer-windows", () => realInstallerWindows);
+  // Clear the globalThis-backed override slots so any later test file that
+  // exercises the real installer functions sees clean defaults.
+  __setInstallerMacOsOverridesForTests({});
+  __setInstallerLinuxOverridesForTests({});
+  __setInstallerWindowsOverridesForTests({});
   mock.restore();
 });
 

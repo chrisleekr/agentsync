@@ -67,6 +67,26 @@ export function __setInstallerMacOsImplForTests(deps: {
   (globalThis as unknown as Record<string, Slot>)[SLOT] = deps;
 }
 
+// Public-function override slot — see installer-linux.ts for the rationale.
+const FN_SLOT = "__agentsyncInstallerMacOsPublicOverrides";
+type PublicOverrides = Partial<{
+  installMacOs: typeof installMacOs;
+  uninstallMacOs: typeof uninstallMacOs;
+  startMacOs: typeof startMacOs;
+  stopMacOs: typeof stopMacOs;
+  isInstalledMacOs: typeof isInstalledMacOs;
+  isRegisteredMacOs: typeof isRegisteredMacOs;
+}>;
+
+function getOverride<K extends keyof PublicOverrides>(name: K): PublicOverrides[K] | undefined {
+  return (globalThis as unknown as Record<string, PublicOverrides | undefined>)[FN_SLOT]?.[name];
+}
+
+/** @internal Test-only hook. Pass `{}` to clear overrides. */
+export function __setInstallerMacOsOverridesForTests(overrides: PublicOverrides): void {
+  (globalThis as unknown as Record<string, PublicOverrides>)[FN_SLOT] = overrides;
+}
+
 /** Escape a string for safe inclusion in XML text content. */
 function escapeXml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -148,6 +168,8 @@ export function extractServiceManagerError(err: unknown): string {
  * (avoids "Bootstrap failed: 5" on already-registered services).
  */
 export async function installMacOs(args: string[]): Promise<void> {
+  const override = getOverride("installMacOs");
+  if (override) return override(args);
   const logDir = join(homedir(), "Library", "Logs", "AgentSync");
 
   await fsImpl().mkdir(LAUNCH_AGENTS_DIR, { recursive: true });
@@ -179,6 +201,8 @@ export async function installMacOs(args: string[]): Promise<void> {
 
 /** Boot out and remove the macOS LaunchAgent definition if it exists. */
 export async function uninstallMacOs(): Promise<void> {
+  const override = getOverride("uninstallMacOs");
+  if (override) return override();
   try {
     await execImpl()("launchctl", ["bootout", `gui/${process.getuid?.() ?? 501}`, PLIST_PATH]);
   } catch {
@@ -199,6 +223,8 @@ export async function uninstallMacOs(): Promise<void> {
  * Runs `launchctl print gui/<uid>/com.agentsync.daemon`; returns true on exit code 0.
  */
 export async function isRegisteredMacOs(): Promise<boolean> {
+  const override = getOverride("isRegisteredMacOs");
+  if (override) return override();
   try {
     await execImpl()("launchctl", ["print", `gui/${process.getuid?.() ?? 501}/${PLIST_LABEL}`]);
     return true;
@@ -212,6 +238,8 @@ export async function isRegisteredMacOs(): Promise<boolean> {
  * Verifies the service is registered first; applies a 10-second hard timeout on kickstart.
  */
 export async function startMacOs(): Promise<void> {
+  const override = getOverride("startMacOs");
+  if (override) return override();
   if (!(await isRegisteredMacOs())) {
     throw new Error("Service not bootstrapped — run `agentsync daemon install` first.");
   }
@@ -235,6 +263,8 @@ export async function startMacOs(): Promise<void> {
 
 /** Ask launchd to stop the macOS daemon process. */
 export async function stopMacOs(): Promise<void> {
+  const override = getOverride("stopMacOs");
+  if (override) return override();
   await execImpl()("launchctl", [
     "kill",
     "SIGTERM",
@@ -244,6 +274,8 @@ export async function stopMacOs(): Promise<void> {
 
 /** Check whether the macOS LaunchAgent plist is present on disk. */
 export async function isInstalledMacOs(): Promise<boolean> {
+  const override = getOverride("isInstalledMacOs");
+  if (override) return override();
   try {
     await fsImpl().readFile(PLIST_PATH, "utf8");
     return true;

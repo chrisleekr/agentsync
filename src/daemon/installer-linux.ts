@@ -71,6 +71,29 @@ export function __setInstallerLinuxImplForTests(deps: {
   (globalThis as unknown as Record<string, Slot>)[SLOT] = deps;
 }
 
+// Public-function override slot for daemon.test.ts and similar callers that
+// want to stub out installLinux / uninstallLinux / etc. without going
+// through Bun's `mock.module()` (which pollutes every other test file's
+// view of this module — see installer-linux.test.ts diagnostics).
+const FN_SLOT = "__agentsyncInstallerLinuxPublicOverrides";
+type PublicOverrides = Partial<{
+  installLinux: typeof installLinux;
+  uninstallLinux: typeof uninstallLinux;
+  startLinux: typeof startLinux;
+  stopLinux: typeof stopLinux;
+  isInstalledLinux: typeof isInstalledLinux;
+  isRegisteredLinux: typeof isRegisteredLinux;
+}>;
+
+function getOverride<K extends keyof PublicOverrides>(name: K): PublicOverrides[K] | undefined {
+  return (globalThis as unknown as Record<string, PublicOverrides | undefined>)[FN_SLOT]?.[name];
+}
+
+/** @internal Test-only hook. Pass `{}` to clear overrides. */
+export function __setInstallerLinuxOverridesForTests(overrides: PublicOverrides): void {
+  (globalThis as unknown as Record<string, PublicOverrides>)[FN_SLOT] = overrides;
+}
+
 const SERVICE_NAME = "agentsync";
 const SYSTEMD_USER_DIR = join(homedir(), ".config", "systemd", "user");
 const SERVICE_PATH = join(SYSTEMD_USER_DIR, `${SERVICE_NAME}.service`);
@@ -113,6 +136,8 @@ WantedBy=default.target
  * Returns true only when `systemctl --user is-enabled agentsync` outputs "enabled".
  */
 export async function isRegisteredLinux(): Promise<boolean> {
+  const override = getOverride("isRegisteredLinux");
+  if (override) return override();
   try {
     const { stdout } = await execImpl()("systemctl", ["--user", "is-enabled", SERVICE_NAME]);
     return stdout.trim() === "enabled";
@@ -125,6 +150,8 @@ export async function isRegisteredLinux(): Promise<boolean> {
  * Install and start the Linux user service that runs the daemon in the background.
  */
 export async function installLinux(args: string[]): Promise<void> {
+  const override = getOverride("installLinux");
+  if (override) return override(args);
   await fsImpl().mkdir(SYSTEMD_USER_DIR, { recursive: true });
   const unit = buildUnit(args);
   await fsImpl().writeFile(SERVICE_PATH, unit, "utf8");
@@ -137,6 +164,8 @@ export async function installLinux(args: string[]): Promise<void> {
 
 /** Stop and remove the Linux user service definition if it exists. */
 export async function uninstallLinux(): Promise<void> {
+  const override = getOverride("uninstallLinux");
+  if (override) return override();
   try {
     await execImpl()("systemctl", ["--user", "disable", "--now", SERVICE_NAME]);
   } catch {
@@ -163,6 +192,8 @@ export async function uninstallLinux(): Promise<void> {
  * Verifies registration first; applies a 10-second timeout on the start call.
  */
 export async function startLinux(): Promise<void> {
+  const override = getOverride("startLinux");
+  if (override) return override();
   if (!(await isRegisteredLinux())) {
     throw new Error("Service not bootstrapped — run `agentsync daemon install` first.");
   }
@@ -184,11 +215,15 @@ export async function startLinux(): Promise<void> {
 
 /** Stop the installed Linux user service. */
 export async function stopLinux(): Promise<void> {
+  const override = getOverride("stopLinux");
+  if (override) return override();
   await execImpl()("systemctl", ["--user", "stop", SERVICE_NAME]);
 }
 
 /** Check whether the Linux user service file is present on disk. */
 export async function isInstalledLinux(): Promise<boolean> {
+  const override = getOverride("isInstalledLinux");
+  if (override) return override();
   try {
     await fsImpl().readFile(SERVICE_PATH, "utf8");
     return true;

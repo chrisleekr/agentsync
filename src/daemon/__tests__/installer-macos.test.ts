@@ -9,7 +9,6 @@
  * for the full rationale on why this bypasses Bun's `mock.module()` cache.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
-import { createRequire } from "node:module";
 
 const fsWrites = new Map<string, string>();
 const execFileCalls: Array<{ cmd: string; args: string[] }> = [];
@@ -59,12 +58,8 @@ const execStub = async (
 type MacOsInstallerModule = typeof import("../installer-macos");
 let m: MacOsInstallerModule;
 
-beforeAll(() => {
-  // See installer-linux.test for why this uses createRequire instead of
-  // `await import(...)`. We need to bypass Bun's mock.module() registry
-  // so daemon.test.ts's stub does not bleed in.
-  const req = createRequire(import.meta.url);
-  m = req("../installer-macos") as MacOsInstallerModule;
+beforeAll(async () => {
+  m = await import("../installer-macos");
   m.__setInstallerMacOsImplForTests({ fs: fsStub, exec: execStub });
 });
 
