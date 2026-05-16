@@ -739,6 +739,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#windows-smartscreen-on-first-run" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Windows SmartScreen on first run
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1160,6 +1171,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#windows-smartscreen-on-first-run" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Windows SmartScreen on first run
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1524,6 +1546,10 @@ live state without you re-running <code>agentsync status</code>.</p>
 </span></code></pre></div>
 <p>A passing verification reports the workflow path, commit SHA, and Sigstore transparency log entry. Failure means the binary was not produced by this repository's release pipeline; do not run it. Pin the verification to <code>--repo</code> (not <code>--owner</code>) so an attestation minted by any other repository under the same owner is rejected.</p>
 <p>Both checks are independent. The checksum protects against transport corruption and mirror tampering; the attestation protects against a substituted binary that happens to carry a forged checksum. Run both on first install of every release, and repeat the pair for each platform binary you download — every job in the release matrix mints its own attestation.</p>
+<h3 id="windows-smartscreen-on-first-run">Windows SmartScreen on first run<a class="headerlink" href="#windows-smartscreen-on-first-run" title="Permanent link">&para;</a></h3>
+<p>The first time you launch <code>agentsync-windows-x64.exe</code>, Windows will display <em>"Windows protected your PC"</em> with the body text <em>"Microsoft Defender SmartScreen prevented an unrecognized app from starting. Running this app might put your PC at risk."</em> It refuses to run until you click <strong>More info</strong> → <strong>Run anyway</strong>. This happens because the binary is not signed with an <a href="https://learn.microsoft.com/en-us/windows-hardware/drivers/install/authenticode">Authenticode</a> code-signing certificate. Since the CA/B Forum 2023 ruling, every code-signing cert (OV or EV) requires HSM-backed key storage, so the practical floor is a few hundred dollars per year plus ongoing key-management overhead.</p>
+<p>This project relies on the <a href="#verify-build-provenance">Sigstore-backed build provenance attestation</a> as its trust path instead. If <code>gh attestation verify agentsync-windows-x64.exe --repo chrisleekr/agentsync</code> passes against the binary you downloaded, the bytes were produced by this repository's <code>release-please</code> workflow at the tagged commit — the SmartScreen warning is a UX consequence of the missing Authenticode cert, not a signal that the binary is unsafe. Click through it once per binary update.</p>
+<p>SmartScreen reputation is per-binary-hash and accrues with downloads; every new release starts from zero, so the warning recurs on each update.</p>
 <h2 id="recovery-runbooks">Recovery runbooks<a class="headerlink" href="#recovery-runbooks" title="Permanent link">&para;</a></h2>
 <h3 id="recover-from-divergence">Recover from divergence<a class="headerlink" href="#recover-from-divergence" title="Permanent link">&para;</a></h3>
 <p>Reconciliation is fast-forward only. Any command that touches the vault (<code>init</code>, <code>push</code>, <code>pull</code>, <code>key add</code>, <code>key rotate</code>) fails closed when local history has diverged from <code>origin/&lt;branch&gt;</code>.</p>
