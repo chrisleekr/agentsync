@@ -18,18 +18,20 @@ function escapeRegExp(value: string): string {
 /**
  * Build the ordered set of patterns we treat as a home-prefix. Each pattern
  * is anchored by a no-preceding-identifier-char lookbehind and a trailing
- * `(?=\/|$)` so partial matches inside a larger identifier never fire.
+ * `(?=[\\/]|$)` so partial matches inside a larger identifier never fire.
+ * The separator class accepts both `/` and `\` so a Windows home prefix
+ * like `C:\Users\alice\.claude` is recognised the same way as the Unix form.
  */
 function homePatterns(home: string): RegExp[] {
   // Trim a trailing separator so the lookahead works whether the caller
-  // passes "/Users/x" or "/Users/x/".
-  const trimmed = home.replace(/\/+$/, "");
+  // passes "/Users/x", "/Users/x/", "C:\\Users\\x" or "C:\\Users\\x\\".
+  const trimmed = home.replace(/[\\/]+$/, "");
   const escapedHome = escapeRegExp(trimmed);
   return [
-    /(?<![A-Za-z0-9_])\$\{HOME\}(?=\/|$)/g,
-    /(?<![A-Za-z0-9_])\$HOME(?=\/|$)/g,
-    /(?<![A-Za-z0-9_~])~(?=\/|$)/g,
-    new RegExp(`(?<![A-Za-z0-9_])${escapedHome}(?=\\/|$)`, "g"),
+    /(?<![A-Za-z0-9_])\$\{HOME\}(?=[\\/]|$)/g,
+    /(?<![A-Za-z0-9_])\$HOME(?=[\\/]|$)/g,
+    /(?<![A-Za-z0-9_~])~(?=[\\/]|$)/g,
+    new RegExp(`(?<![A-Za-z0-9_])${escapedHome}(?=[\\\\/]|$)`, "g"),
   ];
 }
 
@@ -45,7 +47,17 @@ export function normalizeStringForVault(input: string, home: string): string {
   return out;
 }
 
-/** Re-expand the placeholder back to the current machine's home directory. */
+/**
+ * Re-expand the placeholder back to the current machine's home directory.
+ *
+ * The tail after the placeholder is opaque text and is left untouched. We
+ * deliberately do not rewrite `/` into `\` (or vice versa) on the target
+ * host, because that tail may contain URLs, regex flags, glob patterns,
+ * or other non-path strings that legitimately use one separator. Windows
+ * path APIs accept `/` in absolute paths, so a Unix-authored
+ * `${AGENTSYNC_HOME}/foo` re-expanded on a Windows host yields a working
+ * `C:\Users\alice/foo` without corrupting non-path neighbours.
+ */
 export function denormalizeStringFromVault(input: string, home: string): string {
   if (home.length === 0) {
     throw new Error("denormalizeStringFromVault requires a non-empty home");
