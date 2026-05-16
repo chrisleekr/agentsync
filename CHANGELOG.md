@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.1.7](https://github.com/chrisleekr/agentsync/compare/v0.1.6...v0.1.7) (2026-05-16)
+
+
+### Features
+
+* **migrate:** expand to 5 config types × 5 agents, add sourcePath display, wrap commands→codex as skills ([#80](https://github.com/chrisleekr/agentsync/issues/80)) ([060c878](https://github.com/chrisleekr/agentsync/commit/060c87865d5bbf8cad38b3cc738677a20cc1d8ac))
+* **packaging:** cross-compile a Windows binary and document PowerShell verification ([#92](https://github.com/chrisleekr/agentsync/issues/92)) ([abe8fc9](https://github.com/chrisleekr/agentsync/commit/abe8fc9365d86c598ad3c10b3257b6af0700f3e3))
+* **tui:** merge Vault+Agents into one Sync tab with skill drill-in ([#87](https://github.com/chrisleekr/agentsync/issues/87)) ([03c6f96](https://github.com/chrisleekr/agentsync/commit/03c6f96b942526d79f59a99667e3d93992467498))
+
+
+### Bug Fixes
+
+* **core:** recognise backslash as a home-prefix separator in path-portability ([#89](https://github.com/chrisleekr/agentsync/issues/89)) ([985ab0b](https://github.com/chrisleekr/agentsync/commit/985ab0be78c04b7d2a3bb8144c8a2f7cb67f8020))
+
 ## [0.1.6](https://github.com/chrisleekr/agentsync/compare/v0.1.5...v0.1.6) (2026-05-13)
 
 
