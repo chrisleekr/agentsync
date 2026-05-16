@@ -189,6 +189,8 @@ export interface AppState {
   activity: ActivityEntry[];
   selection: Set<string>;
   toast: { text: string; level: "info" | "success" | "error"; expiresAt: number } | null;
+  /** Most recently pressed action key, flashed briefly in the action bars. */
+  keyHint: { key: string; expiresAt: number } | null;
   helpOpen: boolean;
   sync: SyncSlice;
   migrate: MigrateSlice;
@@ -210,6 +212,7 @@ export function createInitialState(): AppState {
     activity: [],
     selection: new Set<string>(),
     toast: null,
+    keyHint: null,
     helpOpen: false,
     sync: {
       phase: "idle",
@@ -255,6 +258,12 @@ export function setToast(
   ttlMs = 3000,
 ): void {
   state.toast = { text, level, expiresAt: Date.now() + ttlMs };
+}
+
+/** Record an action keypress so the bars can flash the pressed key. The TTL
+ *  is short so it reads as "just pressed", not a sticky indicator. */
+export function setKeyHint(state: AppState, key: string, ttlMs = 450): void {
+  state.keyHint = { key, expiresAt: Date.now() + ttlMs };
 }
 
 export function migrateSignature(m: MigrateSlice): string {

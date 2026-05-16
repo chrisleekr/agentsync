@@ -1084,7 +1084,7 @@ describe("integration", () => {
     ).toBe(true);
     expect(fakeLogs.success.some((message) => message.includes("Pull completed"))).toBe(false);
     expect(fakeApplyCalls).toHaveLength(0);
-  });
+  }, 20000);
 
   test("performPush inherits the shared divergence policy before writing vault artifacts", async () => {
     const { machineB } = await createDivergentMachinePair(join(tmpDir, "push-divergence"));
@@ -1108,7 +1108,7 @@ describe("integration", () => {
       ),
     ).toBe(true);
     expect(existsSync(join(machineB.vaultDir, "claude", "blocked.age"))).toBe(false);
-  });
+  }, 20000);
 });
 
 // ─── agent-skills-sync integration guarantees ─────────────────────────

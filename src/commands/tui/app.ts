@@ -7,6 +7,7 @@ import {
   type ContextAction,
   countRunning,
   createInitialState,
+  setKeyHint,
   setToast,
   TAB_IDS,
   type TabId,
@@ -103,6 +104,7 @@ export async function runApp(): Promise<void> {
   root.add(actionBar);
   root.add(footer);
 
+  let alive = true;
   const ctx: AppContext = {
     renderer,
     store,
@@ -112,12 +114,25 @@ export async function runApp(): Promise<void> {
       renderTitleBar(titleBar, state);
       renderTabBar(tabBar, state);
       renderActiveTab(renderer, contentHost, store, ctx);
-      renderActionBar(actionBar, contextActionsForTab(state));
+      renderActionBar(actionBar, contextActionsForTab(state), activeKeyHint(state));
       renderFooter(footer, state);
     },
   };
 
-  store.subscribe(() => ctx.rerender());
+  // Coalesce renders onto a microtask. renderActiveTab calls ensureSyncLoaded,
+  // which dispatches; a synchronous subscriber would re-enter rendering mid
+  // render and stack a second panel into the same host. Deferring means a
+  // dispatch-during-render schedules the next render instead of nesting.
+  let renderScheduled = false;
+  const scheduleRender = (): void => {
+    if (renderScheduled) return;
+    renderScheduled = true;
+    queueMicrotask(() => {
+      renderScheduled = false;
+      if (alive) ctx.rerender();
+    });
+  };
+  store.subscribe(scheduleRender);
   ctx.rerender();
 
   const pollOnce = async () => {
@@ -142,9 +157,13 @@ export async function runApp(): Promise<void> {
 
   toastTimer = setInterval(() => {
     const s = store.getState();
-    if (s.toast && s.toast.expiresAt < Date.now()) {
+    const now = Date.now();
+    const toastExpired = s.toast !== null && s.toast.expiresAt < now;
+    const hintExpired = s.keyHint !== null && s.keyHint.expiresAt < now;
+    if (toastExpired || hintExpired) {
       store.dispatch((d) => {
-        d.toast = null;
+        if (toastExpired) d.toast = null;
+        if (hintExpired) d.keyHint = null;
       });
     }
   }, 500);
@@ -168,6 +187,7 @@ export async function runApp(): Promise<void> {
   try {
     await quitPromise;
   } finally {
+    alive = false;
     teardown(renderer);
     store.dispose();
     process.removeListener("SIGINT", onSignal);
@@ -206,6 +226,17 @@ function handleKey(key: KeyEvent, ctx: AppContext, quit: () => void): void {
       });
     }
     return;
+  }
+
+  // Show the action before running it: flash the pressed key in the bars and
+  // surface its label, so a keypress is visibly acknowledged even when the
+  // handler that follows does slow work.
+  const action = actionLabelFor(key, ctx.store.getState());
+  if (action) {
+    ctx.store.dispatch((d) => {
+      setKeyHint(d, action.key);
+      setToast(d, action.label, "info", 1500);
+    });
   }
 
   if (key.name >= "1" && key.name <= "4") {
@@ -339,15 +370,89 @@ function renderFooter(host: TextRenderable, state: AppState): void {
   const running = countRunning(state);
   const opLabel = running > 0 ? `  ${running} op(s)` : "";
   const toast = state.toast ? `  ⟶ ${state.toast.text}` : "";
-  host.content = ` p push  l pull  r refresh  ? help  q quit            daemon ${dot} ${daemonLabel}${opLabel}${toast}`;
+  // The just-pressed global key renders as [k] instead of  k . Both markers
+  // are 3 wide so the bar does not shift when a key flashes.
+  const hintKey = activeKeyHint(state);
+  const globalKeys: [string, string][] = [
+    ["p", "push"],
+    ["l", "pull"],
+    ["r", "refresh"],
+    ["?", "help"],
+    ["q", "quit"],
+  ];
+  const actions = globalKeys
+    .map(([k, label]) => `${hintKey === k ? `[${k}]` : ` ${k} `}${label}`)
+    .join(" ");
+  host.content = `${actions}            daemon ${dot} ${daemonLabel}${opLabel}${toast}`;
 }
 
-function renderActionBar(host: TextRenderable, actions: ContextAction[]): void {
+/** The action-bar key being flashed right now, or null once the flash TTL
+ *  has elapsed. Expiry is checked at render time so a stale hint never shows. */
+function activeKeyHint(state: AppState): string | null {
+  if (state.keyHint && state.keyHint.expiresAt > Date.now()) {
+    return state.keyHint.key;
+  }
+  return null;
+}
+
+/**
+ * Map a keypress to the action it triggers, for the pre-action flash + toast.
+ * Pure navigation (arrows, space, enter, esc) returns null so the bars do not
+ * flash on every cursor move. Returns the bar key it maps to and a label.
+ */
+function actionLabelFor(key: KeyEvent, state: AppState): { key: string; label: string } | null {
+  if (state.helpOpen) return null;
+  const name = key.name;
+  if (name >= "1" && name <= "4") {
+    const idx = Number(name) - 1;
+    if (idx < TAB_IDS.length) return { key: name, label: TAB_LABELS[TAB_IDS[idx]] };
+  }
+  if (name === "tab") return { key: "tab", label: key.shift ? "prev tab" : "next tab" };
+  if (name === "p" && !key.shift) return { key: "p", label: "push" };
+  if (name === "l" && !key.shift) return { key: "l", label: "pull" };
+  if (name === "r" && !key.shift) return { key: "r", label: "refresh" };
+  if (name === "?" || (key.shift && name === "/")) return { key: "?", label: "help" };
+  switch (state.activeTab) {
+    case "dashboard":
+      if (name === "i") return { key: "i", label: "init" };
+      if (name === "k") return { key: "k", label: "key rotate" };
+      break;
+    case "sync":
+      // A Sync sub-mode (diff, skill drill-in, confirm-remove, key prompt)
+      // owns the keymap and swallows k/x, so do not flash an action the
+      // sub-mode will never run.
+      if (
+        state.sync.diff ||
+        state.sync.skillDrillIn ||
+        state.sync.confirmRemove ||
+        state.sync.keyPrompt === "pending"
+      ) {
+        break;
+      }
+      if (name === "x" && state.selection.size > 0) return { key: "x", label: "remove" };
+      if (name === "k") return { key: "k", label: "load key" };
+      break;
+    case "migrate":
+      if (key.shift && name === "p") return { key: "P", label: "preview" };
+      if (key.shift && name === "a") return { key: "A", label: "apply" };
+      break;
+    case "activity":
+      if (name === "c") return { key: "c", label: "clear" };
+      break;
+  }
+  return null;
+}
+
+function renderActionBar(
+  host: TextRenderable,
+  actions: ContextAction[],
+  hintKey: string | null,
+): void {
   if (actions.length === 0) {
     host.content = "";
     return;
   }
-  const parts = actions.map((a) => `${a.key} ${a.label}`);
+  const parts = actions.map((a) => `${hintKey === a.key ? `[${a.key}]` : a.key} ${a.label}`);
   host.content = `  ${parts.join("   ")}`;
 }
 

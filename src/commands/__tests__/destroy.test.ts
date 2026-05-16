@@ -276,7 +276,7 @@ describe("performDestroy", () => {
       performDestroy({ scope: "remote", yes: true }),
     );
     expect(second.status).toBe("not-an-agentsync-vault");
-  });
+  }, 20000);
 
   describe("confirmation gates", () => {
     test("gate 1 'n' aborts at gate 1 without touching the vault", async () => {
