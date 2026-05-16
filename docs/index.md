@@ -54,10 +54,15 @@ Five steps from zero to a working sync.
     agentsync push
     ```
 
-4. **Join from another machine.** On a second machine, run `init` against the same remote, copy or regenerate the age private key, then `pull`.
+4. **Join from another machine.** On the second machine, `init` generates a fresh age keypair; on a machine that already has the vault, register the new public key as a recipient (`agentsync key add <name> <pubkey>` and push), then `pull` here.
 
     ```bash
+    # on the new machine
     agentsync init --remote git@github.com:<you>/agentsync-vault.git --branch main
+    # then on a machine that already has the vault, add the new recipient and push:
+    #   agentsync key add <name> <pubkey-printed-by-init>
+    #   agentsync push
+    # back on the new machine
     agentsync pull
     ```
 

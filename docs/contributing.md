@@ -28,7 +28,7 @@ bun install
 bun run check
 ```
 
-`bun run check` runs the typecheck, Biome lint, the test suite, and the docs-mirror check. A clean run is the precondition for opening a pull request.
+`bun run check` runs typecheck, Biome lint, the docs-mirror check, the spec-tracker ID leak guard, and the test suite (in that order). A clean run is the precondition for opening a pull request.
 
 While developing, run the CLI directly from source rather than the global install so your changes take effect immediately:
 

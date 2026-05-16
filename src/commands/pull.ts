@@ -97,7 +97,10 @@ export const pullCommand = defineCommand({
     description: "Pull and apply vault configs locally",
   },
   args: {
-    agent: { type: "string", description: "Specific agent to sync (cursor|claude|codex|copilot)" },
+    agent: {
+      type: "string",
+      description: "Specific agent to sync (cursor|claude|codex|copilot|vscode)",
+    },
     dryRun: { type: "boolean", description: "Show actions without applying", default: false },
     force: {
       type: "boolean",
