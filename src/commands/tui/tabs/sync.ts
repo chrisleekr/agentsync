@@ -5,6 +5,7 @@ import type { CliRenderer, KeyEvent } from "@opentui/core";
 import { BoxRenderable, TextRenderable } from "@opentui/core";
 import { Agents } from "../../../agents/registry";
 import { decryptString } from "../../../core/encryptor";
+import { GitClient, type GitReconciliationResult } from "../../../core/git";
 import { listArchiveEntries } from "../../../core/tar";
 import { pairDiffRows, type SideBySideRow } from "../../../lib/diff";
 import { performPull } from "../../pull";
@@ -12,7 +13,7 @@ import { performPush } from "../../push";
 import { loadPrivateKey, loadVaultConfigOrExit, resolveRuntimeContext } from "../../shared";
 import { computeSyncStatus, type SyncRow } from "../../status";
 import type { AppState, DiffModalState, SkillDrillInState, SkillFile } from "../state";
-import { setToast } from "../state";
+import { pushActivity, setToast } from "../state";
 import type { Store } from "../store";
 import { runBulkSkillRemove } from "./_skill-remove";
 
@@ -144,10 +145,37 @@ function navigableRows(state: AppState): SyncRow[] {
   return out;
 }
 
-async function loadRows(privateKey: string | null): Promise<SyncRow[]> {
+/** Outcome of the pre-diff vault fetch. A failure is non-fatal: the panel
+ *  still renders against the stale clone so it stays usable offline. */
+type VaultFetchOutcome =
+  | { ok: true; status: GitReconciliationResult["status"] }
+  | { ok: false; message: string };
+
+async function loadRows(
+  privateKey: string | null,
+): Promise<{ rows: SyncRow[]; fetch: VaultFetchOutcome }> {
   const runtime = await resolveRuntimeContext();
   const config = await loadVaultConfigOrExit(runtime.vaultDir);
-  return computeSyncStatus(runtime, config, privateKey);
+
+  // Fast-forward the vault clone before diffing. Without this the panel
+  // compares against the last-pulled snapshot, so skills pushed from another
+  // machine never surface as vault-only. A fetch failure (offline, auth,
+  // diverged history) is non-fatal: fall through to the stale clone so the
+  // panel still renders, and report the failure as an activity entry.
+  let fetch: VaultFetchOutcome;
+  try {
+    const result = await new GitClient(runtime.vaultDir).reconcileWithRemote({
+      remote: "origin",
+      branch: config.remote.branch,
+      allowMissingRemote: true,
+    });
+    fetch = { ok: true, status: result.status };
+  } catch (err) {
+    fetch = { ok: false, message: err instanceof Error ? err.message : String(err) };
+  }
+
+  const rows = await computeSyncStatus(runtime, config, privateKey);
+  return { rows, fetch };
 }
 
 export function ensureSyncLoaded(store: Store): void {
@@ -163,17 +191,36 @@ export function ensureSyncLoaded(store: Store): void {
   });
 
   const key = store.getState().sync.keyCache;
-  store.runOperation("sync-load", "load sync rows", () => loadRows(key), {
-    onSuccess: (draft, rows) => {
-      const list = rows as SyncRow[];
-      draft.sync.rows = list;
+  store.runOperation("sync-load", "fetch vault + load sync rows", () => loadRows(key), {
+    onSuccess: (draft, payload) => {
+      const { rows, fetch } = payload;
+      draft.sync.rows = rows;
       draft.sync.cursor = 0;
       draft.sync.phase = "ready";
       draft.sync.error = null;
+      if (fetch.ok) {
+        // "fast-forwarded" and "bootstrapped-existing" both mean the clone
+        // advanced to origin; only "noop" is genuinely unchanged.
+        const verb =
+          fetch.status === "remote-missing"
+            ? "remote vault branch missing — comparing local only"
+            : fetch.status === "noop"
+              ? "vault already up to date with origin"
+              : "vault advanced to origin";
+        pushActivity(draft, { kind: "info", status: "info", message: `Sync: ${verb}` });
+      } else {
+        pushActivity(draft, {
+          kind: "error",
+          status: "fail",
+          message: `Sync: vault fetch failed, showing last-known state — ${fetch.message}`,
+        });
+        setToast(draft, "Vault fetch failed — showing last-known state", "error");
+      }
     },
     onError: (draft, err) => {
       draft.sync.phase = "error";
       draft.sync.error = err.message;
+      pushActivity(draft, { kind: "error", status: "fail", message: `Sync: ${err.message}` });
     },
   });
 }
