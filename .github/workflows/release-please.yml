@@ -95,6 +95,13 @@ jobs:
         with:
           bun-version: "1.3.9"
 
+      # Pin Node/npm via .nvmrc so the cross-target `npm install --force
+      # --os --cpu` below is reproducible across runner image refreshes.
+      # Matches the pinning the publish-package job already uses.
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+
       - name: Cache bun dependencies
         uses: actions/cache@v5
         with:
