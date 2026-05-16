@@ -122,3 +122,37 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
         run: gh release upload ${{ needs.release-please.outputs.tag_name }} dist/${{ matrix.target }} dist/${{ matrix.target }}.sha256 --clobber
+
+  # No Sigstore attestation on this job: SHA256SUMS is a re-publication of
+  # the already-attested per-binary hashes. The trust root is the per-binary
+  # attestation (matrix.target). Verification chain: provenance proves binary
+  # → binary hash matches manifest line → safe. Attesting the manifest itself
+  # would add noise without raising the floor.
+  aggregate-checksums:
+    name: Aggregate SHA256SUMS manifest
+    needs: [release-please, build-and-upload]
+    if: ${{ needs.release-please.outputs.release_created }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download per-binary checksums
+        env:
+          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+          TAG_NAME: ${{ needs.release-please.outputs.tag_name }}
+        run: |
+          mkdir -p checksums
+          gh release download "$TAG_NAME" \
+            --pattern '*.sha256' \
+            --dir checksums \
+            --repo "$GITHUB_REPOSITORY"
+
+      - name: Build aggregate SHA256SUMS
+        working-directory: checksums
+        run: cat *.sha256 | sort > SHA256SUMS
+
+      - name: Upload SHA256SUMS to release
+        env:
+          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+          TAG_NAME: ${{ needs.release-please.outputs.tag_name }}
+        run: gh release upload "$TAG_NAME" checksums/SHA256SUMS --clobber
