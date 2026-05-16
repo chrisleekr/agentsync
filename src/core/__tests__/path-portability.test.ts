@@ -158,3 +158,77 @@ describe("path-portability — JSON walker", () => {
     expect(twice).toEqual(once);
   });
 });
+
+describe("path-portability — Windows separator support", () => {
+  const WIN_HOME = "C:\\Users\\alice";
+  const WIN_HOME_FWD = "C:/Users/alice";
+
+  test("rewrites literal home prefix followed by backslash separator", () => {
+    expect(normalizeStringForVault(`${WIN_HOME}\\.claude\\srv`, WIN_HOME)).toBe(
+      `${PLACE}\\.claude\\srv`,
+    );
+  });
+
+  test("rewrites bare literal Windows home equal to entire string", () => {
+    expect(normalizeStringForVault(WIN_HOME, WIN_HOME)).toBe(PLACE);
+  });
+
+  test("rewrites Windows home inside flag-style values", () => {
+    expect(normalizeStringForVault(`--root=${WIN_HOME}\\proj`, WIN_HOME)).toBe(
+      `--root=${PLACE}\\proj`,
+    );
+  });
+
+  test("rewrites ~ when followed by backslash", () => {
+    expect(normalizeStringForVault("~\\projects\\x", WIN_HOME)).toBe(`${PLACE}\\projects\\x`);
+  });
+
+  test("rewrites $HOME prefix followed by backslash", () => {
+    expect(normalizeStringForVault("$HOME\\foo", WIN_HOME)).toBe(`${PLACE}\\foo`);
+  });
+
+  test("rewrites ${HOME} prefix followed by backslash", () => {
+    expect(normalizeStringForVault("${HOME}\\foo", WIN_HOME)).toBe(`${PLACE}\\foo`);
+  });
+
+  test("Windows home with trailing backslash is trimmed the same as without", () => {
+    expect(normalizeStringForVault(`${WIN_HOME}\\proj`, `${WIN_HOME}\\`)).toBe(`${PLACE}\\proj`);
+    expect(normalizeStringForVault(WIN_HOME, `${WIN_HOME}\\`)).toBe(PLACE);
+  });
+
+  test("does not rewrite when Windows home appears as substring of larger word", () => {
+    expect(normalizeStringForVault(`${WIN_HOME}NOTME\\foo`, WIN_HOME)).toBe(
+      `${WIN_HOME}NOTME\\foo`,
+    );
+  });
+
+  test("does not rewrite ~ / $HOME / ${HOME} when preceded by an identifier char on Windows", () => {
+    expect(normalizeStringForVault("prefix~\\foo", WIN_HOME)).toBe("prefix~\\foo");
+    expect(normalizeStringForVault("prefix$HOME\\foo", WIN_HOME)).toBe("prefix$HOME\\foo");
+  });
+
+  test("Windows home written with forward slashes still matches a backslash tail", () => {
+    expect(normalizeStringForVault(`${WIN_HOME_FWD}\\.claude`, WIN_HOME_FWD)).toBe(
+      `${PLACE}\\.claude`,
+    );
+  });
+
+  test("cross-machine round-trip from Windows host to Unix host", () => {
+    const input = { cwd: `${WIN_HOME}\\.cursor`, args: [`${WIN_HOME}\\proj\\file.ts`] };
+    const vaulted = normalizeForVault(input, WIN_HOME) as typeof input;
+    expect(vaulted.cwd).toBe(`${PLACE}\\.cursor`);
+    const restored = denormalizeFromVault(vaulted, BETA) as typeof input;
+    expect(restored.cwd).toBe(`${BETA}\\.cursor`);
+    expect(restored.args[0]).toBe(`${BETA}\\proj\\file.ts`);
+  });
+
+  test("Unix-authored placeholder re-expands on Windows preserving the forward-slash tail", () => {
+    // The joined tail is not rewritten to backslashes: that would corrupt
+    // legitimate non-path strings (URLs, flags, regexes) that happen to
+    // contain "/". Windows path APIs tolerate "/" in absolute paths.
+    const vaulted = { cwd: `${PLACE}/.cursor`, url: `https://${PLACE}/x` };
+    const restored = denormalizeFromVault(vaulted, WIN_HOME) as typeof vaulted;
+    expect(restored.cwd).toBe(`${WIN_HOME}/.cursor`);
+    expect(restored.url).toBe(`https://${WIN_HOME}/x`);
+  });
+});
