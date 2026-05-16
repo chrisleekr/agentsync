@@ -202,4 +202,4 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
           TAG_NAME: ${{ needs.release-please.outputs.tag_name }}
-        run: gh release upload "$TAG_NAME" checksums/SHA256SUMS --clobber
+        run: gh release upload "$TAG_NAME" checksums/SHA256SUMS --clobber --repo "$GITHUB_REPOSITORY"
