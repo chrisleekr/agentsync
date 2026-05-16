@@ -170,6 +170,14 @@ A passing verification reports the workflow path, commit SHA, and Sigstore trans
 
 Both checks are independent. The checksum protects against transport corruption and mirror tampering; the attestation protects against a substituted binary that happens to carry a forged checksum. Run both on first install of every release, and repeat the pair for each platform binary you download — every job in the release matrix mints its own attestation.
 
+### Windows SmartScreen on first run
+
+The first time you launch `agentsync-windows-x64.exe`, Windows will display *"Windows protected your PC"* with the body text *"Microsoft Defender SmartScreen prevented an unrecognized app from starting. Running this app might put your PC at risk."* It refuses to run until you click **More info** → **Run anyway**. This happens because the binary is not signed with an [Authenticode](https://learn.microsoft.com/en-us/windows-hardware/drivers/install/authenticode) code-signing certificate. Since the CA/B Forum 2023 ruling, every code-signing cert (OV or EV) requires HSM-backed key storage, so the practical floor is a few hundred dollars per year plus ongoing key-management overhead.
+
+This project relies on the [Sigstore-backed build provenance attestation](#verify-build-provenance) as its trust path instead. If `gh attestation verify agentsync-windows-x64.exe --repo chrisleekr/agentsync` passes against the binary you downloaded, the bytes were produced by this repository's `release-please` workflow at the tagged commit — the SmartScreen warning is a UX consequence of the missing Authenticode cert, not a signal that the binary is unsafe. Click through it once per binary update.
+
+SmartScreen reputation is per-binary-hash and accrues with downloads; every new release starts from zero, so the warning recurs on each update.
+
 ## Recovery runbooks
 
 ### Recover from divergence
