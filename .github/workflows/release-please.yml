@@ -125,9 +125,26 @@ jobs:
             bun-darwin-arm64)   PKG=@opentui/core-darwin-arm64; OS=darwin; CPU=arm64 ;;
             *) echo "Unknown bun_target: $BUN_TARGET" >&2; exit 1 ;;
           esac
-          VERSION=$(jq -r .version node_modules/@opentui/core/package.json)
+          CORE_PKG=node_modules/@opentui/core/package.json
+          if [ ! -f "$CORE_PKG" ]; then
+            echo "Expected @opentui/core hoisted at $CORE_PKG; install layout changed" >&2
+            exit 1
+          fi
+          VERSION=$(jq -r .version "$CORE_PKG")
           echo "Installing $PKG@$VERSION for $OS/$CPU"
           npm install --no-save --force --os="$OS" --cpu="$CPU" "${PKG}@${VERSION}"
+          # Loud failure if the registry returned a different version, instead of
+          # the later "Could not resolve" error from bun build at compile time.
+          INSTALLED="node_modules/${PKG}/package.json"
+          if [ ! -f "$INSTALLED" ]; then
+            echo "Expected $INSTALLED after install; native package missing" >&2
+            exit 1
+          fi
+          INSTALLED_VERSION=$(jq -r .version "$INSTALLED")
+          if [ "$INSTALLED_VERSION" != "$VERSION" ]; then
+            echo "Version mismatch: host @opentui/core=$VERSION, target $PKG=$INSTALLED_VERSION" >&2
+            exit 1
+          fi
 
       - name: Build binary
         run: bun build --compile ${{ matrix.bun_target && format('--target {0}', matrix.bun_target) || '' }} src/cli.ts --outfile dist/${{ matrix.target }}
