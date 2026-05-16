@@ -119,3 +119,23 @@ describe("sideBySideDiff", () => {
     expect(out.split("\n")[0]).toContain("local");
   });
 });
+
+describe("unifiedDiff — empty-side hunk headers (CodeRabbit C23)", () => {
+  test("pure-add at top of file emits +1,N and -0,0 (not -1,0)", () => {
+    const out = unifiedDiff("", "hello\nworld\n");
+    const hunk = out.split("\n").find((l) => l.startsWith("@@"));
+    expect(hunk).toBeDefined();
+    // The empty vault side must report start 0; line 1 of an empty file
+    // does not exist, and `patch` rejects the legacy `-1,0` form.
+    expect(hunk).toContain("-0,0");
+    expect(hunk).toMatch(/\+1,\d+/);
+  });
+
+  test("pure-delete to empty file emits -1,N and +0,0", () => {
+    const out = unifiedDiff("hello\nworld\n", "");
+    const hunk = out.split("\n").find((l) => l.startsWith("@@"));
+    expect(hunk).toBeDefined();
+    expect(hunk).toMatch(/-1,\d+/);
+    expect(hunk).toContain("+0,0");
+  });
+});

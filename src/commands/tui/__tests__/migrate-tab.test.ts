@@ -160,3 +160,27 @@ describe("onMigrateKey — Preview ↔ Apply navigation", () => {
     expect(store.getState().migrate.field).toBe("apply");
   });
 });
+
+describe("snapshotMigrateSelection — async isolation", () => {
+  test("captured snapshot is independent of subsequent state mutations", async () => {
+    const { snapshotMigrateSelection } = await import("../tabs/migrate");
+    const store = createStore(createInitialState());
+    store.dispatch((d) => {
+      d.migrate.from = "claude";
+      d.migrate.toSet = new Set(["cursor"]);
+      d.migrate.typeSet = new Set(["mcp"]);
+    });
+    const snap = snapshotMigrateSelection(store.getState().migrate);
+    // Mid-flight mutation — the user toggles another agent before the
+    // operation reads the snapshot.
+    store.dispatch((d) => {
+      d.migrate.toSet.add("codex");
+      d.migrate.typeSet.add("commands");
+    });
+    // Without the snapshot copy this would observe `codex` and `commands`.
+    expect(snap.toSet.has("codex")).toBe(false);
+    expect(snap.toSet.has("cursor")).toBe(true);
+    expect(snap.typeSet.has("commands")).toBe(false);
+    expect(snap.typeSet.has("mcp")).toBe(true);
+  });
+});

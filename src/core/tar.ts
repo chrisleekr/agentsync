@@ -124,7 +124,16 @@ export async function listArchiveEntries(buffer: Buffer): Promise<TarEntry[]> {
     onReadEntry: (entry: ReadEntry) => {
       if (entry.type !== "File") return;
       const normalised = entry.path.replace(/^\.\//, "").replaceAll("\\", "/");
-      if (normalised.startsWith("/") || normalised.split("/").includes("..")) {
+      // Reject POSIX-absolute (`/foo`), Windows drive-letter (`C:/foo`),
+      // and any traversal segment (`..`). The drive-letter check matters
+      // even on Unix targets so a crafted Windows tar cannot place its
+      // payload at a controlled drive root if an operator ever runs the
+      // drill-in on a Windows host.
+      if (
+        normalised.startsWith("/") ||
+        /^[A-Za-z]:/.test(normalised) ||
+        normalised.split("/").includes("..")
+      ) {
         return;
       }
       pending.push(

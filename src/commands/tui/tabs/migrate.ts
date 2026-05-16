@@ -7,6 +7,7 @@ import {
   AGENTS,
   type AgentName,
   type AppState,
+  type ConfigType,
   MIGRATE_TYPES,
   type MigrateField,
   migrateSignature,
@@ -259,8 +260,22 @@ function toggleAtSubCursor(store: Store): boolean {
  * concatenated). When every agent is in `toSet` we pass the special "all"
  * value once per type to let the migrate engine handle the broadcast.
  */
+interface MigrateSelectionSnapshot {
+  from: AgentName;
+  toSet: Set<AgentName>;
+  typeSet: Set<ConfigType>;
+}
+
+export function snapshotMigrateSelection(m: AppState["migrate"]): MigrateSelectionSnapshot {
+  return {
+    from: m.from,
+    toSet: new Set(m.toSet),
+    typeSet: new Set(m.typeSet),
+  };
+}
+
 async function runMigrateForSelection(
-  m: AppState["migrate"],
+  m: MigrateSelectionSnapshot,
   dryRun: boolean,
 ): Promise<MigrateResult> {
   const aggregate: MigrateResult = { migrated: [], skipped: [], errors: [], warnings: [] };
@@ -296,10 +311,16 @@ function runPreview(store: Store): void {
     return;
   }
   const sig = migrateSignature(m);
+  // Snapshot the selection now, before runOperation may yield. The store
+  // does not deep-freeze state, so a live reference into `m` would let
+  // a mid-flight toSet/typeSet edit by the user change what the operation
+  // actually migrates. The signature `sig` already pins the user's
+  // request; the snapshot pins the data the operation reads.
+  const snap = snapshotMigrateSelection(m);
   store.runOperation<MigrateResult>(
     "migrate-preview",
     `preview ${sig}`,
-    () => runMigrateForSelection(m, true),
+    () => runMigrateForSelection(snap, true),
     {
       meta: { sig },
       activityKind: "preview",
@@ -333,17 +354,22 @@ function runApply(store: Store): void {
     store.dispatch((d) => setToast(d, "Already applied. Change form to migrate again.", "info"));
     return;
   }
+  const snap = snapshotMigrateSelection(m);
   store.runOperation<MigrateResult>(
     "migrate",
     `apply ${sig}`,
-    () => runMigrateForSelection(m, false),
+    () => runMigrateForSelection(snap, false),
     {
       meta: { sig },
       activityKind: "migrate",
       onSuccess: (draft, result) => {
         const okMsg = `Applied: ${result.migrated.length} written, ${result.skipped.length} skipped`;
-        setToast(draft, okMsg, result.errors.length === 0 ? "success" : "error");
-        draft.migrate.appliedSignature = sig;
+        const fullSuccess = result.errors.length === 0;
+        setToast(draft, okMsg, fullSuccess ? "success" : "error");
+        // Only mark the signature as applied when every (target × type)
+        // pair succeeded. A partial failure must remain retryable without
+        // forcing the user to change the form first.
+        if (fullSuccess) draft.migrate.appliedSignature = sig;
       },
       errorToastPrefix: "Apply",
     },

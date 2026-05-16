@@ -85,7 +85,13 @@ export function unifiedDiff(a: string, b: string, contextLines = 3): string {
     }
     if (aStart < 0) aStart = 0;
     if (bStart < 0) bStart = 0;
-    out.push(`@@ -${aStart + 1},${aCount} +${bStart + 1},${bCount} @@`);
+    // Per the unified-diff spec, a zero-length side reports its start
+    // line as 0 — `patch`, `git apply`, and similar tools reject a hunk
+    // header like `-1,0` (line 1 of an empty side cannot exist). Pure-add
+    // at top-of-file is the common trigger.
+    const aLn = aCount === 0 ? 0 : aStart + 1;
+    const bLn = bCount === 0 ? 0 : bStart + 1;
+    out.push(`@@ -${aLn},${aCount} +${bLn},${bCount} @@`);
     for (let k = h.start; k <= h.end; k++) {
       const op = ops[k];
       const prefix = op.kind === "eq" ? " " : op.kind === "del" ? "-" : "+";

@@ -195,6 +195,19 @@ function handleKey(key: KeyEvent, ctx: AppContext, quit: () => void): void {
     return;
   }
 
+  // Help overlay swallows everything until it's dismissed. Without this
+  // gate, pressing `p` (push) or `l` (pull) while the help text is on
+  // screen would fire the global shortcut behind the modal — the user
+  // sees a help overlay and accidentally pushes the vault.
+  if (ctx.store.getState().helpOpen) {
+    if (key.name === "?" || (key.shift && key.name === "/") || key.name === "escape") {
+      ctx.store.dispatch((d) => {
+        d.helpOpen = false;
+      });
+    }
+    return;
+  }
+
   if (key.name >= "1" && key.name <= "4") {
     const idx = Number(key.name) - 1;
     if (idx >= 0 && idx < TAB_IDS.length) {
@@ -230,13 +243,6 @@ function handleKey(key: KeyEvent, ctx: AppContext, quit: () => void): void {
   if (key.name === "?" || (key.shift && key.name === "/")) {
     ctx.store.dispatch((d) => {
       d.helpOpen = !d.helpOpen;
-    });
-    return;
-  }
-
-  if (ctx.store.getState().helpOpen) {
-    ctx.store.dispatch((d) => {
-      d.helpOpen = false;
     });
     return;
   }

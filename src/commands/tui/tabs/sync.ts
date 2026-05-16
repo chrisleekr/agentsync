@@ -590,10 +590,14 @@ function handleSkillDrillInKey(key: KeyEvent, store: Store): boolean {
     });
     return true;
   }
+  // Empty bundles produce max === 0; `max - 1` would land on -1 and the
+  // cursor index would point off the array. Clamp to a safe last index
+  // (0 when empty, max-1 otherwise) for every "move down / end" path.
+  const lastIdx = Math.max(0, max - 1);
   if (key.name === "down") {
     store.dispatch((d) => {
       if (d.sync.skillDrillIn) {
-        d.sync.skillDrillIn.cursor = Math.min(max - 1, d.sync.skillDrillIn.cursor + 1);
+        d.sync.skillDrillIn.cursor = Math.min(lastIdx, d.sync.skillDrillIn.cursor + 1);
       }
     });
     return true;
@@ -609,7 +613,7 @@ function handleSkillDrillInKey(key: KeyEvent, store: Store): boolean {
   if (key.name === "pagedown") {
     store.dispatch((d) => {
       if (!d.sync.skillDrillIn) return;
-      d.sync.skillDrillIn.cursor = Math.min(max - 1, d.sync.skillDrillIn.cursor + PAGE_STEP);
+      d.sync.skillDrillIn.cursor = Math.min(lastIdx, d.sync.skillDrillIn.cursor + PAGE_STEP);
       d.sync.skillDrillIn.scrollOffset += PAGE_STEP;
     });
     return true;
@@ -626,7 +630,7 @@ function handleSkillDrillInKey(key: KeyEvent, store: Store): boolean {
   if (key.name === "end") {
     store.dispatch((d) => {
       if (d.sync.skillDrillIn) {
-        d.sync.skillDrillIn.cursor = max - 1;
+        d.sync.skillDrillIn.cursor = lastIdx;
         d.sync.skillDrillIn.scrollOffset = Number.MAX_SAFE_INTEGER;
       }
     });
@@ -878,6 +882,9 @@ function handleDiffModalKey(key: KeyEvent, store: Store): boolean {
   if (!diff) return false;
   const rows = pairDiffRows(diff.vaultPlain, diff.localPlain);
   const max = rows.length;
+  // Identical-empty pairs (vaultPlain === localPlain === "") yield zero
+  // rows. `max - 1` is -1 then; clamp so cursor never lands off the array.
+  const lastIdx = Math.max(0, max - 1);
 
   if (key.name === "escape" || key.name === "q") {
     store.dispatch((d) => {
@@ -893,7 +900,7 @@ function handleDiffModalKey(key: KeyEvent, store: Store): boolean {
   }
   if (key.name === "down") {
     store.dispatch((d) => {
-      if (d.sync.diff) d.sync.diff.cursor = Math.min(max - 1, d.sync.diff.cursor + 1);
+      if (d.sync.diff) d.sync.diff.cursor = Math.min(lastIdx, d.sync.diff.cursor + 1);
     });
     return true;
   }
@@ -908,7 +915,7 @@ function handleDiffModalKey(key: KeyEvent, store: Store): boolean {
   if (key.name === "pagedown") {
     store.dispatch((d) => {
       if (!d.sync.diff) return;
-      d.sync.diff.cursor = Math.min(max - 1, d.sync.diff.cursor + PAGE_STEP);
+      d.sync.diff.cursor = Math.min(lastIdx, d.sync.diff.cursor + PAGE_STEP);
       d.sync.diff.scrollOffset += PAGE_STEP;
     });
     return true;
@@ -925,7 +932,7 @@ function handleDiffModalKey(key: KeyEvent, store: Store): boolean {
   if (key.name === "end") {
     store.dispatch((d) => {
       if (d.sync.diff) {
-        d.sync.diff.cursor = max - 1;
+        d.sync.diff.cursor = lastIdx;
         d.sync.diff.scrollOffset = Number.MAX_SAFE_INTEGER;
       }
     });
