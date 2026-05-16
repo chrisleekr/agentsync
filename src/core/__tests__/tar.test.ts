@@ -3,7 +3,7 @@ import { mkdir, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { join } from "node:path";
 import { createTmpDir } from "../../test-helpers/fixtures";
-import { archiveDirectory, extractArchive } from "../tar";
+import { archiveDirectory, extractArchive, listArchiveEntries } from "../tar";
 
 // Defensive re-install of the real node:fs/promises — see migrate.test.ts
 // for the full explanation of the bleed this guards against.
@@ -174,5 +174,32 @@ describe("tar", () => {
     const second = await archiveDirectory(srcDir, { skipSymlinks: true });
 
     expect(Buffer.compare(first, second)).toBe(0);
+  });
+
+  test("listArchiveEntries reads every regular file from a gzipped tar buffer", async () => {
+    const srcDir = join(tmpDir, "src-list");
+    await mkdir(srcDir, { recursive: true });
+    await writeFile(join(srcDir, "SKILL.md"), "# skill\nbody\n", "utf8");
+    await mkdir(join(srcDir, "helpers"), { recursive: true });
+    await writeFile(join(srcDir, "helpers", "h.md"), "helper text", "utf8");
+
+    const buffer = await archiveDirectory(srcDir);
+    const entries = await listArchiveEntries(buffer);
+
+    const byPath = new Map(entries.map((e) => [e.path, e.content.toString("utf8")]));
+    expect(byPath.get("SKILL.md")).toBe("# skill\nbody\n");
+    expect(byPath.get("helpers/h.md")).toBe("helper text");
+  });
+
+  test("listArchiveEntries drops traversal entries", async () => {
+    const srcDir = join(tmpDir, "src-list-safe");
+    await mkdir(srcDir, { recursive: true });
+    await writeFile(join(srcDir, "ok.md"), "safe", "utf8");
+    const buffer = await archiveDirectory(srcDir);
+    const entries = await listArchiveEntries(buffer);
+    for (const e of entries) {
+      expect(e.path.split("/")).not.toContain("..");
+      expect(e.path.startsWith("/")).toBe(false);
+    }
   });
 });

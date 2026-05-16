@@ -18,13 +18,20 @@ import {
 
 describe("status colour mapping", () => {
   test("pad-then-colour produces correct visual width with distinct colours", () => {
-    type SyncStatus = "synced" | "local-changed" | "vault-only" | "local-only" | "error";
+    type SyncStatus =
+      | "synced"
+      | "local-changed"
+      | "vault-only"
+      | "local-only"
+      | "unknown"
+      | "error";
 
     const statusColour: Record<SyncStatus, (s: string) => string> = {
       synced: pc.green,
       "local-changed": pc.yellow,
       "vault-only": pc.cyan,
       "local-only": pc.dim,
+      unknown: pc.gray,
       error: pc.red,
     };
 

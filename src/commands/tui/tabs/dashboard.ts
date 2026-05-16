@@ -79,9 +79,9 @@ export function renderDashboard(renderer: CliRenderer, host: BoxRenderable, stat
     bg: "#11151a",
     content: [
       "",
-      "  [2] Vault   browse encrypted entries by agent",
-      "  [3] Agents  inspect what each local agent has on disk",
-      "  [4] Migrate translate config from one agent to another",
+      "  [2] Sync     side-by-side vault ↔ local with status, diff, push, pull",
+      "  [3] Migrate  translate config from one agent to another",
+      "  [4] Activity recent operation log",
     ].join("\n"),
   });
   wrapper.add(hint);

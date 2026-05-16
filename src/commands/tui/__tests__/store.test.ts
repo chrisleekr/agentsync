@@ -32,22 +32,27 @@ describe("createStore.runOperation", () => {
 
   test("onSuccess runs in same dispatch as terminal phase write", async () => {
     const store = createStore(createInitialState());
-    const id = store.runOperation("vault-load", "load", async () => [1, 2, 3], {
+    const id = store.runOperation("sync-load", "load", async () => [1, 2, 3], {
       onSuccess: (draft, result) => {
         const arr = result as number[];
-        draft.vault.entries = arr.map((n) => ({
+        draft.sync.rows = arr.map((n) => ({
           agent: "x",
-          path: `${n}`,
-          absolutePath: `/x/${n}`,
-          size: n,
+          displayName: `${n}`,
+          sourcePath: `/x/${n}`,
+          vaultPath: `x/${n}.age`,
+          vaultAbsPath: `/vault/x/${n}.age`,
           isSkill: false,
+          status: "synced",
+          detail: "",
+          localHash: null,
+          vaultHash: null,
         }));
       },
     });
     await new Promise((r) => setTimeout(r, 5));
     const op = store.getState().inFlight[id];
     expect(op.phase).toBe("ok");
-    expect(store.getState().vault.entries.length).toBe(3);
+    expect(store.getState().sync.rows.length).toBe(3);
   });
 
   test("onError sees the thrown error and terminal phase = error", async () => {
@@ -86,7 +91,7 @@ describe("createStore.runOperation", () => {
 
   test("activityKind pushes start and ok entries with matching messages", async () => {
     const store = createStore(createInitialState());
-    store.runOperation("vault-load", "scan", async () => 1, { activityKind: "info" });
+    store.runOperation("sync-load", "scan", async () => 1, { activityKind: "info" });
     expect(store.getState().activity[0]).toMatchObject({ status: "running", kind: "info" });
     await new Promise((r) => setTimeout(r, 5));
     expect(store.getState().activity[0]).toMatchObject({ status: "ok", kind: "info" });
@@ -94,7 +99,7 @@ describe("createStore.runOperation", () => {
 
   test("eviction removes inFlight slot after evictAfterMs", async () => {
     const store = createStore(createInitialState());
-    const id = store.runOperation("vault-load", "v", async () => 1, { evictAfterMs: 10 });
+    const id = store.runOperation("sync-load", "v", async () => 1, { evictAfterMs: 10 });
     await new Promise((r) => setTimeout(r, 5));
     expect(store.getState().inFlight[id]).toBeDefined();
     await new Promise((r) => setTimeout(r, 20));
@@ -113,7 +118,7 @@ describe("createStore.runOperation", () => {
 describe("createStore.dispose", () => {
   test("cancels pending eviction timers", async () => {
     const store = createStore(createInitialState());
-    const id = store.runOperation("vault-load", "v", async () => 1, { evictAfterMs: 50 });
+    const id = store.runOperation("sync-load", "v", async () => 1, { evictAfterMs: 50 });
     await new Promise((r) => setTimeout(r, 5));
     expect(store.getState().inFlight[id]).toBeDefined();
     store.dispose();
@@ -130,7 +135,7 @@ describe("createStore.dispose", () => {
       fired += 1;
     });
     store.dispatch((d) => {
-      d.activeTab = "vault";
+      d.activeTab = "sync";
     });
     expect(store.getState().activeTab).toBe("dashboard");
     expect(fired).toBe(0);
@@ -151,9 +156,9 @@ describe("createStore.dispatch", () => {
       fired += 1;
     });
     store.dispatch((d) => {
-      d.activeTab = "vault";
+      d.activeTab = "sync";
     });
-    expect(store.getState().activeTab).toBe("vault");
+    expect(store.getState().activeTab).toBe("sync");
     expect(fired).toBe(1);
   });
 
@@ -164,11 +169,11 @@ describe("createStore.dispatch", () => {
       fired += 1;
     });
     store.dispatch((d) => {
-      d.activeTab = "vault";
+      d.activeTab = "sync";
     });
     off();
     store.dispatch((d) => {
-      d.activeTab = "agents";
+      d.activeTab = "migrate";
     });
     expect(fired).toBe(1);
   });
