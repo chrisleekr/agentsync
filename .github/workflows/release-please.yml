@@ -106,6 +106,29 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      # Cross-compiling embeds the target's @opentui/core-<os>-<cpu> native
+      # module. bun install only fetches the host's optional dep, so we
+      # explicitly install the target's variant. --force bypasses os/cpu
+      # skip filtering; --no-save keeps bun.lock untouched.
+      - name: Install target-platform OpenTUI native module
+        if: matrix.bun_target
+        env:
+          BUN_TARGET: ${{ matrix.bun_target }}
+        run: |
+          set -euo pipefail
+          case "$BUN_TARGET" in
+            bun-windows-x64)    PKG=@opentui/core-win32-x64;    OS=win32;  CPU=x64 ;;
+            bun-windows-arm64)  PKG=@opentui/core-win32-arm64;  OS=win32;  CPU=arm64 ;;
+            bun-linux-x64)      PKG=@opentui/core-linux-x64;    OS=linux;  CPU=x64 ;;
+            bun-linux-arm64)    PKG=@opentui/core-linux-arm64;  OS=linux;  CPU=arm64 ;;
+            bun-darwin-x64)     PKG=@opentui/core-darwin-x64;   OS=darwin; CPU=x64 ;;
+            bun-darwin-arm64)   PKG=@opentui/core-darwin-arm64; OS=darwin; CPU=arm64 ;;
+            *) echo "Unknown bun_target: $BUN_TARGET" >&2; exit 1 ;;
+          esac
+          VERSION=$(jq -r .version node_modules/@opentui/core/package.json)
+          echo "Installing $PKG@$VERSION for $OS/$CPU"
+          npm install --no-save --force --os="$OS" --cpu="$CPU" "${PKG}@${VERSION}"
+
       - name: Build binary
         run: bun build --compile ${{ matrix.bun_target && format('--target {0}', matrix.bun_target) || '' }} src/cli.ts --outfile dist/${{ matrix.target }}
 

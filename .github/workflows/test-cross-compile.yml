@@ -1,0 +1,96 @@
+name: test-cross-compile (temporary)
+
+# Temporary workflow to validate the release matrix cross-compile fix.
+# Mirrors the build-binary step of release-please.yml without release upload,
+# provenance attestation, or SHA256SUMS aggregation. Delete before merging
+# this branch back to main.
+
+on:
+  push:
+    branches:
+      - fix/release-cross-compile-opentui-native
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: cross-compile
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: agentsync-linux-x64
+          - os: ubuntu-latest
+            target: agentsync-linux-arm64
+            bun_target: bun-linux-arm64
+          - os: macos-latest
+            target: agentsync-macos-arm64
+          - os: macos-latest
+            target: agentsync-macos-x64
+            bun_target: bun-darwin-x64
+          - os: ubuntu-latest
+            target: agentsync-windows-x64.exe
+            bun_target: bun-windows-x64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.9"
+
+      - name: Cache bun dependencies
+        uses: actions/cache@v5
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Install target-platform OpenTUI native module
+        if: matrix.bun_target
+        env:
+          BUN_TARGET: ${{ matrix.bun_target }}
+        run: |
+          set -euo pipefail
+          case "$BUN_TARGET" in
+            bun-windows-x64)    PKG=@opentui/core-win32-x64;    OS=win32;  CPU=x64 ;;
+            bun-windows-arm64)  PKG=@opentui/core-win32-arm64;  OS=win32;  CPU=arm64 ;;
+            bun-linux-x64)      PKG=@opentui/core-linux-x64;    OS=linux;  CPU=x64 ;;
+            bun-linux-arm64)    PKG=@opentui/core-linux-arm64;  OS=linux;  CPU=arm64 ;;
+            bun-darwin-x64)     PKG=@opentui/core-darwin-x64;   OS=darwin; CPU=x64 ;;
+            bun-darwin-arm64)   PKG=@opentui/core-darwin-arm64; OS=darwin; CPU=arm64 ;;
+            *) echo "Unknown bun_target: $BUN_TARGET" >&2; exit 1 ;;
+          esac
+          VERSION=$(jq -r .version node_modules/@opentui/core/package.json)
+          echo "Installing $PKG@$VERSION for $OS/$CPU"
+          npm install --no-save --force --os="$OS" --cpu="$CPU" "${PKG}@${VERSION}"
+
+      - name: Build binary
+        env:
+          BUN_TARGET: ${{ matrix.bun_target }}
+          TARGET_NAME: ${{ matrix.target }}
+        run: |
+          set -euo pipefail
+          if [ -n "$BUN_TARGET" ]; then
+            bun build --compile --target "$BUN_TARGET" src/cli.ts --outfile "dist/$TARGET_NAME"
+          else
+            bun build --compile src/cli.ts --outfile "dist/$TARGET_NAME"
+          fi
+
+      - name: Verify binary exists
+        env:
+          TARGET_NAME: ${{ matrix.target }}
+        run: ls -la "dist/$TARGET_NAME"
+
+      - name: Upload artifact for inspection
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target }}
+          path: dist/${{ matrix.target }}
+          retention-days: 3
