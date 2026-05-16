@@ -14,7 +14,6 @@
  * (true after install, false after uninstall/rm).
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, mock, test } from "bun:test";
-import { createRequire } from "node:module";
 
 // ── In-memory FS state (captured before the module is imported) ───────────────
 const fsWrites = new Map<string, string>();
@@ -106,17 +105,6 @@ type MacOsInstallerModule = typeof import("../installer-macos");
 let m: MacOsInstallerModule;
 
 beforeAll(async () => {
-  // Bust the require cache for installer-macos before importing so the
-  // module's top-level `import { readFile } from "node:fs/promises"`
-  // binds to THIS file's mock — not whatever another suite registered
-  // first (Bun's mock.module() does not invalidate the import cache).
-  const req = createRequire(import.meta.url);
-  try {
-    const resolved = req.resolve("../installer-macos");
-    delete req.cache?.[resolved];
-  } catch {
-    // ignore — first run, nothing to invalidate
-  }
   m = await import("../installer-macos");
 });
 

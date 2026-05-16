@@ -3,19 +3,43 @@
  *
  * Installs/uninstalls a user service at:
  *   ~/.config/systemd/user/agentsync.service
+ *
+ * fs/promises and child_process are pulled in via dynamic import inside
+ * each function rather than at the top of the file. Top-level destructured
+ * imports cache the resolved functions at first module load — Bun's
+ * mock.module() then has nothing to update when a test suite registers
+ * its own fs/promises mock against an already-cached installer module.
+ * Dynamic imports look up the current binding on every call, which is
+ * what the test mocks rely on.
  */
-import { execFile } from "node:child_process";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { promisify } from "node:util";
 import { log } from "@clack/prompts";
-
-const execFileAsync = promisify(execFile);
 
 const SERVICE_NAME = "agentsync";
 const SYSTEMD_USER_DIR = join(homedir(), ".config", "systemd", "user");
 const SERVICE_PATH = join(SYSTEMD_USER_DIR, `${SERVICE_NAME}.service`);
+
+async function fsp(): Promise<typeof import("node:fs/promises")> {
+  return await import("node:fs/promises");
+}
+
+async function execFileAsync(
+  cmd: string,
+  args: string[],
+  opts?: { signal?: AbortSignal },
+): Promise<{ stdout: string; stderr: string }> {
+  const { execFile } = await import("node:child_process");
+  const { promisify } = await import("node:util");
+  const r = (await promisify(execFile)(cmd, args, opts)) as {
+    stdout: string | Buffer;
+    stderr: string | Buffer;
+  };
+  return {
+    stdout: typeof r.stdout === "string" ? r.stdout : r.stdout.toString("utf8"),
+    stderr: typeof r.stderr === "string" ? r.stderr : r.stderr.toString("utf8"),
+  };
+}
 
 /**
  * Quote a single argument for systemd ExecStart per systemd.syntax(7).
@@ -67,6 +91,7 @@ export async function isRegisteredLinux(): Promise<boolean> {
  * Install and start the Linux user service that runs the daemon in the background.
  */
 export async function installLinux(args: string[]): Promise<void> {
+  const { mkdir, writeFile } = await fsp();
   await mkdir(SYSTEMD_USER_DIR, { recursive: true });
   const unit = buildUnit(args);
   await writeFile(SERVICE_PATH, unit, "utf8");
@@ -86,6 +111,7 @@ export async function uninstallLinux(): Promise<void> {
   }
 
   try {
+    const { rm } = await fsp();
     await rm(SERVICE_PATH, { force: true });
   } catch {
     // Already removed
@@ -132,6 +158,7 @@ export async function stopLinux(): Promise<void> {
 /** Check whether the Linux user service file is present on disk. */
 export async function isInstalledLinux(): Promise<boolean> {
   try {
+    const { readFile } = await fsp();
     await readFile(SERVICE_PATH, "utf8");
     return true;
   } catch {

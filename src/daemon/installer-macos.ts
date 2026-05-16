@@ -3,15 +3,36 @@
  *
  * Installs/uninstalls a LaunchAgent plist at:
  *   ~/Library/LaunchAgents/com.agentsync.daemon.plist
+ *
+ * fs/promises and child_process are pulled in via dynamic import inside
+ * each function rather than at the top of the file — see installer-linux.ts
+ * for the rationale (Bun mock.module() cannot retro-update bindings
+ * captured at first module load).
  */
-import { execFile } from "node:child_process";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { promisify } from "node:util";
 import { log } from "@clack/prompts";
 
-const execFileAsync = promisify(execFile);
+async function fsp(): Promise<typeof import("node:fs/promises")> {
+  return await import("node:fs/promises");
+}
+
+async function execFileAsync(
+  cmd: string,
+  args: string[],
+  opts?: { signal?: AbortSignal },
+): Promise<{ stdout: string; stderr: string }> {
+  const { execFile } = await import("node:child_process");
+  const { promisify } = await import("node:util");
+  const r = (await promisify(execFile)(cmd, args, opts)) as {
+    stdout: string | Buffer;
+    stderr: string | Buffer;
+  };
+  return {
+    stdout: typeof r.stdout === "string" ? r.stdout : r.stdout.toString("utf8"),
+    stderr: typeof r.stderr === "string" ? r.stderr : r.stderr.toString("utf8"),
+  };
+}
 
 /** Escape a string for safe inclusion in XML text content. */
 function escapeXml(s: string): string {
@@ -95,6 +116,7 @@ export function extractServiceManagerError(err: unknown): string {
  */
 export async function installMacOs(args: string[]): Promise<void> {
   const logDir = join(homedir(), "Library", "Logs", "AgentSync");
+  const { mkdir } = await fsp();
   await mkdir(LAUNCH_AGENTS_DIR, { recursive: true });
   await mkdir(logDir, { recursive: true });
 
@@ -106,6 +128,7 @@ export async function installMacOs(args: string[]): Promise<void> {
   }
 
   const plist = buildPlist(args, logDir);
+  const { writeFile } = await fsp();
   await writeFile(PLIST_PATH, plist, "utf8");
 
   try {
@@ -130,6 +153,7 @@ export async function uninstallMacOs(): Promise<void> {
   }
 
   try {
+    const { rm } = await fsp();
     await rm(PLIST_PATH, { force: true });
   } catch {
     // Already removed
@@ -189,6 +213,7 @@ export async function stopMacOs(): Promise<void> {
 /** Check whether the macOS LaunchAgent plist is present on disk. */
 export async function isInstalledMacOs(): Promise<boolean> {
   try {
+    const { readFile } = await fsp();
     await readFile(PLIST_PATH, "utf8");
     return true;
   } catch {

@@ -8,7 +8,6 @@
  * macOS tests: mock node:child_process + node:fs/promises before importing the module.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, mock, test } from "bun:test";
-import { createRequire } from "node:module";
 
 const fsWrites = new Map<string, string>();
 const execFileCalls: Array<{ cmd: string; args: string[] }> = [];
@@ -101,17 +100,6 @@ type LinuxInstallerModule = typeof import("../installer-linux");
 let m: LinuxInstallerModule;
 
 beforeAll(async () => {
-  // Bust the require cache so the module's top-level imports re-bind
-  // to THIS file's fs/promises + child_process mocks instead of stale
-  // closures left over from another suite. Bun's mock.module() does not
-  // invalidate the import cache on its own.
-  const req = createRequire(import.meta.url);
-  try {
-    const resolved = req.resolve("../installer-linux");
-    delete req.cache?.[resolved];
-  } catch {
-    // ignore — first run, nothing to invalidate
-  }
   m = await import("../installer-linux");
 });
 
