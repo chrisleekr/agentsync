@@ -4,27 +4,35 @@
  * Installs/uninstalls a LaunchAgent plist at:
  *   ~/Library/LaunchAgents/com.agentsync.daemon.plist
  *
- * fs/promises and child_process are pulled in via dynamic import inside
- * each function rather than at the top of the file — see installer-linux.ts
- * for the rationale (Bun mock.module() cannot retro-update bindings
- * captured at first module load).
+ * fs/promises and child_process are wired through `fsImpl` / `execImpl`
+ * private slots so the test suite can inject map-backed stubs without
+ * relying on Bun's `mock.module()`. See installer-linux.ts for the
+ * detailed rationale.
  */
+import { execFile } from "node:child_process";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { promisify } from "node:util";
 import { log } from "@clack/prompts";
 
-async function fsp(): Promise<typeof import("node:fs/promises")> {
-  return await import("node:fs/promises");
-}
+type FsImpl = {
+  mkdir: typeof mkdir;
+  readFile: typeof readFile;
+  rm: typeof rm;
+  writeFile: typeof writeFile;
+};
 
-async function execFileAsync(
+type ExecImpl = (
   cmd: string,
   args: string[],
   opts?: { signal?: AbortSignal },
-): Promise<{ stdout: string; stderr: string }> {
-  const { execFile } = await import("node:child_process");
-  const { promisify } = await import("node:util");
-  const r = (await promisify(execFile)(cmd, args, opts)) as {
+) => Promise<{ stdout: string; stderr: string }>;
+
+const realExecFileAsync = promisify(execFile);
+const realFs: FsImpl = { mkdir, readFile, rm, writeFile };
+const realExec: ExecImpl = async (cmd, args, opts) => {
+  const r = (await realExecFileAsync(cmd, args, opts)) as {
     stdout: string | Buffer;
     stderr: string | Buffer;
   };
@@ -32,6 +40,18 @@ async function execFileAsync(
     stdout: typeof r.stdout === "string" ? r.stdout : r.stdout.toString("utf8"),
     stderr: typeof r.stderr === "string" ? r.stderr : r.stderr.toString("utf8"),
   };
+};
+
+let fsImpl: FsImpl = realFs;
+let execImpl: ExecImpl = realExec;
+
+/** @internal Test-only hook. Pass `null` to restore the real implementations. */
+export function __setInstallerMacOsImplForTests(deps: {
+  fs?: FsImpl | null;
+  exec?: ExecImpl | null;
+}): void {
+  fsImpl = deps.fs ?? realFs;
+  execImpl = deps.exec ?? realExec;
 }
 
 /** Escape a string for safe inclusion in XML text content. */
@@ -116,23 +136,23 @@ export function extractServiceManagerError(err: unknown): string {
  */
 export async function installMacOs(args: string[]): Promise<void> {
   const logDir = join(homedir(), "Library", "Logs", "AgentSync");
-  const { mkdir } = await fsp();
-  await mkdir(LAUNCH_AGENTS_DIR, { recursive: true });
-  await mkdir(logDir, { recursive: true });
+
+  await fsImpl.mkdir(LAUNCH_AGENTS_DIR, { recursive: true });
+  await fsImpl.mkdir(logDir, { recursive: true });
 
   // Bootout first — ignore errors (service may not be loaded)
   try {
-    await execFileAsync("launchctl", ["bootout", `gui/${process.getuid?.() ?? 501}`, PLIST_PATH]);
+    await execImpl("launchctl", ["bootout", `gui/${process.getuid?.() ?? 501}`, PLIST_PATH]);
   } catch {
     // Not loaded — expected on first install
   }
 
   const plist = buildPlist(args, logDir);
-  const { writeFile } = await fsp();
-  await writeFile(PLIST_PATH, plist, "utf8");
+
+  await fsImpl.writeFile(PLIST_PATH, plist, "utf8");
 
   try {
-    await execFileAsync("launchctl", ["bootstrap", `gui/${process.getuid?.() ?? 501}`, PLIST_PATH]);
+    await execImpl("launchctl", ["bootstrap", `gui/${process.getuid?.() ?? 501}`, PLIST_PATH]);
   } catch (err) {
     const msg = extractServiceManagerError(err);
     throw new Error(
@@ -147,14 +167,13 @@ export async function installMacOs(args: string[]): Promise<void> {
 /** Boot out and remove the macOS LaunchAgent definition if it exists. */
 export async function uninstallMacOs(): Promise<void> {
   try {
-    await execFileAsync("launchctl", ["bootout", `gui/${process.getuid?.() ?? 501}`, PLIST_PATH]);
+    await execImpl("launchctl", ["bootout", `gui/${process.getuid?.() ?? 501}`, PLIST_PATH]);
   } catch {
     // Service may not be loaded — ignore
   }
 
   try {
-    const { rm } = await fsp();
-    await rm(PLIST_PATH, { force: true });
+    await fsImpl.rm(PLIST_PATH, { force: true });
   } catch {
     // Already removed
   }
@@ -168,7 +187,7 @@ export async function uninstallMacOs(): Promise<void> {
  */
 export async function isRegisteredMacOs(): Promise<boolean> {
   try {
-    await execFileAsync("launchctl", ["print", `gui/${process.getuid?.() ?? 501}/${PLIST_LABEL}`]);
+    await execImpl("launchctl", ["print", `gui/${process.getuid?.() ?? 501}/${PLIST_LABEL}`]);
     return true;
   } catch {
     return false;
@@ -186,7 +205,7 @@ export async function startMacOs(): Promise<void> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 10_000);
   try {
-    await execFileAsync(
+    await execImpl(
       "launchctl",
       ["kickstart", "-k", `gui/${process.getuid?.() ?? 501}/${PLIST_LABEL}`],
       { signal: controller.signal },
@@ -203,7 +222,7 @@ export async function startMacOs(): Promise<void> {
 
 /** Ask launchd to stop the macOS daemon process. */
 export async function stopMacOs(): Promise<void> {
-  await execFileAsync("launchctl", [
+  await execImpl("launchctl", [
     "kill",
     "SIGTERM",
     `gui/${process.getuid?.() ?? 501}/${PLIST_LABEL}`,
@@ -213,8 +232,7 @@ export async function stopMacOs(): Promise<void> {
 /** Check whether the macOS LaunchAgent plist is present on disk. */
 export async function isInstalledMacOs(): Promise<boolean> {
   try {
-    const { readFile } = await fsp();
-    await readFile(PLIST_PATH, "utf8");
+    await fsImpl.readFile(PLIST_PATH, "utf8");
     return true;
   } catch {
     return false;

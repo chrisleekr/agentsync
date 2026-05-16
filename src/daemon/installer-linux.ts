@@ -4,34 +4,37 @@
  * Installs/uninstalls a user service at:
  *   ~/.config/systemd/user/agentsync.service
  *
- * fs/promises and child_process are pulled in via dynamic import inside
- * each function rather than at the top of the file. Top-level destructured
- * imports cache the resolved functions at first module load — Bun's
- * mock.module() then has nothing to update when a test suite registers
- * its own fs/promises mock against an already-cached installer module.
- * Dynamic imports look up the current binding on every call, which is
- * what the test mocks rely on.
+ * fs/promises and child_process are wired through `fsImpl` / `execImpl`
+ * private slots so the test suite can inject map-backed stubs without
+ * relying on `mock.module()`. Bun's mock layer does not retro-update
+ * module bindings already captured by a cached importer (e.g. when
+ * daemon.test.ts loads installer-linux before installer-linux.test.ts
+ * mocks fs/promises), so direct injection is the only reliable path.
  */
+import { execFile } from "node:child_process";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { promisify } from "node:util";
 import { log } from "@clack/prompts";
 
-const SERVICE_NAME = "agentsync";
-const SYSTEMD_USER_DIR = join(homedir(), ".config", "systemd", "user");
-const SERVICE_PATH = join(SYSTEMD_USER_DIR, `${SERVICE_NAME}.service`);
+type FsImpl = {
+  mkdir: typeof mkdir;
+  readFile: typeof readFile;
+  rm: typeof rm;
+  writeFile: typeof writeFile;
+};
 
-async function fsp(): Promise<typeof import("node:fs/promises")> {
-  return await import("node:fs/promises");
-}
-
-async function execFileAsync(
+type ExecImpl = (
   cmd: string,
   args: string[],
   opts?: { signal?: AbortSignal },
-): Promise<{ stdout: string; stderr: string }> {
-  const { execFile } = await import("node:child_process");
-  const { promisify } = await import("node:util");
-  const r = (await promisify(execFile)(cmd, args, opts)) as {
+) => Promise<{ stdout: string; stderr: string }>;
+
+const realExecFileAsync = promisify(execFile);
+const realFs: FsImpl = { mkdir, readFile, rm, writeFile };
+const realExec: ExecImpl = async (cmd, args, opts) => {
+  const r = (await realExecFileAsync(cmd, args, opts)) as {
     stdout: string | Buffer;
     stderr: string | Buffer;
   };
@@ -39,7 +42,23 @@ async function execFileAsync(
     stdout: typeof r.stdout === "string" ? r.stdout : r.stdout.toString("utf8"),
     stderr: typeof r.stderr === "string" ? r.stderr : r.stderr.toString("utf8"),
   };
+};
+
+let fsImpl: FsImpl = realFs;
+let execImpl: ExecImpl = realExec;
+
+/** @internal Test-only hook. Pass `null` to restore the real implementations. */
+export function __setInstallerLinuxImplForTests(deps: {
+  fs?: FsImpl | null;
+  exec?: ExecImpl | null;
+}): void {
+  fsImpl = deps.fs ?? realFs;
+  execImpl = deps.exec ?? realExec;
 }
+
+const SERVICE_NAME = "agentsync";
+const SYSTEMD_USER_DIR = join(homedir(), ".config", "systemd", "user");
+const SERVICE_PATH = join(SYSTEMD_USER_DIR, `${SERVICE_NAME}.service`);
 
 /**
  * Quote a single argument for systemd ExecStart per systemd.syntax(7).
@@ -80,7 +99,7 @@ WantedBy=default.target
  */
 export async function isRegisteredLinux(): Promise<boolean> {
   try {
-    const { stdout } = await execFileAsync("systemctl", ["--user", "is-enabled", SERVICE_NAME]);
+    const { stdout } = await execImpl("systemctl", ["--user", "is-enabled", SERVICE_NAME]);
     return stdout.trim() === "enabled";
   } catch {
     return false;
@@ -91,13 +110,12 @@ export async function isRegisteredLinux(): Promise<boolean> {
  * Install and start the Linux user service that runs the daemon in the background.
  */
 export async function installLinux(args: string[]): Promise<void> {
-  const { mkdir, writeFile } = await fsp();
-  await mkdir(SYSTEMD_USER_DIR, { recursive: true });
+  await fsImpl.mkdir(SYSTEMD_USER_DIR, { recursive: true });
   const unit = buildUnit(args);
-  await writeFile(SERVICE_PATH, unit, "utf8");
+  await fsImpl.writeFile(SERVICE_PATH, unit, "utf8");
 
-  await execFileAsync("systemctl", ["--user", "daemon-reload"]);
-  await execFileAsync("systemctl", ["--user", "enable", "--now", SERVICE_NAME]);
+  await execImpl("systemctl", ["--user", "daemon-reload"]);
+  await execImpl("systemctl", ["--user", "enable", "--now", SERVICE_NAME]);
   log.success(`Installed systemd user service: ${SERVICE_NAME}`);
   log.info(`Unit file: ${SERVICE_PATH}`);
 }
@@ -105,20 +123,19 @@ export async function installLinux(args: string[]): Promise<void> {
 /** Stop and remove the Linux user service definition if it exists. */
 export async function uninstallLinux(): Promise<void> {
   try {
-    await execFileAsync("systemctl", ["--user", "disable", "--now", SERVICE_NAME]);
+    await execImpl("systemctl", ["--user", "disable", "--now", SERVICE_NAME]);
   } catch {
     // Not running or not enabled — ignore
   }
 
   try {
-    const { rm } = await fsp();
-    await rm(SERVICE_PATH, { force: true });
+    await fsImpl.rm(SERVICE_PATH, { force: true });
   } catch {
     // Already removed
   }
 
   try {
-    await execFileAsync("systemctl", ["--user", "daemon-reload"]);
+    await execImpl("systemctl", ["--user", "daemon-reload"]);
   } catch {
     // Best effort
   }
@@ -137,7 +154,7 @@ export async function startLinux(): Promise<void> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 10_000);
   try {
-    await execFileAsync("systemctl", ["--user", "start", SERVICE_NAME], {
+    await execImpl("systemctl", ["--user", "start", SERVICE_NAME], {
       signal: controller.signal,
     });
   } catch (err) {
@@ -152,14 +169,13 @@ export async function startLinux(): Promise<void> {
 
 /** Stop the installed Linux user service. */
 export async function stopLinux(): Promise<void> {
-  await execFileAsync("systemctl", ["--user", "stop", SERVICE_NAME]);
+  await execImpl("systemctl", ["--user", "stop", SERVICE_NAME]);
 }
 
 /** Check whether the Linux user service file is present on disk. */
 export async function isInstalledLinux(): Promise<boolean> {
   try {
-    const { readFile } = await fsp();
-    await readFile(SERVICE_PATH, "utf8");
+    await fsImpl.readFile(SERVICE_PATH, "utf8");
     return true;
   } catch {
     return false;
