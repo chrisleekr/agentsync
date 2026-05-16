@@ -1118,19 +1118,15 @@ push / pull, and run cross-agent migrations from a single interactive screen.</p
 <td>Daemon health (pid, uptime, last error), vault state, agent summary, init / key-rotate launchers.</td>
 </tr>
 <tr>
-<td>2 Vault</td>
-<td>All encrypted entries grouped by agent. Multi-select skills with <code>space</code>; bulk-remove with <code>x</code>.</td>
+<td>2 Sync</td>
+<td>Per-artifact rows grouped by sync status (<code>local-changed</code>, <code>local-only</code>, <code>vault-only</code>, <code>unknown</code>, <code>synced</code>). Multi-select with <code>space</code>; push selected with <code>p</code>; bulk-remove skills with <code>x</code> (y/n confirm). Enter on a skill drills into its files with per-file diff.</td>
 </tr>
 <tr>
-<td>3 Agents</td>
-<td>Per-agent local file tree (<code>~/.claude</code>, <code>~/.cursor</code>, <code>~/.codex</code>, <code>~/.copilot</code>, VS Code user dir).</td>
+<td>3 Migrate</td>
+<td>From / To / Type form (To and Type are multi-select with sub-cursor). Preview is mandatory before Apply enables.</td>
 </tr>
 <tr>
-<td>4 Migrate</td>
-<td>From / To / Type form. Preview is mandatory before Apply enables.</td>
-</tr>
-<tr>
-<td>5 Activity</td>
+<td>4 Activity</td>
 <td>Session-only ring buffer of TUI actions.</td>
 </tr>
 </tbody>
@@ -1145,7 +1141,7 @@ push / pull, and run cross-agent migrations from a single interactive screen.</p
 </thead>
 <tbody>
 <tr>
-<td><code>1</code> – <code>5</code></td>
+<td><code>1</code> – <code>4</code></td>
 <td>Jump to tab</td>
 </tr>
 <tr>
@@ -1154,7 +1150,7 @@ push / pull, and run cross-agent migrations from a single interactive screen.</p
 </tr>
 <tr>
 <td><code>p</code></td>
-<td>Push vault (queues an IPC <code>push</code> to the daemon)</td>
+<td>Push vault (honours selection in the Sync tab as a per-file allowlist)</td>
 </tr>
 <tr>
 <td><code>l</code></td>
