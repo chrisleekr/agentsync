@@ -21,8 +21,8 @@ describe("cross-tab visibility", () => {
   test("multiple in-flight operations from different tabs all counted", () => {
     const store = createStore(createInitialState());
     store.runOperation("migrate-preview", "preview", () => new Promise(() => {}));
-    store.runOperation("vault-load", "load vault", () => new Promise(() => {}));
-    store.runOperation("agents-load", "load agents", () => new Promise(() => {}));
+    store.runOperation("sync-load", "load sync", () => new Promise(() => {}));
+    store.runOperation("pull", "pull", () => new Promise(() => {}));
     expect(countRunning(store.getState())).toBe(3);
   });
 

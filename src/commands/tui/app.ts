@@ -13,17 +13,15 @@ import {
 } from "./state";
 import { createStore, type Store } from "./store";
 import { renderActivity } from "./tabs/activity";
-import { ensureAgentsLoaded, onAgentsKey, renderAgents } from "./tabs/agents";
 import { renderDashboard } from "./tabs/dashboard";
 import { onMigrateKey, renderMigrate } from "./tabs/migrate";
-import { ensureVaultLoaded, onVaultKey, renderVault } from "./tabs/vault";
+import { ensureSyncLoaded, onSyncKey, renderSync, runSyncOp } from "./tabs/sync";
 
 const POLL_INTERVAL_MS = 1500;
 
 const TAB_LABELS: Record<TabId, string> = {
   dashboard: "Dashboard",
-  vault: "Vault",
-  agents: "Agents",
+  sync: "Sync",
   migrate: "Migrate",
   activity: "Activity",
 };
@@ -197,7 +195,20 @@ function handleKey(key: KeyEvent, ctx: AppContext, quit: () => void): void {
     return;
   }
 
-  if (key.name >= "1" && key.name <= "5") {
+  // Help overlay swallows everything until it's dismissed. Without this
+  // gate, pressing `p` (push) or `l` (pull) while the help text is on
+  // screen would fire the global shortcut behind the modal — the user
+  // sees a help overlay and accidentally pushes the vault.
+  if (ctx.store.getState().helpOpen) {
+    if (key.name === "?" || (key.shift && key.name === "/") || key.name === "escape") {
+      ctx.store.dispatch((d) => {
+        d.helpOpen = false;
+      });
+    }
+    return;
+  }
+
+  if (key.name >= "1" && key.name <= "4") {
     const idx = Number(key.name) - 1;
     if (idx >= 0 && idx < TAB_IDS.length) {
       ctx.store.dispatch((d) => {
@@ -216,11 +227,11 @@ function handleKey(key: KeyEvent, ctx: AppContext, quit: () => void): void {
   }
 
   if (key.name === "p" && !key.shift) {
-    invokeDaemonOp("push", ctx);
+    invokeSyncOp("push", ctx);
     return;
   }
   if (key.name === "l" && !key.shift) {
-    invokeDaemonOp("pull", ctx);
+    invokeSyncOp("pull", ctx);
     return;
   }
 
@@ -236,48 +247,21 @@ function handleKey(key: KeyEvent, ctx: AppContext, quit: () => void): void {
     return;
   }
 
-  if (ctx.store.getState().helpOpen) {
-    ctx.store.dispatch((d) => {
-      d.helpOpen = false;
-    });
-    return;
-  }
-
   delegateTabKey(key, ctx);
 }
 
-function invokeDaemonOp(op: "push" | "pull", ctx: AppContext): void {
-  if (!ctx.store.getState().daemon.online) {
-    ctx.store.dispatch((d) =>
-      setToast(d, `Daemon offline — start with "agentsync daemon start"`, "error"),
-    );
-    return;
-  }
-  ctx.store.runOperation(
-    op,
-    `${op} via daemon`,
-    async () => {
-      const result = op === "push" ? await ctx.ipc.push() : await ctx.ipc.pull();
-      if (!result.ok) throw new Error(result.error ?? "unknown");
-      return result;
-    },
-    {
-      activityKind: op,
-      toastOnStart: { text: `Queued ${op}…`, level: "info" },
-      successToast: `${op} queued`,
-      errorToastPrefix: op,
-    },
-  );
+function invokeSyncOp(op: "push" | "pull", ctx: AppContext): void {
+  // Delegate to the Sync tab's runSyncOp so push/pull always populate
+  // `sync.lastOp` — the persistent banner the user reads to see what
+  // happened. Toasts alone are too short-lived for terminal errors.
+  runSyncOp(ctx.store, op);
 }
 
 function delegateTabKey(key: KeyEvent, ctx: AppContext): void {
   const tab = ctx.store.getState().activeTab;
   switch (tab) {
-    case "vault":
-      onVaultKey(key, ctx.store);
-      break;
-    case "agents":
-      onAgentsKey(key, ctx.store);
+    case "sync":
+      onSyncKey(key, ctx.store);
       break;
     case "migrate":
       onMigrateKey(key, ctx.store);
@@ -333,7 +317,7 @@ function renderTabBar(host: TextRenderable, state: AppState): void {
     const num = i + 1;
     const label = TAB_LABELS[id];
     const active = id === state.activeTab;
-    const dirty = id === "vault" && state.selection.size > 0;
+    const dirty = id === "sync" && state.selection.size > 0;
     const text = `[${num}] ${label}${dirty ? "*" : ""}`;
     parts.push(active ? `▌${text}▐` : ` ${text} `);
   });
@@ -385,13 +369,9 @@ function renderActiveTab(
       case "dashboard":
         renderDashboard(renderer, host, state);
         break;
-      case "vault":
-        ensureVaultLoaded(store);
-        renderVault(renderer, host, state);
-        break;
-      case "agents":
-        ensureAgentsLoaded(store);
-        renderAgents(renderer, host, state);
+      case "sync":
+        ensureSyncLoaded(store);
+        renderSync(renderer, host, state);
         break;
       case "migrate":
         renderMigrate(renderer, host, state);
@@ -407,10 +387,10 @@ function renderHelp(renderer: CliRenderer, host: BoxRenderable): void {
   const help = [
     "",
     "  Global keys",
-    "    1 – 5         Jump to tab",
+    "    1 – 4         Jump to tab",
     "    Tab / Sh+Tab  Cycle tabs",
-    "    p             Push vault",
-    "    l             Pull vault",
+    "    p             Push vault (direct)",
+    "    l             Pull vault (direct)",
     "    r             Refresh current tab",
     "    ?             Toggle this overlay",
     "    q / Ctrl-C    Quit",
@@ -419,18 +399,43 @@ function renderHelp(renderer: CliRenderer, host: BoxRenderable): void {
     "    i             Init wizard hint",
     "    k             Key rotate hint",
     "",
-    "  Vault",
-    "    ↑ / ↓         Move cursor",
-    "    space         Toggle selection (skills only)",
-    "    x             Bulk remove selected skills",
+    "  Sync — file list",
+    "    ↑ / ↓         Move cursor (auto-scrolls)",
+    "    PgUp / PgDn   Jump cursor by a page",
+    "    Home / End    Jump to first / last row",
+    "    enter / d     Open diff (skill rows: drill into bundle)",
+    "    space         Toggle selection (push respects selection as allowlist)",
+    "    a             Select all rows in cursor's section (toggle)",
+    "    A             Select all visible rows (toggle)",
+    "    esc           Clear selection",
+    "    c             Copy selected paths (or cursor path) to clipboard",
+    "    x             Remove selected skills — opens y/n confirm modal",
+    "    s             Toggle synced section (collapsed by default)",
+    "    k             Load private key for accurate status",
     "",
-    "  Agents",
-    "    ↑ / ↓         Move cursor",
-    "    d             Diff focused file vs vault (planned)",
+    "  Sync — skill drill-in",
+    "    ↑ / ↓         Move cursor through files in bundle",
+    "    enter / d     Open diff for focused file",
+    "    esc / q       Close drill-in",
+    "",
+    "  Sync — diff modal",
+    "    ↑ / ↓         Move cursor through diff rows",
+    "    PgUp / PgDn   Jump by a page",
+    "    Home / End    Jump to first / last row",
+    "    ← / h         Switch cursor to vault side",
+    "    → / l         Switch cursor to local side",
+    "    space         Toggle line selection on current side",
+    "    a             Select all lines on current side (toggle)",
+    "    c             Copy selected lines (or full diff if none selected)",
+    "    esc / q       Close diff modal",
     "",
     "  Migrate",
-    "    Tab           Cycle From / To / Type / Preview / Apply",
-    "    ← / →         Cycle value of focused field",
+    "    Tab / Sh+Tab  Cycle From / To / Type / Preview / Apply",
+    "    ↑ / ↓         Same as Tab / Shift-Tab",
+    "    ← / →         From: cycle value · To/Type: move sub-cursor",
+    "                  Preview ↔ Apply (same visual row)",
+    "    space         Toggle option at sub-cursor (To / Type)",
+    "    enter         Activate Preview / Apply",
     "    Shift-P       Run preview",
     "    Shift-A       Apply (after a matching preview)",
     "",
@@ -459,21 +464,16 @@ function contextActionsForTab(state: AppState): ContextAction[] {
         { key: "i", label: "init" },
         { key: "k", label: "key rotate" },
       ];
-    case "vault": {
-      const base = [
+    case "sync": {
+      const base: ContextAction[] = [
         { key: "↑↓", label: "move" },
+        { key: "enter", label: "diff" },
         { key: "space", label: "select" },
-        { key: "/", label: "filter" },
       ];
       if (state.selection.size > 0) base.push({ key: "x", label: "remove" });
+      if (!state.sync.keyLoaded) base.push({ key: "k", label: "load key" });
       return base;
     }
-    case "agents":
-      return [
-        { key: "↑↓", label: "move" },
-        { key: "enter", label: "preview" },
-        { key: "d", label: "diff vs vault" },
-      ];
     case "migrate":
       return [
         { key: "tab", label: "next field" },

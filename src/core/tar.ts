@@ -2,7 +2,7 @@ import type { Stats } from "node:fs";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 // tar v7 is a TypeScript rewrite that ships its own .d.ts — import named exports directly.
-import { type ReadEntry, c as tarCreate, x as tarExtract } from "tar";
+import { type ReadEntry, c as tarCreate, x as tarExtract, t as tarList } from "tar";
 
 /** Optional knobs for {@link archiveDirectory}. */
 export interface ArchiveDirectoryOptions {
@@ -97,4 +97,60 @@ export async function extractArchive(buffer: Buffer, targetDir: string): Promise
     },
   });
   await pipeline(readable, extract as unknown as NodeJS.WritableStream);
+}
+
+/** A single regular-file entry decoded from a tar.gz buffer. */
+export interface TarEntry {
+  /** POSIX-style path relative to the archive root, leading `./` stripped. */
+  path: string;
+  content: Buffer;
+}
+
+/**
+ * Read every regular-file entry from a gzipped tar buffer into memory.
+ * Used by the TUI's skill drill-in to inspect bundle contents without
+ * extracting decrypted plaintext to disk. Symlinks, directories, and
+ * traversal entries are dropped — same security posture as
+ * {@link extractArchive}.
+ */
+export async function listArchiveEntries(buffer: Buffer): Promise<TarEntry[]> {
+  const entries: TarEntry[] = [];
+  const pending: Promise<void>[] = [];
+
+  // tar v7 defaults to `noResume: false`, which auto-resumes each entry
+  // stream after this callback returns — no explicit `entry.resume()` needed
+  // for the non-File branches we drop on the floor.
+  const list = tarList({
+    onReadEntry: (entry: ReadEntry) => {
+      if (entry.type !== "File") return;
+      const normalised = entry.path.replace(/^\.\//, "").replaceAll("\\", "/");
+      // Reject POSIX-absolute (`/foo`), Windows drive-letter (`C:/foo`),
+      // and any traversal segment (`..`). The drive-letter check matters
+      // even on Unix targets so a crafted Windows tar cannot place its
+      // payload at a controlled drive root if an operator ever runs the
+      // drill-in on a Windows host.
+      if (
+        normalised.startsWith("/") ||
+        /^[A-Za-z]:/.test(normalised) ||
+        normalised.split("/").includes("..")
+      ) {
+        return;
+      }
+      pending.push(
+        new Promise<void>((resolve, reject) => {
+          const chunks: Buffer[] = [];
+          entry.on("data", (c: Buffer) => chunks.push(c));
+          entry.on("end", () => {
+            entries.push({ path: normalised, content: Buffer.concat(chunks) });
+            resolve();
+          });
+          entry.on("error", reject);
+        }),
+      );
+    },
+  });
+
+  await pipeline(Readable.from(buffer), list as unknown as NodeJS.WritableStream);
+  await Promise.all(pending);
+  return entries;
 }

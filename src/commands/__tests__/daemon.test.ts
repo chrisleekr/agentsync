@@ -6,6 +6,9 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, mock, spyOn, test } from "bun:test";
 import { log } from "@clack/prompts";
 import { IpcClient } from "../../core/ipc";
+import { __setInstallerLinuxOverridesForTests } from "../../daemon/installer-linux";
+import { __setInstallerMacOsOverridesForTests } from "../../daemon/installer-macos";
+import { __setInstallerWindowsOverridesForTests } from "../../daemon/installer-windows";
 
 // ── getExecutableArgs tests ────────────────────────────────────────────────────
 
@@ -76,33 +79,35 @@ const mockStop = mock(async () => {});
 const mockIsInstalled = mock(async () => true);
 const mockIsRegistered = mock(async () => true);
 
-// Mock all platform installer modules so tests pass on any OS
-mock.module("../../daemon/installer-macos", () => ({
+// Stub all platform installer modules via their globalThis-backed
+// override slots so tests pass on any OS. Avoids mock.module() entirely —
+// the cached installer modules are NOT replaced, so other test files
+// loaded later in the same Bun run see the real exports (buildUnit,
+// quoteSystemdArg, etc.) intact. See installer-linux.ts for the
+// mechanism rationale.
+__setInstallerMacOsOverridesForTests({
   installMacOs: mockInstall,
   uninstallMacOs: mockUninstall,
   startMacOs: mockStart,
   stopMacOs: mockStop,
   isInstalledMacOs: mockIsInstalled,
   isRegisteredMacOs: mockIsRegistered,
-}));
-
-mock.module("../../daemon/installer-linux", () => ({
+});
+__setInstallerLinuxOverridesForTests({
   installLinux: mockInstall,
   uninstallLinux: mockUninstall,
   startLinux: mockStart,
   stopLinux: mockStop,
   isInstalledLinux: mockIsInstalled,
   isRegisteredLinux: mockIsRegistered,
-}));
-
-mock.module("../../daemon/installer-windows", () => ({
+});
+__setInstallerWindowsOverridesForTests({
   installWindows: mockInstall,
   uninstallWindows: mockUninstall,
   startWindows: mockStart,
   stopWindows: mockStop,
   isInstalledWindows: mockIsInstalled,
-  isRegisteredWindows: mockIsRegistered,
-}));
+});
 
 const successLogs: string[] = [];
 const errorLogs: string[] = [];
@@ -131,6 +136,11 @@ afterAll(() => {
   errorSpy.mockRestore();
   warnSpy.mockRestore();
   ipcClientSendSpy.mockRestore();
+  // Clear the globalThis-backed override slots so any later test file that
+  // exercises the real installer functions sees clean defaults.
+  __setInstallerMacOsOverridesForTests({});
+  __setInstallerLinuxOverridesForTests({});
+  __setInstallerWindowsOverridesForTests({});
   mock.restore();
 });
 

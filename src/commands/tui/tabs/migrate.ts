@@ -7,6 +7,7 @@ import {
   AGENTS,
   type AgentName,
   type AppState,
+  type ConfigType,
   MIGRATE_TYPES,
   type MigrateField,
   migrateSignature,
@@ -29,10 +30,14 @@ export function renderMigrate(renderer: CliRenderer, host: BoxRenderable, state:
   const focusMark = (f: MigrateField) => (m.field === f ? "▶" : " ");
   const radio = (sel: boolean) => (sel ? "(●)" : "( )");
   const check = (sel: boolean) => (sel ? "[x]" : "[ ]");
+  // For multi-select fields the sub-cursor is highlighted with a chevron
+  // so the user can see which option arrow keys + space will affect.
+  const subMark = (active: boolean, focused: boolean) =>
+    active && focused ? "›" : active ? " " : " ";
 
-  const fromRow = `${focusMark("from")}  From:  ${AGENTS.map((a) => `${radio(a === m.from)} ${a}`).join("  ")}`;
-  const toRow = `${focusMark("to")}  To:    ${AGENTS.map((a) => `${check(m.toSet.has(a))} ${a}`).join("  ")}`;
-  const typeRow = `${focusMark("type")}  Type:  ${MIGRATE_TYPES.map((t) => `${radio(t === m.type)} ${t}`).join("  ")}`;
+  const fromRow = `${focusMark("from")}  From:  ${AGENTS.map((a) => `${subMark(m.field === "from", a === m.from)}${radio(a === m.from)} ${a}`).join("  ")}`;
+  const toRow = `${focusMark("to")}  To:    ${AGENTS.map((a, i) => `${subMark(m.field === "to", i === m.toCursor)}${check(m.toSet.has(a))} ${a}`).join("  ")}`;
+  const typeRow = `${focusMark("type")}  Type:  ${MIGRATE_TYPES.map((t, i) => `${subMark(m.field === "type", i === m.typeCursor)}${check(m.typeSet.has(t))} ${t}`).join("  ")}`;
 
   const sig = migrateSignature(m);
   const previewRunning = anyOp(state, "migrate-preview", "running");
@@ -60,12 +65,13 @@ export function renderMigrate(renderer: CliRenderer, host: BoxRenderable, state:
     "",
     `${focusMark("preview")}  ${previewLabel}        ${focusMark("apply")}  ${applyLabel}`,
     "",
-    "  Tab / Shift-Tab move between fields. Arrow keys or space change values.",
-    "  Enter activates the Preview / Apply button.",
+    "  Tab / ↑↓ move between fields. ←/→ move sub-cursor on To & Type,",
+    "  and switch between Preview / Apply. Space toggles the focused option.",
+    "  Enter activates Preview / Apply.",
   ].join("\n");
 
   const formBox = new BoxRenderable(renderer, {
-    height: 14,
+    height: 15,
     width: "100%",
     border: true,
     borderColor: "#3b4252",
@@ -113,12 +119,30 @@ export function onMigrateKey(key: KeyEvent, store: Store): boolean {
     return true;
   }
 
-  if (key.name === "left" || key.name === "right") {
-    return cycleValue(store, key.name === "right");
+  // Arrow up/down move between fields exactly like tab/shift-tab. Most users
+  // reach for ↑/↓ first in a form; not binding them was a discoverability
+  // bug — Tab still works for power users.
+  if (key.name === "down") {
+    store.dispatch((d) => {
+      const i = FIELDS.indexOf(d.migrate.field);
+      d.migrate.field = FIELDS[(i + 1) % FIELDS.length];
+    });
+    return true;
+  }
+  if (key.name === "up") {
+    store.dispatch((d) => {
+      const i = FIELDS.indexOf(d.migrate.field);
+      d.migrate.field = FIELDS[(i - 1 + FIELDS.length) % FIELDS.length];
+    });
+    return true;
   }
 
-  if (key.name === "space" && m.field === "to") {
-    return cycleValue(store, true);
+  if (key.name === "left" || key.name === "right") {
+    return moveSubCursorOrCycle(store, key.name === "right");
+  }
+
+  if (key.name === "space" && (m.field === "to" || m.field === "type")) {
+    return toggleAtSubCursor(store);
   }
 
   if (key.name === "return") {
@@ -143,7 +167,17 @@ export function onMigrateKey(key: KeyEvent, store: Store): boolean {
   return false;
 }
 
-function cycleValue(store: Store, forward: boolean): boolean {
+/**
+ * On single-select fields (`from`), arrow keys cycle the value directly.
+ * On multi-select fields (`to`, `type`) they move the sub-cursor inside
+ * the field — space toggles the option at the cursor. This separation is
+ * what HTML form controls do and is what the user expects.
+ *
+ * Preview and Apply share a visual row, so ←/→ also walks between them.
+ * That preserves the spatial layout: pressing right from Preview lands
+ * on Apply, which is literally the next button to its right.
+ */
+function moveSubCursorOrCycle(store: Store, forward: boolean): boolean {
   const m = store.getState().migrate;
   switch (m.field) {
     case "from": {
@@ -156,23 +190,32 @@ function cycleValue(store: Store, forward: boolean): boolean {
     }
     case "to": {
       store.dispatch((d) => {
-        const sorted = [...d.migrate.toSet].sort();
-        const last = sorted[sorted.length - 1] as AgentName | undefined;
-        const i = last ? AGENTS.indexOf(last) : -1;
-        const next = AGENTS[(i + (forward ? 1 : -1) + AGENTS.length) % AGENTS.length];
-        if (d.migrate.toSet.has(next)) d.migrate.toSet.delete(next);
-        else d.migrate.toSet.add(next);
-        d.migrate.previewKey = null;
+        d.migrate.toCursor =
+          (d.migrate.toCursor + (forward ? 1 : -1) + AGENTS.length) % AGENTS.length;
       });
       return true;
     }
     case "type": {
       store.dispatch((d) => {
-        const i = MIGRATE_TYPES.indexOf(d.migrate.type);
-        d.migrate.type =
-          MIGRATE_TYPES[(i + (forward ? 1 : -1) + MIGRATE_TYPES.length) % MIGRATE_TYPES.length];
-        d.migrate.previewKey = null;
+        d.migrate.typeCursor =
+          (d.migrate.typeCursor + (forward ? 1 : -1) + MIGRATE_TYPES.length) % MIGRATE_TYPES.length;
       });
+      return true;
+    }
+    case "preview": {
+      if (forward) {
+        store.dispatch((d) => {
+          d.migrate.field = "apply";
+        });
+      }
+      return true;
+    }
+    case "apply": {
+      if (!forward) {
+        store.dispatch((d) => {
+          d.migrate.field = "preview";
+        });
+      }
       return true;
     }
     default:
@@ -181,29 +224,78 @@ function cycleValue(store: Store, forward: boolean): boolean {
 }
 
 /**
- * `performMigrate` accepts a single agent or "all", not a comma list, so the
- * multi-select Migrate tab fans out one call per target and merges results.
- * Returns the aggregated MigrateResult (migrated/skipped/errors concatenated).
+ * Toggle the option at the sub-cursor for the active multi-select field.
+ * Clears the preview cache because changing the set invalidates any prior
+ * preview keyed by `migrateSignature`.
  */
+function toggleAtSubCursor(store: Store): boolean {
+  const m = store.getState().migrate;
+  if (m.field === "to") {
+    const target = AGENTS[m.toCursor];
+    if (!target) return true;
+    store.dispatch((d) => {
+      if (d.migrate.toSet.has(target)) d.migrate.toSet.delete(target);
+      else d.migrate.toSet.add(target);
+      d.migrate.previewKey = null;
+    });
+    return true;
+  }
+  if (m.field === "type") {
+    const target = MIGRATE_TYPES[m.typeCursor];
+    if (!target) return true;
+    store.dispatch((d) => {
+      if (d.migrate.typeSet.has(target)) d.migrate.typeSet.delete(target);
+      else d.migrate.typeSet.add(target);
+      d.migrate.previewKey = null;
+    });
+    return true;
+  }
+  return false;
+}
+
+/**
+ * `performMigrate` accepts a single agent + single type per call, so the
+ * multi-select Migrate tab fans out one call per (target, type) pair and
+ * merges results. Returns the aggregated MigrateResult (every list
+ * concatenated). When every agent is in `toSet` we pass the special "all"
+ * value once per type to let the migrate engine handle the broadcast.
+ */
+interface MigrateSelectionSnapshot {
+  from: AgentName;
+  toSet: Set<AgentName>;
+  typeSet: Set<ConfigType>;
+}
+
+export function snapshotMigrateSelection(m: AppState["migrate"]): MigrateSelectionSnapshot {
+  return {
+    from: m.from,
+    toSet: new Set(m.toSet),
+    typeSet: new Set(m.typeSet),
+  };
+}
+
 async function runMigrateForSelection(
-  m: AppState["migrate"],
+  m: MigrateSelectionSnapshot,
   dryRun: boolean,
 ): Promise<MigrateResult> {
   const aggregate: MigrateResult = { migrated: [], skipped: [], errors: [], warnings: [] };
   const targets: ("all" | AgentName)[] =
     m.toSet.size === AGENTS.length ? ["all"] : [...m.toSet].sort();
+  const types = [...m.typeSet].sort();
   for (const target of targets) {
-    const options: MigrateOptions = {
-      from: m.from,
-      to: target,
-      type: m.type,
-      dryRun,
-    };
-    const r = await performMigrate(options);
-    aggregate.migrated.push(...r.migrated);
-    aggregate.skipped.push(...r.skipped);
-    aggregate.errors.push(...r.errors);
-    aggregate.warnings.push(...r.warnings);
+    for (const type of types) {
+      const options: MigrateOptions = {
+        from: m.from,
+        to: target,
+        type,
+        dryRun,
+      };
+      const r = await performMigrate(options);
+      aggregate.migrated.push(...r.migrated);
+      aggregate.skipped.push(...r.skipped);
+      aggregate.errors.push(...r.errors);
+      aggregate.warnings.push(...r.warnings);
+    }
   }
   return aggregate;
 }
@@ -214,11 +306,21 @@ function runPreview(store: Store): void {
     store.dispatch((d) => setToast(d, "Select at least one target agent", "error"));
     return;
   }
+  if (m.typeSet.size === 0) {
+    store.dispatch((d) => setToast(d, "Select at least one config type", "error"));
+    return;
+  }
   const sig = migrateSignature(m);
+  // Snapshot the selection now, before runOperation may yield. The store
+  // does not deep-freeze state, so a live reference into `m` would let
+  // a mid-flight toSet/typeSet edit by the user change what the operation
+  // actually migrates. The signature `sig` already pins the user's
+  // request; the snapshot pins the data the operation reads.
+  const snap = snapshotMigrateSelection(m);
   store.runOperation<MigrateResult>(
     "migrate-preview",
     `preview ${sig}`,
-    () => runMigrateForSelection(m, true),
+    () => runMigrateForSelection(snap, true),
     {
       meta: { sig },
       activityKind: "preview",
@@ -252,17 +354,22 @@ function runApply(store: Store): void {
     store.dispatch((d) => setToast(d, "Already applied. Change form to migrate again.", "info"));
     return;
   }
+  const snap = snapshotMigrateSelection(m);
   store.runOperation<MigrateResult>(
     "migrate",
     `apply ${sig}`,
-    () => runMigrateForSelection(m, false),
+    () => runMigrateForSelection(snap, false),
     {
       meta: { sig },
       activityKind: "migrate",
       onSuccess: (draft, result) => {
         const okMsg = `Applied: ${result.migrated.length} written, ${result.skipped.length} skipped`;
-        setToast(draft, okMsg, result.errors.length === 0 ? "success" : "error");
-        draft.migrate.appliedSignature = sig;
+        const fullSuccess = result.errors.length === 0;
+        setToast(draft, okMsg, fullSuccess ? "success" : "error");
+        // Only mark the signature as applied when every (target × type)
+        // pair succeeded. A partial failure must remain retryable without
+        // forcing the user to change the form first.
+        if (fullSuccess) draft.migrate.appliedSignature = sig;
       },
       errorToastPrefix: "Apply",
     },

@@ -4,114 +4,64 @@
  *
  * Strategy
  * --------
- * SERVICE_PATH is baked from homedir() at module import time. Same approach as the
- * macOS tests: mock node:child_process + node:fs/promises before importing the module.
+ * The installer module exposes `__setInstallerLinuxImplForTests` so we can
+ * inject fs + exec stubs DIRECTLY into its private slots. This bypasses
+ * Bun's mock.module() cache entirely — which is necessary because the
+ * cache does not retro-update bindings already captured by daemon.test.ts
+ * (which loads installer-linux before this file runs in CI's file order).
  */
-import { afterAll, beforeAll, beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 
 const fsWrites = new Map<string, string>();
 const execFileCalls: Array<{ cmd: string; args: string[] }> = [];
-let lastExecFileOpts: Record<string, unknown> | undefined;
+let lastExecFileOpts: { signal?: AbortSignal } | undefined;
 
-// Control is-enabled output for isRegisteredLinux tests
 let isEnabledStdout = "";
 let isEnabledShouldFail = false;
 
-// Build the execFile mock with custom promisify support so that
-// `promisify(execFile)` returns { stdout, stderr } rather than just stdout.
-const execFileMock = (
-  cmd: string,
-  args: string[],
-  callback: (err: Error | null, stdout: string, stderr: string) => void,
-) => {
-  execFileCalls.push({ cmd, args });
-  if (cmd === "systemctl" && args.includes("is-enabled")) {
-    if (isEnabledShouldFail) {
-      callback(new Error("not enabled"), "", "");
-      return;
-    }
-    callback(null, isEnabledStdout, "");
-    return;
-  }
-  callback(null, "", "");
-};
-
-const { promisify } = require("node:util") as typeof import("node:util");
-(execFileMock as unknown as Record<symbol, unknown>)[promisify.custom] = (
-  ...fnArgs: unknown[]
-): Promise<{ stdout: string; stderr: string }> =>
-  new Promise((resolve, reject) => {
-    const cmd = fnArgs[0] as string;
-    const args = fnArgs[1] as string[];
-    if (fnArgs.length > 2 && typeof fnArgs[2] === "object" && fnArgs[2] !== null) {
-      lastExecFileOpts = fnArgs[2] as Record<string, unknown>;
-    }
-    execFileMock(cmd, args, (err, stdout, stderr) => {
-      if (err) {
-        reject(Object.assign(err, { stdout, stderr }));
-        return;
-      }
-      resolve({ stdout, stderr });
-    });
-  });
-
-// Spread the real module so `spawnSync` and every other export survive the
-// mock — a bare `() => ({ execFile })` would replace the module in bun's
-// cache with a 1-key object, and later test files in the run that do
-// `import { spawnSync } from "node:child_process"` would fail to load with
-// `SyntaxError: Export named 'spawnSync' not found`. See PR #26 for the
-// cross-file bleed this guards against.
-const actualChildProcess = require("node:child_process") as typeof import("node:child_process");
-mock.module("node:child_process", () => ({
-  ...actualChildProcess,
-  execFile: execFileMock,
-}));
-
-// Spread the real fs/promises so unrelated exports (stat, readdir, etc.)
-// remain available to modules loaded in other test files that share Bun's
-// module cache during a multi-file run. Without this, the mock returns a
-// 4-key object and any subsequent `import { stat } from "node:fs/promises"`
-// (e.g. from src/commands/destroy.test.ts) errors with
-// `Export named 'stat' not found`.
-const actualFsPromises = require("node:fs/promises") as typeof import("node:fs/promises");
-mock.module("node:fs/promises", () => ({
-  ...actualFsPromises,
-  mkdir: async () => {},
-  writeFile: async (path: string, content: string | Uint8Array) => {
+const fsStub = {
+  mkdir: (async () => {}) as unknown as typeof import("node:fs/promises").mkdir,
+  writeFile: (async (path: string, content: string | Uint8Array) => {
     fsWrites.set(path, typeof content === "string" ? content : (content as Buffer).toString());
-  },
-  readFile: async (path: string) => {
+  }) as unknown as typeof import("node:fs/promises").writeFile,
+  readFile: (async (path: string) => {
     const content = fsWrites.get(path);
     if (content !== undefined) return content;
     throw Object.assign(new Error(`ENOENT: no such file or directory, open '${path}'`), {
       code: "ENOENT",
     });
-  },
-  rm: async (path: string) => {
+  }) as unknown as typeof import("node:fs/promises").readFile,
+  rm: (async (path: string) => {
     fsWrites.delete(path);
-  },
-}));
+  }) as unknown as typeof import("node:fs/promises").rm,
+};
 
-mock.module("@clack/prompts", () => ({
-  log: { success: () => {}, info: () => {}, warn: () => {}, error: () => {} },
-}));
+const execStub = async (
+  cmd: string,
+  args: string[],
+  opts?: { signal?: AbortSignal },
+): Promise<{ stdout: string; stderr: string }> => {
+  execFileCalls.push({ cmd, args });
+  if (opts) lastExecFileOpts = opts;
+  if (cmd === "systemctl" && args.includes("is-enabled")) {
+    if (isEnabledShouldFail) throw new Error("not enabled");
+    return { stdout: isEnabledStdout, stderr: "" };
+  }
+  return { stdout: "", stderr: "" };
+};
 
 type LinuxInstallerModule = typeof import("../installer-linux");
 let m: LinuxInstallerModule;
 
 beforeAll(async () => {
   m = await import("../installer-linux");
+  m.__setInstallerLinuxImplForTests({ fs: fsStub, exec: execStub });
 });
 
 afterAll(() => {
-  // Re-mock back to the real implementations BEFORE mock.restore() so any
-  // test file loaded later in the same Bun run sees an unmocked fs/promises.
-  // mock.restore() alone leaves the cached fs/promises pointing at our
-  // override, which breaks unrelated tests that call readFile/stat
-  // (e.g. destroy.test.ts going through loadConfig).
-  mock.module("node:fs/promises", () => actualFsPromises);
-  mock.module("node:child_process", () => actualChildProcess);
-  mock.restore();
+  // Restore real implementations on the global slot so any later test file
+  // that exercises installer-linux for real sees clean defaults.
+  m.__setInstallerLinuxImplForTests({ fs: null, exec: null });
 });
 
 beforeEach(() => {

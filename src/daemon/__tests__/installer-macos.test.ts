@@ -4,110 +4,67 @@
  *
  * Strategy
  * --------
- * PLIST_PATH is a module-level constant baked from homedir() at import time, so the
- * real path cannot be overridden. Instead, we mock:
- *   - node:child_process — capture execFile calls without running launchctl
- *   - node:fs/promises   — intercept file I/O so no writes touch the live filesystem
- *   - @clack/prompts      — suppress output
- *
- * File state is tracked in an in-memory Map so isInstalledMacOs() behaves correctly
- * (true after install, false after uninstall/rm).
+ * The installer exposes `__setInstallerMacOsImplForTests` so we can inject
+ * fs + exec stubs DIRECTLY into its private slots. See installer-linux.test
+ * for the full rationale on why this bypasses Bun's `mock.module()` cache.
  */
-import { afterAll, beforeAll, beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 
-// ── In-memory FS state (captured before the module is imported) ───────────────
 const fsWrites = new Map<string, string>();
 const execFileCalls: Array<{ cmd: string; args: string[] }> = [];
-let lastExecFileOpts: Record<string, unknown> | undefined;
+let lastExecFileOpts: { signal?: AbortSignal } | undefined;
 
-// Control whether launchctl commands succeed or fail
 let launchctlShouldFail = false;
 let launchctlFailStderr = "Bootstrap failed: 5: Input/output error";
 let launchctlPrintShouldFail = true; // default: not registered
 
-const execFileMock = (
-  cmd: string,
-  args: string[],
-  callback: (err: Error | null, stdout: string, stderr: string) => void,
-) => {
-  execFileCalls.push({ cmd, args });
-  if (cmd === "launchctl" && args[0] === "print" && launchctlPrintShouldFail) {
-    callback(new Error("Could not find service"), "", "Could not find service");
-    return;
-  }
-  if (launchctlShouldFail && cmd === "launchctl" && args[0] === "bootstrap") {
-    const err = Object.assign(new Error("launchctl failed"), {
-      stderr: launchctlFailStderr,
-    });
-    callback(err, "", launchctlFailStderr);
-    return;
-  }
-  callback(null, "", "");
-};
-
-const { promisify } = require("node:util") as typeof import("node:util");
-(execFileMock as unknown as Record<symbol, unknown>)[promisify.custom] = (
-  ...fnArgs: unknown[]
-): Promise<{ stdout: string; stderr: string }> =>
-  new Promise((resolve, reject) => {
-    const cmd = fnArgs[0] as string;
-    const args = fnArgs[1] as string[];
-    if (fnArgs.length > 2 && typeof fnArgs[2] === "object" && fnArgs[2] !== null) {
-      lastExecFileOpts = fnArgs[2] as Record<string, unknown>;
-    }
-    execFileMock(cmd, args, (err, stdout, stderr) => {
-      if (err) {
-        reject(Object.assign(err, { stdout, stderr }));
-        return;
-      }
-      resolve({ stdout, stderr });
-    });
-  });
-
-// Spread the real module so `spawnSync` and every other export survive the
-// mock — a bare `() => ({ execFile })` would replace the module in bun's
-// cache with a 1-key object, and later test files in the run that do
-// `import { spawnSync } from "node:child_process"` would fail to load with
-// `SyntaxError: Export named 'spawnSync' not found`. See PR #26 for the
-// cross-file bleed this guards against.
-const actualChildProcess = require("node:child_process") as typeof import("node:child_process");
-mock.module("node:child_process", () => ({
-  ...actualChildProcess,
-  execFile: execFileMock,
-}));
-
-mock.module("node:fs/promises", () => ({
-  mkdir: async () => {},
-  writeFile: async (path: string, content: string | Uint8Array) => {
+const fsStub = {
+  mkdir: (async () => {}) as unknown as typeof import("node:fs/promises").mkdir,
+  writeFile: (async (path: string, content: string | Uint8Array) => {
     fsWrites.set(path, typeof content === "string" ? content : (content as Buffer).toString());
-  },
-  readFile: async (path: string) => {
+  }) as unknown as typeof import("node:fs/promises").writeFile,
+  readFile: (async (path: string) => {
     const content = fsWrites.get(path);
     if (content !== undefined) return content;
     throw Object.assign(new Error(`ENOENT: no such file or directory, open '${path}'`), {
       code: "ENOENT",
     });
-  },
-  rm: async (path: string) => {
+  }) as unknown as typeof import("node:fs/promises").readFile,
+  rm: (async (path: string) => {
     fsWrites.delete(path);
-  },
-}));
+  }) as unknown as typeof import("node:fs/promises").rm,
+};
 
-mock.module("@clack/prompts", () => ({
-  log: { success: () => {}, info: () => {}, warn: () => {}, error: () => {} },
-}));
+const execStub = async (
+  cmd: string,
+  args: string[],
+  opts?: { signal?: AbortSignal },
+): Promise<{ stdout: string; stderr: string }> => {
+  execFileCalls.push({ cmd, args });
+  if (opts) lastExecFileOpts = opts;
+  if (cmd === "launchctl" && args[0] === "print" && launchctlPrintShouldFail) {
+    throw Object.assign(new Error("Could not find service"), {
+      stderr: "Could not find service",
+    });
+  }
+  if (launchctlShouldFail && cmd === "launchctl" && args[0] === "bootstrap") {
+    throw Object.assign(new Error("launchctl failed"), {
+      stderr: launchctlFailStderr,
+    });
+  }
+  return { stdout: "", stderr: "" };
+};
 
 type MacOsInstallerModule = typeof import("../installer-macos");
 let m: MacOsInstallerModule;
 
 beforeAll(async () => {
   m = await import("../installer-macos");
+  m.__setInstallerMacOsImplForTests({ fs: fsStub, exec: execStub });
 });
 
-// Restore mocked modules after this file completes so they do not bleed into
-// subsequent test files (e.g. integration.test.ts) that need the real node:fs/promises.
 afterAll(() => {
-  mock.restore();
+  m.__setInstallerMacOsImplForTests({ fs: null, exec: null });
 });
 
 beforeEach(() => {

@@ -64,18 +64,17 @@ agentsync tui       # explicit alias, same behaviour
 | Tab | What it shows |
 |---|---|
 | 1 Dashboard | Daemon health (pid, uptime, last error), vault state, agent summary, init / key-rotate launchers. |
-| 2 Vault | All encrypted entries grouped by agent. Multi-select skills with `space`; bulk-remove with `x`. |
-| 3 Agents | Per-agent local file tree (`~/.claude`, `~/.cursor`, `~/.codex`, `~/.copilot`, VS Code user dir). |
-| 4 Migrate | From / To / Type form. Preview is mandatory before Apply enables. |
-| 5 Activity | Session-only ring buffer of TUI actions. |
+| 2 Sync | Per-artifact rows grouped by sync status (`local-changed`, `local-only`, `vault-only`, `unknown`, `synced`). Multi-select with `space`; push selected with `p`; bulk-remove skills with `x` (y/n confirm). Enter on a skill drills into its files with per-file diff. |
+| 3 Migrate | From / To / Type form (To and Type are multi-select with sub-cursor). Preview is mandatory before Apply enables. |
+| 4 Activity | Session-only ring buffer of TUI actions. |
 
 **Global keys** (any tab):
 
 | Key | Action |
 |---|---|
-| `1` – `5` | Jump to tab |
+| `1` – `4` | Jump to tab |
 | `Tab` / `Shift-Tab` | Cycle tabs |
-| `p` | Push vault (queues an IPC `push` to the daemon) |
+| `p` | Push vault (honours selection in the Sync tab as a per-file allowlist) |
 | `l` | Pull vault |
 | `r` | Refresh current tab |
 | `?` | Toggle the keymap overlay |

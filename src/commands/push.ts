@@ -15,6 +15,37 @@ export function __setPushAgentsForTesting(agents: AgentDefinition[] | null): voi
   agentDefinitions = agents ?? Agents;
 }
 
+/**
+ * Decide whether a walker warning is in scope for a path-filtered push.
+ *
+ * Walker warnings carry the interior path of the offending file inside a
+ * skill bundle (e.g. `claude/skills/foo/SKILL.md`). The vault path for the
+ * skill itself is `<agent>/skills/<name>.tar.age`. We strip the `.tar.age`
+ * suffix from each selected skill vault path and check whether the warning
+ * mentions that skill's directory. If yes, the user is explicitly trying to
+ * push a skill the walker rejected and the warning must escalate to a fatal
+ * abort. Non-skill selections cannot match any walker warning by
+ * construction (warnings only fire from the skills-walker).
+ */
+export function walkerWarningMatchesSelection(
+  warning: string,
+  pathFilter: Set<string>,
+  agentName: string,
+): boolean {
+  for (const vp of pathFilter) {
+    if (!vp.endsWith(".tar.age")) continue;
+    if (!vp.startsWith(`${agentName}/`)) continue;
+    const skillDir = vp.slice(0, -".tar.age".length);
+    // Require a directory boundary so e.g. selecting `claude/skills/foo`
+    // does not match a warning about a sibling `claude/skills/foo-extra`.
+    // Walker warnings always cite a specific file inside the skill dir
+    // (e.g. `…/claude/skills/foo/SKILL.md`), so the trailing slash is
+    // always present in practice.
+    if (warning.includes(`${skillDir}/`)) return true;
+  }
+  return false;
+}
+
 /** Preview entry emitted to onPreview callbacks during a dry-run push. */
 export type PushPreviewEntry = {
   agent: AgentName;
@@ -36,6 +67,12 @@ export async function performPush(
     dryRun?: boolean;
     message?: string;
     onPreview?: (entry: PushPreviewEntry) => void;
+    /** Optional allowlist of relative vault paths (e.g. `claude/CLAUDE.md.age`)
+     *  to push. When provided, only matching artifacts are scanned and
+     *  written — secrets in unselected files do NOT abort the push. When
+     *  omitted (CLI default) every enabled-agent artifact is processed,
+     *  preserving the original full-scan abort-on-secret behaviour. */
+    vaultPaths?: Set<string>;
   } = {},
 ): Promise<{ pushed: number; errors: string[]; fatal: boolean }> {
   const errors: string[] = [];
@@ -89,8 +126,22 @@ export async function performPush(
   const allSnapshots: AgentWithSnapshot[] = [];
   const secretErrors: string[] = [];
 
+  // When the caller passes a `vaultPaths` allowlist (e.g. the TUI handing
+  // through a Sync-tab selection) we filter every agent's artifact list
+  // down to the matching subset BEFORE running the secret scan. Secrets in
+  // unselected files are still in your working tree and still bad, but they
+  // are not in scope for THIS push and must not abort it.
+  const pathFilter = options.vaultPaths;
+
   for (const agent of agentsToSync) {
-    const snapshot = await agent.snapshot(config);
+    const raw = await agent.snapshot(config);
+    // Shallow-copy with a filtered artifacts array so we never mutate the
+    // object an adapter returned. Adapters are free to memoise or share
+    // state across calls; in-place mutation here would leak between pushes.
+    const snapshot =
+      pathFilter !== undefined
+        ? { ...raw, artifacts: raw.artifacts.filter((a) => pathFilter.has(a.vaultPath)) }
+        : raw;
     allSnapshots.push({ agent, snapshot });
     for (const artifact of snapshot.artifacts) {
       for (const w of artifact.warnings) {
@@ -140,10 +191,20 @@ export async function performPush(
     // Those redactor warnings land on BOTH artifact.warnings AND
     // snapshot.warnings; the per-artifact loop above already catches them, so
     // a broad `Detected literal secret` match here would double-report.
+    //
+    // When a path allowlist is active, walker warnings name the dropped
+    // bundle's path. Only escalate when that path overlaps the allowlist
+    // (i.e. the user is trying to push the skill the walker rejected).
     for (const w of snapshot.warnings) {
-      if (w.startsWith(NEVER_SYNC_WARNING_PREFIX) || w.startsWith(WALKER_SECRET_WARNING_PREFIX)) {
-        secretErrors.push(`[${agent.name}] ${w}`);
+      if (
+        !(w.startsWith(NEVER_SYNC_WARNING_PREFIX) || w.startsWith(WALKER_SECRET_WARNING_PREFIX))
+      ) {
+        continue;
       }
+      if (pathFilter !== undefined && !walkerWarningMatchesSelection(w, pathFilter, agent.name)) {
+        continue;
+      }
+      secretErrors.push(`[${agent.name}] ${w}`);
     }
   }
 

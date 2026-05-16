@@ -7,12 +7,81 @@
  * Requires PowerShell and schtasks.exe (available on all modern Windows).
  */
 import { execFile } from "node:child_process";
+import type * as fsPromises from "node:fs/promises";
 import { promisify } from "node:util";
 import { log } from "@clack/prompts";
 
-const execFileAsync = promisify(execFile);
+type ExecImpl = (
+  cmd: string,
+  args: string[],
+  opts?: { signal?: AbortSignal },
+) => Promise<{ stdout: string; stderr: string }>;
+type FsImpl = {
+  writeFile: typeof fsPromises.writeFile;
+  rm: typeof fsPromises.rm;
+};
+
+const realExecFileAsync = promisify(execFile);
+const realExec: ExecImpl = async (cmd, args, opts) => {
+  const r = (await realExecFileAsync(cmd, args, opts)) as {
+    stdout: string | Buffer;
+    stderr: string | Buffer;
+  };
+  return {
+    stdout: typeof r.stdout === "string" ? r.stdout : r.stdout.toString("utf8"),
+    stderr: typeof r.stderr === "string" ? r.stderr : r.stderr.toString("utf8"),
+  };
+};
+
+const IMPL_SLOT = "__agentsyncInstallerWindowsTestImpl";
+type ImplSlot = { fs?: FsImpl | null; exec?: ExecImpl | null } | undefined;
+
+async function fsImpl(): Promise<FsImpl> {
+  const slot = (globalThis as unknown as Record<string, ImplSlot>)[IMPL_SLOT];
+  if (slot?.fs) return slot.fs;
+  return await import("node:fs/promises");
+}
+function execImpl(): ExecImpl {
+  const slot = (globalThis as unknown as Record<string, ImplSlot>)[IMPL_SLOT];
+  return slot?.exec ?? realExec;
+}
+
+/** @internal Test-only hook. Pass `{ fs: null, exec: null }` to restore. */
+export function __setInstallerWindowsImplForTests(deps: {
+  fs?: FsImpl | null;
+  exec?: ExecImpl | null;
+}): void {
+  (globalThis as unknown as Record<string, ImplSlot>)[IMPL_SLOT] = deps;
+}
+
+// Backward-compat shim so existing top-of-body calls still resolve. New
+// code should call `execImpl()` directly.
+const execFileAsync = (
+  cmd: string,
+  args: string[],
+  opts?: { signal?: AbortSignal },
+): Promise<{ stdout: string; stderr: string }> => execImpl()(cmd, args, opts);
 
 const TASK_NAME = "AgentSync";
+
+// Public-function override slot — see installer-linux.ts for the rationale.
+const FN_SLOT = "__agentsyncInstallerWindowsPublicOverrides";
+type PublicOverrides = Partial<{
+  installWindows: typeof installWindows;
+  uninstallWindows: typeof uninstallWindows;
+  startWindows: typeof startWindows;
+  stopWindows: typeof stopWindows;
+  isInstalledWindows: typeof isInstalledWindows;
+}>;
+
+function getOverride<K extends keyof PublicOverrides>(name: K): PublicOverrides[K] | undefined {
+  return (globalThis as unknown as Record<string, PublicOverrides | undefined>)[FN_SLOT]?.[name];
+}
+
+/** @internal Test-only hook. Pass `{}` to clear overrides. */
+export function __setInstallerWindowsOverridesForTests(overrides: PublicOverrides): void {
+  (globalThis as unknown as Record<string, PublicOverrides>)[FN_SLOT] = overrides;
+}
 
 /** Escape a string for use in XML attribute and text content. */
 function escapeXml(value: string): string {
@@ -84,10 +153,12 @@ export function buildXml(args: string[]): string {
  * `args[0]` is the binary; remaining args plus `daemon _run` go into `<Arguments>`.
  */
 export async function installWindows(args: string[]): Promise<void> {
+  const override = getOverride("installWindows");
+  if (override) return override(args);
   const xml = buildXml(args);
   const tmpXml = `${process.env.TEMP ?? "C:\\Temp"}\\agentsync-task.xml`;
 
-  const { writeFile, rm } = await import("node:fs/promises");
+  const { writeFile, rm } = await fsImpl();
   await writeFile(tmpXml, xml, "utf16le");
 
   try {
@@ -111,6 +182,8 @@ export async function installWindows(args: string[]): Promise<void> {
 
 /** Stop and delete the Windows scheduled task if it exists. */
 export async function uninstallWindows(): Promise<void> {
+  const override = getOverride("uninstallWindows");
+  if (override) return override();
   try {
     await execFileAsync("schtasks", ["/End", "/TN", TASK_NAME]);
   } catch {
@@ -126,6 +199,8 @@ export async function uninstallWindows(): Promise<void> {
  * Uses `isInstalledWindows()` as the registration check; applies a 10-second timeout.
  */
 export async function startWindows(): Promise<void> {
+  const override = getOverride("startWindows");
+  if (override) return override();
   if (!(await isInstalledWindows())) {
     throw new Error("Service not bootstrapped — run `agentsync daemon install` first.");
   }
@@ -145,11 +220,15 @@ export async function startWindows(): Promise<void> {
 
 /** Stop the running Windows scheduled task instance. */
 export async function stopWindows(): Promise<void> {
+  const override = getOverride("stopWindows");
+  if (override) return override();
   await execFileAsync("schtasks", ["/End", "/TN", TASK_NAME]);
 }
 
 /** Check whether the Windows scheduled task already exists. */
 export async function isInstalledWindows(): Promise<boolean> {
+  const override = getOverride("isInstalledWindows");
+  if (override) return override();
   try {
     await execFileAsync("schtasks", ["/Query", "/TN", TASK_NAME]);
     return true;

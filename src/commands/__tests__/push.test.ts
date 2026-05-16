@@ -377,6 +377,60 @@ describe("performPush — literal secret embedded in markdown body", () => {
       false,
     );
   });
+
+  test("vaultPaths allowlist skips the secret scan for unselected files", async () => {
+    // A secret-bearing prompt sits in one file; a clean instructions file
+    // sits in another. With vaultPaths scoped to ONLY the clean file, the
+    // push must succeed — the leaky file is not in scope for this op.
+    mkdirSync(mutableCopilotPaths.promptsDir, { recursive: true });
+    const promptPath = join(mutableCopilotPaths.promptsDir, "leaky.prompt.md");
+    const fakeKey = `sk-ant-api03-${"A".repeat(48)}`;
+    writeFileSync(
+      promptPath,
+      `# Demo prompt\n\nMy API key is ${fakeKey}\n\nDo not share.\n`,
+      "utf8",
+    );
+
+    // Add the clean file in the same agent surface.
+    writeFileSync(mutableCopilotPaths.instructionsFile, "# Clean instructions\n", "utf8");
+
+    const result = await pushMod.performPush({
+      agent: "copilot",
+      vaultPaths: new Set(["copilot/instructions.md.age"]),
+    });
+
+    // Push succeeds because the leaky file is filtered out before the scan.
+    expect(result.fatal).toBe(false);
+    expect(result.pushed).toBeGreaterThan(0);
+    expect(existsSync(join(machine.vaultDir, "copilot", "instructions.md.age"))).toBe(true);
+    // The unselected leaky file was never encrypted.
+    expect(existsSync(join(machine.vaultDir, "copilot", "prompts", "leaky.prompt.md.age"))).toBe(
+      false,
+    );
+  });
+
+  test("vaultPaths allowlist still aborts when a SELECTED file contains a secret", async () => {
+    // Same setup as above, but this time the leaky file IS in the
+    // allowlist. The scan must still abort — the gate's job is to prevent
+    // encrypted secrets from landing in the vault, not to honour selection.
+    mkdirSync(mutableCopilotPaths.promptsDir, { recursive: true });
+    const promptPath = join(mutableCopilotPaths.promptsDir, "leaky.prompt.md");
+    const fakeKey = `sk-ant-api03-${"A".repeat(48)}`;
+    writeFileSync(
+      promptPath,
+      `# Demo prompt\n\nMy API key is ${fakeKey}\n\nDo not share.\n`,
+      "utf8",
+    );
+
+    const result = await pushMod.performPush({
+      agent: "copilot",
+      vaultPaths: new Set(["copilot/prompts/leaky.prompt.md.age"]),
+    });
+
+    expect(result.fatal).toBe(true);
+    expect(result.pushed).toBe(0);
+    expect(result.errors.some((e) => e.includes("leaky.prompt.md"))).toBe(true);
+  });
 });
 
 describe("performPush — literal secret embedded inside a skill bundle body", () => {
@@ -613,5 +667,45 @@ describe("performPush — dry-run still runs Phase 1 security gates", () => {
     expect(existsSync(join(machine.vaultDir, "copilot", "skills", "dirty-skill.tar.age"))).toBe(
       false,
     );
+  });
+});
+
+describe("walkerWarningMatchesSelection — directory boundary", () => {
+  test("matches the exact selected skill via trailing slash", async () => {
+    const { walkerWarningMatchesSelection } = await import("../push");
+    const filter = new Set(["claude/skills/foo.tar.age"]);
+    expect(
+      walkerWarningMatchesSelection(
+        "[Detected literal secret in /Users/x/.claude/skills/foo/SKILL.md]",
+        filter,
+        "claude",
+      ),
+    ).toBe(true);
+  });
+
+  test("does not match a sibling skill that shares a name prefix", async () => {
+    const { walkerWarningMatchesSelection } = await import("../push");
+    const filter = new Set(["claude/skills/foo.tar.age"]);
+    // Substring match on the bare skillDir would falsely escalate this
+    // sibling — the directory-boundary check must reject it.
+    expect(
+      walkerWarningMatchesSelection(
+        "[Detected literal secret in /Users/x/.claude/skills/foo-extra/SKILL.md]",
+        filter,
+        "claude",
+      ),
+    ).toBe(false);
+  });
+
+  test("ignores warnings for a different agent", async () => {
+    const { walkerWarningMatchesSelection } = await import("../push");
+    const filter = new Set(["claude/skills/foo.tar.age"]);
+    expect(
+      walkerWarningMatchesSelection(
+        "[Detected literal secret in /Users/x/.codex/skills/foo/SKILL.md]",
+        filter,
+        "codex",
+      ),
+    ).toBe(false);
   });
 });
