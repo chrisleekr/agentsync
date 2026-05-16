@@ -78,18 +78,18 @@ const SECTIONS: Section[] = [
   },
   {
     key: "local-changed",
-    title: "Changes not yet pushed",
-    hint: "press p to push",
+    title: "To push: local edits",
+    hint: "press p",
   },
   {
     key: "local-only",
-    title: "Local files not in vault",
-    hint: "press p to push",
+    title: "To push: local additions",
+    hint: "press p",
   },
   {
     key: "vault-only",
-    title: "Vault entries not applied locally",
-    hint: "press l to pull",
+    title: "To pull: vault-only, not in local",
+    hint: "press l",
   },
   {
     key: "unknown",
@@ -218,12 +218,26 @@ export function runSyncOp(store: Store, op: "push" | "pull"): void {
     });
     return;
   }
-  // If the user has selected specific rows, honour that as a push allowlist.
-  // A non-empty selection narrows the push to those exact vault paths; the
-  // secret-scan gate also runs only on the selected subset. Selection has no
-  // effect on pull (pull is by-agent, not by-file).
+  // Push from the TUI requires an explicit selection. A bulk push of every
+  // pending change is still available via the CLI (`agentsync push`) where
+  // it runs under the stricter full-scan secret-detection gate. Refusing
+  // empty-selection here removes the ambiguity between TUI and CLI modes,
+  // and prevents an accidental key-press from publishing every drift row.
   const selection = store.getState().selection;
-  const selectedVaultPaths = op === "push" && selection.size > 0 ? new Set(selection) : undefined;
+  if (op === "push" && selection.size === 0) {
+    store.dispatch((d) => {
+      setToast(d, "Select files to push (press space on rows)", "error");
+      d.sync.lastOp = {
+        kind: "push",
+        status: "error",
+        message: "nothing selected — press space to mark files, then p to push",
+        ts: Date.now(),
+      };
+    });
+    return;
+  }
+  // Selection has no effect on pull (pull is by-agent, not by-file).
+  const selectedVaultPaths = op === "push" ? new Set(selection) : undefined;
 
   const runningMessage = selectedVaultPaths
     ? `${op}ing ${selectedVaultPaths.size} selected file(s)…`
@@ -260,6 +274,14 @@ export function runSyncOp(store: Store, op: "push" | "pull"): void {
             setToast(draft, `Push ok: ${r.pushed} artifact(s)`, "success");
             draft.sync.lastOp = { kind: "push", status: "ok", message: msg, ts: Date.now() };
             draft.sync.phase = "idle";
+            // Drop only the paths that were actually pushed in this op,
+            // not the whole selection set. The push captured its paths via
+            // `new Set(selection)` at launch, so any rows the user space-
+            // toggled while the push was async are intentionally outside
+            // this op's scope and must survive into the next push.
+            if (selectedVaultPaths) {
+              for (const p of selectedVaultPaths) draft.selection.delete(p);
+            }
           }
         } else {
           const r = result as Awaited<ReturnType<typeof performPull>>;
@@ -1566,9 +1588,18 @@ export function renderSync(renderer: CliRenderer, host: BoxRenderable, state: Ap
     lines.push("");
   }
 
+  // Drift sections always render their header — even at count 0 — so the
+  // categories are visible and the user learns that vault-only drift is a
+  // thing the panel tracks before it ever appears. Transient sections
+  // (error, unknown) and synced stay conditional.
+  const ALWAYS_SHOW_HEADERS: ReadonlySet<SyncRow["status"]> = new Set([
+    "local-changed",
+    "local-only",
+    "vault-only",
+  ]);
   for (const section of SECTIONS) {
     const rows = groups.get(section.key) ?? [];
-    if (rows.length === 0) continue;
+    if (rows.length === 0 && !ALWAYS_SHOW_HEADERS.has(section.key)) continue;
 
     if (section.key === "synced" && !state.sync.showSynced) {
       lines.push("");

@@ -405,7 +405,25 @@ describe("runSyncOp — lastOp persistence", () => {
     expect(lastOp?.message).toContain("private key");
   });
 
-  test("seeds lastOp.running synchronously when key is loaded", () => {
+  test("seeds lastOp.running synchronously when key is loaded and selection is non-empty", () => {
+    const store = createStore(createInitialState());
+    store.dispatch((d) => {
+      d.sync.phase = "ready";
+      d.sync.keyPrompt = "idle";
+      d.sync.keyLoaded = true;
+      d.sync.keyCache = "AGE-SECRET-KEY-1FAKE";
+      d.selection.add("claude/CLAUDE.md.age");
+    });
+    runSyncOp(store, "push");
+    const lastOp = store.getState().sync.lastOp;
+    expect(lastOp?.kind).toBe("push");
+    // The op is in-flight (will likely fail asynchronously in this test
+    // env, but the synchronous transition to running is what we're
+    // checking).
+    expect(["running", "error"]).toContain(lastOp?.status ?? "");
+  });
+
+  test("rejects push synchronously with actionable error when selection is empty", () => {
     const store = createStore(createInitialState());
     store.dispatch((d) => {
       d.sync.phase = "ready";
@@ -416,9 +434,32 @@ describe("runSyncOp — lastOp persistence", () => {
     runSyncOp(store, "push");
     const lastOp = store.getState().sync.lastOp;
     expect(lastOp?.kind).toBe("push");
-    // The op is in-flight (will likely fail in this test env, but the
-    // synchronous transition to running is what we're checking).
+    expect(lastOp?.status).toBe("error");
+    // Message must tell the user exactly how to recover (select + push),
+    // not just "nothing selected" — the recovery key is the actionable
+    // part for a first-time user.
+    expect(lastOp?.message).toContain("nothing selected");
+    // Lock in the actionable phrase "press space" — not just "space" —
+    // so a future rewrite that drops the verb still fails this assertion.
+    expect(lastOp?.message).toContain("press space");
+  });
+
+  test("pull is unaffected by empty selection — selection is push-only", () => {
+    const store = createStore(createInitialState());
+    store.dispatch((d) => {
+      d.sync.phase = "ready";
+      d.sync.keyPrompt = "idle";
+      d.sync.keyLoaded = true;
+      d.sync.keyCache = "AGE-SECRET-KEY-1FAKE";
+    });
+    runSyncOp(store, "pull");
+    const lastOp = store.getState().sync.lastOp;
+    expect(lastOp?.kind).toBe("pull");
+    // Pull must not land in the empty-selection error path we added for push.
     expect(["running", "error"]).toContain(lastOp?.status ?? "");
+    if (lastOp?.status === "error") {
+      expect(lastOp.message).not.toContain("nothing selected");
+    }
   });
 });
 
