@@ -83,6 +83,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     permissions:
       contents: write
+      id-token: write
+      attestations: write
     steps:
       - uses: actions/checkout@v6
 
@@ -104,7 +106,16 @@ jobs:
       - name: Build binary
         run: bun build --compile ${{ matrix.bun_target && format('--target {0}', matrix.bun_target) || '' }} src/cli.ts --outfile dist/${{ matrix.target }}
 
+      - name: Generate SHA256 checksum
+        working-directory: dist
+        run: shasum -a 256 ${{ matrix.target }} > ${{ matrix.target }}.sha256
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v3
+        with:
+          subject-path: dist/${{ matrix.target }}
+
       - name: Upload release artifact
         env:
           GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
-        run: gh release upload ${{ needs.release-please.outputs.tag_name }} dist/${{ matrix.target }} --clobber
+        run: gh release upload ${{ needs.release-please.outputs.tag_name }} dist/${{ matrix.target }} dist/${{ matrix.target }}.sha256 --clobber
