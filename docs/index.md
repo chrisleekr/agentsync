@@ -31,7 +31,7 @@ bunx --package @chrisleekr/agentsync agentsync --version
 
 The `bunx` form is fully supported. It is slower on cold runs because it fetches the package each time, but it keeps your machine clean.
 
-The GitHub Release record is the canonical source for the version you are installing and what changed in it. Start at the [latest release](https://github.com/chrisleekr/agentsync/releases/latest).
+The GitHub Release record is the canonical source for the version you are installing and what changed in it. Start at the [latest release](https://github.com/chrisleekr/agentsync/releases/latest). Standalone compiled binaries are published there alongside SHA256 checksums and Sigstore build provenance attestations — see [Operations → Verifying release binaries](operations.md#verifying-release-binaries) for the one-line check.
 
 ## Quickstart
 
