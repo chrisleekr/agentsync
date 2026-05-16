@@ -133,6 +133,16 @@ shasum -a 256 -c agentsync-linux-x64.sha256
 
 A line ending in `OK` means the bytes you downloaded match the bytes the release job hashed. Anything else aborts the install. The `.sha256` file lists the binary by its release filename, so keep the downloaded filename unchanged (or update the first column of the `.sha256` to whatever you renamed it to) before running `-c`.
 
+Windows ships neither `shasum` nor `sha256sum` by default. Use PowerShell's `Get-FileHash` and compare against the first column of the downloaded `.sha256` file:
+
+```powershell
+$expected = (Get-Content agentsync-windows-x64.exe.sha256).Split(' ')[0]
+$actual   = (Get-FileHash agentsync-windows-x64.exe -Algorithm SHA256).Hash.ToLower()
+if ($expected -eq $actual) { "OK" } else { throw "checksum mismatch" }
+```
+
+In a CI script that needs a non-zero exit on mismatch, replace `throw` with `Write-Error 'checksum mismatch'; exit 1` so the host shell sees the failure regardless of `$ErrorActionPreference`.
+
 ### Verify build provenance
 
 The attestation proves the binary was produced by this repository's `release-please` workflow at the tagged commit. Verify it with the GitHub CLI:

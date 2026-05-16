@@ -80,6 +80,9 @@ jobs:
           - os: macos-latest
             target: agentsync-macos-x64
             bun_target: bun-darwin-x64
+          - os: ubuntu-latest
+            target: agentsync-windows-x64.exe
+            bun_target: bun-windows-x64
     runs-on: ${{ matrix.os }}
     permissions:
       contents: write
