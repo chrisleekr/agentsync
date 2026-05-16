@@ -12,8 +12,9 @@
 
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const REPO_ROOT = new URL("..", import.meta.url).pathname;
+const REPO_ROOT = fileURLToPath(new URL("..", import.meta.url));
 const DOCS_DIR = join(REPO_ROOT, "docs");
 const CONTRIBUTING = join(DOCS_DIR, "contributing.md");
 const README = join(REPO_ROOT, "README.md");
