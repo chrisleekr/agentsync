@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.9](https://github.com/chrisleekr/agentsync/compare/v0.1.8...v0.1.9) (2026-05-16)
+
+
+### Bug Fixes
+
+* **release:** scope SHA256SUMS upload to repo in checkout-less job ([#100](https://github.com/chrisleekr/agentsync/issues/100)) ([0298131](https://github.com/chrisleekr/agentsync/commit/0298131f5008ea89250c60af2bd07a8c8093fb0f))
+* **tui:** fetch vault from remote before computing Sync diff ([#102](https://github.com/chrisleekr/agentsync/issues/102)) ([267ba31](https://github.com/chrisleekr/agentsync/commit/267ba31d81d1acfe976566a42dcc7383e2db68d6))
+
 ## [0.1.8](https://github.com/chrisleekr/agentsync/compare/v0.1.7...v0.1.8) (2026-05-16)
 
 
