@@ -7,10 +7,60 @@
  * Requires PowerShell and schtasks.exe (available on all modern Windows).
  */
 import { execFile } from "node:child_process";
+import type * as fsPromises from "node:fs/promises";
 import { promisify } from "node:util";
 import { log } from "@clack/prompts";
 
-const execFileAsync = promisify(execFile);
+type ExecImpl = (
+  cmd: string,
+  args: string[],
+  opts?: { signal?: AbortSignal },
+) => Promise<{ stdout: string; stderr: string }>;
+type FsImpl = {
+  writeFile: typeof fsPromises.writeFile;
+  rm: typeof fsPromises.rm;
+};
+
+const realExecFileAsync = promisify(execFile);
+const realExec: ExecImpl = async (cmd, args, opts) => {
+  const r = (await realExecFileAsync(cmd, args, opts)) as {
+    stdout: string | Buffer;
+    stderr: string | Buffer;
+  };
+  return {
+    stdout: typeof r.stdout === "string" ? r.stdout : r.stdout.toString("utf8"),
+    stderr: typeof r.stderr === "string" ? r.stderr : r.stderr.toString("utf8"),
+  };
+};
+
+const IMPL_SLOT = "__agentsyncInstallerWindowsTestImpl";
+type ImplSlot = { fs?: FsImpl | null; exec?: ExecImpl | null } | undefined;
+
+async function fsImpl(): Promise<FsImpl> {
+  const slot = (globalThis as unknown as Record<string, ImplSlot>)[IMPL_SLOT];
+  if (slot?.fs) return slot.fs;
+  return await import("node:fs/promises");
+}
+function execImpl(): ExecImpl {
+  const slot = (globalThis as unknown as Record<string, ImplSlot>)[IMPL_SLOT];
+  return slot?.exec ?? realExec;
+}
+
+/** @internal Test-only hook. Pass `{ fs: null, exec: null }` to restore. */
+export function __setInstallerWindowsImplForTests(deps: {
+  fs?: FsImpl | null;
+  exec?: ExecImpl | null;
+}): void {
+  (globalThis as unknown as Record<string, ImplSlot>)[IMPL_SLOT] = deps;
+}
+
+// Backward-compat shim so existing top-of-body calls still resolve. New
+// code should call `execImpl()` directly.
+const execFileAsync = (
+  cmd: string,
+  args: string[],
+  opts?: { signal?: AbortSignal },
+): Promise<{ stdout: string; stderr: string }> => execImpl()(cmd, args, opts);
 
 const TASK_NAME = "AgentSync";
 
@@ -108,7 +158,7 @@ export async function installWindows(args: string[]): Promise<void> {
   const xml = buildXml(args);
   const tmpXml = `${process.env.TEMP ?? "C:\\Temp"}\\agentsync-task.xml`;
 
-  const { writeFile, rm } = await import("node:fs/promises");
+  const { writeFile, rm } = await fsImpl();
   await writeFile(tmpXml, xml, "utf16le");
 
   try {

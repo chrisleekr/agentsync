@@ -4,83 +4,47 @@
  *
  * Strategy
  * --------
- * installWindows uses process.env.TEMP (evaluated at call time, not baked), so we can
- * set it freely. All schtasks calls are captured via a mocked node:child_process.
- * node:fs/promises is mocked in-memory so no real files are written.
+ * Inject fs + exec stubs through the installer's globalThis-backed slot
+ * (`__setInstallerWindowsImplForTests`). Bypasses Bun's mock.module()
+ * entirely so daemon.test.ts's installer overrides cannot bleed in.
  */
-import { afterAll, beforeAll, beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 
 const fsWrites = new Map<string, string>();
 const fsRms = new Set<string>();
 const execFileCalls: Array<{ cmd: string; args: string[] }> = [];
-let lastExecFileOpts: Record<string, unknown> | undefined;
+let lastExecFileOpts: { signal?: AbortSignal } | undefined;
 
-// isInstalledWindows checks schtasks /Query exit code; simulate it via the mock.
-let queryExitCode = 0; // 0 = installed, non-zero = not installed
+let queryExitCode = 0;
 
-const execFileMock = (
-  cmd: string,
-  args: string[],
-  callback: (err: Error | null, stdout: string, stderr: string) => void,
-) => {
-  execFileCalls.push({ cmd, args });
-  if (cmd === "schtasks" && args[0] === "/Query") {
-    if (queryExitCode !== 0) {
-      callback(new Error("schtasks query failed"), "", "ERROR: task not found");
-      return;
-    }
-  }
-  callback(null, "", "");
-};
-
-const { promisify } = require("node:util") as typeof import("node:util");
-(execFileMock as unknown as Record<symbol, unknown>)[promisify.custom] = (
-  ...fnArgs: unknown[]
-): Promise<{ stdout: string; stderr: string }> =>
-  new Promise((resolve, reject) => {
-    const cmd = fnArgs[0] as string;
-    const args = fnArgs[1] as string[];
-    if (fnArgs.length > 2 && typeof fnArgs[2] === "object" && fnArgs[2] !== null) {
-      lastExecFileOpts = fnArgs[2] as Record<string, unknown>;
-    }
-    execFileMock(cmd, args, (err, stdout, stderr) => {
-      if (err) {
-        reject(Object.assign(err, { stdout, stderr }));
-        return;
-      }
-      resolve({ stdout, stderr });
-    });
-  });
-
-// Spread the real module so `spawnSync` and every other export survive the
-// mock — a bare `() => ({ execFile })` would replace the module in bun's
-// cache with a 1-key object, and later test files in the run that do
-// `import { spawnSync } from "node:child_process"` would fail to load with
-// `SyntaxError: Export named 'spawnSync' not found`. See PR #26 for the
-// cross-file bleed this guards against.
-const actualChildProcess = require("node:child_process") as typeof import("node:child_process");
-mock.module("node:child_process", () => ({
-  ...actualChildProcess,
-  execFile: execFileMock,
-}));
-
-mock.module("node:fs/promises", () => ({
-  writeFile: async (path: string, content: string | Uint8Array) => {
+const fsStub = {
+  writeFile: (async (path: string, content: string | Uint8Array) => {
     fsWrites.set(
       path,
       typeof content === "string"
         ? content
         : Buffer.from(content as Uint8Array).toString("utf16le"),
     );
-  },
-  rm: async (path: string) => {
+  }) as unknown as typeof import("node:fs/promises").writeFile,
+  rm: (async (path: string) => {
     fsRms.add(path);
-  },
-}));
+  }) as unknown as typeof import("node:fs/promises").rm,
+};
 
-mock.module("@clack/prompts", () => ({
-  log: { success: () => {}, info: () => {}, warn: () => {}, error: () => {} },
-}));
+const execStub = async (
+  cmd: string,
+  args: string[],
+  opts?: { signal?: AbortSignal },
+): Promise<{ stdout: string; stderr: string }> => {
+  execFileCalls.push({ cmd, args });
+  if (opts) lastExecFileOpts = opts;
+  if (cmd === "schtasks" && args[0] === "/Query" && queryExitCode !== 0) {
+    throw Object.assign(new Error("schtasks query failed"), {
+      stderr: "ERROR: task not found",
+    });
+  }
+  return { stdout: "", stderr: "" };
+};
 
 type WindowsInstallerModule = typeof import("../installer-windows");
 let m: WindowsInstallerModule;
@@ -90,11 +54,12 @@ const originalTemp = process.env.TEMP;
 beforeAll(async () => {
   process.env.TEMP = "/tmp/agent-sync-test";
   m = await import("../installer-windows");
+  m.__setInstallerWindowsImplForTests({ fs: fsStub, exec: execStub });
 });
 
 afterAll(() => {
   process.env.TEMP = originalTemp;
-  mock.restore();
+  m.__setInstallerWindowsImplForTests({ fs: null, exec: null });
 });
 
 beforeEach(() => {
