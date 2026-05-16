@@ -103,6 +103,7 @@ export async function runApp(): Promise<void> {
   root.add(actionBar);
   root.add(footer);
 
+  let alive = true;
   const ctx: AppContext = {
     renderer,
     store,
@@ -117,7 +118,20 @@ export async function runApp(): Promise<void> {
     },
   };
 
-  store.subscribe(() => ctx.rerender());
+  // Coalesce renders onto a microtask. renderActiveTab calls ensureSyncLoaded,
+  // which dispatches; a synchronous subscriber would re-enter rendering mid
+  // render and stack a second panel into the same host. Deferring means a
+  // dispatch-during-render schedules the next render instead of nesting.
+  let renderScheduled = false;
+  const scheduleRender = (): void => {
+    if (renderScheduled) return;
+    renderScheduled = true;
+    queueMicrotask(() => {
+      renderScheduled = false;
+      if (alive) ctx.rerender();
+    });
+  };
+  store.subscribe(scheduleRender);
   ctx.rerender();
 
   const pollOnce = async () => {
@@ -168,6 +182,7 @@ export async function runApp(): Promise<void> {
   try {
     await quitPromise;
   } finally {
+    alive = false;
     teardown(renderer);
     store.dispose();
     process.removeListener("SIGINT", onSignal);

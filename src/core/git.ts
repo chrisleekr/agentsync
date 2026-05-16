@@ -2,8 +2,6 @@ import { mkdir, stat } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import simpleGit, { type SimpleGit } from "simple-git";
 
-const decoder = new TextDecoder();
-
 /** Stable error categories returned by the vault reconciliation flow. */
 export type GitReconciliationCode = "DIVERGED_HISTORY" | "REMOTE_BRANCH_MISSING";
 
@@ -58,17 +56,26 @@ export class GitClient {
     this.git = simpleGit(repoDir);
   }
 
-  private runGit(args: string[]): { exitCode: number; stdout: string; stderr: string } {
-    const result = Bun.spawnSync(["git", "-C", this.repoDir, ...args]);
-    return {
-      exitCode: result.exitCode,
-      stdout: decoder.decode(result.stdout).trim(),
-      stderr: decoder.decode(result.stderr).trim(),
-    };
+  // Async subprocess (Bun.spawn, not spawnSync): a synchronous git call blocks
+  // the event loop, which freezes the TUI render/input loop during the network
+  // round-trips in fetch/ls-remote. Awaiting an async subprocess yields instead.
+  private async runGit(
+    args: string[],
+  ): Promise<{ exitCode: number; stdout: string; stderr: string }> {
+    const proc = Bun.spawn(["git", "-C", this.repoDir, ...args], {
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const [stdout, stderr, exitCode] = await Promise.all([
+      new Response(proc.stdout).text(),
+      new Response(proc.stderr).text(),
+      proc.exited,
+    ]);
+    return { exitCode, stdout: stdout.trim(), stderr: stderr.trim() };
   }
 
-  private assertGit(args: string[], action: string): string {
-    const result = this.runGit(args);
+  private async assertGit(args: string[], action: string): Promise<string> {
+    const result = await this.runGit(args);
     if (result.exitCode !== 0) {
       throw new Error(`${action} failed: ${result.stderr || result.stdout || "no output"}`);
     }
@@ -76,12 +83,12 @@ export class GitClient {
   }
 
   private async revParse(ref: string): Promise<string | null> {
-    const result = this.runGit(["rev-parse", "--verify", ref]);
+    const result = await this.runGit(["rev-parse", "--verify", ref]);
     return result.exitCode === 0 ? result.stdout : null;
   }
 
-  private isAncestor(ancestor: string, descendant: string): boolean {
-    const result = this.runGit(["merge-base", "--is-ancestor", ancestor, descendant]);
+  private async isAncestor(ancestor: string, descendant: string): Promise<boolean> {
+    const result = await this.runGit(["merge-base", "--is-ancestor", ancestor, descendant]);
     if (result.exitCode === 0) {
       return true;
     }
@@ -103,33 +110,33 @@ export class GitClient {
     }
 
     if ((await this.revParse("HEAD")) !== null) {
-      this.assertGit(["checkout", "-b", branch], `git checkout -b ${branch}`);
+      await this.assertGit(["checkout", "-b", branch], `git checkout -b ${branch}`);
     }
   }
 
-  private trySetUpstream(branch: string, remoteRef: string): void {
-    const result = this.runGit(["branch", "--set-upstream-to", remoteRef, branch]);
+  private async trySetUpstream(branch: string, remoteRef: string): Promise<void> {
+    const result = await this.runGit(["branch", "--set-upstream-to", remoteRef, branch]);
     if (result.exitCode !== 0 && !result.stderr.includes("set up to track")) {
       throw new Error(result.stderr || result.stdout || "git branch --set-upstream-to failed");
     }
   }
 
-  private ensureLocalConfig(key: string, value: string): void {
-    const existing = this.runGit(["config", "--local", "--get", key]);
+  private async ensureLocalConfig(key: string, value: string): Promise<void> {
+    const existing = await this.runGit(["config", "--local", "--get", key]);
     if (existing.exitCode === 0 && existing.stdout.length > 0) {
       return;
     }
 
-    const result = this.runGit(["config", "--local", key, value]);
+    const result = await this.runGit(["config", "--local", key, value]);
     if (result.exitCode !== 0) {
       throw new Error(result.stderr || result.stdout || `git config --local ${key} failed`);
     }
   }
 
-  private ensureCommitConfig(): void {
-    this.ensureLocalConfig("user.name", "Agent Sync");
-    this.ensureLocalConfig("user.email", "agentsync@local.invalid");
-    this.ensureLocalConfig("commit.gpgsign", "false");
+  private async ensureCommitConfig(): Promise<void> {
+    await this.ensureLocalConfig("user.name", "Agent Sync");
+    await this.ensureLocalConfig("user.email", "agentsync@local.invalid");
+    await this.ensureLocalConfig("commit.gpgsign", "false");
   }
 
   /**
@@ -167,7 +174,7 @@ export class GitClient {
 
   /** Ensure the expected remote exists without failing when it was already configured. */
   async ensureRemote(name: string, url: string): Promise<void> {
-    const result = this.runGit(["remote", "get-url", name]);
+    const result = await this.runGit(["remote", "get-url", name]);
     if (result.exitCode === 0) {
       if (result.stdout !== url) {
         throw new Error(
@@ -182,7 +189,7 @@ export class GitClient {
 
   /** Set the unborn HEAD branch explicitly before the first commit. */
   async setHeadBranch(branch: string): Promise<void> {
-    this.assertGit(
+    await this.assertGit(
       ["symbolic-ref", "HEAD", `refs/heads/${branch}`],
       `git symbolic-ref HEAD ${branch}`,
     );
@@ -191,7 +198,7 @@ export class GitClient {
   /** Inspect whether a remote branch currently exists and, if it does, capture its head SHA. */
   async inspectRemoteBranch(remote = "origin", branch = "main"): Promise<RemoteBranchState> {
     const refName = `refs/heads/${branch}`;
-    const result = this.runGit(["ls-remote", "--heads", remote, refName]);
+    const result = await this.runGit(["ls-remote", "--heads", remote, refName]);
     if (result.exitCode !== 0) {
       throw new Error(result.stderr || result.stdout || `git ls-remote failed for ${remote}`);
     }
@@ -239,7 +246,7 @@ export class GitClient {
       );
     }
 
-    this.assertGit(["fetch", "--prune", remote, branch], `git fetch ${remote} ${branch}`);
+    await this.assertGit(["fetch", "--prune", remote, branch], `git fetch ${remote} ${branch}`);
     const remoteRef = `refs/remotes/${remote}/${branch}`;
     const remoteHead = await this.revParse(remoteRef);
 
@@ -249,11 +256,11 @@ export class GitClient {
 
     const localHead = await this.revParse("HEAD");
     if (localHead === null) {
-      this.assertGit(
+      await this.assertGit(
         ["checkout", "-B", branch, remoteRef],
         `git checkout -B ${branch} ${remoteRef}`,
       );
-      this.trySetUpstream(branch, remoteRef);
+      await this.trySetUpstream(branch, remoteRef);
       return {
         status: "bootstrapped-existing",
         remote,
@@ -271,7 +278,7 @@ export class GitClient {
     }
 
     if (branchHead === remoteHead) {
-      this.trySetUpstream(branch, remoteRef);
+      await this.trySetUpstream(branch, remoteRef);
       return {
         status: "noop",
         remote,
@@ -281,9 +288,9 @@ export class GitClient {
       };
     }
 
-    if (this.isAncestor(branchHead, remoteHead)) {
-      this.assertGit(["merge", "--ff-only", remoteRef], `git merge --ff-only ${remoteRef}`);
-      this.trySetUpstream(branch, remoteRef);
+    if (await this.isAncestor(branchHead, remoteHead)) {
+      await this.assertGit(["merge", "--ff-only", remoteRef], `git merge --ff-only ${remoteRef}`);
+      await this.trySetUpstream(branch, remoteRef);
       return {
         status: "fast-forwarded",
         remote,
@@ -293,8 +300,8 @@ export class GitClient {
       };
     }
 
-    if (this.isAncestor(remoteHead, branchHead)) {
-      this.trySetUpstream(branch, remoteRef);
+    if (await this.isAncestor(remoteHead, branchHead)) {
+      await this.trySetUpstream(branch, remoteRef);
       return {
         status: "noop",
         remote,
@@ -305,8 +312,8 @@ export class GitClient {
     }
 
     if (options.force) {
-      this.assertGit(["reset", "--hard", remoteRef], `git reset --hard ${remoteRef}`);
-      this.trySetUpstream(branch, remoteRef);
+      await this.assertGit(["reset", "--hard", remoteRef], `git reset --hard ${remoteRef}`);
+      await this.trySetUpstream(branch, remoteRef);
       return {
         status: "fast-forwarded",
         remote,
@@ -343,7 +350,7 @@ export class GitClient {
       return false;
     }
 
-    this.ensureCommitConfig();
+    await this.ensureCommitConfig();
     await this.git.commit(message);
     return true;
   }
