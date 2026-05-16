@@ -16,18 +16,39 @@
 
 import { readdir, readFile, stat } from "node:fs/promises";
 import { join, relative } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const REPO_ROOT = new URL("..", import.meta.url).pathname;
+// fileURLToPath handles Windows drive letters, percent-encoding, and UNC
+// paths correctly. The naive `new URL(...).pathname` form leaks `/C:/...`
+// shaped strings on Windows that node:path.join cannot resolve.
+const REPO_ROOT = fileURLToPath(new URL("..", import.meta.url));
 
 /**
  * Surfaces scanned at every `bun run check`. README + CLAUDE + every
  * docs page are user-facing; src/** carries comments and test names
- * the original CLAUDE.md rule also bans. specs/** is deliberately
- * NOT scanned — it is the one place spec IDs are correct.
+ * the original CLAUDE.md rule also bans; root configs and the GitHub
+ * Actions workflows are shipped-with-the-repo surfaces where a
+ * spec-ID leak would land on main with no other guard catching it.
+ *
+ * specs/** is deliberately NOT scanned — it is the one place spec
+ * IDs are correct. scripts/__tests__/ is implicitly skipped because
+ * scripts/ is not in any root — the guard's own tests need the spec
+ * IDs as fixture material (same reason specs/ is excluded). The
+ * .github/agents/ and .github/prompts/ trees are speckit tooling
+ * downloaded with the plugin, not project-authored, so they are
+ * excluded too.
  */
 export const SCAN_ROOTS: ReadonlyArray<{ path: string; recursive: boolean; ext?: string }> = [
   { path: "README.md", recursive: false },
   { path: "CLAUDE.md", recursive: false },
+  { path: "package.json", recursive: false },
+  { path: "biome.json", recursive: false },
+  { path: "bunfig.toml", recursive: false },
+  { path: "lefthook.yml", recursive: false },
+  { path: ".github/copilot-instructions.md", recursive: false },
+  { path: ".github/CODEOWNERS", recursive: false },
+  { path: ".github/dependabot.yml", recursive: false },
+  { path: ".github/workflows", recursive: true, ext: ".yml" },
   { path: "docs", recursive: true, ext: ".md" },
   { path: "src", recursive: true, ext: ".ts" },
 ];

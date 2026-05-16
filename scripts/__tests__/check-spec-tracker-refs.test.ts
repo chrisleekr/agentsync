@@ -199,7 +199,29 @@ describe("collectFiles + scan + runCheck against tmpdir fixtures", () => {
     expect(result.stdout).toMatch(/passed \(\d+ files\)/);
   });
 
-  test("SCAN_ROOTS includes the four advertised surfaces", () => {
-    expect(SCAN_ROOTS.map((r) => r.path).sort()).toEqual(["CLAUDE.md", "README.md", "docs", "src"]);
+  test("SCAN_ROOTS includes every advertised shipped/config surface", () => {
+    expect(SCAN_ROOTS.map((r) => r.path).sort()).toEqual([
+      ".github/CODEOWNERS",
+      ".github/copilot-instructions.md",
+      ".github/dependabot.yml",
+      ".github/workflows",
+      "CLAUDE.md",
+      "README.md",
+      "biome.json",
+      "bunfig.toml",
+      "docs",
+      "lefthook.yml",
+      "package.json",
+      "src",
+    ]);
+  });
+
+  test("scripts/ is NOT in SCAN_ROOTS — the guard's own tests need spec IDs as fixtures", () => {
+    // Same reason specs/ is excluded: this directory is allowed to contain
+    // the very tokens the guard catches elsewhere. Pinning the absence is
+    // the contract that protects the test suite from regression.
+    expect(
+      SCAN_ROOTS.find((r) => r.path === "scripts" || r.path.startsWith("scripts/")),
+    ).toBeUndefined();
   });
 });
