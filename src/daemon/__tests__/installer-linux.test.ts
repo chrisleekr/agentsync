@@ -11,6 +11,7 @@
  * (which loads installer-linux before this file runs in CI's file order).
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
+import { createRequire } from "node:module";
 
 const fsWrites = new Map<string, string>();
 const execFileCalls: Array<{ cmd: string; args: string[] }> = [];
@@ -53,14 +54,20 @@ const execStub = async (
 type LinuxInstallerModule = typeof import("../installer-linux");
 let m: LinuxInstallerModule;
 
-beforeAll(async () => {
-  m = await import("../installer-linux");
+beforeAll(() => {
+  // Use createRequire instead of `await import(...)` so Bun's mock.module()
+  // registry (which daemon.test.ts populates with a stub when it runs
+  // first on CI) does not hand us back the stubbed exports. createRequire
+  // bypasses that registry — we always get the real installer-linux,
+  // which is what we need to drive its globalThis-backed injection slot.
+  const req = createRequire(import.meta.url);
+  m = req("../installer-linux") as LinuxInstallerModule;
   m.__setInstallerLinuxImplForTests({ fs: fsStub, exec: execStub });
 });
 
 afterAll(() => {
-  // Restore real implementations so any later test file that imports
-  // installer-linux from the cached module sees a clean module.
+  // Restore real implementations on the global slot so any later test file
+  // that exercises installer-linux for real sees clean defaults.
   m.__setInstallerLinuxImplForTests({ fs: null, exec: null });
 });
 
