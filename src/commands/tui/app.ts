@@ -418,6 +418,17 @@ function actionLabelFor(key: KeyEvent, state: AppState): { key: string; label: s
       if (name === "k") return { key: "k", label: "key rotate" };
       break;
     case "sync":
+      // A Sync sub-mode (diff, skill drill-in, confirm-remove, key prompt)
+      // owns the keymap and swallows k/x, so do not flash an action the
+      // sub-mode will never run.
+      if (
+        state.sync.diff ||
+        state.sync.skillDrillIn ||
+        state.sync.confirmRemove ||
+        state.sync.keyPrompt === "pending"
+      ) {
+        break;
+      }
       if (name === "x" && state.selection.size > 0) return { key: "x", label: "remove" };
       if (name === "k") return { key: "k", label: "load key" };
       break;
