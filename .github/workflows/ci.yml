@@ -72,8 +72,12 @@ jobs:
       - name: Upgrade npm
         run: npm install --global npm@11.5.1
 
-      - name: Unit tests with coverage
-        run: bun test --coverage
+      - name: Unit tests
+        # Coverage is disabled because Bun's coverage reporter intermittently
+        # exits 1 on Linux after the entire suite passes (no failing tests
+        # in the log, just a non-zero exit). Plain `bun test` reports the
+        # same pass/fail counts and exits faithfully.
+        run: bun test
 
   build:
     name: Build Binary
