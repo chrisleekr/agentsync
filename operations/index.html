@@ -1440,11 +1440,14 @@ live state without you re-running <code>agentsync status</code>.</p>
 <tr>
 <td>Windows</td>
 <td>Task Scheduler</td>
-<td>per-user scheduled task <code>AgentSyncDaemon</code></td>
+<td>per-user scheduled task <code>AgentSync</code></td>
 </tr>
 </tbody>
 </table>
 <p>After <code>daemon install</code>, the OS supervisor restarts the daemon on user login and after a crash. <code>daemon start</code> brings it up immediately without waiting for the next login.</p>
+<blockquote>
+<p><strong>Install globally first.</strong> <code>daemon install</code> refuses to register an executable that lives in a temporary directory (the case when running via <code>bunx</code>) because the OS supervisor would lose the binary on the next reboot. Run <code>bun install -g @chrisleekr/agentsync</code> (or another stable install path) before <code>daemon install</code>.</p>
+</blockquote>
 <h3 id="lifecycle">Lifecycle<a class="headerlink" href="#lifecycle" title="Permanent link">&para;</a></h3>
 <p>The daemon moves through a small number of phases. Each phase has a well-defined exit condition.</p>
 <table>
@@ -1488,14 +1491,56 @@ live state without you re-running <code>agentsync status</code>.</p>
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">autoPush</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span><span class="w">         </span><span class="c1"># disable to make the daemon read-only</span>
 </span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="n">autoPull</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span><span class="w">         </span><span class="c1"># disable to opt out of periodic pull</span>
 </span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="n">pullIntervalMs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">300000</span><span class="w"> </span><span class="c1"># how often periodic pull runs, in milliseconds; minimum 1000</span>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="k">[agents]</span>
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="n">cursor</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span><span class="w">           </span><span class="c1"># enable cursor adapter</span>
+</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="n">claude</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span><span class="w">           </span><span class="c1"># enable claude adapter</span>
+</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="n">codex</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span><span class="w">            </span><span class="c1"># enable codex adapter</span>
+</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="n">copilot</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span><span class="w">          </span><span class="c1"># enable copilot adapter</span>
+</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="n">vscode</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">false</span><span class="w">          </span><span class="c1"># opt-in; vscode&#39;s surface is MCP-only</span>
+</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a>
+</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="k">[claudePlugins]</span>
+</span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="n">syncMarketplace</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">false</span><span class="w"> </span><span class="c1"># opt-in: include ~/.claude/marketplace.json in push/pull</span>
 </span></code></pre></div>
 <p>Defaults are chosen so you can install and forget. Tune them only if you observe excessive push churn or want to widen the pull cadence. Values outside the supported range are rejected at config load.</p>
+<p><strong>Environment-variable escape hatches.</strong> For tests, CI, and air-gapped setups, the following variables override the resolved defaults:</p>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Overrides</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>AGENTSYNC_VAULT_DIR</code></td>
+<td>Vault clone directory</td>
+<td><code>~/.config/agentsync/vault</code> (Unix), <code>%APPDATA%/agentsync/vault</code> (Windows)</td>
+</tr>
+<tr>
+<td><code>AGENTSYNC_KEY_PATH</code></td>
+<td>Private key file</td>
+<td><code>~/.config/agentsync/key.txt</code> (Unix), <code>%APPDATA%/agentsync/key.txt</code> (Windows)</td>
+</tr>
+<tr>
+<td><code>AGENTSYNC_MACHINE</code></td>
+<td>Machine identifier in recipient names</td>
+<td>derived from <code>os.hostname()</code></td>
+</tr>
+<tr>
+<td><code>CODEX_HOME</code></td>
+<td>Codex root directory</td>
+<td><code>~/.codex</code></td>
+</tr>
+</tbody>
+</table>
 <h3 id="logs">Logs<a class="headerlink" href="#logs" title="Permanent link">&para;</a></h3>
 <p>Inspect platform logs when <code>daemon status</code> reports unhealthy:</p>
 <ul>
-<li>macOS: <code>~/Library/Logs/agentsync.out.log</code> and <code>agentsync.err.log</code>, plus the LaunchAgent's <code>Console.app</code> entries.</li>
+<li>macOS: <code>~/Library/Logs/AgentSync/agentsync.out.log</code> and <code>~/Library/Logs/AgentSync/agentsync.err.log</code>, plus the LaunchAgent's <code>Console.app</code> entries.</li>
 <li>Linux: <code>journalctl --user -u agentsync.service</code>.</li>
-<li>Windows: Task Scheduler history for <code>AgentSyncDaemon</code>, plus the daemon's stdout file under the user's local app data.</li>
+<li>Windows: Task Scheduler history for <code>AgentSync</code>, plus the daemon's stdout file under the user's local app data.</li>
 </ul>
 <h2 id="key-management">Key management<a class="headerlink" href="#key-management" title="Permanent link">&para;</a></h2>
 <h3 id="add-a-recipient">Add a recipient<a class="headerlink" href="#add-a-recipient" title="Permanent link">&para;</a></h3>
@@ -1588,8 +1633,9 @@ directory and the configured remote.</p>
 <p>Decide the scope first:</p>
 <ul>
 <li><strong>Local clone is corrupted, remote is fine</strong> → <code>agentsync destroy</code>
-  (default <code>--scope=local</code>). Removes <code>~/.agentsync/vault/</code>, keeps
-  <code>key.txt</code>. Then re-init from the same remote.</li>
+  (default <code>--scope=local</code>). Removes <code>~/.config/agentsync/vault/</code>
+  (<code>%APPDATA%/agentsync/vault/</code> on Windows), keeps <code>key.txt</code>. Then
+  re-init from the same remote.</li>
 <li><strong>You want every machine to start fresh, including the remote</strong> →
   <code>agentsync destroy --scope=remote</code>. Adds a commit to the remote that
   removes every tracked file (not a force-push — history is preserved
@@ -1599,7 +1645,7 @@ directory and the configured remote.</p>
   the remote.</li>
 </ul>
 <p>Before running, back the vault up if you might still want it:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>cp<span class="w"> </span>-r<span class="w"> </span>~/.agentsync/vault<span class="w"> </span>~/.agentsync/vault.bak.<span class="k">$(</span>date<span class="w"> </span>+%s<span class="k">)</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>cp<span class="w"> </span>-r<span class="w"> </span>~/.config/agentsync/vault<span class="w"> </span>~/.config/agentsync/vault.bak.<span class="k">$(</span>date<span class="w"> </span>+%s<span class="k">)</span>
 </span></code></pre></div>
 <p>Three confirmation gates must pass: preview prompt → typed phrase
 (<code>DESTROY</code> for local, <code>DESTROY &lt;branch&gt;@&lt;remote-fragment&gt;</code> for remote /

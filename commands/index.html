@@ -1265,7 +1265,7 @@ that <code>agentsync skill remove</code> does, once per selected skill.</p>
 <p><strong>Outcome</strong>: every changed artefact for the targeted agent(s) is encrypted and committed to the vault, then fast-forward-pushed to the remote. The vault commit message names the agent(s) and the machine.</p>
 <p><strong>Caveats</strong>:</p>
 <ul>
-<li>Push is <strong>additive by default</strong>: deleting a skill locally does not remove it from the vault. Use <a href="#skill"><code>skill remove</code></a> for explicit removal.</li>
+<li>Push is <strong>additive</strong>: deleting a skill locally does not remove it from the vault. Use <a href="#skill"><code>skill remove</code></a> for explicit removal.</li>
 <li>The sanitiser is a hard gate. Literal secrets or never-sync paths abort the entire push before bytes leave the machine. See <a href="../operations/#push-aborts-because-secrets-were-detected">Push aborts because secrets were detected</a>.</li>
 <li>Reconciliation is fast-forward only. Divergence aborts the push with recovery guidance.</li>
 <li><code>--dry-run</code> exercises the snapshot, sanitiser, and encryption pipeline so previews reflect what would actually be written.</li>
@@ -1300,7 +1300,7 @@ that <code>agentsync skill remove</code> does, once per selected skill.</p>
 <tr>
 <td><code>--force</code></td>
 <td><code>false</code></td>
-<td>Skip interactive conflict prompts.</td>
+<td>Apply the remote state without prompting on conflicts. Used by the daemon and other non-interactive callers.</td>
 </tr>
 </tbody>
 </table>
@@ -1531,7 +1531,7 @@ invariants in <code>destroy.test.ts</code>).</p>
 <tbody>
 <tr>
 <td><code>local</code></td>
-<td><code>~/.agentsync/vault/</code> is gone. <code>~/.agentsync/key.txt</code>, the daemon, the remote, and every <code>~/.&lt;agent&gt;/</code> directory are unchanged. Re-init from the same remote restores the clone.</td>
+<td><code>~/.config/agentsync/vault/</code> (or <code>%APPDATA%/agentsync/vault/</code> on Windows) is gone. <code>~/.config/agentsync/key.txt</code>, the daemon, the remote, and every <code>~/.&lt;agent&gt;/</code> directory are unchanged. Re-init from the same remote restores the clone.</td>
 </tr>
 <tr>
 <td><code>remote</code></td>
@@ -1553,7 +1553,7 @@ invariants in <code>destroy.test.ts</code>).</p>
   quiet in the meantime.</li>
 <li><code>key.txt</code> is preserved across every scope. Re-init from the same remote
   reuses the existing identity so you stay a recipient. Delete the key
-  manually (<code>rm ~/.agentsync/key.txt</code>) if you really need a key wipe.</li>
+  manually (<code>rm ~/.config/agentsync/key.txt</code> on Unix, or remove <code>%APPDATA%/agentsync/key.txt</code> on Windows) if you really need a key wipe.</li>
 <li>Refuses to run in a non-TTY context without <code>--yes</code>, to protect against
   accidental destroys from piped scripts.</li>
 </ul>
@@ -1576,7 +1576,7 @@ invariants in <code>destroy.test.ts</code>).</p>
 </tr>
 </tbody>
 </table>
-<p>Every command prints a one-line summary on success and an actionable error on failure. If neither is printed, the command was killed externally (a SIGKILL on an unsigned macOS binary is the most common case; see the GitHub Releases for the signed binary).</p>
+<p>Every command prints a one-line summary on success and an actionable error on failure. If neither is printed, the command was killed externally — a Gatekeeper SIGKILL on the unsigned macOS release binary is the most common case. To avoid it, install via <code>bun install -g @chrisleekr/agentsync</code>, or verify the binary first with <code>gh attestation verify</code>. See <a href="../operations/#verifying-release-binaries">Operations → Verifying release binaries</a>.</p>
 
 
 

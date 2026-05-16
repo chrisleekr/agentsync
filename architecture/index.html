@@ -1029,7 +1029,7 @@
 <ul>
 <li>If the local branch is identical to the remote branch, the operation continues.</li>
 <li>If the local branch is behind the remote, the operation fast-forwards the local before continuing.</li>
-<li>If the local branch is ahead of the remote, the operation pushes after the local step completes.</li>
+<li>If the local branch is ahead of the remote, <code>push</code> fast-forwards the remote; <code>pull</code> continues without writing (pull never pushes).</li>
 <li>If the local branch has diverged from the remote, the operation stops with a printed recovery path. AgentSync never merges or rebases automatically.</li>
 </ul>
 <p>The reasoning: a configuration vault is a flat record of intent. Three-way merge on encrypted blobs would either produce nonsense or require trust in a merge driver that has no way to inspect the plaintext. Failing closed forces the human to decide which branch is canonical.</p>
@@ -1122,9 +1122,9 @@ because every request goes through the same sync queue.</p>
 </ul>
 <p>Private keys stay on disk in the local runtime directory (<code>~/.config/agentsync/key.txt</code> by default on Unix, with restrictive permissions). They are never committed and never logged.</p>
 <h2 id="path-resolution">Path resolution<a class="headerlink" href="#path-resolution" title="Permanent link">&para;</a></h2>
-<p>Every agent path is resolved through a single resolver that maps <code>&lt;agent&gt;.&lt;dir&gt;</code> to an absolute path on the current OS. Tests and platform overrides drive the resolver through environment variables rather than rewriting paths inline. The consequence: AgentSync runs identically inside the Docker E2E harness, on a developer laptop, and in CI, with no platform-specific branches in the call sites.</p>
+<p>Every agent path is resolved through a single resolver that maps <code>&lt;agent&gt;.&lt;dir&gt;</code> to an absolute path on the current OS. Tests and platform overrides drive the resolver through environment variables rather than rewriting paths inline. The consequence: AgentSync runs identically inside the Docker E2E harness, on a developer laptop, and in CI, without command-implementation sites needing to branch on platform — platform-specific decisions live in <code>src/config/paths.ts</code> and <code>src/daemon/installer-*.ts</code> and nowhere else.</p>
 <h2 id="vault-format-versioning">Vault format versioning<a class="headerlink" href="#vault-format-versioning" title="Permanent link">&para;</a></h2>
-<p>The vault has a format version recorded in <code>agentsync.toml</code>. Backwards-incompatible changes (a renamed namespace, a new sanitiser rule that would reject already-published content, a new encryption-recipient encoding) require a migration step. Each migration is recorded under <code>src/migrate/</code> and is documented in <a href="../migrate/">Migrate</a>. AgentSync refuses to push to a vault whose format version is newer than the CLI understands.</p>
+<p>The vault carries a <code>version</code> field in <code>agentsync.toml</code> (default <code>"1"</code>) that future backwards-incompatible changes (a renamed namespace, a new sanitiser rule that would reject already-published content, a new encryption-recipient encoding) will use to gate migrations. Each migration lives under <code>src/migrate/</code> and is documented in <a href="../migrate/">Migrate</a>. The current schema treats the field as informational; a forward-incompatibility refusal will land alongside the first breaking change.</p>
 <h2 id="source-map">Source map<a class="headerlink" href="#source-map" title="Permanent link">&para;</a></h2>
 <p>If you are reading the code, this is the rough mapping from concept to module. Keep this list short and link by responsibility rather than file path so renames do not silently invalidate it.</p>
 <table>

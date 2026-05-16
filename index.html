@@ -818,9 +818,14 @@ push/pull, and migrate. See <a href="commands/#tui">Commands → tui</a>.</p>
 </span></code></pre></div>
 </li>
 <li>
-<p><strong>Join from another machine.</strong> On a second machine, run <code>init</code> against the same remote, copy or regenerate the age private key, then <code>pull</code>.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>agentsync<span class="w"> </span>init<span class="w"> </span>--remote<span class="w"> </span>git@github.com:&lt;you&gt;/agentsync-vault.git<span class="w"> </span>--branch<span class="w"> </span>main
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>agentsync<span class="w"> </span>pull
+<p><strong>Join from another machine.</strong> On the second machine, <code>init</code> generates a fresh age keypair; on a machine that already has the vault, register the new public key as a recipient (<code>agentsync key add &lt;name&gt; &lt;pubkey&gt;</code> and push), then <code>pull</code> here.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># on the new machine</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>agentsync<span class="w"> </span>init<span class="w"> </span>--remote<span class="w"> </span>git@github.com:&lt;you&gt;/agentsync-vault.git<span class="w"> </span>--branch<span class="w"> </span>main
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="c1"># then on a machine that already has the vault, add the new recipient and push:</span>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="c1">#   agentsync key add &lt;name&gt; &lt;pubkey-printed-by-init&gt;</span>
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="c1">#   agentsync push</span>
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="c1"># back on the new machine</span>
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>agentsync<span class="w"> </span>pull
 </span></code></pre></div>
 </li>
 <li>

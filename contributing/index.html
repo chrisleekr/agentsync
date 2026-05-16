@@ -863,7 +863,7 @@
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>bun<span class="w"> </span>install
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>bun<span class="w"> </span>run<span class="w"> </span>check
 </span></code></pre></div>
-<p><code>bun run check</code> runs the typecheck, Biome lint, the test suite, and the docs-mirror check. A clean run is the precondition for opening a pull request.</p>
+<p><code>bun run check</code> runs typecheck, Biome lint, the docs-mirror check, the spec-tracker ID leak guard, and the test suite (in that order). A clean run is the precondition for opening a pull request.</p>
 <p>While developing, run the CLI directly from source rather than the global install so your changes take effect immediately:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>bun<span class="w"> </span>run<span class="w"> </span>src/cli.ts<span class="w"> </span>&lt;command&gt;
 </span></code></pre></div>
