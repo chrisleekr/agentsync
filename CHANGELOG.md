@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.8](https://github.com/chrisleekr/agentsync/compare/v0.1.7...v0.1.8) (2026-05-16)
+
+
+### Bug Fixes
+
+* **release:** install target-platform OpenTUI native to fix cross-compile ([#97](https://github.com/chrisleekr/agentsync/issues/97)) ([649a27b](https://github.com/chrisleekr/agentsync/commit/649a27b110f41a8488a748a5d4e878e603249748))
+* **tui:** make Sync panel drift categories visible and selection-safe ([#99](https://github.com/chrisleekr/agentsync/issues/99)) ([6f1c586](https://github.com/chrisleekr/agentsync/commit/6f1c586d0d3c1cdece5b3f2e364ce84fc9b9ec0a))
+
 ## [0.1.7](https://github.com/chrisleekr/agentsync/compare/v0.1.6...v0.1.7) (2026-05-16)
 
 
