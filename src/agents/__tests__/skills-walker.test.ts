@@ -180,8 +180,10 @@ describe("collectSkillArtifacts", () => {
     expect(offending?.startsWith("never-sync inside skill: ")).toBe(true);
   });
 
-  // Row 12 — two skills, one clean + one dirty → walker collects clean, warns dirty (R3)
-  test("collects clean skills even when another skill has a never-sync hit (R3)", async () => {
+  // Row 12 — two skills, one clean + one dirty → walker collects clean, warns dirty.
+  // The whole-picture invariant: one offending skill must NOT mask the other clean
+  // skills from being collected; the push gate handles escalation, not the walker.
+  test("collects clean skills even when another skill has a never-sync hit", async () => {
     const clean = join(tmpDir, "clean-skill");
     await mkdir(clean, { recursive: true });
     await writeFile(join(clean, "SKILL.md"), "# clean", "utf8");
