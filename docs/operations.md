@@ -47,9 +47,11 @@ The platform backend is selected at runtime:
 |---|---|---|
 | macOS | launchd LaunchAgent | `~/Library/LaunchAgents/com.agentsync.daemon.plist` |
 | Linux | systemd user unit | `~/.config/systemd/user/agentsync.service` |
-| Windows | Task Scheduler | per-user scheduled task `AgentSyncDaemon` |
+| Windows | Task Scheduler | per-user scheduled task `AgentSync` |
 
 After `daemon install`, the OS supervisor restarts the daemon on user login and after a crash. `daemon start` brings it up immediately without waiting for the next login.
+
+> **Install globally first.** `daemon install` refuses to register an executable that lives in a temporary directory (the case when running via `bunx`) because the OS supervisor would lose the binary on the next reboot. Run `bun install -g @chrisleekr/agentsync` (or another stable install path) before `daemon install`.
 
 ### Lifecycle
 
@@ -74,17 +76,36 @@ debounceMs = 300        # quiet window after a file change before push fires; 50
 autoPush = true         # disable to make the daemon read-only
 autoPull = true         # disable to opt out of periodic pull
 pullIntervalMs = 300000 # how often periodic pull runs, in milliseconds; minimum 1000
+
+[agents]
+cursor = true           # enable cursor adapter
+claude = true           # enable claude adapter
+codex = true            # enable codex adapter
+copilot = true          # enable copilot adapter
+vscode = false          # opt-in; vscode's surface is MCP-only
+
+[claudePlugins]
+syncMarketplace = false # opt-in: include ~/.claude/marketplace.json in push/pull
 ```
 
 Defaults are chosen so you can install and forget. Tune them only if you observe excessive push churn or want to widen the pull cadence. Values outside the supported range are rejected at config load.
+
+**Environment-variable escape hatches.** For tests, CI, and air-gapped setups, the following variables override the resolved defaults:
+
+| Variable | Overrides | Default |
+|---|---|---|
+| `AGENTSYNC_VAULT_DIR` | Vault clone directory | `~/.config/agentsync/vault` (Unix), `%APPDATA%/agentsync/vault` (Windows) |
+| `AGENTSYNC_KEY_PATH` | Private key file | `~/.config/agentsync/key.txt` (Unix), `%APPDATA%/agentsync/key.txt` (Windows) |
+| `AGENTSYNC_MACHINE` | Machine identifier in recipient names | derived from `os.hostname()` |
+| `CODEX_HOME` | Codex root directory | `~/.codex` |
 
 ### Logs
 
 Inspect platform logs when `daemon status` reports unhealthy:
 
-- macOS: `~/Library/Logs/agentsync.out.log` and `agentsync.err.log`, plus the LaunchAgent's `Console.app` entries.
+- macOS: `~/Library/Logs/AgentSync/agentsync.out.log` and `~/Library/Logs/AgentSync/agentsync.err.log`, plus the LaunchAgent's `Console.app` entries.
 - Linux: `journalctl --user -u agentsync.service`.
-- Windows: Task Scheduler history for `AgentSyncDaemon`, plus the daemon's stdout file under the user's local app data.
+- Windows: Task Scheduler history for `AgentSync`, plus the daemon's stdout file under the user's local app data.
 
 ## Key management
 
@@ -223,8 +244,9 @@ When you want to throw away vault state and start over, reach for
 Decide the scope first:
 
 - **Local clone is corrupted, remote is fine** → `agentsync destroy`
-  (default `--scope=local`). Removes `~/.agentsync/vault/`, keeps
-  `key.txt`. Then re-init from the same remote.
+  (default `--scope=local`). Removes `~/.config/agentsync/vault/`
+  (`%APPDATA%/agentsync/vault/` on Windows), keeps `key.txt`. Then
+  re-init from the same remote.
 - **You want every machine to start fresh, including the remote** →
   `agentsync destroy --scope=remote`. Adds a commit to the remote that
   removes every tracked file (not a force-push — history is preserved
@@ -236,7 +258,7 @@ Decide the scope first:
 Before running, back the vault up if you might still want it:
 
 ```bash
-cp -r ~/.agentsync/vault ~/.agentsync/vault.bak.$(date +%s)
+cp -r ~/.config/agentsync/vault ~/.config/agentsync/vault.bak.$(date +%s)
 ```
 
 Three confirmation gates must pass: preview prompt → typed phrase

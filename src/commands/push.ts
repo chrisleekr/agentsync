@@ -313,7 +313,7 @@ export const pushCommand = defineCommand({
   args: {
     agent: {
       type: "string",
-      description: "Specific agent to sync (cursor|claude|codex|copilot)",
+      description: "Specific agent to sync (cursor|claude|codex|copilot|vscode)",
     },
     message: { type: "string", description: "Custom commit message" },
     dryRun: {

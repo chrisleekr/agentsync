@@ -154,7 +154,7 @@ agentsync push --dry-run
 
 **Caveats**:
 
-- Push is **additive by default**: deleting a skill locally does not remove it from the vault. Use [`skill remove`](#skill) for explicit removal.
+- Push is **additive**: deleting a skill locally does not remove it from the vault. Use [`skill remove`](#skill) for explicit removal.
 - The sanitiser is a hard gate. Literal secrets or never-sync paths abort the entire push before bytes leave the machine. See [Push aborts because secrets were detected](operations.md#push-aborts-because-secrets-were-detected).
 - Reconciliation is fast-forward only. Divergence aborts the push with recovery guidance.
 - `--dry-run` exercises the snapshot, sanitiser, and encryption pipeline so previews reflect what would actually be written.
@@ -177,7 +177,7 @@ agentsync pull --dry-run
 |---|---|---|
 | `--agent` | all enabled | Restrict to one agent. |
 | `--dry-run` | `false` | Show what would be applied without writing locally. |
-| `--force` | `false` | Skip interactive conflict prompts. |
+| `--force` | `false` | Apply the remote state without prompting on conflicts. Used by the daemon and other non-interactive callers. |
 
 **Outcome**: supported local agent files are updated from the vault, including per-agent skills under `claude/skills/`, `codex/skills/`, `cursor/skills/`, and `copilot/skills/`. Claude Code plugins under `claude/plugins/<name>/` round-trip back to `~/.claude/plugins/<name>/`. `marketplace.json` is only applied when `claudePlugins.syncMarketplace = true` is set locally.
 
@@ -375,7 +375,7 @@ agentsync destroy --scope=all           # both
 
 | Scope | After destroy |
 |---|---|
-| `local` | `~/.agentsync/vault/` is gone. `~/.agentsync/key.txt`, the daemon, the remote, and every `~/.<agent>/` directory are unchanged. Re-init from the same remote restores the clone. |
+| `local` | `~/.config/agentsync/vault/` (or `%APPDATA%/agentsync/vault/` on Windows) is gone. `~/.config/agentsync/key.txt`, the daemon, the remote, and every `~/.<agent>/` directory are unchanged. Re-init from the same remote restores the clone. |
 | `remote` | Remote branch has a new commit, `destroy: clear vault content`, that removes every previously-tracked file. Local vault dir keeps its `.git/` history. Other machines that still have the data can `git revert <sha>` to recover. |
 | `all` | Both of the above. Remote is wiped first so a failed push does not leave you with a wiped local that cannot reach the remote. |
 
@@ -389,7 +389,7 @@ agentsync destroy --scope=all           # both
   quiet in the meantime.
 - `key.txt` is preserved across every scope. Re-init from the same remote
   reuses the existing identity so you stay a recipient. Delete the key
-  manually (`rm ~/.agentsync/key.txt`) if you really need a key wipe.
+  manually (`rm ~/.config/agentsync/key.txt` on Unix, or remove `%APPDATA%/agentsync/key.txt` on Windows) if you really need a key wipe.
 - Refuses to run in a non-TTY context without `--yes`, to protect against
   accidental destroys from piped scripts.
 
@@ -400,4 +400,4 @@ agentsync destroy --scope=all           # both
 | 0 | Success. |
 | 1 | Failure. Re-run only after addressing the printed cause. Some failures are not recoverable (a lost private key cannot be re-derived; a divergent vault must be reset or recloned). |
 
-Every command prints a one-line summary on success and an actionable error on failure. If neither is printed, the command was killed externally (a SIGKILL on an unsigned macOS binary is the most common case; see the GitHub Releases for the signed binary).
+Every command prints a one-line summary on success and an actionable error on failure. If neither is printed, the command was killed externally — a Gatekeeper SIGKILL on the unsigned macOS release binary is the most common case. To avoid it, install via `bun install -g @chrisleekr/agentsync`, or verify the binary first with `gh attestation verify`. See [Operations → Verifying release binaries](operations.md#verifying-release-binaries).

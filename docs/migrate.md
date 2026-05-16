@@ -108,11 +108,11 @@ flowchart TD
 - **MCP per-server merge**: Only colliding server names are overwritten; target-only servers are preserved. The merge key is target-specific: VS Code uses top-level `servers` + `inputs`, Claude/Cursor/Copilot CLI use `mcpServers`, Codex uses `[mcp.servers.*]` TOML tables.
 - **Secret detection**: If API keys or tokens are found in MCP content (including HTTP-transport `headers.Authorization`), migration aborts with a clear error. Remove literal secrets and retry.
 - **Graceful skipping**: Missing source files and unsupported pairs produce skip messages, not errors.
-- **`--name` is strict**: When `--name` is set and zero source artefacts match that name, migration hard-errors and exits non-zero rather than silently skipping. Catches typos. Behaviour change in this version — earlier releases silently skipped.
+- **`--name` is strict**: When `--name` is set and zero source artefacts match that name, migration hard-errors and exits non-zero rather than silently skipping. Catches typos.
 
 ## Skills migration
 
-`agentsync migrate --type skills --from <agent> --to <agent|all>` cross-translates the Anthropic SKILL.md spec between Claude, Cursor, and Codex (all three implement the same progressive-disclosure spec verbatim). Copilot CLI is supported as a best-effort target — files land in `~/.copilot/skills/<name>/` but Copilot has no documented SKILL.md loader as of 2026-05, so a warning is emitted. VS Code is skipped (no SKILL.md surface).
+`agentsync migrate --type skills --from <agent> --to <agent|all>` cross-translates the Anthropic SKILL.md spec between Claude, Cursor, and Codex (all three implement the same progressive-disclosure spec verbatim). Copilot CLI is supported as a best-effort target — files land in `~/.copilot/skills/<name>/` but Copilot does not yet implement a documented SKILL.md loader, so a warning is emitted. VS Code is skipped (no SKILL.md surface).
 
 Each skill directory's supporting files (`reference.md`, `scripts/*`, assets) ride along as sidecars — they're written under the destination skill dir verbatim. Binary assets are base64-roundtripped. Skill names are validated against the same traversal/hidden-name guard the snapshot path uses.
 

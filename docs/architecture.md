@@ -121,7 +121,7 @@ Reconciliation is fast-forward only and is the **same rule** used by `init`, `pu
 
 - If the local branch is identical to the remote branch, the operation continues.
 - If the local branch is behind the remote, the operation fast-forwards the local before continuing.
-- If the local branch is ahead of the remote, the operation pushes after the local step completes.
+- If the local branch is ahead of the remote, `push` fast-forwards the remote; `pull` continues without writing (pull never pushes).
 - If the local branch has diverged from the remote, the operation stops with a printed recovery path. AgentSync never merges or rebases automatically.
 
 The reasoning: a configuration vault is a flat record of intent. Three-way merge on encrypted blobs would either produce nonsense or require trust in a merge driver that has no way to inspect the plaintext. Failing closed forces the human to decide which branch is canonical.
@@ -236,11 +236,11 @@ Private keys stay on disk in the local runtime directory (`~/.config/agentsync/k
 
 ## Path resolution
 
-Every agent path is resolved through a single resolver that maps `<agent>.<dir>` to an absolute path on the current OS. Tests and platform overrides drive the resolver through environment variables rather than rewriting paths inline. The consequence: AgentSync runs identically inside the Docker E2E harness, on a developer laptop, and in CI, with no platform-specific branches in the call sites.
+Every agent path is resolved through a single resolver that maps `<agent>.<dir>` to an absolute path on the current OS. Tests and platform overrides drive the resolver through environment variables rather than rewriting paths inline. The consequence: AgentSync runs identically inside the Docker E2E harness, on a developer laptop, and in CI, without command-implementation sites needing to branch on platform — platform-specific decisions live in `src/config/paths.ts` and `src/daemon/installer-*.ts` and nowhere else.
 
 ## Vault format versioning
 
-The vault has a format version recorded in `agentsync.toml`. Backwards-incompatible changes (a renamed namespace, a new sanitiser rule that would reject already-published content, a new encryption-recipient encoding) require a migration step. Each migration is recorded under `src/migrate/` and is documented in [Migrate](migrate.md). AgentSync refuses to push to a vault whose format version is newer than the CLI understands.
+The vault carries a `version` field in `agentsync.toml` (default `"1"`) that future backwards-incompatible changes (a renamed namespace, a new sanitiser rule that would reject already-published content, a new encryption-recipient encoding) will use to gate migrations. Each migration lives under `src/migrate/` and is documented in [Migrate](migrate.md). The current schema treats the field as informational; a forward-incompatibility refusal will land alongside the first breaking change.
 
 ## Source map
 
