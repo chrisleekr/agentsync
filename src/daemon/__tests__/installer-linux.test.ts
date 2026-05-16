@@ -54,15 +54,34 @@ const execStub = async (
 type LinuxInstallerModule = typeof import("../installer-linux");
 let m: LinuxInstallerModule;
 
-beforeAll(() => {
-  // Use createRequire instead of `await import(...)` so Bun's mock.module()
-  // registry (which daemon.test.ts populates with a stub when it runs
-  // first on CI) does not hand us back the stubbed exports. createRequire
-  // bypasses that registry — we always get the real installer-linux,
-  // which is what we need to drive its globalThis-backed injection slot.
+beforeAll(async () => {
   const req = createRequire(import.meta.url);
   m = req("../installer-linux") as LinuxInstallerModule;
+  // Diagnostic: log which functions we received so CI logs surface
+  // whether mock.module() pollution is happening.
+  // biome-ignore lint/suspicious/noConsole: diagnostic for CI flake
+  console.log(
+    `[installer-linux.test] m.installLinux.name=${m.installLinux.name} ` +
+      `hasSetImpl=${typeof m.__setInstallerLinuxImplForTests}`,
+  );
   m.__setInstallerLinuxImplForTests({ fs: fsStub, exec: execStub });
+
+  // Probe: trigger installLinux with a sentinel arg and assert the stub
+  // wrote to fsWrites. If this fails, every subsequent test would fail
+  // too — fail loudly with diagnostic data instead.
+  fsWrites.clear();
+  try {
+    await m.installLinux(["__probe__"]);
+  } catch (err) {
+    // biome-ignore lint/suspicious/noConsole: diagnostic
+    console.error(`[installer-linux.test] probe threw: ${(err as Error).message}`);
+  }
+  // biome-ignore lint/suspicious/noConsole: diagnostic
+  console.log(
+    `[installer-linux.test] probe wrote ${fsWrites.size} files; ` +
+      `keys=${[...fsWrites.keys()].join(",")}`,
+  );
+  fsWrites.clear();
 });
 
 afterAll(() => {
