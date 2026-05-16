@@ -14,6 +14,7 @@
  * (true after install, false after uninstall/rm).
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, mock, test } from "bun:test";
+import { createRequire } from "node:module";
 
 // ── In-memory FS state (captured before the module is imported) ───────────────
 const fsWrites = new Map<string, string>();
@@ -71,6 +72,10 @@ const { promisify } = require("node:util") as typeof import("node:util");
 // `SyntaxError: Export named 'spawnSync' not found`. See PR #26 for the
 // cross-file bleed this guards against.
 const actualChildProcess = require("node:child_process") as typeof import("node:child_process");
+// Capture the REAL node:fs/promises before our override so afterAll can
+// restore it for later test files in the same Bun run. Without this,
+// the in-memory mock leaks into unrelated suites (mirrors the linux fix).
+const actualFsPromises = require("node:fs/promises") as typeof import("node:fs/promises");
 mock.module("node:child_process", () => ({
   ...actualChildProcess,
   execFile: execFileMock,
@@ -101,12 +106,29 @@ type MacOsInstallerModule = typeof import("../installer-macos");
 let m: MacOsInstallerModule;
 
 beforeAll(async () => {
+  // Bust the require cache for installer-macos before importing so the
+  // module's top-level `import { readFile } from "node:fs/promises"`
+  // binds to THIS file's mock — not whatever another suite registered
+  // first (Bun's mock.module() does not invalidate the import cache).
+  const req = createRequire(import.meta.url);
+  try {
+    const resolved = req.resolve("../installer-macos");
+    delete req.cache?.[resolved];
+  } catch {
+    // ignore — first run, nothing to invalidate
+  }
   m = await import("../installer-macos");
 });
 
 // Restore mocked modules after this file completes so they do not bleed into
 // subsequent test files (e.g. integration.test.ts) that need the real node:fs/promises.
+// Re-mock back to the real implementations BEFORE mock.restore() so any
+// test file loaded later in the same Bun run sees an unmocked fs/promises —
+// mock.restore() alone leaves the cached fs/promises pointing at our
+// override and breaks unrelated tests that call readFile/stat.
 afterAll(() => {
+  mock.module("node:fs/promises", () => actualFsPromises);
+  mock.module("node:child_process", () => actualChildProcess);
   mock.restore();
 });
 
