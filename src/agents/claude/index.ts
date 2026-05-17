@@ -13,6 +13,7 @@ import {
   readIfExists,
   type SnapshotArtifact,
   type SnapshotResult,
+  setJsoncTopLevelKey,
 } from "../_utils";
 import { collectSkillArtifacts, InvalidSkillNameError, validateSkillName } from "../skills-walker";
 import { applyClaudePluginsDir } from "./plugin-apply";
@@ -340,23 +341,32 @@ export async function applyClaudeMd(content: string): Promise<void> {
 export async function applyClaudeHooks(hooksJsonContent: string): Promise<void> {
   const home = homedir();
   const existingRaw = await readIfExists(AgentPaths.claude.settingsJson);
-  const existing = existingRaw ? (JSON.parse(existingRaw) as Record<string, unknown>) : {};
+  // Vault content was re-serialized as clean JSON on snapshot, so parsing it
+  // strict is safe. The local settings.json is JSONC — edit the `hooks` key in
+  // place so a trailing comma elsewhere does not abort the pull.
   const incoming = JSON.parse(hooksJsonContent) as Record<string, unknown>;
   // Denormalize only the incoming subset — local-only keys must not be touched
   // because they were never normalized on snapshot and any `$` in their values
   // is literal.
-  existing.hooks = denormalizeFromVault(incoming.hooks ?? {}, home);
-  await atomicWrite(AgentPaths.claude.settingsJson, `${JSON.stringify(existing, null, 2)}\n`);
+  const hooks = denormalizeFromVault(incoming.hooks ?? {}, home);
+  await atomicWrite(
+    AgentPaths.claude.settingsJson,
+    setJsoncTopLevelKey(existingRaw ?? "", "hooks", hooks),
+  );
 }
 
 /** Merge synced Claude MCP servers back into the local Claude config file. */
 export async function applyClaudeMcp(claudeJsonContent: string): Promise<void> {
   const home = homedir();
   const existingRaw = await readIfExists(AgentPaths.claude.mcpJson);
-  const existing = existingRaw ? (JSON.parse(existingRaw) as Record<string, unknown>) : {};
   const incoming = JSON.parse(claudeJsonContent) as Record<string, unknown>;
-  existing.mcpServers = denormalizeFromVault(incoming.mcpServers ?? {}, home);
-  await atomicWrite(AgentPaths.claude.mcpJson, `${JSON.stringify(existing, null, 2)}\n`);
+  // ~/.claude.json is large and JSONC-tolerant. Edit `mcpServers` in place so
+  // the rest of Claude's config (and any trailing comma) is left untouched.
+  const mcpServers = denormalizeFromVault(incoming.mcpServers ?? {}, home);
+  await atomicWrite(
+    AgentPaths.claude.mcpJson,
+    setJsoncTopLevelKey(existingRaw ?? "", "mcpServers", mcpServers),
+  );
 }
 
 /** Restore one Claude command markdown file from the vault. */

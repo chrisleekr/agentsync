@@ -8,6 +8,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { readFile, stat, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
+import { applyEdits, modify, type ParseError, parse } from "jsonc-parser";
 import type { RedactionResult } from "../core/sanitizer";
 
 /**
@@ -68,6 +69,37 @@ export async function readIfExists(path: string): Promise<string | null> {
 export async function atomicWrite(path: string, content: string | Buffer): Promise<void> {
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, content);
+}
+
+/**
+ * Set a single top-level key in a JSONC document, leaving the rest of the file
+ * verbatim — comments, trailing commas, and formatting all survive.
+ *
+ * Agent config files (Cursor/VS Code settings.json, ~/.claude/settings.json,
+ * ~/.claude.json) are JSONC, not strict JSON. A plain `JSON.parse` on the apply
+ * path aborts the whole pull on a trailing comma, and a `JSON.parse` →
+ * `JSON.stringify` round-trip silently discards the user's comments. The
+ * `jsonc-parser` edit API tolerates JSONC and rewrites only the owned key, so a
+ * pull never reformats config AgentSync does not control.
+ *
+ * When `raw` has no editable JSONC object — it is empty, whitespace-only,
+ * malformed, or a non-object root (array/primitive) — there is nothing to edit
+ * in place: `modify` would either throw or splice a fresh object before the
+ * residual content. A clean single-key object is written instead. A freshly
+ * written file ends in a newline; an edited file keeps the user's own EOF.
+ */
+export function setJsoncTopLevelKey(raw: string, key: string, value: unknown): string {
+  const errors: ParseError[] = [];
+  const parsed = parse(raw, errors, { allowTrailingComma: true });
+  const rootIsObject =
+    errors.length === 0 && parsed !== null && typeof parsed === "object" && !Array.isArray(parsed);
+  if (!rootIsObject) {
+    return `${JSON.stringify({ [key]: value }, null, 2)}\n`;
+  }
+  const edits = modify(raw, [key], value, {
+    formattingOptions: { insertSpaces: true, tabSize: 2 },
+  });
+  return applyEdits(raw, edits);
 }
 
 /**

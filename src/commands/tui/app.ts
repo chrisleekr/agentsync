@@ -261,7 +261,6 @@ function handleKey(key: KeyEvent, ctx: AppContext, quit: () => void): void {
     if (idx >= 0 && idx < TAB_IDS.length) {
       ctx.store.dispatch((d) => {
         d.activeTab = TAB_IDS[idx];
-        d.selection.clear();
       });
       return;
     }
