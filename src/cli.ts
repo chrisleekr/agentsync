@@ -11,6 +11,7 @@ import { pushCommand } from "./commands/push";
 import { skillCommand } from "./commands/skill";
 import { statusCommand } from "./commands/status";
 import { tuiCommand } from "./commands/tui";
+import { upgradeCommand } from "./commands/upgrade";
 
 /** Root CLI command that wires every user-facing subcommand into a single entry point. */
 const main = defineCommand({
@@ -30,6 +31,7 @@ const main = defineCommand({
     migrate: migrateCommand,
     skill: skillCommand,
     destroy: destroyCommand,
+    upgrade: upgradeCommand,
     tui: tuiCommand,
   },
 });

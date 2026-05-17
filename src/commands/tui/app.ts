@@ -1,6 +1,8 @@
 import type { CliRenderer, KeyEvent } from "@opentui/core";
 import { BoxRenderable, createCliRenderer, TextRenderable } from "@opentui/core";
 import { version as pkgVersion } from "../../../package.json";
+import { getUpdateStatus } from "../../core/version-check";
+import { performUpgrade, upgradeInstructions } from "../upgrade";
 import { TuiIpcClient } from "./lib/ipc-client";
 import {
   type AppState,
@@ -72,6 +74,21 @@ export async function runApp(): Promise<void> {
 
   const store = createStore(createInitialState());
   const ipc = new TuiIpcClient();
+
+  // Non-blocking update check: dispatches into state when it resolves, never
+  // gates the first render. A failed check (offline, rate limit) leaves the
+  // update slice unset, so no banner appears.
+  void getUpdateStatus()
+    .then((status) => {
+      store.dispatch((d) => {
+        d.update = {
+          latest: status.latest,
+          available: status.updateAvailable,
+          method: status.method,
+        };
+      });
+    })
+    .catch(() => {});
 
   const root = new BoxRenderable(renderer, {
     flexDirection: "column",
@@ -265,6 +282,10 @@ function handleKey(key: KeyEvent, ctx: AppContext, quit: () => void): void {
     invokeSyncOp("pull", ctx);
     return;
   }
+  if (key.name === "u" && !key.shift) {
+    invokeUpgrade(ctx);
+    return;
+  }
 
   if (key.name === "r" && !key.shift) {
     ctx.rerender();
@@ -286,6 +307,48 @@ function invokeSyncOp(op: "push" | "pull", ctx: AppContext): void {
   // `sync.lastOp` — the persistent banner the user reads to see what
   // happened. Toasts alone are too short-lived for terminal errors.
   runSyncOp(ctx.store, op);
+}
+
+/**
+ * Handle the `u` key. Only a global npm install can be replaced from inside
+ * the TUI; every other install method gets the manual instructions in a
+ * longer-lived toast so the user has time to read the link.
+ */
+function invokeUpgrade(ctx: AppContext): void {
+  const { update } = ctx.store.getState();
+  if (!update.available || update.latest === null) {
+    ctx.store.dispatch((d) => setToast(d, "You are on the latest version.", "info"));
+    return;
+  }
+  if (update.method !== "npm-global") {
+    // Bind `latest` outside the dispatch closure: TypeScript drops the
+    // non-null narrowing of `update.latest` once it crosses into a callback.
+    const latest = update.latest;
+    ctx.store.dispatch((d) =>
+      setToast(d, upgradeInstructions(update.method, latest), "info", 8000),
+    );
+    return;
+  }
+  // Build the status from the slice the banner already showed — re-fetching
+  // here could install a version different from the one in the toast.
+  const latest = update.latest;
+  ctx.store.runOperation(
+    "upgrade",
+    `Upgrade to v${latest}`,
+    async () =>
+      performUpgrade({
+        current: pkgVersion,
+        latest,
+        updateAvailable: true,
+        method: "npm-global",
+      }),
+    {
+      activityKind: "info",
+      toastOnStart: { text: `Upgrading to v${latest}…` },
+      onSuccess: (d, result) => setToast(d, result.message, "success", 8000),
+      errorToastPrefix: "Upgrade",
+    },
+  );
 }
 
 function delegateTabKey(key: KeyEvent, ctx: AppContext): void {
@@ -380,6 +443,9 @@ function renderFooter(host: TextRenderable, state: AppState): void {
     ["?", "help"],
     ["q", "quit"],
   ];
+  // Surface the update key only when there is something to install, so the
+  // bar does not advertise an action that would just say "already latest".
+  if (state.update.available) globalKeys.splice(2, 0, ["u", "update"]);
   const actions = globalKeys
     .map(([k, label]) => `${hintKey === k ? `[${k}]` : ` ${k} `}${label}`)
     .join(" ");
@@ -410,6 +476,7 @@ function actionLabelFor(key: KeyEvent, state: AppState): { key: string; label: s
   if (name === "tab") return { key: "tab", label: key.shift ? "prev tab" : "next tab" };
   if (name === "p" && !key.shift) return { key: "p", label: "push" };
   if (name === "l" && !key.shift) return { key: "l", label: "pull" };
+  if (name === "u" && !key.shift && state.update.available) return { key: "u", label: "update" };
   if (name === "r" && !key.shift) return { key: "r", label: "refresh" };
   if (name === "?" || (key.shift && name === "/")) return { key: "?", label: "help" };
   switch (state.activeTab) {
@@ -497,6 +564,7 @@ function renderHelp(renderer: CliRenderer, host: BoxRenderable): void {
     "    p             Push vault (direct)",
     "    l             Pull vault (direct)",
     "    r             Refresh current tab",
+    "    u             Install an available update",
     "    ?             Toggle this overlay",
     "    q / Ctrl-C    Quit",
     "",

@@ -46,6 +46,7 @@ When developing from source, replace the binary call with `bun run src/cli.ts`. 
 | [`skill`](#skill) | Remove a skill from the vault. |
 | [`migrate`](#migrate) | Translate configuration between agent formats. |
 | [`destroy`](#destroy) | Wipe the local vault clone or the remote vault contents (via commit). |
+| [`upgrade`](#upgrade) | Check GitHub for a newer release and install it when possible. |
 
 ## tui
 
@@ -241,6 +242,31 @@ agentsync doctor
 
 - `doctor` does not fix anything. It surfaces the failure mode so you can choose the right runbook in [Operations](operations.md).
 - A `doctor` warning about a sensitive file in the vault is always serious. See [Doctor reports a sensitive file in the vault](operations.md#doctor-reports-a-sensitive-file-in-the-vault).
+
+## upgrade
+
+**Why**: Stay on the latest release without leaving the tool. `upgrade` asks GitHub for the newest published version and, when it can, installs it for you.
+
+**Usage**:
+
+```bash
+agentsync upgrade          # check, then install if a newer version exists
+agentsync upgrade --check  # report only, install nothing
+```
+
+**Outcome**: depends on how agentsync was installed:
+
+| Install method | What `upgrade` does |
+|---|---|
+| `bun install -g @chrisleekr/agentsync` | Reinstalls the package globally at the latest version. Restart agentsync to run the new code. |
+| Standalone binary | Prints the releases page — a running binary cannot replace its own file. Download and verify the new binary against `SHA256SUMS` yourself. See [Verifying release binaries](operations.md#verifying-release-binaries). |
+| `bunx` | Nothing to do — `bunx` fetches the latest on every run. |
+
+**Caveats**:
+
+- The check calls the GitHub releases API. Offline or rate-limited, it fails quietly and reports that it could not check (exit code 1).
+- The TUI Dashboard runs the same check in the background and shows an `Update available` banner; press `u` there to upgrade a global install.
+- The result is cached for 24 hours at `~/.config/agentsync/update-check.json` (`%APPDATA%/agentsync` on Windows). `agentsync upgrade` always re-checks and ignores the cache.
 
 ## daemon
 

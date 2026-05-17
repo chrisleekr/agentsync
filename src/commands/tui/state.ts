@@ -1,4 +1,5 @@
 import type { DaemonStatus } from "../../config/schema";
+import { detectInstallMethod, type InstallMethod } from "../../core/version-check";
 import type { SyncRow } from "../status";
 
 export const TAB_IDS = ["dashboard", "sync", "migrate", "activity"] as const;
@@ -26,7 +27,22 @@ export interface DaemonState {
   pidObservedAt: number | null;
 }
 
-export type OpKind = "push" | "pull" | "migrate" | "migrate-preview" | "skill-rm" | "sync-load";
+export type OpKind =
+  | "push"
+  | "pull"
+  | "migrate"
+  | "migrate-preview"
+  | "skill-rm"
+  | "sync-load"
+  | "upgrade";
+
+/** Background update-check result. Populated once the TUI's startup check
+ *  resolves; `latest` stays null when the check could not reach GitHub. */
+export interface UpdateInfo {
+  latest: string | null;
+  available: boolean;
+  method: InstallMethod;
+}
 
 export type OpPhase = "running" | "ok" | "error";
 
@@ -196,6 +212,7 @@ export interface AppState {
   migrate: MigrateSlice;
   inFlight: Record<string, OperationStatus>;
   opSeq: number;
+  update: UpdateInfo;
 }
 
 const MAX_ACTIVITY = 200;
@@ -243,6 +260,7 @@ export function createInitialState(): AppState {
     },
     inFlight: {},
     opSeq: 0,
+    update: { latest: null, available: false, method: detectInstallMethod() },
   };
 }
 

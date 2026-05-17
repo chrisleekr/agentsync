@@ -1,6 +1,7 @@
 import type { CliRenderer } from "@opentui/core";
 import { BoxRenderable, TextRenderable } from "@opentui/core";
 import { type AppState, countRunning } from "../state";
+import { dashboardBannerContent } from "./dashboard-banner";
 
 function fmtDuration(ms: number): string {
   if (ms < 1000) return "<1s";
@@ -28,9 +29,7 @@ export function renderDashboard(renderer: CliRenderer, host: BoxRenderable, stat
     width: "100%",
     fg: "#ebcb8b",
     bg: "#11151a",
-    content: state.daemon.online
-      ? "  Welcome back. Press a tab number to drill in, or p/l to sync."
-      : "  No daemon detected. Run `agentsync daemon start` to enable live sync, or browse offline.",
+    content: dashboardBannerContent(state),
   });
   wrapper.add(banner);
 
