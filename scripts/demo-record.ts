@@ -41,32 +41,39 @@ function main(): void {
   const keepSandbox = process.argv.includes("--keep");
   requireVhs();
 
-  console.log("Setting up the demo sandbox...");
-  const sandbox = setupDemoSandbox();
+  let exitCode = 0;
+  try {
+    console.log("Setting up the demo sandbox...");
+    const sandbox = setupDemoSandbox();
 
-  console.log("Recording the TUI tour with vhs...");
-  const record = Bun.spawnSync(["vhs", TAPE], {
-    cwd: REPO_ROOT,
-    // HOME is NOT overridden here: vhs drives a headless browser that caches
-    // under the real HOME. The tape's `agentsync` shell function reads these
-    // two vars to point HOME at the sandbox and locate the CLI source.
-    env: {
-      ...process.env,
-      AGENTSYNC_DEMO_HOME: sandbox.home,
-      AGENTSYNC_DEMO_REPO: sandbox.repoRoot,
-    },
-    stdout: "inherit",
-    stderr: "inherit",
-  });
-
-  if (!keepSandbox) {
-    rmSync(SANDBOX, { recursive: true, force: true });
+    console.log("Recording the TUI tour with vhs...");
+    const record = Bun.spawnSync(["vhs", TAPE], {
+      cwd: REPO_ROOT,
+      // HOME is NOT overridden here: vhs drives a headless browser that caches
+      // under the real HOME. The tape's `agentsync` shell function reads these
+      // two vars to point HOME at the sandbox and locate the CLI source.
+      env: {
+        ...process.env,
+        AGENTSYNC_DEMO_HOME: sandbox.home,
+        AGENTSYNC_DEMO_REPO: sandbox.repoRoot,
+      },
+      stdout: "inherit",
+      stderr: "inherit",
+    });
+    exitCode = record.exitCode ?? 1;
+    if (exitCode === 0) {
+      console.log("Done. GIF written to docs/demo/tui.gif");
+    }
+  } finally {
+    // Runs even if setup or recording throws, so a failed run never leaves the
+    // sandbox (and its throwaway age key) behind. `--keep` opts out. The exit
+    // below is intentionally outside the try: process.exit skips finally.
+    if (!keepSandbox) {
+      rmSync(SANDBOX, { recursive: true, force: true });
+    }
   }
 
-  if (record.exitCode !== 0) {
-    process.exit(record.exitCode ?? 1);
-  }
-  console.log("Done. GIF written to docs/demo/tui.gif");
+  process.exit(exitCode);
 }
 
 main();

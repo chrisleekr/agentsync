@@ -11,12 +11,15 @@
  * place, or import `setupDemoSandbox()` from the recorder.
  */
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { homedir } from "node:os";
+import { dirname, join, relative } from "node:path";
+import { AgentPaths } from "../src/config/paths";
 
 const REPO_ROOT = join(import.meta.dir, "..");
 const SANDBOX = join(REPO_ROOT, ".demo-sandbox");
 const HOME = join(SANDBOX, "home");
 const BARE_REMOTE = join(SANDBOX, "remote.git");
+const REAL_HOME = homedir();
 
 /** Git needs an identity to commit; the sandbox HOME has no ~/.gitconfig. */
 const GIT_IDENTITY = {
@@ -48,38 +51,43 @@ function run(cmd: string[], extraEnv: Record<string, string> = {}): void {
   }
 }
 
-/** Write a file, creating parent directories as needed. */
-function seed(relPath: string, contents: string): void {
-  const full = join(HOME, relPath);
+/**
+ * Write a file at an agent path, re-rooted from the real HOME onto the sandbox
+ * HOME. `agentPath` comes from `AgentPaths`, so demo seeding cannot drift from
+ * the paths the CLI actually resolves at runtime.
+ */
+function seed(agentPath: string, contents: string): void {
+  const full = join(HOME, relative(REAL_HOME, agentPath));
   mkdirSync(dirname(full), { recursive: true });
   writeFileSync(full, contents, "utf8");
 }
 
 /**
  * Lay down fake agent configuration across three agents so the TUI dashboard
- * has something representative to show.
+ * has something representative to show. Paths are derived from `AgentPaths`,
+ * never hardcoded, so a change to `src/config/paths.ts` keeps the demo aligned.
  */
 function seedAgentConfig(): void {
   // Claude — the most-populated agent in the demo.
   seed(
-    ".claude/CLAUDE.md",
+    AgentPaths.claude.claudeMd,
     "# Global instructions\n\nPrefer small, surgical changes. Explain the why.\n",
   );
   seed(
-    ".claude/settings.json",
+    AgentPaths.claude.settingsJson,
     `${JSON.stringify({ theme: "dark", model: "claude-opus-4-7" }, null, 2)}\n`,
   );
   seed(
-    ".claude/skills/code-review/SKILL.md",
+    join(AgentPaths.claude.skillsDir, "code-review", "SKILL.md"),
     "---\nname: code-review\ndescription: Review a diff for correctness and style.\n---\n\nWalk the diff hunk by hunk.\n",
   );
-  seed(".claude/commands/ship.md", "Run the test suite, then open a PR.\n");
+  seed(join(AgentPaths.claude.commandsDir, "ship.md"), "Run the test suite, then open a PR.\n");
 
   // Cursor — rules only, to show a second agent.
-  seed(".cursor/rules/style.md", "Match the surrounding code style.\n");
+  seed(join(AgentPaths.cursor.rulesDir, "style.md"), "Match the surrounding code style.\n");
 
   // Codex — top-level guidance file.
-  seed(".codex/AGENTS.md", "# Codex agents\n\nKeep diffs reviewable.\n");
+  seed(AgentPaths.codex.agentsMd, "# Codex agents\n\nKeep diffs reviewable.\n");
 }
 
 /** Build the sandbox from scratch and return the paths the recorder needs. */
@@ -101,7 +109,7 @@ export function setupDemoSandbox(): DemoSandbox {
   // Dirty one file after the push so the Sync tab shows a pending change
   // rather than an empty "in sync" state.
   seed(
-    ".claude/CLAUDE.md",
+    AgentPaths.claude.claudeMd,
     "# Global instructions\n\nPrefer small, surgical changes. Explain the why.\n\nAlways run the test suite before pushing.\n",
   );
 
