@@ -96,8 +96,11 @@ Defaults are chosen so you can install and forget. Tune them only if you observe
 |---|---|---|
 | `AGENTSYNC_VAULT_DIR` | Vault clone directory | `~/.config/agentsync/vault` (Unix), `%APPDATA%/agentsync/vault` (Windows) |
 | `AGENTSYNC_KEY_PATH` | Private key file | `~/.config/agentsync/key.txt` (Unix), `%APPDATA%/agentsync/key.txt` (Windows) |
-| `AGENTSYNC_MACHINE` | Machine identifier in recipient names | derived from `os.hostname()` |
+| `AGENTSYNC_MACHINE` | Machine identifier in recipient names | `HOSTNAME` if set, else the `os.hostname()` call, else the literal `local-machine` |
+| `HOSTNAME` | Machine identifier when `AGENTSYNC_MACHINE` is unset (fallback only, not a recommended knob) | the `os.hostname()` call, else the literal `local-machine` |
 | `CODEX_HOME` | Codex root directory | `~/.codex` |
+
+`HOSTNAME` is consulted only as a fallback for the machine identifier. It is a bash-shell convenience variable, not a portable environment variable: it is generally absent under `sh`/`dash`/`zsh`, absent on macOS and Windows, and defaults to the container ID inside Docker. Two machines with the same `os.hostname()` but different exported `HOSTNAME` therefore resolve to different recipient names, and conversely, when neither variable is set, two machines whose `os.hostname()` returns the same value resolve to the same name. Set `AGENTSYNC_MACHINE` explicitly to make the identifier deterministic. See [Recipient naming](#recipient-naming) for why this value matters.
 
 ### Logs
 
@@ -131,7 +134,7 @@ Rotation requires the existing private key to still be readable, because every v
 
 ### Recipient naming
 
-Recipient names are stable config keys. Use machine names that describe the device clearly (`work-mbp`, `home-desktop`). Names are visible to anyone who can read the vault repository — they are not secret, but they should not encode anything you do not want associated with a public Git remote.
+Recipient names are stable config keys. Use machine names that describe the device clearly (`work-mbp`, `home-desktop`). Names are visible to anyone who can read the vault repository — they are not secret, but they should not encode anything you do not want associated with a public Git remote. When `AGENTSYNC_MACHINE` is unset the name is derived automatically; see the [Configuration](#configuration) section for the full `HOSTNAME` → `os.hostname()` → `local-machine` resolution chain.
 
 ## Verifying release binaries
 
