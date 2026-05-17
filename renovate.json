@@ -1,0 +1,54 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended", ":semanticCommits", "helpers:pinGitHubActionDigests"],
+  "timezone": "Australia/Melbourne",
+  "schedule": ["before 4am on Monday"],
+  "labels": ["dependencies"],
+  "prHourlyLimit": 2,
+  "prConcurrentLimit": 4,
+  "packageRules": [
+    {
+      "description": "One PR for all GitHub Actions workflow updates.",
+      "matchManagers": ["github-actions"],
+      "groupName": "github-actions"
+    },
+    {
+      "description": "One grouped PR for npm/bun bumps, dev and prod together. Major bumps split into a separate npm-dependencies major PR via separateMajorMinor.",
+      "matchManagers": ["npm", "bun"],
+      "groupName": "npm dependencies"
+    },
+    {
+      "description": "One PR for the Docker base image and the .nvmrc Node pin.",
+      "matchManagers": ["dockerfile", "nvm"],
+      "groupName": "base images"
+    },
+    {
+      "description": "One PR for the MkDocs toolchain in docs/requirements.txt.",
+      "matchManagers": ["pip_requirements"],
+      "groupName": "docs dependencies"
+    },
+    {
+      "description": "Auto-merge non-major bumps once CI is green. Major bumps open a PR for review.",
+      "matchUpdateTypes": ["minor", "patch", "digest"],
+      "automerge": true,
+      "platformAutomerge": true
+    },
+    {
+      "description": "Docs toolchain is reviewed by hand: mkdocs-material renames features between minors.",
+      "matchManagers": ["pip_requirements"],
+      "automerge": false
+    },
+    {
+      "description": "Hold non-major PRs 7 days so yanked or broken releases surface before automerge.",
+      "matchUpdateTypes": ["minor", "patch", "digest"],
+      "minimumReleaseAge": "7 days",
+      "internalChecksFilter": "strict"
+    },
+    {
+      "description": "Hold major PRs 14 days for manual-review stability.",
+      "matchUpdateTypes": ["major"],
+      "minimumReleaseAge": "14 days",
+      "internalChecksFilter": "strict"
+    }
+  ]
+}
