@@ -1,7 +1,7 @@
 import { mkdir, readdir, readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
-import { parse as parseJsonc } from "jsonc-parser";
+import { type ParseError, parse as parseJsonc } from "jsonc-parser";
 import { AgentPaths } from "../../config/paths";
 import type { AgentSyncConfig } from "../../config/schema";
 import { denormalizeStringFromVault, normalizeStringForVault } from "../../core/path-portability";
@@ -30,10 +30,15 @@ async function readCursorRules(): Promise<string | null> {
 
   // Cursor's settings.json is JSONC. Parse it tolerantly so a comment or a
   // trailing comma does not silently drop the user's `rules` from the vault.
+  // jsonc-parser returns a best-effort partial object for malformed input
+  // instead of throwing, so reject on collected errors — otherwise a truncated
+  // `rules` value from a corrupt file could be synced.
   try {
-    const parsed = parseJsonc(raw, undefined, { allowTrailingComma: true }) as
+    const errors: ParseError[] = [];
+    const parsed = parseJsonc(raw, errors, { allowTrailingComma: true }) as
       | Record<string, unknown>
       | undefined;
+    if (errors.length > 0) return null;
     const rules = parsed?.rules;
     if (typeof rules !== "string") return null;
     return rules;
