@@ -2,6 +2,7 @@ import { realpathSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { z } from "zod";
 import { version as currentVersion } from "../../package.json";
 import { resolveAgentSyncHome } from "../config/paths";
 
@@ -25,10 +26,16 @@ const FETCH_TIMEOUT_MS = 3000;
  */
 export type InstallMethod = "npm-global" | "standalone" | "bunx" | "dev";
 
-interface CacheFile {
-  latest: string;
-  checkedAt: number;
-}
+/** Shape of the on-disk update-check cache; parsed with safeParse so a
+ *  hand-edited or truncated file degrades to a cache miss, not a throw. */
+const CacheFileSchema = z.object({
+  latest: z.string(),
+  checkedAt: z.number().finite(),
+});
+type CacheFile = z.infer<typeof CacheFileSchema>;
+
+/** Only `tag_name` is consumed from the GitHub releases payload. */
+const LatestReleaseSchema = z.object({ tag_name: z.string() });
 
 function cachePath(): string {
   return join(resolveAgentSyncHome(), "update-check.json");
@@ -61,11 +68,8 @@ export function detectInstallMethod(): InstallMethod {
 
 async function readCache(): Promise<CacheFile | null> {
   try {
-    const parsed = JSON.parse(await readFile(cachePath(), "utf8")) as CacheFile;
-    if (typeof parsed.latest === "string" && typeof parsed.checkedAt === "number") {
-      return parsed;
-    }
-    return null;
+    const parsed = CacheFileSchema.safeParse(JSON.parse(await readFile(cachePath(), "utf8")));
+    return parsed.success ? parsed.data : null;
   } catch {
     return null;
   }
@@ -112,9 +116,9 @@ async function fetchLatestVersion(): Promise<string | null> {
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
     if (!res.ok) return null;
-    const body = (await res.json()) as { tag_name?: unknown };
-    if (typeof body.tag_name !== "string") return null;
-    const version = tagToVersion(body.tag_name);
+    const parsed = LatestReleaseSchema.safeParse(await res.json());
+    if (!parsed.success) return null;
+    const version = tagToVersion(parsed.data.tag_name);
     // Reject an unparseable tag now so it never reaches the cache or a compare.
     return isComparableVersion(version) ? version : null;
   } catch {

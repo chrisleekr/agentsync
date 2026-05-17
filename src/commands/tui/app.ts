@@ -309,6 +309,11 @@ function invokeSyncOp(op: "push" | "pull", ctx: AppContext): void {
   runSyncOp(ctx.store, op);
 }
 
+/** Guards a second `u` press from launching a concurrent `bun install -g`
+ *  while one is already running — two installs racing on the global
+ *  node_modules can leave a half-written package. */
+let upgradeInFlight = false;
+
 /**
  * Handle the `u` key. Only a global npm install can be replaced from inside
  * the TUI; every other install method gets the manual instructions in a
@@ -329,19 +334,29 @@ function invokeUpgrade(ctx: AppContext): void {
     );
     return;
   }
+  if (upgradeInFlight) {
+    ctx.store.dispatch((d) => setToast(d, "Upgrade already in progress.", "info"));
+    return;
+  }
   // Build the status from the slice the banner already showed — re-fetching
   // here could install a version different from the one in the toast.
   const latest = update.latest;
+  upgradeInFlight = true;
   ctx.store.runOperation(
     "upgrade",
     `Upgrade to v${latest}`,
-    async () =>
-      performUpgrade({
-        current: pkgVersion,
-        latest,
-        updateAvailable: true,
-        method: "npm-global",
-      }),
+    async () => {
+      try {
+        return await performUpgrade({
+          current: pkgVersion,
+          latest,
+          updateAvailable: true,
+          method: "npm-global",
+        });
+      } finally {
+        upgradeInFlight = false;
+      }
+    },
     {
       activityKind: "info",
       toastOnStart: { text: `Upgrading to v${latest}…` },
@@ -535,7 +550,7 @@ function renderActiveTab(
   }
   const state = store.getState();
   if (state.helpOpen) {
-    renderHelp(renderer, host);
+    renderHelp(renderer, host, state);
   } else {
     switch (state.activeTab) {
       case "dashboard":
@@ -555,7 +570,7 @@ function renderActiveTab(
   }
 }
 
-function renderHelp(renderer: CliRenderer, host: BoxRenderable): void {
+function renderHelp(renderer: CliRenderer, host: BoxRenderable, state: AppState): void {
   const help = [
     "",
     "  Global keys",
@@ -564,7 +579,8 @@ function renderHelp(renderer: CliRenderer, host: BoxRenderable): void {
     "    p             Push vault (direct)",
     "    l             Pull vault (direct)",
     "    r             Refresh current tab",
-    "    u             Install an available update",
+    // Listed only when armed, to match the footer and action bar.
+    ...(state.update.available ? ["    u             Install an available update"] : []),
     "    ?             Toggle this overlay",
     "    q / Ctrl-C    Quit",
     "",
