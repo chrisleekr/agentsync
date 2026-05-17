@@ -1526,7 +1526,12 @@ live state without you re-running <code>agentsync status</code>.</p>
 <tr>
 <td><code>AGENTSYNC_MACHINE</code></td>
 <td>Machine identifier in recipient names</td>
-<td>derived from <code>os.hostname()</code></td>
+<td><code>HOSTNAME</code> if set, else the <code>os.hostname()</code> call, else the literal <code>local-machine</code></td>
+</tr>
+<tr>
+<td><code>HOSTNAME</code></td>
+<td>Machine identifier when <code>AGENTSYNC_MACHINE</code> is unset (fallback only, not a recommended knob)</td>
+<td>the <code>os.hostname()</code> call, else the literal <code>local-machine</code></td>
 </tr>
 <tr>
 <td><code>CODEX_HOME</code></td>
@@ -1535,6 +1540,7 @@ live state without you re-running <code>agentsync status</code>.</p>
 </tr>
 </tbody>
 </table>
+<p><code>HOSTNAME</code> is consulted only as a fallback for the machine identifier. It is a bash-shell convenience variable, not a portable environment variable: it is generally absent under <code>sh</code>/<code>dash</code>/<code>zsh</code>, absent on macOS and Windows, and defaults to the container ID inside Docker. Two machines with the same <code>os.hostname()</code> but different exported <code>HOSTNAME</code> therefore resolve to different recipient names, and conversely, when neither variable is set, two machines whose <code>os.hostname()</code> returns the same value resolve to the same name. Set <code>AGENTSYNC_MACHINE</code> explicitly to make the identifier deterministic. See <a href="#recipient-naming">Recipient naming</a> for why this value matters.</p>
 <h3 id="logs">Logs<a class="headerlink" href="#logs" title="Permanent link">&para;</a></h3>
 <p>Inspect platform logs when <code>daemon status</code> reports unhealthy:</p>
 <ul>
@@ -1554,7 +1560,7 @@ live state without you re-running <code>agentsync status</code>.</p>
 </span></code></pre></div>
 <p>Rotation requires the existing private key to still be readable, because every vault artefact must be decrypted before it can be re-encrypted under the new recipient. Back up the old key before rotation if you intend to retire the previous identity entirely.</p>
 <h3 id="recipient-naming">Recipient naming<a class="headerlink" href="#recipient-naming" title="Permanent link">&para;</a></h3>
-<p>Recipient names are stable config keys. Use machine names that describe the device clearly (<code>work-mbp</code>, <code>home-desktop</code>). Names are visible to anyone who can read the vault repository — they are not secret, but they should not encode anything you do not want associated with a public Git remote.</p>
+<p>Recipient names are stable config keys. Use machine names that describe the device clearly (<code>work-mbp</code>, <code>home-desktop</code>). Names are visible to anyone who can read the vault repository — they are not secret, but they should not encode anything you do not want associated with a public Git remote. When <code>AGENTSYNC_MACHINE</code> is unset the name is derived automatically; see the <a href="#configuration">Configuration</a> section for the full <code>HOSTNAME</code> → <code>os.hostname()</code> → <code>local-machine</code> resolution chain.</p>
 <h2 id="verifying-release-binaries">Verifying release binaries<a class="headerlink" href="#verifying-release-binaries" title="Permanent link">&para;</a></h2>
 <p>Every binary published to a <a href="https://github.com/chrisleekr/agentsync/releases/latest">GitHub Release</a> ships with three complementary verification artefacts:</p>
 <ul>
