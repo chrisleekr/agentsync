@@ -15,6 +15,10 @@
 	<a href="https://chrisleekr.github.io/agentsync/"><img src="https://img.shields.io/badge/docs-online-blue" alt="Documentation"/></a>
 </p>
 
+<div align="center">
+	<img src="./docs/demo/tui.gif" alt="AgentSync TUI walkthrough" width="800"/>
+</div>
+
 AgentSync is a Bun-based CLI and background daemon that snapshots AI agent configuration from your machine, encrypts it with [age](https://age-encryption.org/) recipients, and stores it in a Git-backed vault so you can pull the same setup onto another machine.
 
 It is for people who keep global agent configuration in tools like Claude, Cursor, Codex, Copilot, and VS Code and want one encrypted source of truth instead of manually copying files between laptops.
