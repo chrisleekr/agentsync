@@ -629,6 +629,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#upgrade" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        upgrade
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#daemon" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -931,6 +942,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#upgrade" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        upgrade
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#daemon" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1094,6 +1116,10 @@
 <tr>
 <td><a href="#destroy"><code>destroy</code></a></td>
 <td>Wipe the local vault clone or the remote vault contents (via commit).</td>
+</tr>
+<tr>
+<td><a href="#upgrade"><code>upgrade</code></a></td>
+<td>Check GitHub for a newer release and install it when possible.</td>
 </tr>
 </tbody>
 </table>
@@ -1367,14 +1393,49 @@ that <code>agentsync skill remove</code> does, once per selected skill.</p>
 <li><code>doctor</code> does not fix anything. It surfaces the failure mode so you can choose the right runbook in <a href="../operations/">Operations</a>.</li>
 <li>A <code>doctor</code> warning about a sensitive file in the vault is always serious. See <a href="../operations/#doctor-reports-a-sensitive-file-in-the-vault">Doctor reports a sensitive file in the vault</a>.</li>
 </ul>
+<h2 id="upgrade">upgrade<a class="headerlink" href="#upgrade" title="Permanent link">&para;</a></h2>
+<p><strong>Why</strong>: Stay on the latest release without leaving the tool. <code>upgrade</code> asks GitHub for the newest published version and, when it can, installs it for you.</p>
+<p><strong>Usage</strong>:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>agentsync<span class="w"> </span>upgrade<span class="w">          </span><span class="c1"># check, then install if a newer version exists</span>
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>agentsync<span class="w"> </span>upgrade<span class="w"> </span>--check<span class="w">  </span><span class="c1"># report only, install nothing</span>
+</span></code></pre></div>
+<p><strong>Outcome</strong>: depends on how agentsync was installed:</p>
+<table>
+<thead>
+<tr>
+<th>Install method</th>
+<th>What <code>upgrade</code> does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>bun install -g @chrisleekr/agentsync</code></td>
+<td>Reinstalls the package globally at the latest version. Restart agentsync to run the new code.</td>
+</tr>
+<tr>
+<td>Standalone binary</td>
+<td>Prints the releases page — a running binary cannot replace its own file. Download and verify the new binary against <code>SHA256SUMS</code> yourself. See <a href="../operations/#verifying-release-binaries">Verifying release binaries</a>.</td>
+</tr>
+<tr>
+<td><code>bunx</code></td>
+<td>Nothing to do — <code>bunx</code> fetches the latest on every run.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Caveats</strong>:</p>
+<ul>
+<li>The check calls the GitHub releases API. Offline or rate-limited, it fails quietly and reports that it could not check (exit code 1).</li>
+<li>The TUI Dashboard runs the same check in the background and shows an <code>Update available</code> banner; press <code>u</code> there to upgrade a global install.</li>
+<li>The result is cached for 24 hours at <code>~/.config/agentsync/update-check.json</code> (<code>%APPDATA%/agentsync</code> on Windows). <code>agentsync upgrade</code> always re-checks and ignores the cache.</li>
+</ul>
 <h2 id="daemon">daemon<a class="headerlink" href="#daemon" title="Permanent link">&para;</a></h2>
 <p><strong>Why</strong>: Run AgentSync as a background process that watches your agent paths, debounces pushes, and runs periodic pulls.</p>
 <p><strong>Usage</strong>:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>agentsync<span class="w"> </span>daemon<span class="w"> </span>install<span class="w">     </span><span class="c1"># write the OS service descriptor</span>
-</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>agentsync<span class="w"> </span>daemon<span class="w"> </span>start<span class="w">       </span><span class="c1"># idempotent</span>
-</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>agentsync<span class="w"> </span>daemon<span class="w"> </span>status<span class="w">      </span><span class="c1"># IPC ping</span>
-</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>agentsync<span class="w"> </span>daemon<span class="w"> </span>stop
-</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>agentsync<span class="w"> </span>daemon<span class="w"> </span>uninstall
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>agentsync<span class="w"> </span>daemon<span class="w"> </span>install<span class="w">     </span><span class="c1"># write the OS service descriptor</span>
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>agentsync<span class="w"> </span>daemon<span class="w"> </span>start<span class="w">       </span><span class="c1"># idempotent</span>
+</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>agentsync<span class="w"> </span>daemon<span class="w"> </span>status<span class="w">      </span><span class="c1"># IPC ping</span>
+</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a>agentsync<span class="w"> </span>daemon<span class="w"> </span>stop
+</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a>agentsync<span class="w"> </span>daemon<span class="w"> </span>uninstall
 </span></code></pre></div>
 <p><strong>Outcome</strong>: a long-running process supervised by launchd (macOS), systemd-user (Linux), or Task Scheduler (Windows). The daemon serialises sync operations through an internal queue so no two operations race.</p>
 <p><strong>Caveats</strong>:</p>
@@ -1386,8 +1447,8 @@ that <code>agentsync skill remove</code> does, once per selected skill.</p>
 <h2 id="key">key<a class="headerlink" href="#key" title="Permanent link">&para;</a></h2>
 <p><strong>Why</strong>: Add a new recipient or rotate the current machine's keypair without changing vault semantics.</p>
 <p><strong>Usage</strong>:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>agentsync<span class="w"> </span>key<span class="w"> </span>add<span class="w"> </span>&lt;name&gt;<span class="w"> </span>&lt;age-public-key&gt;
-</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>agentsync<span class="w"> </span>key<span class="w"> </span>rotate
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>agentsync<span class="w"> </span>key<span class="w"> </span>add<span class="w"> </span>&lt;name&gt;<span class="w"> </span>&lt;age-public-key&gt;
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>agentsync<span class="w"> </span>key<span class="w"> </span>rotate
 </span></code></pre></div>
 <p><strong>Outcome</strong>: every existing vault artefact is decrypted under the current key and re-encrypted under the updated recipient set, then the change is committed and pushed.</p>
 <p><strong>Caveats</strong>:</p>
@@ -1400,7 +1461,7 @@ that <code>agentsync skill remove</code> does, once per selected skill.</p>
 <h2 id="skill">skill<a class="headerlink" href="#skill" title="Permanent link">&para;</a></h2>
 <p><strong>Why</strong>: Remove a skill from the vault without affecting the rest of the snapshot. This is AgentSync's only explicit, non-additive operation.</p>
 <p><strong>Usage</strong>:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>agentsync<span class="w"> </span>skill<span class="w"> </span>remove<span class="w"> </span>&lt;agent&gt;<span class="w"> </span>&lt;name&gt;
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>agentsync<span class="w"> </span>skill<span class="w"> </span>remove<span class="w"> </span>&lt;agent&gt;<span class="w"> </span>&lt;name&gt;
 </span></code></pre></div>
 <p><strong>Outcome</strong>: the vault artefact for that skill is deleted, the change is committed and pushed under the fast-forward reconciliation rule. The local skill directory on the current machine is left untouched.</p>
 <p><strong>Caveats</strong>:</p>
@@ -1412,7 +1473,7 @@ that <code>agentsync skill remove</code> does, once per selected skill.</p>
 <h2 id="migrate">migrate<a class="headerlink" href="#migrate" title="Permanent link">&para;</a></h2>
 <p><strong>Why</strong>: Translate configuration between Claude, Cursor, Codex, Copilot, and VS Code without touching the vault.</p>
 <p><strong>Usage</strong>:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>agentsync<span class="w"> </span>migrate<span class="w"> </span>--from<span class="w"> </span>&lt;agent&gt;<span class="w"> </span>--to<span class="w"> </span>&lt;agent<span class="p">|</span>all&gt;<span class="w"> </span><span class="o">[</span>--type<span class="w"> </span>&lt;type&gt;<span class="o">]</span><span class="w"> </span><span class="o">[</span>--name<span class="w"> </span>&lt;file&gt;<span class="o">]</span><span class="w"> </span><span class="o">[</span>--dry-run<span class="o">]</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>agentsync<span class="w"> </span>migrate<span class="w"> </span>--from<span class="w"> </span>&lt;agent&gt;<span class="w"> </span>--to<span class="w"> </span>&lt;agent<span class="p">|</span>all&gt;<span class="w"> </span><span class="o">[</span>--type<span class="w"> </span>&lt;type&gt;<span class="o">]</span><span class="w"> </span><span class="o">[</span>--name<span class="w"> </span>&lt;file&gt;<span class="o">]</span><span class="w"> </span><span class="o">[</span>--dry-run<span class="o">]</span>
 </span></code></pre></div>
 <p><strong>Flags</strong>:</p>
 <table>
@@ -1476,9 +1537,9 @@ in <code>src/commands/destroy.ts</code>) and by test (three sha256+mtime
 invariants in <code>destroy.test.ts</code>).</p>
 </blockquote>
 <p><strong>Usage</strong>:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>agentsync<span class="w"> </span>destroy<span class="w">                       </span><span class="c1"># local-only, default</span>
-</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>agentsync<span class="w"> </span>destroy<span class="w"> </span>--scope<span class="o">=</span>remote<span class="w">        </span><span class="c1"># wipe remote via commit</span>
-</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>agentsync<span class="w"> </span>destroy<span class="w"> </span>--scope<span class="o">=</span>all<span class="w">           </span><span class="c1"># both</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>agentsync<span class="w"> </span>destroy<span class="w">                       </span><span class="c1"># local-only, default</span>
+</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>agentsync<span class="w"> </span>destroy<span class="w"> </span>--scope<span class="o">=</span>remote<span class="w">        </span><span class="c1"># wipe remote via commit</span>
+</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a>agentsync<span class="w"> </span>destroy<span class="w"> </span>--scope<span class="o">=</span>all<span class="w">           </span><span class="c1"># both</span>
 </span></code></pre></div>
 <p><strong>Flags</strong>:</p>
 <table>
