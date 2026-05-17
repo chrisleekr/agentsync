@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.1.11](https://github.com/chrisleekr/agentsync/compare/v0.1.10...v0.1.11) (2026-05-17)
+
+
+### Features
+
+* **config:** add AGENTSYNC_DIR override for the base directory ([#116](https://github.com/chrisleekr/agentsync/issues/116)) ([5b9cafa](https://github.com/chrisleekr/agentsync/commit/5b9cafa76d7e50e6320db754a9fcab6c2d60c494))
+
+
+### Bug Fixes
+
+* **commands:** treat blank env vars as unset in machineName resolution ([#111](https://github.com/chrisleekr/agentsync/issues/111)) ([3dc9ae7](https://github.com/chrisleekr/agentsync/commit/3dc9ae77ad0e5d154a687f335ea4277fd6baf63d))
+* **commands:** treat blank env vars as unset in vault and key paths ([#114](https://github.com/chrisleekr/agentsync/issues/114)) ([897fe62](https://github.com/chrisleekr/agentsync/commit/897fe62fe8b53aab564ef25e021a71ac7cdb7b45))
+* **config:** treat blank APPDATA and CODEX_HOME env vars as unset ([#117](https://github.com/chrisleekr/agentsync/issues/117)) ([0598a11](https://github.com/chrisleekr/agentsync/commit/0598a11aa33d682ca50b0d620b6aaf7c06572726))
+
 ## [0.1.10](https://github.com/chrisleekr/agentsync/compare/v0.1.9...v0.1.10) (2026-05-17)
 
 
