@@ -8,6 +8,7 @@ coverage/
 *.log
 .plan
 .agentsync-test-tmp
+.demo-sandbox/
 
 # Spec Kit — ephemeral/local artifacts only
 .specify/extensions/.cache/

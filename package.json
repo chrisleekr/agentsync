@@ -51,6 +51,7 @@
     "check:docs": "bun run scripts/check-docs-mirror.ts",
     "check:spec-refs": "bun run scripts/check-spec-tracker-refs.ts",
     "check:act": "act -W .github/workflows/ci.yml",
+    "demo:record": "bun run scripts/demo-record.ts",
     "e2e:all": "bash docker/e2e/run-all.sh",
     "e2e:smoke": "bash -c 'trap \"docker compose -f docker/e2e/compose.yml down -v\" EXIT; docker compose -f docker/e2e/compose.yml up --build --abort-on-container-exit --exit-code-from machine'",
     "e2e:scenario": "bash -c 'docker compose -f docker/e2e/compose.yml run --rm machine /home/agent/scenarios/${SCENARIO:?SCENARIO env var required}'",
