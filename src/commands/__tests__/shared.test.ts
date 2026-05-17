@@ -77,6 +77,59 @@ describe("resolveRuntimeContext", () => {
     expect(typeof ctx.machineName).toBe("string");
     expect(ctx.machineName.length).toBeGreaterThan(0);
   });
+
+  test("treats an empty AGENTSYNC_MACHINE as unset and falls back to HOSTNAME", async () => {
+    const { resolveRuntimeContext } = await import("../shared");
+
+    // An exported-but-empty env var is "", not undefined; `??` alone would
+    // short-circuit on it and yield an empty machineName.
+    process.env.AGENTSYNC_MACHINE = "";
+    process.env.HOSTNAME = "my-laptop";
+    process.env.AGENTSYNC_VAULT_DIR = join(tmpDir, "vault");
+    process.env.AGENTSYNC_KEY_PATH = join(tmpDir, "key.txt");
+
+    const ctx = await resolveRuntimeContext();
+    expect(ctx.machineName).toBe("my-laptop");
+  });
+
+  test("treats a whitespace-only AGENTSYNC_MACHINE as unset and falls back to HOSTNAME", async () => {
+    const { resolveRuntimeContext } = await import("../shared");
+
+    process.env.AGENTSYNC_MACHINE = "   ";
+    process.env.HOSTNAME = "fallback-host";
+    process.env.AGENTSYNC_VAULT_DIR = join(tmpDir, "vault");
+    process.env.AGENTSYNC_KEY_PATH = join(tmpDir, "key.txt");
+
+    const ctx = await resolveRuntimeContext();
+    expect(ctx.machineName).toBe("fallback-host");
+  });
+
+  test("treats a whitespace-only HOSTNAME as unset and falls through to os.hostname()", async () => {
+    const { resolveRuntimeContext } = await import("../shared");
+
+    // os.hostname() is not deterministically controllable, so this can only
+    // assert the chain did not yield the blank HOSTNAME — the deepest fallback.
+    process.env.AGENTSYNC_MACHINE = undefined;
+    process.env.HOSTNAME = "\t";
+    process.env.AGENTSYNC_VAULT_DIR = join(tmpDir, "vault");
+    process.env.AGENTSYNC_KEY_PATH = join(tmpDir, "key.txt");
+
+    const ctx = await resolveRuntimeContext();
+    expect(ctx.machineName.trim()).toBe(ctx.machineName);
+    expect(ctx.machineName.length).toBeGreaterThan(0);
+  });
+
+  test("trims surrounding whitespace from a set AGENTSYNC_MACHINE value", async () => {
+    const { resolveRuntimeContext } = await import("../shared");
+
+    process.env.AGENTSYNC_MACHINE = "  ci-runner  ";
+    process.env.HOSTNAME = undefined;
+    process.env.AGENTSYNC_VAULT_DIR = join(tmpDir, "vault");
+    process.env.AGENTSYNC_KEY_PATH = join(tmpDir, "key.txt");
+
+    const ctx = await resolveRuntimeContext();
+    expect(ctx.machineName).toBe("ci-runner");
+  });
 });
 
 describe("loadPrivateKey", () => {

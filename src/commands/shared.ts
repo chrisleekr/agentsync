@@ -13,6 +13,18 @@ export interface RuntimeContext {
   machineName: string;
 }
 
+/**
+ * Trim a candidate string and treat blank values as absent. An exported but
+ * empty env var is "" (a defined string), so `??` alone would short-circuit
+ * the fallback chain on it; this collapses "" and whitespace-only to undefined
+ * so resolution falls through to the next source. A non-blank value is
+ * returned trimmed.
+ */
+function nonBlank(value: string | undefined): string | undefined {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : undefined;
+}
+
 /** Resolve the working directories and machine label that all commands share. */
 export async function resolveRuntimeContext(): Promise<RuntimeContext> {
   const baseDir = resolveAgentSyncHome();
@@ -23,7 +35,10 @@ export async function resolveRuntimeContext(): Promise<RuntimeContext> {
     privateKeyPath: process.env.AGENTSYNC_KEY_PATH ?? join(baseDir, "key.txt"),
     // AGENTSYNC_MACHINE env var > HOSTNAME env var > os.hostname() > static fallback
     machineName:
-      process.env.AGENTSYNC_MACHINE ?? process.env.HOSTNAME ?? hostname() ?? "local-machine",
+      nonBlank(process.env.AGENTSYNC_MACHINE) ??
+      nonBlank(process.env.HOSTNAME) ??
+      nonBlank(hostname()) ??
+      "local-machine",
   };
 }
 
