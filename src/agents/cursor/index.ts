@@ -1,6 +1,7 @@
 import { mkdir, readdir, readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
+import { type ParseError, parse as parseJsonc } from "jsonc-parser";
 import { AgentPaths } from "../../config/paths";
 import type { AgentSyncConfig } from "../../config/schema";
 import { denormalizeStringFromVault, normalizeStringForVault } from "../../core/path-portability";
@@ -12,6 +13,7 @@ import {
   readIfExists,
   type SnapshotArtifact,
   type SnapshotResult,
+  setJsoncTopLevelKey,
 } from "../_utils";
 import { collectSkillArtifacts, InvalidSkillNameError, validateSkillName } from "../skills-walker";
 
@@ -26,9 +28,18 @@ async function readCursorRules(): Promise<string | null> {
   const raw = await readIfExists(AgentPaths.cursor.settingsJson);
   if (raw === null) return null;
 
+  // Cursor's settings.json is JSONC. Parse it tolerantly so a comment or a
+  // trailing comma does not silently drop the user's `rules` from the vault.
+  // jsonc-parser returns a best-effort partial object for malformed input
+  // instead of throwing, so reject on collected errors — otherwise a truncated
+  // `rules` value from a corrupt file could be synced.
   try {
-    const parsed = JSON.parse(raw) as Record<string, unknown>;
-    const rules = parsed.rules;
+    const errors: ParseError[] = [];
+    const parsed = parseJsonc(raw, errors, { allowTrailingComma: true }) as
+      | Record<string, unknown>
+      | undefined;
+    if (errors.length > 0) return null;
+    const rules = parsed?.rules;
     if (typeof rules !== "string") return null;
     return rules;
   } catch {
@@ -102,9 +113,11 @@ export async function snapshotCursor(_config?: AgentSyncConfig): Promise<Snapsho
  */
 export async function applyCursorRules(rulesContent: string): Promise<void> {
   const raw = await readIfExists(AgentPaths.cursor.settingsJson);
-  const settings: Record<string, unknown> = raw ? (JSON.parse(raw) as Record<string, unknown>) : {};
-  settings.rules = denormalizeStringFromVault(rulesContent, homedir());
-  await atomicWrite(AgentPaths.cursor.settingsJson, `${JSON.stringify(settings, null, 2)}\n`);
+  const rules = denormalizeStringFromVault(rulesContent, homedir());
+  // Cursor's settings.json is JSONC. Edit the `rules` key in place so a
+  // trailing comma elsewhere does not abort the pull and the user's other
+  // settings and comments survive untouched.
+  await atomicWrite(AgentPaths.cursor.settingsJson, setJsoncTopLevelKey(raw ?? "", "rules", rules));
 }
 
 /**

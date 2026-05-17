@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { createTmpDir } from "../../test-helpers/fixtures";
-import { atomicWrite, collect, readIfExists } from "../_utils";
+import { atomicWrite, collect, readIfExists, setJsoncTopLevelKey } from "../_utils";
 
 // _utils helpers
 
@@ -88,5 +88,59 @@ describe("agents/_utils", () => {
     const artifact = collect(result, "/src/settings.json", "claude/settings.json.age");
     expect(artifact.warnings).toHaveLength(1);
     expect(artifact.warnings[0]).toContain("Detected");
+  });
+
+  // setJsoncTopLevelKey
+
+  test("setJsoncTopLevelKey writes a fresh object for empty input", () => {
+    const out = setJsoncTopLevelKey("", "rules", "be concise");
+    expect(JSON.parse(out)).toEqual({ rules: "be concise" });
+  });
+
+  test("setJsoncTopLevelKey edits one key in a strict-JSON document", () => {
+    const raw = `{\n  "editor.fontSize": 14,\n  "rules": "old"\n}\n`;
+    const parsed = JSON.parse(setJsoncTopLevelKey(raw, "rules", "new")) as Record<string, unknown>;
+    expect(parsed.rules).toBe("new");
+    expect(parsed["editor.fontSize"]).toBe(14);
+  });
+
+  test("setJsoncTopLevelKey tolerates a trailing comma instead of aborting", () => {
+    // A trailing comma is the JSONC feature that made strict JSON.parse throw
+    // "Property name must be a string literal" and abort the whole pull. The
+    // jsonc-parser edit API must set the key and leave the comma in place.
+    const raw = `{\n  "[typescript]": {\n    "editor.defaultFormatter": "esbenp.prettier-vscode",\n  },\n}\n`;
+    const out = setJsoncTopLevelKey(raw, "rules", "be concise");
+    expect(out).toContain('"rules": "be concise"');
+    expect(out).toContain('"esbenp.prettier-vscode"');
+  });
+
+  test("setJsoncTopLevelKey preserves comments in the document", () => {
+    const raw = `{\n  // user preference\n  "editor.wordWrap": "on"\n}\n`;
+    const out = setJsoncTopLevelKey(raw, "rules", "x");
+    expect(out).toContain("// user preference");
+    expect(out).toContain('"rules": "x"');
+  });
+
+  test("setJsoncTopLevelKey sets an object value (hooks/mcpServers path)", () => {
+    const raw = `{\n  "model": "opus"\n}\n`;
+    const parsed = JSON.parse(setJsoncTopLevelKey(raw, "hooks", { PreToolUse: [] })) as Record<
+      string,
+      unknown
+    >;
+    expect(parsed.hooks).toEqual({ PreToolUse: [] });
+    expect(parsed.model).toBe("opus");
+  });
+
+  test("setJsoncTopLevelKey writes a fresh object for whitespace-only input", () => {
+    expect(JSON.parse(setJsoncTopLevelKey("  \n\t ", "rules", "x"))).toEqual({ rules: "x" });
+  });
+
+  test("setJsoncTopLevelKey replaces a non-object root instead of throwing", () => {
+    expect(JSON.parse(setJsoncTopLevelKey("[1, 2, 3]", "rules", "x"))).toEqual({ rules: "x" });
+  });
+
+  test("setJsoncTopLevelKey replaces a malformed document instead of corrupting it", () => {
+    const out = setJsoncTopLevelKey("{not valid json", "rules", "x");
+    expect(JSON.parse(out)).toEqual({ rules: "x" });
   });
 });

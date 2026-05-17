@@ -56,7 +56,7 @@ function copyToClipboard(text: string): void {
 
 const STATUS_VERB: Record<SyncRow["status"], string> = {
   synced: "synced",
-  "local-changed": "modified",
+  "local-changed": "changed",
   "local-only": "new",
   "vault-only": "missing",
   unknown: "unknown",
@@ -79,8 +79,8 @@ const SECTIONS: Section[] = [
   },
   {
     key: "local-changed",
-    title: "To push: local edits",
-    hint: "press p",
+    title: "Changed — local and vault differ",
+    hint: "press p to push or l to pull",
   },
   {
     key: "local-only",
@@ -1324,7 +1324,7 @@ function renderUnifiedRows(
 
 const SKILL_FILE_STATUS_VERB: Record<SkillFile["status"], string> = {
   synced: "synced",
-  "local-changed": "modified",
+  "local-changed": "changed",
   "local-only": "new",
   "vault-only": "missing",
 };
@@ -1622,8 +1622,9 @@ export function renderSync(renderer: CliRenderer, host: BoxRenderable, state: Ap
   // arrays.
   const cursorPath = navIndex[s.cursor]?.vaultPath;
 
-  // Verb column width — fits "modified:" (9 chars) plus the trailing colon
-  // we render inline. Picked so every section's rows line up consistently.
+  // Verb column width — fits the longest status verb plus the trailing colon
+  // we render inline ("missing:" / "unknown:", 8 chars). Picked so every
+  // section's rows line up consistently.
   const verbW = 10;
   const lines: string[] = [];
   let cursorLineIdx = -1;
