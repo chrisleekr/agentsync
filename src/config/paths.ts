@@ -1,5 +1,6 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { nonBlank } from "../lib/env";
 
 const HOME = homedir();
 const PLATFORM = process.platform;
@@ -45,7 +46,7 @@ export const AgentPaths = {
     marketplaceJson: join(HOME, ".claude", ".claude-plugin", "marketplace.json"),
   },
   codex: (() => {
-    const CODEX_HOME = process.env.CODEX_HOME ?? join(HOME, ".codex");
+    const CODEX_HOME = nonBlank(process.env.CODEX_HOME) ?? join(HOME, ".codex");
     return {
       root: CODEX_HOME,
       agentsMd: join(CODEX_HOME, "AGENTS.md"),
@@ -140,12 +141,12 @@ export function resolveClaudePluginPaths(pluginRoot: string): {
  * directory, a different path.
  */
 export function resolveAgentSyncHome(): string {
-  const override = process.env.AGENTSYNC_DIR?.trim();
+  const override = nonBlank(process.env.AGENTSYNC_DIR);
   if (override) {
     return override;
   }
   if (process.platform === "win32") {
-    return join(process.env.APPDATA ?? HOME, "agentsync");
+    return join(nonBlank(process.env.APPDATA) ?? HOME, "agentsync");
   }
   return join(HOME, ".config", "agentsync");
 }
