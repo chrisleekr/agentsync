@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.1.10](https://github.com/chrisleekr/agentsync/compare/v0.1.9...v0.1.10) (2026-05-17)
+
+
+### Features
+
+* **upgrade:** add in-app version check and upgrade command ([#104](https://github.com/chrisleekr/agentsync/issues/104)) ([01ff046](https://github.com/chrisleekr/agentsync/commit/01ff046b70810e3096411680143f8dc623ced511))
+
+
+### Bug Fixes
+
+* JSONC pull crash and Sync tab UX ([#109](https://github.com/chrisleekr/agentsync/issues/109)) ([c0bf4b5](https://github.com/chrisleekr/agentsync/commit/c0bf4b5af720dc962aa03c0b8ca515915e345715))
+
 ## [0.1.9](https://github.com/chrisleekr/agentsync/compare/v0.1.8...v0.1.9) (2026-05-16)
 
 
