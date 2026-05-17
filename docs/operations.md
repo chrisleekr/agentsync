@@ -1,3 +1,7 @@
+---
+description: Run AgentSync day to day: install the daemon per OS, rotate age keys, verify release binaries, recover from divergence, and troubleshoot.
+---
+
 # Operations
 
 Run AgentSync in production for your own laptops: install the daemon, rotate keys, recover from divergence, and diagnose every common failure.

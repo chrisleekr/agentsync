@@ -1,5 +1,6 @@
 ---
 title: AgentSync
+description: Sync AI agent configs across machines. Encrypted Git-backed vault for Claude, Cursor, Codex, Copilot, and VS Code. Install guide and quickstart.
 hide:
   - navigation
 ---

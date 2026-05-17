@@ -23,7 +23,9 @@
     "cursor",
     "codex",
     "copilot",
-    "vscode"
+    "vscode",
+    "sync",
+    "dotfiles"
   ],
   "bin": {
     "agentsync": "dist/cli.js"
