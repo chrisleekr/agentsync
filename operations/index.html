@@ -1514,14 +1514,19 @@ live state without you re-running <code>agentsync status</code>.</p>
 </thead>
 <tbody>
 <tr>
+<td><code>AGENTSYNC_DIR</code></td>
+<td>Base directory for AgentSync state (vault clone, private key, update-check cache; also the daemon socket on Unix — Windows uses a fixed named pipe)</td>
+<td><code>~/.config/agentsync</code> (Unix), <code>%APPDATA%/agentsync</code> (Windows)</td>
+</tr>
+<tr>
 <td><code>AGENTSYNC_VAULT_DIR</code></td>
 <td>Vault clone directory</td>
-<td><code>~/.config/agentsync/vault</code> (Unix), <code>%APPDATA%/agentsync/vault</code> (Windows)</td>
+<td><code>&lt;AGENTSYNC_DIR&gt;/vault</code></td>
 </tr>
 <tr>
 <td><code>AGENTSYNC_KEY_PATH</code></td>
 <td>Private key file</td>
-<td><code>~/.config/agentsync/key.txt</code> (Unix), <code>%APPDATA%/agentsync/key.txt</code> (Windows)</td>
+<td><code>&lt;AGENTSYNC_DIR&gt;/key.txt</code></td>
 </tr>
 <tr>
 <td><code>AGENTSYNC_MACHINE</code></td>
