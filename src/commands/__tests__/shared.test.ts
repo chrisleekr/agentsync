@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { resolveAgentSyncHome } from "../../config/paths";
 import { createTmpDir } from "../../test-helpers/fixtures";
 
 // resolveRuntimeContext + loadPrivateKey
@@ -15,6 +14,7 @@ describe("resolveRuntimeContext", () => {
   let prevKeyPath: string | undefined;
   let prevMachine: string | undefined;
   let prevHostname: string | undefined;
+  let prevDir: string | undefined;
 
   beforeEach(async () => {
     tmpDir = await createTmpDir();
@@ -22,6 +22,11 @@ describe("resolveRuntimeContext", () => {
     prevKeyPath = process.env.AGENTSYNC_KEY_PATH;
     prevMachine = process.env.AGENTSYNC_MACHINE;
     prevHostname = process.env.HOSTNAME;
+    prevDir = process.env.AGENTSYNC_DIR;
+    // Redirect the AgentSync base dir into the per-test temp dir so the
+    // unconditional mkdir in resolveRuntimeContext does not touch the real
+    // ~/.config/agentsync.
+    process.env.AGENTSYNC_DIR = tmpDir;
   });
 
   afterEach(async () => {
@@ -34,6 +39,7 @@ describe("resolveRuntimeContext", () => {
     restore("AGENTSYNC_KEY_PATH", prevKeyPath);
     restore("AGENTSYNC_MACHINE", prevMachine);
     restore("HOSTNAME", prevHostname);
+    restore("AGENTSYNC_DIR", prevDir);
     await rm(tmpDir, { recursive: true, force: true });
   });
 
@@ -141,7 +147,7 @@ describe("resolveRuntimeContext", () => {
     process.env.AGENTSYNC_KEY_PATH = join(tmpDir, "key.txt");
 
     const ctx = await resolveRuntimeContext();
-    expect(ctx.vaultDir).toBe(join(resolveAgentSyncHome(), "vault"));
+    expect(ctx.vaultDir).toBe(join(tmpDir, "vault"));
   });
 
   test("treats an empty AGENTSYNC_KEY_PATH as unset and falls back to the default path", async () => {
@@ -151,7 +157,7 @@ describe("resolveRuntimeContext", () => {
     process.env.AGENTSYNC_KEY_PATH = "";
 
     const ctx = await resolveRuntimeContext();
-    expect(ctx.privateKeyPath).toBe(join(resolveAgentSyncHome(), "key.txt"));
+    expect(ctx.privateKeyPath).toBe(join(tmpDir, "key.txt"));
   });
 
   test("treats whitespace-only path env vars as unset and falls back to defaults", async () => {
@@ -161,8 +167,8 @@ describe("resolveRuntimeContext", () => {
     process.env.AGENTSYNC_KEY_PATH = "\t";
 
     const ctx = await resolveRuntimeContext();
-    expect(ctx.vaultDir).toBe(join(resolveAgentSyncHome(), "vault"));
-    expect(ctx.privateKeyPath).toBe(join(resolveAgentSyncHome(), "key.txt"));
+    expect(ctx.vaultDir).toBe(join(tmpDir, "vault"));
+    expect(ctx.privateKeyPath).toBe(join(tmpDir, "key.txt"));
   });
 });
 

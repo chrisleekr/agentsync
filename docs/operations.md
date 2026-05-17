@@ -94,8 +94,9 @@ Defaults are chosen so you can install and forget. Tune them only if you observe
 
 | Variable | Overrides | Default |
 |---|---|---|
-| `AGENTSYNC_VAULT_DIR` | Vault clone directory | `~/.config/agentsync/vault` (Unix), `%APPDATA%/agentsync/vault` (Windows) |
-| `AGENTSYNC_KEY_PATH` | Private key file | `~/.config/agentsync/key.txt` (Unix), `%APPDATA%/agentsync/key.txt` (Windows) |
+| `AGENTSYNC_DIR` | Base directory for AgentSync state (vault clone, private key, update-check cache; also the daemon socket on Unix — Windows uses a fixed named pipe) | `~/.config/agentsync` (Unix), `%APPDATA%/agentsync` (Windows) |
+| `AGENTSYNC_VAULT_DIR` | Vault clone directory | `<AGENTSYNC_DIR>/vault` |
+| `AGENTSYNC_KEY_PATH` | Private key file | `<AGENTSYNC_DIR>/key.txt` |
 | `AGENTSYNC_MACHINE` | Machine identifier in recipient names | `HOSTNAME` if set, else the `os.hostname()` call, else the literal `local-machine` |
 | `HOSTNAME` | Machine identifier when `AGENTSYNC_MACHINE` is unset (fallback only, not a recommended knob) | the `os.hostname()` call, else the literal `local-machine` |
 | `CODEX_HOME` | Codex root directory | `~/.codex` |

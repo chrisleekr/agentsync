@@ -126,8 +126,24 @@ export function resolveClaudePluginPaths(pluginRoot: string): {
   };
 }
 
-/** Resolve the OS-specific base directory used for AgentSync state. */
+/**
+ * Resolve the OS-specific base directory used for AgentSync state — the single
+ * root under which the vault clone, private key, update-check cache, and (on
+ * Unix) the daemon socket live. On Windows the daemon endpoint is a fixed
+ * named pipe that AGENTSYNC_DIR does not relocate.
+ *
+ * `AGENTSYNC_DIR` overrides the default location (read at call time so tests
+ * and wrapper scripts can redirect it). A blank value is treated as unset, so
+ * an exported-but-empty `AGENTSYNC_DIR=` does not collapse the base dir to "".
+ * The override is intentionally not named `AGENTSYNC_HOME`: `${AGENTSYNC_HOME}`
+ * is already the vault path-portability placeholder for the user's OS home
+ * directory, a different path.
+ */
 export function resolveAgentSyncHome(): string {
+  const override = process.env.AGENTSYNC_DIR?.trim();
+  if (override) {
+    return override;
+  }
   if (process.platform === "win32") {
     return join(process.env.APPDATA ?? HOME, "agentsync");
   }

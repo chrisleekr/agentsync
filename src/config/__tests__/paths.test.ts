@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import {
@@ -130,5 +130,40 @@ describe("paths", () => {
     if (PLATFORM !== "win32") {
       expect(resolveDaemonSocketPath()).toStartWith(resolveAgentSyncHome());
     }
+  });
+});
+
+describe("resolveAgentSyncHome AGENTSYNC_DIR override", () => {
+  let prevDir: string | undefined;
+
+  beforeEach(() => {
+    prevDir = process.env.AGENTSYNC_DIR;
+  });
+
+  afterEach(() => {
+    if (prevDir === undefined) delete process.env.AGENTSYNC_DIR;
+    else process.env.AGENTSYNC_DIR = prevDir;
+  });
+
+  test("returns a set AGENTSYNC_DIR", () => {
+    process.env.AGENTSYNC_DIR = "/tmp/agentsync-override";
+    expect(resolveAgentSyncHome()).toBe("/tmp/agentsync-override");
+  });
+
+  test("trims surrounding whitespace from a set AGENTSYNC_DIR", () => {
+    process.env.AGENTSYNC_DIR = "  /tmp/agentsync-override  ";
+    expect(resolveAgentSyncHome()).toBe("/tmp/agentsync-override");
+  });
+
+  test("treats an empty AGENTSYNC_DIR as unset and falls back to the default", () => {
+    // An exported-but-empty env var is "", not undefined; a bare read would
+    // collapse the base dir to "".
+    process.env.AGENTSYNC_DIR = "";
+    expect(resolveAgentSyncHome()).toContain("agentsync");
+  });
+
+  test("treats a whitespace-only AGENTSYNC_DIR as unset and falls back to the default", () => {
+    process.env.AGENTSYNC_DIR = "   ";
+    expect(resolveAgentSyncHome()).toContain("agentsync");
   });
 });
