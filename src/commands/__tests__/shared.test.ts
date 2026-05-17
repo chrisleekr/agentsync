@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { resolveAgentSyncHome } from "../../config/paths";
 import { createTmpDir } from "../../test-helpers/fixtures";
 
 // resolveRuntimeContext + loadPrivateKey
@@ -129,6 +130,39 @@ describe("resolveRuntimeContext", () => {
 
     const ctx = await resolveRuntimeContext();
     expect(ctx.machineName).toBe("ci-runner");
+  });
+
+  test("treats an empty AGENTSYNC_VAULT_DIR as unset and falls back to the default path", async () => {
+    const { resolveRuntimeContext } = await import("../shared");
+
+    // An exported-but-empty env var is "", not undefined; `??` alone would
+    // short-circuit on it and yield an empty vault dir (the process CWD).
+    process.env.AGENTSYNC_VAULT_DIR = "";
+    process.env.AGENTSYNC_KEY_PATH = join(tmpDir, "key.txt");
+
+    const ctx = await resolveRuntimeContext();
+    expect(ctx.vaultDir).toBe(join(resolveAgentSyncHome(), "vault"));
+  });
+
+  test("treats an empty AGENTSYNC_KEY_PATH as unset and falls back to the default path", async () => {
+    const { resolveRuntimeContext } = await import("../shared");
+
+    process.env.AGENTSYNC_VAULT_DIR = join(tmpDir, "vault");
+    process.env.AGENTSYNC_KEY_PATH = "";
+
+    const ctx = await resolveRuntimeContext();
+    expect(ctx.privateKeyPath).toBe(join(resolveAgentSyncHome(), "key.txt"));
+  });
+
+  test("treats whitespace-only path env vars as unset and falls back to defaults", async () => {
+    const { resolveRuntimeContext } = await import("../shared");
+
+    process.env.AGENTSYNC_VAULT_DIR = "   ";
+    process.env.AGENTSYNC_KEY_PATH = "\t";
+
+    const ctx = await resolveRuntimeContext();
+    expect(ctx.vaultDir).toBe(join(resolveAgentSyncHome(), "vault"));
+    expect(ctx.privateKeyPath).toBe(join(resolveAgentSyncHome(), "key.txt"));
   });
 });
 
