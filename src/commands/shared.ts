@@ -31,8 +31,8 @@ export async function resolveRuntimeContext(): Promise<RuntimeContext> {
   await mkdir(baseDir, { recursive: true });
 
   return {
-    vaultDir: process.env.AGENTSYNC_VAULT_DIR ?? join(baseDir, "vault"),
-    privateKeyPath: process.env.AGENTSYNC_KEY_PATH ?? join(baseDir, "key.txt"),
+    vaultDir: nonBlank(process.env.AGENTSYNC_VAULT_DIR) ?? join(baseDir, "vault"),
+    privateKeyPath: nonBlank(process.env.AGENTSYNC_KEY_PATH) ?? join(baseDir, "key.txt"),
     // AGENTSYNC_MACHINE env var > HOSTNAME env var > os.hostname() > static fallback
     machineName:
       nonBlank(process.env.AGENTSYNC_MACHINE) ??
