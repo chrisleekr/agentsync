@@ -5,24 +5,13 @@ import { log } from "@clack/prompts";
 import { loadConfig, resolveConfigPath } from "../config/loader";
 import { resolveAgentSyncHome } from "../config/paths";
 import type { AgentSyncConfig } from "../config/schema";
+import { nonBlank } from "../lib/env";
 
 /** Runtime paths and machine identity resolved from the local environment. */
 export interface RuntimeContext {
   vaultDir: string;
   privateKeyPath: string;
   machineName: string;
-}
-
-/**
- * Trim a candidate string and treat blank values as absent. An exported but
- * empty env var is "" (a defined string), so `??` alone would short-circuit
- * the fallback chain on it; this collapses "" and whitespace-only to undefined
- * so resolution falls through to the next source. A non-blank value is
- * returned trimmed.
- */
-function nonBlank(value: string | undefined): string | undefined {
-  const trimmed = value?.trim();
-  return trimmed ? trimmed : undefined;
 }
 
 /** Resolve the working directories and machine label that all commands share. */
