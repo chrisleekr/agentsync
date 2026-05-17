@@ -1,3 +1,7 @@
+---
+description: How AgentSync works: the encrypted vault format, push and pull pipelines, the background daemon, and fail-closed reconciliation.
+---
+
 # Architecture
 
 How AgentSync moves bytes from your machine to a Git remote and back, encrypted end-to-end, with reconciliation that fails closed.

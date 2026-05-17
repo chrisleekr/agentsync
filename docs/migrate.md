@@ -1,3 +1,7 @@
+---
+description: Migrate AI agent configuration between Claude, Cursor, Codex, Copilot, and VS Code formats with AgentSync. Local-only, no vault required.
+---
+
 # Cross-Agent Configuration Migration
 
 ## Overview

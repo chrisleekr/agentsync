@@ -1,3 +1,7 @@
+---
+description: Contribute to AgentSync, set up from source, run the verification loop, follow release discipline, and keep the documentation from drifting.
+---
+
 # Contributing
 
 Develop AgentSync from a clone, run the verification loop, follow the release discipline, and keep the docs from drifting.

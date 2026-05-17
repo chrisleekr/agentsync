@@ -1,3 +1,7 @@
+---
+description: Complete AgentSync CLI reference: every command, flag, default, and caveat for init, push, pull, status, daemon, key, skill, and the TUI.
+---
+
 # Commands
 
 Every AgentSync subcommand in one reference: what it does, what it needs, what it produces, and the caveats that bite if you ignore them.
