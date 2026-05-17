@@ -63,6 +63,24 @@
 
     
     
+  
+  
+    
+  
+  
+    
+  
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="AgentSync">
+  <meta property="og:title" content="Operations - AgentSync">
+  <meta property="og:description" content="Snapshot, encrypt, and sync AI agent configs across machines via a Git vault.">
+  
+  <meta property="og:url" content="https://chrisleekr.github.io/agentsync/operations/">
+  
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Operations - AgentSync">
+  <meta name="twitter:description" content="Snapshot, encrypt, and sync AI agent configs across machines via a Git vault.">
+
   </head>
   
   
@@ -82,7 +100,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#operations" class="md-skip">
+        <a href="#description-run-agentsync-day-to-day-install-the-daemon-per-os-rotate-age-keys-verify-release-binaries-recover-from-divergence-and-troubleshoot" class="md-skip">
           Skip to content
         </a>
       
@@ -508,8 +526,6 @@
       <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
       
       
-        
-      
       
         <label class="md-nav__link md-nav__link--active" for="__toc">
           
@@ -552,8 +568,6 @@
   
   
   
-    
-  
   
     <label class="md-nav__title" for="__toc">
       <span class="md-nav__icon md-icon"></span>
@@ -562,6 +576,29 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#description-run-agentsync-day-to-day-install-the-daemon-per-os-rotate-age-keys-verify-release-binaries-recover-from-divergence-and-troubleshoot" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        description: Run AgentSync day to day: install the daemon per OS, rotate age keys, verify release binaries, recover from divergence, and troubleshoot.
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#operations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Operations
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Operations">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
   <a href="#what-this-page-owns" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -571,8 +608,8 @@
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
+        
+          <li class="md-nav__item">
   <a href="#daily-ops-in-the-tui" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -582,8 +619,8 @@
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
+        
+          <li class="md-nav__item">
   <a href="#daemon" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -643,8 +680,8 @@
     </nav>
   
 </li>
-      
-        <li class="md-nav__item">
+        
+          <li class="md-nav__item">
   <a href="#key-management" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -693,8 +730,8 @@
     </nav>
   
 </li>
-      
-        <li class="md-nav__item">
+        
+          <li class="md-nav__item">
   <a href="#verifying-release-binaries" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -754,8 +791,8 @@
     </nav>
   
 </li>
-      
-        <li class="md-nav__item">
+        
+          <li class="md-nav__item">
   <a href="#recovery-runbooks" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -804,8 +841,8 @@
     </nav>
   
 </li>
-      
-        <li class="md-nav__item">
+        
+          <li class="md-nav__item">
   <a href="#troubleshooting-catalogue" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -924,6 +961,11 @@
       
     </span>
   </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
         
@@ -984,8 +1026,6 @@
   
   
   
-    
-  
   
     <label class="md-nav__title" for="__toc">
       <span class="md-nav__icon md-icon"></span>
@@ -994,6 +1034,29 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#description-run-agentsync-day-to-day-install-the-daemon-per-os-rotate-age-keys-verify-release-binaries-recover-from-divergence-and-troubleshoot" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        description: Run AgentSync day to day: install the daemon per OS, rotate age keys, verify release binaries, recover from divergence, and troubleshoot.
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#operations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Operations
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Operations">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
   <a href="#what-this-page-owns" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1003,8 +1066,8 @@
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
+        
+          <li class="md-nav__item">
   <a href="#daily-ops-in-the-tui" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1014,8 +1077,8 @@
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
+        
+          <li class="md-nav__item">
   <a href="#daemon" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1075,8 +1138,8 @@
     </nav>
   
 </li>
-      
-        <li class="md-nav__item">
+        
+          <li class="md-nav__item">
   <a href="#key-management" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1125,8 +1188,8 @@
     </nav>
   
 </li>
-      
-        <li class="md-nav__item">
+        
+          <li class="md-nav__item">
   <a href="#verifying-release-binaries" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1186,8 +1249,8 @@
     </nav>
   
 </li>
-      
-        <li class="md-nav__item">
+        
+          <li class="md-nav__item">
   <a href="#recovery-runbooks" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1236,8 +1299,8 @@
     </nav>
   
 </li>
-      
-        <li class="md-nav__item">
+        
+          <li class="md-nav__item">
   <a href="#troubleshooting-catalogue" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1363,6 +1426,11 @@
     </nav>
   
 </li>
+        
+      </ul>
+    </nav>
+  
+</li>
       
     </ul>
   
@@ -1389,6 +1457,8 @@
   
 
 
+<hr />
+<h2 id="description-run-agentsync-day-to-day-install-the-daemon-per-os-rotate-age-keys-verify-release-binaries-recover-from-divergence-and-troubleshoot">description: Run AgentSync day to day: install the daemon per OS, rotate age keys, verify release binaries, recover from divergence, and troubleshoot.<a class="headerlink" href="#description-run-agentsync-day-to-day-install-the-daemon-per-os-rotate-age-keys-verify-release-binaries-recover-from-divergence-and-troubleshoot" title="Permanent link">&para;</a></h2>
 <h1 id="operations">Operations<a class="headerlink" href="#operations" title="Permanent link">&para;</a></h1>
 <p>Run AgentSync in production for your own laptops: install the daemon, rotate keys, recover from divergence, and diagnose every common failure.</p>
 <h2 id="what-this-page-owns">What this page owns<a class="headerlink" href="#what-this-page-owns" title="Permanent link">&para;</a></h2>

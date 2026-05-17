@@ -63,6 +63,24 @@
 
     
     
+  
+  
+    
+  
+  
+    
+  
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="AgentSync">
+  <meta property="og:title" content="Architecture - AgentSync">
+  <meta property="og:description" content="Snapshot, encrypt, and sync AI agent configs across machines via a Git vault.">
+  
+  <meta property="og:url" content="https://chrisleekr.github.io/agentsync/architecture/">
+  
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Architecture - AgentSync">
+  <meta name="twitter:description" content="Snapshot, encrypt, and sync AI agent configs across machines via a Git vault.">
+
   </head>
   
   
@@ -82,7 +100,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#architecture" class="md-skip">
+        <a href="#description-how-agentsync-works-the-encrypted-vault-format-push-and-pull-pipelines-the-background-daemon-and-fail-closed-reconciliation" class="md-skip">
           Skip to content
         </a>
       
@@ -427,8 +445,6 @@
       <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
       
       
-        
-      
       
         <label class="md-nav__link md-nav__link--active" for="__toc">
           
@@ -471,8 +487,6 @@
   
   
   
-    
-  
   
     <label class="md-nav__title" for="__toc">
       <span class="md-nav__icon md-icon"></span>
@@ -481,6 +495,29 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#description-how-agentsync-works-the-encrypted-vault-format-push-and-pull-pipelines-the-background-daemon-and-fail-closed-reconciliation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        description: How AgentSync works: the encrypted vault format, push and pull pipelines, the background daemon, and fail-closed reconciliation.
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Architecture
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Architecture">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
   <a href="#what-this-page-owns" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -490,8 +527,8 @@
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
+        
+          <li class="md-nav__item">
   <a href="#system-context" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -501,8 +538,8 @@
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
+        
+          <li class="md-nav__item">
   <a href="#the-push-pipeline" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -512,8 +549,8 @@
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
+        
+          <li class="md-nav__item">
   <a href="#the-pull-pipeline" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -523,8 +560,8 @@
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
+        
+          <li class="md-nav__item">
   <a href="#reconciliation-rule" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -534,8 +571,8 @@
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
+        
+          <li class="md-nav__item">
   <a href="#vault-layout" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -545,8 +582,8 @@
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
+        
+          <li class="md-nav__item">
   <a href="#skills-and-plugins" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -556,8 +593,8 @@
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
+        
+          <li class="md-nav__item">
   <a href="#daemon-model" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -567,8 +604,8 @@
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
+        
+          <li class="md-nav__item">
   <a href="#security-boundaries" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -578,8 +615,8 @@
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
+        
+          <li class="md-nav__item">
   <a href="#path-resolution" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -589,8 +626,8 @@
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
+        
+          <li class="md-nav__item">
   <a href="#vault-format-versioning" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -600,8 +637,8 @@
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
+        
+          <li class="md-nav__item">
   <a href="#source-map" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -611,8 +648,8 @@
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
+        
+          <li class="md-nav__item">
   <a href="#compiled-binary-packaging" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -620,6 +657,11 @@
       
     </span>
   </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -756,8 +798,6 @@
   
   
   
-    
-  
   
     <label class="md-nav__title" for="__toc">
       <span class="md-nav__icon md-icon"></span>
@@ -766,6 +806,29 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#description-how-agentsync-works-the-encrypted-vault-format-push-and-pull-pipelines-the-background-daemon-and-fail-closed-reconciliation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        description: How AgentSync works: the encrypted vault format, push and pull pipelines, the background daemon, and fail-closed reconciliation.
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Architecture
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Architecture">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
   <a href="#what-this-page-owns" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -775,8 +838,8 @@
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
+        
+          <li class="md-nav__item">
   <a href="#system-context" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -786,8 +849,8 @@
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
+        
+          <li class="md-nav__item">
   <a href="#the-push-pipeline" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -797,8 +860,8 @@
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
+        
+          <li class="md-nav__item">
   <a href="#the-pull-pipeline" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -808,8 +871,8 @@
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
+        
+          <li class="md-nav__item">
   <a href="#reconciliation-rule" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -819,8 +882,8 @@
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
+        
+          <li class="md-nav__item">
   <a href="#vault-layout" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -830,8 +893,8 @@
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
+        
+          <li class="md-nav__item">
   <a href="#skills-and-plugins" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -841,8 +904,8 @@
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
+        
+          <li class="md-nav__item">
   <a href="#daemon-model" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -852,8 +915,8 @@
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
+        
+          <li class="md-nav__item">
   <a href="#security-boundaries" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -863,8 +926,8 @@
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
+        
+          <li class="md-nav__item">
   <a href="#path-resolution" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -874,8 +937,8 @@
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
+        
+          <li class="md-nav__item">
   <a href="#vault-format-versioning" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -885,8 +948,8 @@
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
+        
+          <li class="md-nav__item">
   <a href="#source-map" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -896,8 +959,8 @@
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
+        
+          <li class="md-nav__item">
   <a href="#compiled-binary-packaging" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -905,6 +968,11 @@
       
     </span>
   </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -933,6 +1001,8 @@
   
 
 
+<hr />
+<h2 id="description-how-agentsync-works-the-encrypted-vault-format-push-and-pull-pipelines-the-background-daemon-and-fail-closed-reconciliation">description: How AgentSync works: the encrypted vault format, push and pull pipelines, the background daemon, and fail-closed reconciliation.<a class="headerlink" href="#description-how-agentsync-works-the-encrypted-vault-format-push-and-pull-pipelines-the-background-daemon-and-fail-closed-reconciliation" title="Permanent link">&para;</a></h2>
 <h1 id="architecture">Architecture<a class="headerlink" href="#architecture" title="Permanent link">&para;</a></h1>
 <p>How AgentSync moves bytes from your machine to a Git remote and back, encrypted end-to-end, with reconciliation that fails closed.</p>
 <h2 id="what-this-page-owns">What this page owns<a class="headerlink" href="#what-this-page-owns" title="Permanent link">&para;</a></h2>

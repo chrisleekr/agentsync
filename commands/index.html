@@ -63,6 +63,24 @@
 
     
     
+  
+  
+    
+  
+  
+    
+  
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="AgentSync">
+  <meta property="og:title" content="Commands - AgentSync">
+  <meta property="og:description" content="Snapshot, encrypt, and sync AI agent configs across machines via a Git vault.">
+  
+  <meta property="og:url" content="https://chrisleekr.github.io/agentsync/commands/">
+  
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Commands - AgentSync">
+  <meta name="twitter:description" content="Snapshot, encrypt, and sync AI agent configs across machines via a Git vault.">
+
   </head>
   
   
@@ -82,7 +100,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#commands" class="md-skip">
+        <a href="#description-complete-agentsync-cli-reference-every-command-flag-default-and-caveat-for-init-push-pull-status-daemon-key-skill-and-the-tui" class="md-skip">
           Skip to content
         </a>
       
@@ -454,8 +472,6 @@
       <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
       
       
-        
-      
       
         <label class="md-nav__link md-nav__link--active" for="__toc">
           
@@ -498,8 +514,6 @@
   
   
   
-    
-  
   
     <label class="md-nav__title" for="__toc">
       <span class="md-nav__icon md-icon"></span>
@@ -508,6 +522,29 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#description-complete-agentsync-cli-reference-every-command-flag-default-and-caveat-for-init-push-pull-status-daemon-key-skill-and-the-tui" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        description: Complete AgentSync CLI reference: every command, flag, default, and caveat for init, push, pull, status, daemon, key, skill, and the TUI.
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#commands" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Commands
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Commands">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
   <a href="#what-this-page-owns" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -517,8 +554,8 @@
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
+        
+          <li class="md-nav__item">
   <a href="#install-paths" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -528,8 +565,8 @@
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
+        
+          <li class="md-nav__item">
   <a href="#two-ways-to-use-agentsync" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -539,8 +576,8 @@
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
+        
+          <li class="md-nav__item">
   <a href="#command-index" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -550,8 +587,8 @@
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
+        
+          <li class="md-nav__item">
   <a href="#tui" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -561,8 +598,8 @@
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
+        
+          <li class="md-nav__item">
   <a href="#conventions" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -572,8 +609,8 @@
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
+        
+          <li class="md-nav__item">
   <a href="#init" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -583,8 +620,8 @@
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
+        
+          <li class="md-nav__item">
   <a href="#push" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -594,8 +631,8 @@
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
+        
+          <li class="md-nav__item">
   <a href="#pull" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -605,8 +642,8 @@
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
+        
+          <li class="md-nav__item">
   <a href="#status" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -616,8 +653,8 @@
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
+        
+          <li class="md-nav__item">
   <a href="#doctor" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -627,8 +664,8 @@
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
+        
+          <li class="md-nav__item">
   <a href="#upgrade" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -638,8 +675,8 @@
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
+        
+          <li class="md-nav__item">
   <a href="#daemon" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -649,8 +686,8 @@
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
+        
+          <li class="md-nav__item">
   <a href="#key" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -660,8 +697,8 @@
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
+        
+          <li class="md-nav__item">
   <a href="#skill" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -671,8 +708,8 @@
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
+        
+          <li class="md-nav__item">
   <a href="#migrate" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -682,8 +719,8 @@
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
+        
+          <li class="md-nav__item">
   <a href="#destroy" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -693,8 +730,8 @@
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
+        
+          <li class="md-nav__item">
   <a href="#exit-codes" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -702,6 +739,11 @@
       
     </span>
   </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -811,8 +853,6 @@
   
   
   
-    
-  
   
     <label class="md-nav__title" for="__toc">
       <span class="md-nav__icon md-icon"></span>
@@ -821,6 +861,29 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#description-complete-agentsync-cli-reference-every-command-flag-default-and-caveat-for-init-push-pull-status-daemon-key-skill-and-the-tui" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        description: Complete AgentSync CLI reference: every command, flag, default, and caveat for init, push, pull, status, daemon, key, skill, and the TUI.
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#commands" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Commands
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Commands">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
   <a href="#what-this-page-owns" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -830,8 +893,8 @@
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
+        
+          <li class="md-nav__item">
   <a href="#install-paths" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -841,8 +904,8 @@
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
+        
+          <li class="md-nav__item">
   <a href="#two-ways-to-use-agentsync" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -852,8 +915,8 @@
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
+        
+          <li class="md-nav__item">
   <a href="#command-index" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -863,8 +926,8 @@
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
+        
+          <li class="md-nav__item">
   <a href="#tui" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -874,8 +937,8 @@
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
+        
+          <li class="md-nav__item">
   <a href="#conventions" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -885,8 +948,8 @@
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
+        
+          <li class="md-nav__item">
   <a href="#init" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -896,8 +959,8 @@
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
+        
+          <li class="md-nav__item">
   <a href="#push" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -907,8 +970,8 @@
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
+        
+          <li class="md-nav__item">
   <a href="#pull" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -918,8 +981,8 @@
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
+        
+          <li class="md-nav__item">
   <a href="#status" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -929,8 +992,8 @@
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
+        
+          <li class="md-nav__item">
   <a href="#doctor" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -940,8 +1003,8 @@
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
+        
+          <li class="md-nav__item">
   <a href="#upgrade" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -951,8 +1014,8 @@
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
+        
+          <li class="md-nav__item">
   <a href="#daemon" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -962,8 +1025,8 @@
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
+        
+          <li class="md-nav__item">
   <a href="#key" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -973,8 +1036,8 @@
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
+        
+          <li class="md-nav__item">
   <a href="#skill" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -984,8 +1047,8 @@
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
+        
+          <li class="md-nav__item">
   <a href="#migrate" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -995,8 +1058,8 @@
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
+        
+          <li class="md-nav__item">
   <a href="#destroy" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1006,8 +1069,8 @@
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
+        
+          <li class="md-nav__item">
   <a href="#exit-codes" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1015,6 +1078,11 @@
       
     </span>
   </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -1043,6 +1111,8 @@
   
 
 
+<hr />
+<h2 id="description-complete-agentsync-cli-reference-every-command-flag-default-and-caveat-for-init-push-pull-status-daemon-key-skill-and-the-tui">description: Complete AgentSync CLI reference: every command, flag, default, and caveat for init, push, pull, status, daemon, key, skill, and the TUI.<a class="headerlink" href="#description-complete-agentsync-cli-reference-every-command-flag-default-and-caveat-for-init-push-pull-status-daemon-key-skill-and-the-tui" title="Permanent link">&para;</a></h2>
 <h1 id="commands">Commands<a class="headerlink" href="#commands" title="Permanent link">&para;</a></h1>
 <p>Every AgentSync subcommand in one reference: what it does, what it needs, what it produces, and the caveats that bite if you ignore them.</p>
 <h2 id="what-this-page-owns">What this page owns<a class="headerlink" href="#what-this-page-owns" title="Permanent link">&para;</a></h2>
