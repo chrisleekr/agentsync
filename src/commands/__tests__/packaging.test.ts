@@ -117,20 +117,20 @@ describe("package release surface", () => {
     expect(workflow).toContain("run: npm install --global npm@11.5.1");
   });
 
-  test("npm pack dry-run includes the published CLI and excludes repo-only source files", async () => {
+  test("npm pack dry-run publishes exactly the files in the package.json allowlist", async () => {
+    // package.json `files` is the only knob that should govern the tarball.
+    // Strict equality on the sorted file list catches both stray additions
+    // (e.g. an accidental `"CLAUDE.md"` slipped into `files`) and
+    // .npmignore/.gitignore-shadowing regressions that would re-introduce a
+    // denylist surface. Both are publishing-contract regressions that must
+    // be caught before release rather than after.
     runCommand(process.execPath, ["run", "build:package"]);
 
     const rawPackOutput = runCommand("npm", ["pack", "--dry-run", "--json", "--ignore-scripts"]);
     const packOutput = parseNpmPackOutput(rawPackOutput);
-    const packedFiles = packOutput[0]?.files.map((file) => file.path) ?? [];
+    const packedFiles = packOutput[0]?.files.map((file) => file.path).sort() ?? [];
 
-    expect(packedFiles).toContain("dist/cli.js");
-    expect(packedFiles).toContain("README.md");
-    expect(packedFiles).toContain("LICENSE");
-    expect(packedFiles).not.toContain("dist/agentsync");
-    expect(packedFiles).not.toContain("src/cli.ts");
-    expect(packedFiles).not.toContain("src/commands/shared.ts");
-    expect(packedFiles).not.toContain("specs/20260405-112827-bunx-release/spec.md");
+    expect(packedFiles).toEqual(["LICENSE", "README.md", "dist/cli.js", "package.json"]);
   });
 
   test("source and package version markers stay aligned", async () => {
