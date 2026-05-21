@@ -8,6 +8,8 @@
  */
 import { execFile } from "node:child_process";
 import type * as fsPromises from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { promisify } from "node:util";
 import { log } from "@clack/prompts";
 
@@ -156,7 +158,9 @@ export async function installWindows(args: string[]): Promise<void> {
   const override = getOverride("installWindows");
   if (override) return override(args);
   const xml = buildXml(args);
-  const tmpXml = `${process.env.TEMP ?? "C:\\Temp"}\\agentsync-task.xml`;
+  // Use os.tmpdir() so the resolved directory always exists: on Windows it
+  // checks TEMP → TMP → %SystemRoot%\Temp and treats blank values as unset.
+  const tmpXml = join(tmpdir(), "agentsync-task.xml");
 
   const { writeFile, rm } = await fsImpl();
   await writeFile(tmpXml, xml, "utf16le");

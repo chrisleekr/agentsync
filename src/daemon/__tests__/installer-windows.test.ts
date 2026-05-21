@@ -8,7 +8,9 @@
  * (`__setInstallerWindowsImplForTests`). Bypasses Bun's mock.module()
  * entirely so daemon.test.ts's installer overrides cannot bleed in.
  */
+
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
+import { tmpdir } from "node:os";
 
 const fsWrites = new Map<string, string>();
 const fsRms = new Set<string>();
@@ -150,6 +152,40 @@ describe("installWindows", () => {
 
     const xmlEntry = [...fsRms].find((p) => p.endsWith(".xml"));
     expect(xmlEntry).toBeDefined();
+  });
+
+  // Regression guard: the install path must always resolve under os.tmpdir().
+  // Hand-rolling `process.env.TEMP ?? "C:\\Temp"` previously produced a path
+  // whose parent does not exist on stock Windows, aborting installWindows()
+  // with ENOENT before schtasks /Create ever ran.
+  test("writes XML under os.tmpdir() with the agentsync-task.xml filename", async () => {
+    await m.installWindows(["C:\\agentsync.exe"]);
+
+    const xmlPath = [...fsWrites.keys()].find((p) => p.endsWith("agentsync-task.xml"));
+    expect(xmlPath).toBeDefined();
+    if (!xmlPath) return;
+    expect(xmlPath.startsWith(tmpdir())).toBe(true);
+  });
+
+  // Regression guard: an exported-but-empty TEMP env var must not collapse
+  // the write path to drive root. `??` would short-circuit only on undefined,
+  // letting "" through; os.tmpdir() treats blanks as unset and falls through
+  // its own resolution chain.
+  test("resolves under os.tmpdir() even when TEMP is set to empty string", async () => {
+    const saved = process.env.TEMP;
+    process.env.TEMP = "";
+    try {
+      await m.installWindows(["C:\\agentsync.exe"]);
+
+      const xmlPath = [...fsWrites.keys()].find((p) => p.endsWith("agentsync-task.xml"));
+      expect(xmlPath).toBeDefined();
+      if (!xmlPath) return;
+      expect(xmlPath.startsWith(tmpdir())).toBe(true);
+      // Defence-in-depth: must not be the drive-root regression
+      expect(xmlPath).not.toBe("\\agentsync-task.xml");
+    } finally {
+      process.env.TEMP = saved;
+    }
   });
 });
 
