@@ -4,6 +4,13 @@ import { nonBlank } from "../lib/env";
 
 const HOME = homedir();
 const PLATFORM = process.platform;
+// Windows roaming-config root. An exported-but-empty APPDATA is "", which is
+// not nullish, so a bare `?? ""` would yield a relative path and silently
+// drop or misplace agent configs. nonBlank collapses blank/whitespace-only
+// to undefined; the canonical %USERPROFILE%\AppData\Roaming default keeps
+// resolution absolute when the env var is unset or stripped (Task Scheduler,
+// service accounts, minimal container env blocks).
+const APPDATA = nonBlank(process.env.APPDATA) ?? join(HOME, "AppData", "Roaming");
 
 /** Platform-aware locations for the agent files that AgentSync snapshots and restores. */
 export const AgentPaths = {
@@ -20,7 +27,7 @@ export const AgentPaths = {
         return join(HOME, "Library", "Application Support", "Cursor", "User", "settings.json");
       }
       if (PLATFORM === "win32") {
-        return join(process.env.APPDATA ?? "", "Cursor", "User", "settings.json");
+        return join(APPDATA, "Cursor", "User", "settings.json");
       }
       return join(HOME, ".config", "Cursor", "User", "settings.json");
     })(),
@@ -82,7 +89,7 @@ export const AgentPaths = {
         return join(HOME, "Library", "Application Support", "Code", "User", "settings.json");
       }
       if (PLATFORM === "win32") {
-        return join(process.env.APPDATA ?? "", "Code", "User", "settings.json");
+        return join(APPDATA, "Code", "User", "settings.json");
       }
       return join(HOME, ".config", "Code", "User", "settings.json");
     })(),
@@ -93,7 +100,7 @@ export const AgentPaths = {
         return join(HOME, "Library", "Application Support", "Code", "User", "mcp.json");
       }
       if (PLATFORM === "win32") {
-        return join(process.env.APPDATA ?? "", "Code", "User", "mcp.json");
+        return join(APPDATA, "Code", "User", "mcp.json");
       }
       return join(HOME, ".config", "Code", "User", "mcp.json");
     })(),

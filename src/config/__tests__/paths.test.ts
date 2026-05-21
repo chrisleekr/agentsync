@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { isAbsolute, join } from "node:path";
 import {
   AgentPaths,
   resolveAgentSyncHome,
@@ -165,5 +165,45 @@ describe("resolveAgentSyncHome AGENTSYNC_DIR override", () => {
   test("treats a whitespace-only AGENTSYNC_DIR as unset and falls back to the default", () => {
     process.env.AGENTSYNC_DIR = "   ";
     expect(resolveAgentSyncHome()).toContain("agentsync");
+  });
+});
+
+describe("AgentPaths Windows APPDATA fallback", () => {
+  // The APPDATA-derived agent paths bake in at module load time, so each
+  // case mutates the env and re-imports ../paths with a cache-busting query
+  // suffix. On non-Windows hosts the win32 branches never execute, so the
+  // assertions short-circuit to keep the suite green in Linux/macOS CI.
+  let prevAppData: string | undefined;
+
+  beforeEach(() => {
+    prevAppData = process.env.APPDATA;
+  });
+
+  afterEach(() => {
+    if (prevAppData === undefined) delete process.env.APPDATA;
+    else process.env.APPDATA = prevAppData;
+  });
+
+  async function assertWin32PathsAbsolute(): Promise<void> {
+    if (process.platform !== "win32") return;
+    const mod = await import(`../paths?v=${Date.now()}-${Math.random()}`);
+    expect(isAbsolute(mod.AgentPaths.cursor.settingsJson)).toBe(true);
+    expect(isAbsolute(mod.AgentPaths.copilot.vscodeMcpInSettings)).toBe(true);
+    expect(isAbsolute(mod.AgentPaths.vscode.mcpJson)).toBe(true);
+  }
+
+  test("an unset APPDATA still resolves to absolute paths on Windows", async () => {
+    delete process.env.APPDATA;
+    await assertWin32PathsAbsolute();
+  });
+
+  test("an empty APPDATA still resolves to absolute paths on Windows", async () => {
+    process.env.APPDATA = "";
+    await assertWin32PathsAbsolute();
+  });
+
+  test("a whitespace-only APPDATA still resolves to absolute paths on Windows", async () => {
+    process.env.APPDATA = "   ";
+    await assertWin32PathsAbsolute();
   });
 });
