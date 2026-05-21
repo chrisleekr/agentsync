@@ -36,7 +36,9 @@ describe("release workflow publishing contract", () => {
     const ciWorkflow = await readFile(ciWorkflowPath, "utf8");
 
     expect(ciWorkflow).toContain("name: Unit Tests");
-    expect(ciWorkflow).toContain("uses: actions/setup-node@v6");
+    // Accept either the floating `@v6` tag or a Renovate-pinned commit SHA
+    // carrying the `# v6` comment — both lock the action to major v6.
+    expect(ciWorkflow).toMatch(/uses: actions\/setup-node@(?:v6\b|[a-f0-9]{40} # v6\b)/);
     expect(ciWorkflow).toContain("node-version-file: .nvmrc");
     expect(ciWorkflow).toContain("name: Upgrade npm");
     expect(ciWorkflow).toContain("npm install --global npm@11.5.1");
