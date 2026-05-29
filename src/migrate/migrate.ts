@@ -9,7 +9,8 @@
 import { mkdir, readdir, readFile, stat } from "node:fs/promises";
 import { basename, join, relative } from "node:path";
 import * as TOML from "@iarna/toml";
-import { atomicWrite, readIfExists } from "../agents/_utils";
+import { type ParseError, parse as parseJsonc } from "jsonc-parser";
+import { atomicWrite, readIfExists, setJsoncTopLevelKey } from "../agents/_utils";
 import { applyClaudeMd } from "../agents/claude";
 import { applyCodexAgentsMd } from "../agents/codex";
 import { applyCopilotInstructions } from "../agents/copilot";
@@ -259,6 +260,46 @@ export async function readSourceArtefacts(
 }
 
 /**
+ * Parse a JSONC document into a plain object for reading existing values.
+ *
+ * Returns {} for a non-object root or any genuine parse error (trailing commas
+ * and comments are tolerated, not errors). This mirrors setJsoncTopLevelKey's
+ * own object/error gate, so a corrupt target is treated the same on the read
+ * side (merge from nothing) as on the write side (write a clean object).
+ */
+function parseJsoncObject(raw: string): Record<string, unknown> {
+  const errors: ParseError[] = [];
+  const parsed = parseJsonc(raw, errors, { allowTrailingComma: true });
+  if (errors.length > 0 || parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return {};
+  }
+  return parsed as Record<string, unknown>;
+}
+
+/**
+ * Merge two MCP `inputs` arrays with the source list winning on collision.
+ * Dedupe by `id` when present, otherwise by structural equality. Incoming is
+ * iterated first so its entry is recorded under the dedupe key before existing.
+ */
+function mergeMcpInputs(incoming: unknown[], existing: unknown[]): unknown[] {
+  const seen = new Set<string>();
+  const merged: unknown[] = [];
+  for (const list of [incoming, existing]) {
+    for (const entry of list) {
+      const id =
+        entry && typeof entry === "object"
+          ? ((entry as { id?: unknown }).id as string | undefined)
+          : undefined;
+      const dedupeKey = typeof id === "string" ? id : JSON.stringify(entry);
+      if (seen.has(dedupeKey)) continue;
+      seen.add(dedupeKey);
+      merged.push(entry);
+    }
+  }
+  return merged;
+}
+
+/**
  * Write a migrated artefact to the target agent using existing apply functions.
  * @param to - Target agent.
  * @param type - Configuration type.
@@ -341,62 +382,61 @@ export async function applyMigrated(
       // either write to a section the target ignores or duplicate state.
       const existing = await readIfExists(targetPath);
       if (existing) {
-        try {
-          if (to === "codex") {
-            const existingParsed = TOML.parse(existing);
-            const incomingParsed = TOML.parse(content);
-            const existingMcp = (existingParsed.mcp ?? {}) as TOML.JsonMap;
-            const incomingMcp = (incomingParsed.mcp ?? {}) as TOML.JsonMap;
-            const existingServers = (existingMcp.servers ?? {}) as TOML.JsonMap;
-            const incomingServers = (incomingMcp.servers ?? {}) as TOML.JsonMap;
-            existingMcp.servers = { ...existingServers, ...incomingServers };
-            existingParsed.mcp = existingMcp;
-            content = TOML.stringify(existingParsed);
-          } else if (to === "vscode") {
-            const existingParsed = JSON.parse(existing) as Record<string, unknown>;
-            const incomingParsed = JSON.parse(content) as Record<string, unknown>;
-            const existingServers = (existingParsed.servers ?? {}) as Record<string, unknown>;
-            const incomingServers = (incomingParsed.servers ?? {}) as Record<string, unknown>;
-            existingParsed.servers = { ...existingServers, ...incomingServers };
-            const existingInputs = Array.isArray(existingParsed.inputs)
-              ? existingParsed.inputs
-              : [];
-            const incomingInputs = Array.isArray(incomingParsed.inputs)
-              ? incomingParsed.inputs
-              : [];
-            if (incomingInputs.length > 0) {
-              // Source wins on collision (mirrors the spread-based servers
-              // merge above and the documented "source value wins" rule in
-              // docs/migrate.md). Iterate incoming first so its entry is
-              // recorded under the dedupe key before the existing one.
-              const seen = new Set<string>();
-              const merged: unknown[] = [];
-              for (const list of [incomingInputs, existingInputs]) {
-                for (const entry of list) {
-                  const id =
-                    entry && typeof entry === "object"
-                      ? ((entry as { id?: unknown }).id as string | undefined)
-                      : undefined;
-                  const dedupeKey = typeof id === "string" ? id : JSON.stringify(entry);
-                  if (seen.has(dedupeKey)) continue;
-                  seen.add(dedupeKey);
-                  merged.push(entry);
-                }
-              }
-              existingParsed.inputs = merged;
-            }
-            content = `${JSON.stringify(existingParsed, null, 2)}\n`;
-          } else {
-            // Claude and Cursor: mcpServers merge
-            const existingParsed = JSON.parse(existing) as Record<string, unknown>;
-            const incomingParsed = JSON.parse(content) as Record<string, unknown>;
-            const existingServers = (existingParsed.mcpServers ?? {}) as Record<string, unknown>;
-            const incomingServers = (incomingParsed.mcpServers ?? {}) as Record<string, unknown>;
-            existingParsed.mcpServers = { ...existingServers, ...incomingServers };
-            content = `${JSON.stringify(existingParsed, null, 2)}\n`;
+        if (to === "codex") {
+          // Codex config.toml is strict TOML, not JSONC. A malformed existing
+          // file throws here and is recorded as a write error upstream, never
+          // silently overwritten.
+          const existingParsed = TOML.parse(existing);
+          const incomingParsed = TOML.parse(content);
+          const existingMcp = (existingParsed.mcp ?? {}) as TOML.JsonMap;
+          const incomingMcp = (incomingParsed.mcp ?? {}) as TOML.JsonMap;
+          const existingServers = (existingMcp.servers ?? {}) as TOML.JsonMap;
+          const incomingServers = (incomingMcp.servers ?? {}) as TOML.JsonMap;
+          existingMcp.servers = { ...existingServers, ...incomingServers };
+          existingParsed.mcp = existingMcp;
+          content = TOML.stringify(existingParsed);
+        } else if (to === "vscode") {
+          // VS Code mcp.json is JSONC (comments, trailing commas) and sits
+          // beside user state. Edit servers/inputs in place so unrelated keys
+          // and comments survive; a strict JSON.parse used to throw on any
+          // JSONC feature, after which the bare catch overwrote the whole file.
+          const incomingParsed = JSON.parse(content) as Record<string, unknown>;
+          const incomingServers = (incomingParsed.servers ?? {}) as Record<string, unknown>;
+          const existingObj = parseJsoncObject(existing);
+          const existingServers = (existingObj.servers ?? {}) as Record<string, unknown>;
+          let merged = setJsoncTopLevelKey(existing, "servers", {
+            ...existingServers,
+            ...incomingServers,
+          });
+          const incomingInputs = Array.isArray(incomingParsed.inputs) ? incomingParsed.inputs : [];
+          if (incomingInputs.length > 0) {
+            const existingInputs = Array.isArray(existingObj.inputs) ? existingObj.inputs : [];
+            merged = setJsoncTopLevelKey(
+              merged,
+              "inputs",
+              mergeMcpInputs(incomingInputs, existingInputs),
+            );
           }
-        } catch {
-          /* existing file corrupt — overwrite entirely */
+          content = merged;
+        } else {
+          // Claude, Cursor, and Copilot: mcpServers merge. ~/.claude.json is
+          // large and JSONC-tolerant, and Claude Code continuously writes
+          // trackedFileBackups, projects, and other state to it. A strict
+          // JSON.parse threw on any JSONC feature and the bare catch then
+          // overwrote the whole file with just mcpServers, destroying that
+          // state. Edit mcpServers in place, matching applyClaudeMcp on the
+          // pull side. A genuinely corrupt target (real JSON error, not a JSONC
+          // feature) reads as {} and is rewritten as a clean mcpServers object —
+          // the same fail-open the pull path takes, since no safe in-place edit
+          // of unparseable content exists.
+          const incomingParsed = JSON.parse(content) as Record<string, unknown>;
+          const incomingServers = (incomingParsed.mcpServers ?? {}) as Record<string, unknown>;
+          const existingObj = parseJsoncObject(existing);
+          const existingServers = (existingObj.mcpServers ?? {}) as Record<string, unknown>;
+          content = setJsoncTopLevelKey(existing, "mcpServers", {
+            ...existingServers,
+            ...incomingServers,
+          });
         }
       }
       await atomicWrite(targetPath, content);
