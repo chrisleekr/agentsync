@@ -33,6 +33,11 @@ const packageJsonSchema = z.object({
   homepage: z.string(),
   bugs: z.object({ url: z.string() }),
   license: z.string(),
+  // Required: the documented Bun >=1.3.9 runtime floor must be machine-enforced,
+  // not just prose in CLAUDE.md. A missing engines.bun fails this parse.
+  engines: z.object({
+    bun: z.string(),
+  }),
   volta: z
     .object({
       node: z.string(),
@@ -89,6 +94,8 @@ describe("package release surface", () => {
     expect(packageJson.bugs.url).toBe("https://github.com/chrisleekr/agentsync/issues");
     expect(packageJson.homepage).toBe("https://github.com/chrisleekr/agentsync#readme");
     expect(packageJson.license).toBe("MIT");
+    // Enforces the Bun runtime floor documented in CLAUDE.md (Bun >=1.3.9).
+    expect(packageJson.engines.bun).toBe(">=1.3.9");
   });
 
   test("package build emits a Bun-shebang CLI whose version matches the manifest", async () => {
