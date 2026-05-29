@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
-import { rm, writeFile } from "node:fs/promises";
+import { mkdir, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { join } from "node:path";
 import { createTmpDir } from "../../test-helpers/fixtures";
@@ -86,6 +86,30 @@ describe("loader", () => {
     expect(reloaded.recipients).toEqual(original.recipients);
     expect(reloaded.agents).toEqual(original.agents);
     expect(reloaded.sync.debounceMs).toBe(original.sync.debounceMs);
+  });
+
+  test("writeConfig leaves no temp sibling after a successful write", async () => {
+    await writeFile(configPath, MINIMAL_TOML, "utf8");
+    const config = await loadConfig(configPath);
+    await writeConfig(configPath, config);
+    // The temp file must have been renamed over the destination, not left behind.
+    const leftovers = (await readdir(tmpDir)).filter((f) => f.endsWith(".tmp"));
+    expect(leftovers).toEqual([]);
+    expect((await loadConfig(configPath)).version).toBe("1");
+  });
+
+  test("writeConfig preserves the destination and removes the temp when rename fails", async () => {
+    // A directory at the destination path makes rename(file -> dir) fail,
+    // standing in for any mid-write rename failure. The original must survive
+    // and no partial temp may be left in the vault tree.
+    const dirDest = join(tmpDir, "as-dir");
+    await mkdir(dirDest, { recursive: true });
+    await writeFile(configPath, MINIMAL_TOML, "utf8");
+    const config = await loadConfig(configPath);
+    await expect(writeConfig(dirDest, config)).rejects.toThrow();
+    const leftovers = (await readdir(tmpDir)).filter((f) => f.endsWith(".tmp"));
+    expect(leftovers).toEqual([]);
+    expect((await stat(dirDest)).isDirectory()).toBeTrue();
   });
 
   test("writeConfig creates parent directories if needed", async () => {
