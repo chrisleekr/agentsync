@@ -1,11 +1,12 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { isAbsolute, join } from "node:path";
 import {
   AgentPaths,
   resolveAgentSyncHome,
   resolveClaudePluginPaths,
   resolveDaemonSocketPath,
+  resolveWindowsAppData,
 } from "../paths";
 
 // AgentPaths shape validation (non-mutable, import-time baked paths)
@@ -165,5 +166,39 @@ describe("resolveAgentSyncHome AGENTSYNC_DIR override", () => {
   test("treats a whitespace-only AGENTSYNC_DIR as unset and falls back to the default", () => {
     process.env.AGENTSYNC_DIR = "   ";
     expect(resolveAgentSyncHome()).toContain("agentsync");
+  });
+});
+
+describe("resolveWindowsAppData blank/unset APPDATA", () => {
+  // A relative base would make push skip the file and pull write under cwd, so
+  // every branch must stay absolute. FAKE_HOME is absolute on POSIX and Windows.
+  const FAKE_HOME = join("/fake", "home");
+
+  test("returns a set APPDATA verbatim", () => {
+    const appdata = join("C:", "Users", "foo", "AppData", "Roaming");
+    expect(resolveWindowsAppData(appdata, FAKE_HOME)).toBe(appdata);
+  });
+
+  test("trims surrounding whitespace from a set APPDATA", () => {
+    const appdata = join("C:", "Users", "foo", "AppData", "Roaming");
+    expect(resolveWindowsAppData(`  ${appdata}  `, FAKE_HOME)).toBe(appdata);
+  });
+
+  test("falls back to HOME/AppData/Roaming when APPDATA is unset", () => {
+    const result = resolveWindowsAppData(undefined, FAKE_HOME);
+    expect(result).toBe(join(FAKE_HOME, "AppData", "Roaming"));
+    expect(isAbsolute(result)).toBeTrue();
+  });
+
+  test("treats an empty APPDATA as unset, never a relative base", () => {
+    const result = resolveWindowsAppData("", FAKE_HOME);
+    expect(result).toBe(join(FAKE_HOME, "AppData", "Roaming"));
+    expect(isAbsolute(result)).toBeTrue();
+  });
+
+  test("treats a whitespace-only APPDATA as unset", () => {
+    const result = resolveWindowsAppData("   ", FAKE_HOME);
+    expect(result).toBe(join(FAKE_HOME, "AppData", "Roaming"));
+    expect(isAbsolute(result)).toBeTrue();
   });
 });

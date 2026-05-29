@@ -5,6 +5,23 @@ import { nonBlank } from "../lib/env";
 const HOME = homedir();
 const PLATFORM = process.platform;
 
+/**
+ * Resolve the Windows %APPDATA% base (= %USERPROFILE%\AppData\Roaming).
+ *
+ * nonBlank collapses an exported-but-empty APPDATA to undefined so the result
+ * stays absolute. A bare `?? ""` left an unset or blank var as a relative base,
+ * which push silently skipped (the file reads as "not found") and pull misplaced
+ * under process.cwd() instead of restoring it. This mirrors how CODEX_HOME and
+ * resolveAgentSyncHome already handle the same blank-env case. Parameterized so
+ * the blank/unset behaviour is testable on any platform.
+ */
+export function resolveWindowsAppData(
+  appdata: string | undefined = process.env.APPDATA,
+  home: string = HOME,
+): string {
+  return nonBlank(appdata) ?? join(home, "AppData", "Roaming");
+}
+
 /** Platform-aware locations for the agent files that AgentSync snapshots and restores. */
 export const AgentPaths = {
   cursor: {
@@ -20,7 +37,7 @@ export const AgentPaths = {
         return join(HOME, "Library", "Application Support", "Cursor", "User", "settings.json");
       }
       if (PLATFORM === "win32") {
-        return join(process.env.APPDATA ?? "", "Cursor", "User", "settings.json");
+        return join(resolveWindowsAppData(), "Cursor", "User", "settings.json");
       }
       return join(HOME, ".config", "Cursor", "User", "settings.json");
     })(),
@@ -82,7 +99,7 @@ export const AgentPaths = {
         return join(HOME, "Library", "Application Support", "Code", "User", "settings.json");
       }
       if (PLATFORM === "win32") {
-        return join(process.env.APPDATA ?? "", "Code", "User", "settings.json");
+        return join(resolveWindowsAppData(), "Code", "User", "settings.json");
       }
       return join(HOME, ".config", "Code", "User", "settings.json");
     })(),
@@ -93,7 +110,7 @@ export const AgentPaths = {
         return join(HOME, "Library", "Application Support", "Code", "User", "mcp.json");
       }
       if (PLATFORM === "win32") {
-        return join(process.env.APPDATA ?? "", "Code", "User", "mcp.json");
+        return join(resolveWindowsAppData(), "Code", "User", "mcp.json");
       }
       return join(HOME, ".config", "Code", "User", "mcp.json");
     })(),
