@@ -59,6 +59,12 @@ jobs:
       - name: Build package
         run: bun run build:package
 
+      - name: Smoke-test package bundle
+        # Execute the exact bundle about to hit the npm registry. Build success
+        # does not prove the bundle runs: a mangled shebang, a syntax regression,
+        # or broken @opentui/core external resolution would publish undetected.
+        run: bun dist/cli.js --version
+
       - name: Publish package
         run: npm publish --provenance --access public
 
@@ -155,6 +161,18 @@ jobs:
 
       - name: Build binary
         run: bun build --compile ${{ matrix.bun_target && format('--target {0}', matrix.bun_target) || '' }} src/cli.ts --outfile dist/${{ matrix.target }}
+
+      - name: Smoke-test native binary
+        # Linux host-native target only (no bun_target -> host os/arch). Running
+        # before checksum/attest/upload stops a broken artifact from being signed
+        # and shipped. macOS arm64 is excluded: Apple Silicon SIGKILLs unsigned
+        # arm64 binaries, and `bun build --compile` output is not reliably
+        # signed, so executing it on the macOS runner could fail for signing
+        # reasons unrelated to the code. Cross-compiled and Windows binaries
+        # cannot run on the host at all and stay on the checksum + attestation
+        # checks.
+        if: ${{ runner.os == 'Linux' && !matrix.bun_target }}
+        run: ./dist/${{ matrix.target }} --version
 
       - name: Generate SHA256 checksum
         working-directory: dist
