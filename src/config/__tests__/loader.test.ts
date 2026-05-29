@@ -2,8 +2,16 @@ import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import { mkdir, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { join } from "node:path";
+import { parse as parseToml } from "@iarna/toml";
 import { createTmpDir } from "../../test-helpers/fixtures";
-import { loadConfig, resolveConfigPath, writeConfig } from "../loader";
+import {
+  formatConfigError,
+  isConfigParseError,
+  loadConfig,
+  resolveConfigPath,
+  writeConfig,
+} from "../loader";
+import { AgentSyncConfigSchema } from "../schema";
 
 // Defensive re-install of the real node:fs/promises — see migrate.test.ts
 // for the full explanation of the bleed this guards against.
@@ -126,5 +134,74 @@ describe("loader", () => {
   test("resolveConfigPath appends agentsync.toml to vaultDir", () => {
     const result = resolveConfigPath("/my/vault");
     expect(result).toBe("/my/vault/agentsync.toml");
+  });
+});
+
+describe("formatConfigError", () => {
+  const CONFIG_PATH = "/vault/agentsync.toml";
+
+  // A fully valid config; each test overrides exactly one field so the parse
+  // produces a single isolated issue, independent of Zod's issue ordering or
+  // formatConfigError's 3-issue cap.
+  const validBase = {
+    recipients: { me: "age1qpzry9x8gf2tvdw0s3jn54khce6mua7l" },
+    agents: { cursor: true, claude: true, codex: true, copilot: true, vscode: false },
+    remote: { url: "git@github.com:user/vault.git", branch: "main" },
+    sync: { debounceMs: 300, autoPush: true, autoPull: true, pullIntervalMs: 300_000 },
+  };
+
+  test("names the offending recipient alias for a schema (Zod) error", () => {
+    const result = AgentSyncConfigSchema.safeParse({
+      ...validBase,
+      recipients: { alice: "notage1xyz" },
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const msg = formatConfigError(result.error, CONFIG_PATH);
+      expect(msg).toContain(CONFIG_PATH);
+      expect(msg).toContain("recipients.alice");
+      expect(msg).toContain("Invalid config");
+    }
+  });
+
+  test("names remote.branch for an empty-branch schema error", () => {
+    const result = AgentSyncConfigSchema.safeParse({
+      ...validBase,
+      remote: { url: "git@github.com:user/vault.git", branch: "" },
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(formatConfigError(result.error, CONFIG_PATH)).toContain("remote.branch");
+    }
+  });
+
+  test("renders a TOML syntax error as one line with the path, no stack trace", () => {
+    let tomlErr: unknown;
+    try {
+      parseToml("a = ");
+    } catch (e) {
+      tomlErr = e;
+    }
+    expect(isConfigParseError(tomlErr)).toBeTrue();
+    const msg = formatConfigError(tomlErr, CONFIG_PATH);
+    expect(msg).toContain("Invalid TOML");
+    expect(msg).toContain(CONFIG_PATH);
+    expect(msg).not.toContain("\n");
+  });
+
+  test("isConfigParseError is true for a ZodError and false for ENOENT", () => {
+    const zodResult = AgentSyncConfigSchema.safeParse({});
+    expect(zodResult.success).toBe(false);
+    if (!zodResult.success) {
+      expect(isConfigParseError(zodResult.error)).toBeTrue();
+    }
+    const enoent = Object.assign(new Error("no file"), { code: "ENOENT" });
+    expect(isConfigParseError(enoent)).toBeFalse();
+  });
+
+  test("falls back to a single generic line for non-config errors", () => {
+    expect(formatConfigError(new Error("disk full"), CONFIG_PATH)).toBe(
+      `Failed to load config ${CONFIG_PATH}: disk full`,
+    );
   });
 });

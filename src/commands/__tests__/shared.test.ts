@@ -251,15 +251,18 @@ describe("loadVaultConfigOrExit", () => {
     expect(fakeLogs.error[0]).not.toContain("at async");
   });
 
-  test("re-throws non-ENOENT errors so callers see schema/parse failures intact", async () => {
+  test("re-throws non-ENOENT config errors with a friendly one-line message", async () => {
     const { loadVaultConfigOrExit } = await import("../shared");
 
     const vaultDir = join(tmpDir, "broken-vault");
     await mkdir(vaultDir, { recursive: true });
     await writeFile(join(vaultDir, "agentsync.toml"), "this is = not [ valid toml", "utf8");
 
-    await expect(loadVaultConfigOrExit(vaultDir)).rejects.toThrow();
-    // Should NOT have called process.exit — only ENOENT triggers the friendly path.
+    // Parse failures re-throw so callers (performPull/performPush/daemon) can
+    // aggregate them; only ENOENT exits. The thrown message is the one-line
+    // diagnostic naming the file, not a raw Zod/Toml stack trace.
+    await expect(loadVaultConfigOrExit(vaultDir)).rejects.toThrow("agentsync.toml");
+    // process.exit must NOT fire — that path is reserved for the missing-vault case.
     expect(exitCalledWith).toBeNull();
   });
 });
