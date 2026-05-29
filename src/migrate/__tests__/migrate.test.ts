@@ -396,6 +396,86 @@ describe("performMigrate", () => {
     expect(written).toContain("slack");
   });
 
+  test("MCP merge preserves JSONC comments and unrelated state in ~/.claude.json", async () => {
+    // Source brings one server in.
+    writeFixture(
+      testCursor.mcpGlobal,
+      JSON.stringify({ mcpServers: { slack: { command: "slack-mcp", args: [], env: {} } } }),
+    );
+    // Target ~/.claude.json carries a comment, a trailing comma, and
+    // system-managed state Claude Code owns. A strict JSON.parse throws on the
+    // comment; the old bare catch then overwrote the whole file with just
+    // mcpServers, destroying trackedFileBackups/projects silently.
+    writeFixture(
+      testClaude.mcpJson,
+      `{
+  // user comment that strict JSON.parse rejects
+  "trackedFileBackups": { "a.txt": "deadbeef" },
+  "projects": { "/home/u/proj": { "lastUsed": 1 } },
+  "mcpServers": { "gh": { "command": "gh-mcp", "args": [], "env": {} } },
+}`,
+    );
+
+    const result = await performMigrate({
+      from: "cursor",
+      to: "claude",
+      type: "mcp",
+      dryRun: false,
+    });
+
+    expect(result.errors).toHaveLength(0);
+    const { readIfExists } = await import("../../agents/_utils");
+    const written = (await readIfExists(testClaude.mcpJson)) as string;
+    // Unrelated state and the user's comment must survive the in-place edit.
+    expect(written).toContain("trackedFileBackups");
+    expect(written).toContain("projects");
+    expect(written).toContain("user comment");
+    // Servers merged: source slack added, existing gh kept.
+    const { parse: parseJsonc } = await import("jsonc-parser");
+    const parsed = parseJsonc(written, [], { allowTrailingComma: true }) as {
+      mcpServers: Record<string, unknown>;
+    };
+    expect(parsed.mcpServers.gh).toBeDefined();
+    expect(parsed.mcpServers.slack).toBeDefined();
+  });
+
+  test("MCP merge preserves JSONC comments and existing inputs in VS Code mcp.json", async () => {
+    writeFixture(
+      testClaude.mcpJson,
+      JSON.stringify({ mcpServers: { slack: { command: "slack-mcp", args: [], env: {} } } }),
+    );
+    // VS Code mcp.json is settings-style JSONC: comment + an existing input.
+    writeFixture(
+      testVscode.mcpJson,
+      `{
+  // vscode user comment
+  "servers": { "gh": { "command": "gh-mcp" } },
+  "inputs": [{ "id": "token", "type": "promptString" }],
+}`,
+    );
+
+    const result = await performMigrate({
+      from: "claude",
+      to: "vscode",
+      type: "mcp",
+      dryRun: false,
+    });
+
+    expect(result.errors).toHaveLength(0);
+    const { readIfExists } = await import("../../agents/_utils");
+    const written = (await readIfExists(testVscode.mcpJson)) as string;
+    expect(written).toContain("vscode user comment");
+    const { parse: parseJsonc } = await import("jsonc-parser");
+    const parsed = parseJsonc(written, [], { allowTrailingComma: true }) as {
+      servers: Record<string, unknown>;
+      inputs: Array<{ id?: string }>;
+    };
+    expect(parsed.servers.gh).toBeDefined();
+    expect(parsed.servers.slack).toBeDefined();
+    // The existing input must not be dropped.
+    expect(parsed.inputs.some((i) => i.id === "token")).toBeTrue();
+  });
+
   test("reports skip for missing source files", async () => {
     const result = await performMigrate({
       from: "claude",
