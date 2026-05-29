@@ -66,6 +66,13 @@ const WHOLE_VALUE_SECRET_PATTERNS = [
   /^sk-[a-zA-Z0-9]{20,}$/,
   /^ghp_[a-zA-Z0-9]{36}$/,
   /^xoxb-[0-9]+-[a-zA-Z0-9]+$/,
+  // AgentSync's own vault identity. Bech32 HRP "AGE-SECRET-KEY-", separator
+  // "1", uppercased, so the body is a strict subset of [A-Z0-9]. A native
+  // X25519 key is a fixed 32 bytes, which bech32-encodes to exactly 58 chars,
+  // so we bound to the exact length like the other fixed-size patterns. The
+  // hyphens in the prefix mean the base64 catch-all below can never match it,
+  // so this anchored entry is required to redact a key pasted as a JSON value.
+  /^AGE-SECRET-KEY-1[A-Z0-9]{58}$/,
   /^[A-Za-z0-9+/]{40,}={0,2}$/,
 ];
 
@@ -87,6 +94,11 @@ export const EMBEDDED_SECRET_PATTERNS: ReadonlyArray<{ name: string; pattern: Re
   { name: "aws-access-key", pattern: /AKIA[0-9A-Z]{16}/ },
   { name: "google-api-key", pattern: /AIza[0-9A-Za-z_-]{35}/ },
   { name: "slack-token", pattern: /xox[abprs]-[A-Za-z0-9-]{10,}/ },
+  // The vault's own age identity decrypts every artifact AgentSync has ever
+  // stored, retroactively and irreversibly once committed to git history. A
+  // native X25519 key bech32-encodes to a fixed 58-char body; the 16-char
+  // prefix makes false positives on prose effectively impossible.
+  { name: "age-secret-key", pattern: /AGE-SECRET-KEY-1[A-Z0-9]{58}/ },
 ];
 
 export interface RedactionResult<T> {

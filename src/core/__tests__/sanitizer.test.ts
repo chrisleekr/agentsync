@@ -162,6 +162,7 @@ describe("sanitizer", () => {
     ["slack-token-app", `xoxa-${"abc123".repeat(2)}`],
     ["slack-token-refresh", `xoxr-${"abc123".repeat(2)}`],
     ["slack-token-session", `xoxs-${"abc123".repeat(2)}`],
+    ["age-secret-key", `AGE-SECRET-KEY-1${"A".repeat(58)}`],
   ])("scanForSecrets detects %s embedded in prose", (expectedName, sampleSecret) => {
     const body = `Note from setup: my key is ${sampleSecret}. Do not share.`;
     const warnings = scanForSecrets(body, "/tmp/leaky.md");
@@ -190,6 +191,18 @@ describe("sanitizer", () => {
     const warnings = scanForSecrets(mcpJson, "/home/user/.claude.json");
     expect(warnings.length).toBeGreaterThan(0);
     expect(warnings.some((w) => w.includes("anthropic-api-key"))).toBe(true);
+  });
+
+  test("redactSecretLiterals rewrites an age secret key pasted as a whole JSON value", () => {
+    // An MCP env block like { AGENTSYNC_KEY: "AGE-SECRET-KEY-1..." } must be
+    // redacted, not just aborted, so the rest of the structured config survives.
+    const ageKey = `AGE-SECRET-KEY-1${"A".repeat(58)}`;
+    const input = { env: { AGENTSYNC_KEY: ageKey } };
+    const result = redactSecretLiterals(input);
+    const value = result.value as { env: { AGENTSYNC_KEY: string } };
+    expect(value.env.AGENTSYNC_KEY).not.toBe(ageKey);
+    expect(value.env.AGENTSYNC_KEY.startsWith("$AGENTSYNC_REDACTED")).toBeTrue();
+    expect(result.warnings.length).toBeGreaterThan(0);
   });
 
   test("scanForSecrets does NOT false-positive on long alphanumeric runs in prose", () => {
