@@ -32,6 +32,33 @@ describe("release workflow publishing contract", () => {
     );
   });
 
+  test("executes the macOS arm64 release binary before attesting and uploading it", async () => {
+    const workflow = await readFile(workflowPath, "utf8");
+
+    // The native smoke gate runs every host-native target (no bun_target ->
+    // built for its own runner), not Linux-only. Apple Silicon was previously
+    // excluded because Bun 1.3.12 produced an unsigned arm64 binary that
+    // SIGKILLed; Bun >=1.3.13 ad-hoc signs it, so executing the published
+    // binary here guards that regression class from shipping again.
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: asserting on the literal GitHub Actions `${{ }}` expression in the workflow YAML, not a JS template.
+    expect(workflow).toContain("if: ${{ !matrix.bun_target }}");
+    expect(workflow).not.toContain("runner.os == 'Linux' && !matrix.bun_target");
+
+    // macos-arm64 must stay host-native (no bun_target) or `bun build
+    // --compile` would cross-compile it and the gate above would skip it,
+    // shipping an unexecuted binary. Assert the invariant on the entry itself
+    // (bounded to the build matrix) so reordering the matrix cannot mask a
+    // bun_target sneaking onto this target.
+    const matrixRegion = workflow.match(/include:\n([\s\S]*?)\n {4}runs-on:/)?.[1] ?? "";
+    const arm64Entry =
+      matrixRegion
+        .split(/\n\s*- os:/)
+        .find((entry) => entry.includes("target: agentsync-macos-arm64")) ?? "";
+
+    expect(arm64Entry).not.toBe("");
+    expect(arm64Entry).not.toContain("bun_target");
+  });
+
   test("pins the CI unit-test job to the publish validation Node and npm toolchain", async () => {
     const ciWorkflow = await readFile(ciWorkflowPath, "utf8");
 
