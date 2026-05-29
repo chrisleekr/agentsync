@@ -4,7 +4,12 @@ import { log } from "@clack/prompts";
 import { performPull } from "../commands/pull";
 import { performPush } from "../commands/push";
 import { resolveRuntimeContext } from "../commands/shared";
-import { loadConfig, resolveConfigPath } from "../config/loader";
+import {
+  formatConfigError,
+  isConfigParseError,
+  loadConfig,
+  resolveConfigPath,
+} from "../config/loader";
 import { AgentPaths } from "../config/paths";
 import { DaemonStatusSchema } from "../config/schema";
 import { IpcClient, IpcServer } from "../core/ipc";
@@ -54,7 +59,7 @@ async function withRetry<T>(fn: () => Promise<T>): Promise<T> {
  */
 export async function startDaemon(): Promise<void> {
   // ── Startup validation ──────────────────────────
-  let runtime: Awaited<ReturnType<typeof resolveRuntimeContext>>;
+  let runtime: Awaited<ReturnType<typeof resolveRuntimeContext>> | undefined;
   try {
     runtime = await resolveRuntimeContext();
     // Eagerly load config to validate vault accessibility
@@ -62,7 +67,14 @@ export async function startDaemon(): Promise<void> {
     // Validate encryption key is readable
     await access(runtime.privateKeyPath);
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
+    // A schema/TOML failure here would otherwise log a multi-line Zod/Toml blob
+    // into the launchd/systemd journal; collapse it to one parseable line.
+    const msg =
+      runtime && isConfigParseError(err)
+        ? formatConfigError(err, resolveConfigPath(runtime.vaultDir))
+        : err instanceof Error
+          ? err.message
+          : String(err);
     log.error(`${ts()} Startup failed: ${msg}`);
     process.exit(1);
     return; // unreachable but satisfies TS control flow

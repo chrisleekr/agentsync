@@ -2,7 +2,12 @@ import { mkdir, readFile } from "node:fs/promises";
 import { hostname } from "node:os";
 import { join } from "node:path";
 import { log } from "@clack/prompts";
-import { loadConfig, resolveConfigPath } from "../config/loader";
+import {
+  formatConfigError,
+  isConfigParseError,
+  loadConfig,
+  resolveConfigPath,
+} from "../config/loader";
 import { resolveAgentSyncHome } from "../config/paths";
 import type { AgentSyncConfig } from "../config/schema";
 import { nonBlank } from "../lib/env";
@@ -38,10 +43,14 @@ export async function loadPrivateKey(path: string): Promise<string> {
 }
 
 /**
- * Load the vault config; if it is missing, print a friendly "vault not
- * initialized" error and exit 1 instead of letting the raw ENOENT bubble up as
- * a Node stack trace. Other errors (e.g. schema parse failures) are re-thrown
- * unchanged so callers and test harnesses can still see them.
+ * Load the vault config. A missing file prints the friendly "vault not
+ * initialized" hint and exits 1. Schema (Zod) and TOML syntax errors are
+ * re-thrown with a single-line diagnostic message (via formatConfigError)
+ * instead of the raw Zod/Toml stack trace, so the error stays catchable:
+ * performPull/performPush and the daemon fold it into their errors[] /
+ * retry logic, and anything that reaches the CLI top level shows the
+ * one-line message rather than a multi-line blob. Only ENOENT exits here,
+ * preserving the contract those callers depend on.
  */
 export async function loadVaultConfigOrExit(vaultDir: string): Promise<AgentSyncConfig> {
   const configPath = resolveConfigPath(vaultDir);
@@ -53,6 +62,9 @@ export async function loadVaultConfigOrExit(vaultDir: string): Promise<AgentSync
         `Vault not initialized at ${vaultDir}. Run \`agentsync init --remote <git-url>\` first.`,
       );
       process.exit(1);
+    }
+    if (isConfigParseError(err)) {
+      throw new Error(formatConfigError(err, configPath));
     }
     throw err;
   }

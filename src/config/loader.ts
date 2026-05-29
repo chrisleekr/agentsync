@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { mkdir, open, readFile, rename, unlink } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { parse, stringify } from "@iarna/toml";
+import { z } from "zod";
 import { type AgentSyncConfig, AgentSyncConfigSchema } from "./schema";
 
 /** Read and validate the vault config, stripping TOML symbol metadata before Zod parsing. */
@@ -74,4 +75,35 @@ export async function writeConfig(configPath: string, config: AgentSyncConfig): 
 /** Build the canonical config path inside a vault directory. */
 export function resolveConfigPath(vaultDir: string): string {
   return join(vaultDir, "agentsync.toml");
+}
+
+/** True when a loadConfig failure is a schema (Zod) or TOML syntax error. */
+export function isConfigParseError(err: unknown): boolean {
+  return err instanceof z.ZodError || (err instanceof Error && err.name === "TomlError");
+}
+
+/**
+ * Render a loadConfig failure as a single actionable line instead of a raw
+ * Zod/Toml stack trace. loadConfig can throw a ZodError (schema), a TomlError
+ * (syntax), or a generic error; each collapses to `<path>: what is wrong` so
+ * CLI users and the supervised daemon get a parseable diagnostic rather than a
+ * multi-line blob. Zod issues are capped at three to keep the line readable.
+ */
+export function formatConfigError(err: unknown, configPath: string): string {
+  if (err instanceof z.ZodError) {
+    const parts = err.issues.slice(0, 3).map((issue) => {
+      const path = issue.path.length > 0 ? issue.path.join(".") : "(root)";
+      return `${path}: ${issue.message}`;
+    });
+    const suffix = err.issues.length > 3 ? ` (+${err.issues.length - 3} more)` : "";
+    return `Invalid config in ${configPath}: ${parts.join("; ")}${suffix}`;
+  }
+  if (err instanceof Error && err.name === "TomlError") {
+    // @iarna/toml's message already names the row/col with a caret diagram; its
+    // first line carries the human-readable location, so keep just that.
+    const firstLine = (err.message.split("\n", 1)[0] ?? "").replace(/:\s*$/, "");
+    return `Invalid TOML in ${configPath}: ${firstLine}`;
+  }
+  const message = err instanceof Error ? err.message : String(err);
+  return `Failed to load config ${configPath}: ${message}`;
 }

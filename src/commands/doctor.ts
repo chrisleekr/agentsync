@@ -6,28 +6,9 @@ import { join, relative } from "node:path";
 import { promisify } from "node:util";
 import { log } from "@clack/prompts";
 import { defineCommand } from "citty";
-import { z } from "zod";
-import { loadConfig, resolveConfigPath } from "../config/loader";
+import { formatConfigError, loadConfig, resolveConfigPath } from "../config/loader";
 import { AgentPaths } from "../config/paths";
 import { resolveRuntimeContext } from "./shared";
-
-/**
- * Render a ZodError as a one-line `field: message` summary so the
- * doctor row points the user at the offending field (e.g. the recipient
- * alias, `remote.branch`, `remote.url`) instead of dumping `[ZodError: ...]`.
- * Caps at three issues to keep the row readable.
- */
-export function formatSchemaError(err: unknown): string {
-  if (err instanceof z.ZodError) {
-    const parts = err.issues.slice(0, 3).map((issue) => {
-      const path = issue.path.length > 0 ? issue.path.join(".") : "(root)";
-      return `${path}: ${issue.message}`;
-    });
-    const suffix = err.issues.length > 3 ? ` (+${err.issues.length - 3} more)` : "";
-    return `Invalid: ${parts.join("; ")}${suffix}`;
-  }
-  return `Invalid: ${String(err)}`;
-}
 
 /** Single diagnostic check row rendered by the doctor command. */
 export interface Check {
@@ -184,7 +165,7 @@ export const doctorCommand = defineCommand({
       checks.push({
         name: "agentsync.toml schema",
         status: "fail",
-        detail: formatSchemaError(err),
+        detail: formatConfigError(err, resolveConfigPath(runtime.vaultDir)),
       });
     }
 
