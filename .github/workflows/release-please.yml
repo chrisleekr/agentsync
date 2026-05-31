@@ -59,6 +59,12 @@ jobs:
       - name: Build package
         run: bun run build:package
 
+      - name: Smoke-test package bundle
+        # Execute the exact bundle about to hit the npm registry. Build success
+        # does not prove the bundle runs: a mangled shebang, a syntax regression,
+        # or broken @opentui/core external resolution would publish undetected.
+        run: bun dist/cli.js --version
+
       - name: Publish package
         run: npm publish --provenance --access public
 
@@ -155,6 +161,22 @@ jobs:
 
       - name: Build binary
         run: bun build --compile ${{ matrix.bun_target && format('--target {0}', matrix.bun_target) || '' }} src/cli.ts --outfile dist/${{ matrix.target }}
+
+      - name: Smoke-test native binary
+        # Host-native targets only (no bun_target -> built for this runner's
+        # os/arch): linux-x64 on the ubuntu runner and macos-arm64 on the Apple
+        # Silicon runner. Executing before checksum/attest/upload stops a broken
+        # artifact from being signed and shipped. macOS arm64 runs here because
+        # `bun build --compile` ad-hoc signs its darwin output itself
+        # (flags=adhoc,linker-signed), which is what Apple Silicon requires to
+        # not SIGKILL an arm64 binary. Bun 1.3.12 shipped that signature
+        # truncated (oven-sh/bun#29120, fixed in 1.3.13); the pinned 1.3.14 is
+        # good, and executing the published binary here now fails the release
+        # loudly if a future Bun reintroduces that class of regression instead
+        # of publishing an unrunnable binary. Cross-compiled and Windows targets
+        # cannot run on the host and stay on the checksum + attestation checks.
+        if: ${{ !matrix.bun_target }}
+        run: ./dist/${{ matrix.target }} --version
 
       - name: Generate SHA256 checksum
         working-directory: dist

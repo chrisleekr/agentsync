@@ -119,8 +119,11 @@ jobs:
       - name: Build binary
         run: bun build --compile src/cli.ts --outfile dist/agentsync
 
-      - name: Verify binary artifact
-        run: test -f dist/agentsync
+      - name: Smoke-test binary
+        # Execute the compiled artifact, not just test -f: a zero-byte file, a
+        # startup segfault, or a broken @opentui/core native loader all pass an
+        # existence check but fail here.
+        run: ./dist/agentsync --version
 
   build-package:
     name: Package Smoke Test
@@ -152,4 +155,11 @@ jobs:
         run: npm install --global npm@11.5.1
 
       - name: Build and verify package
-        run: bun run build:package && npm pack --dry-run
+        # Execute the bundle between build and pack: npm pack --dry-run only
+        # lists files, so a mangled shebang, a Bun-minifier syntax regression,
+        # a missing dynamic import, or broken @opentui/core external resolution
+        # would ship undetected. Running it with the published entry catches all.
+        run: |
+          bun run build:package
+          bun dist/cli.js --version
+          npm pack --dry-run
