@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.1.12](https://github.com/chrisleekr/agentsync/compare/v0.1.11...v0.1.12) (2026-05-29)
+
+
+### Bug Fixes
+
+* **config:** make writeConfig crash-safe with atomic temp-and-rename ([#145](https://github.com/chrisleekr/agentsync/issues/145)) ([fa06f2b](https://github.com/chrisleekr/agentsync/commit/fa06f2b8f122d5fc97fe8528c0af875680fad179))
+* **config:** resolve Windows APPDATA agent paths through nonBlank guard ([#147](https://github.com/chrisleekr/agentsync/issues/147)) ([8e791c7](https://github.com/chrisleekr/agentsync/commit/8e791c79a858ee42dfca15b445f616b9bddf2035))
+* **config:** surface schema and TOML errors as one-line diagnostics ([#148](https://github.com/chrisleekr/agentsync/issues/148)) ([65a1e2e](https://github.com/chrisleekr/agentsync/commit/65a1e2ebd3f0f5babf9be1f106ce219a85ac17a1))
+* **daemon:** use os.tmpdir() for Windows task XML path ([#132](https://github.com/chrisleekr/agentsync/issues/132)) ([0586854](https://github.com/chrisleekr/agentsync/commit/058685456356a2d8a35466db92dafde895ec760a))
+* **migrate:** preserve JSONC state in MCP merge instead of silent overwrite ([#146](https://github.com/chrisleekr/agentsync/issues/146)) ([378dd9a](https://github.com/chrisleekr/agentsync/commit/378dd9a96d3a5ed9d6f832fefa8cf963233e2c50))
+* **packaging:** declare engines.bun to enforce the documented Bun floor ([#149](https://github.com/chrisleekr/agentsync/issues/149)) ([dc677c0](https://github.com/chrisleekr/agentsync/commit/dc677c05fc5302d9d93ac7c29685e8970ce68d73))
+* **packaging:** remove stale .npmignore shadowed by files allowlist ([#130](https://github.com/chrisleekr/agentsync/issues/130)) ([315259b](https://github.com/chrisleekr/agentsync/commit/315259bb16ef5f05af55be2a0178d70c3b906705))
+* **sanitizer:** detect AGE-SECRET-KEY-1 vault identity in secret scanner ([#144](https://github.com/chrisleekr/agentsync/issues/144)) ([b8a6683](https://github.com/chrisleekr/agentsync/commit/b8a6683f19369ae7751c5226646b2a4af34c8594))
+
 ## [0.1.11](https://github.com/chrisleekr/agentsync/compare/v0.1.10...v0.1.11) (2026-05-17)
 
 
