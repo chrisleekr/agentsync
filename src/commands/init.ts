@@ -161,7 +161,10 @@ export async function performInit(options: InitOptions): Promise<InitResult> {
 
     // Pin the machine name to local state so a later hostname change cannot
     // re-derive a different name and orphan this machine's vault namespace
-    // (machines/<name>/ in v2). Idempotent: a no-op once pinned.
+    // (machines/<name>/ in v2). Idempotent: a no-op once pinned. The name is
+    // already validated in resolveRuntimeContext, and the pin is deliberately
+    // NOT part of the key rollback below: it is local identity, so a retry must
+    // resolve to the same namespace and reuse it.
     await pinMachineNameIfAbsent(runtime.machineFilePath, runtime.machineName);
 
     const gitignorePath = join(runtime.vaultDir, ".gitignore");

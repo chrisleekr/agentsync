@@ -94,8 +94,9 @@ export async function resolveRuntimeContext(): Promise<RuntimeContext> {
   await mkdir(baseDir, { recursive: true });
 
   const privateKeyPath = nonBlank(process.env.AGENTSYNC_KEY_PATH) ?? join(baseDir, "key.txt");
-  // Sibling of key.txt by default (identical to resolveAgentSyncHome()/machine
-  // in the default layout); follows AGENTSYNC_KEY_PATH so a sandboxed key path
+  // Defaults to dirname(privateKeyPath)/machine (a sibling of key.txt); in the
+  // default layout both resolve under baseDir, so the pin lands at
+  // <AGENTSYNC_DIR>/machine. Follows AGENTSYNC_KEY_PATH so a sandboxed key path
   // keeps the pin isolated. AGENTSYNC_MACHINE_FILE is the per-machine test seam.
   const machineFilePath =
     nonBlank(process.env.AGENTSYNC_MACHINE_FILE) ?? join(dirname(privateKeyPath), "machine");
