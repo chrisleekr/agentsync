@@ -421,4 +421,28 @@ describe("loadVaultConfigOrExit", () => {
     // process.exit must NOT fire — that path is reserved for the missing-vault case.
     expect(exitCalledWith).toBeNull();
   });
+
+  test("stops a v1 (flat) vault with the `vault upgrade` hint", async () => {
+    const { loadVaultConfigOrExit } = await import("../shared");
+
+    const vaultDir = join(tmpDir, "v1-vault");
+    await mkdir(vaultDir, { recursive: true });
+    await writeFile(join(vaultDir, "agentsync.toml"), 'version = "1"\n', "utf8");
+
+    await expect(loadVaultConfigOrExit(vaultDir)).rejects.toThrow("__test_exit__");
+    expect(exitCalledWith).toBe(1);
+    expect(fakeLogs.error[0]).toContain("vault upgrade");
+  });
+
+  test("stops a newer-format vault with the `upgrade agentsync` hint", async () => {
+    const { loadVaultConfigOrExit } = await import("../shared");
+
+    const vaultDir = join(tmpDir, "v3-vault");
+    await mkdir(vaultDir, { recursive: true });
+    await writeFile(join(vaultDir, "agentsync.toml"), "version = 3\n", "utf8");
+
+    await expect(loadVaultConfigOrExit(vaultDir)).rejects.toThrow("__test_exit__");
+    expect(exitCalledWith).toBe(1);
+    expect(fakeLogs.error[0]).toContain("upgrade");
+  });
 });

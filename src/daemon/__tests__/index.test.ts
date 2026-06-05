@@ -41,9 +41,8 @@ const watcherAdds: Array<{
 let listenedSocketPath = "";
 let watcherClosed = false;
 let ipcClosed = false;
-let scheduledIntervalMs = 0;
+// Captured to assert the push-only daemon arms NO periodic pull (stays null).
 let scheduledIntervalCallback: null | (() => Promise<void>) = null;
-let clearedIntervalToken: unknown = null;
 let exitCode: number | null = null;
 
 const originalSetInterval = globalThis.setInterval;
@@ -106,15 +105,12 @@ beforeAll(async () => {
     watcherClosed = true;
   });
 
-  globalThis.setInterval = ((callback: TimerHandler, delay?: number) => {
+  globalThis.setInterval = ((callback: TimerHandler) => {
     scheduledIntervalCallback = callback as () => Promise<void>;
-    scheduledIntervalMs = delay ?? 0;
     return "daemon-interval" as unknown as ReturnType<typeof setInterval>;
   }) as unknown as typeof setInterval;
 
-  globalThis.clearInterval = ((token?: unknown) => {
-    clearedIntervalToken = token ?? null;
-  }) as typeof clearInterval;
+  globalThis.clearInterval = (() => {}) as typeof clearInterval;
 
   process.on = ((event: NodeJS.Signals, listener: () => Promise<void>) => {
     signalHandlers.set(String(event), listener);
@@ -175,7 +171,7 @@ beforeEach(async () => {
   await writeFile(
     join(vaultDir, "agentsync.toml"),
     [
-      'version = "1"',
+      "version = 2",
       "[recipients]",
       `daemon = "${recipient}"`,
       "[agents]",
@@ -190,8 +186,6 @@ beforeEach(async () => {
       "[sync]",
       "debounceMs = 300",
       "autoPush = true",
-      "autoPull = true",
-      "pullIntervalMs = 12345",
       "",
     ].join("\n"),
     "utf8",
@@ -215,9 +209,7 @@ beforeEach(async () => {
   listenedSocketPath = "";
   watcherClosed = false;
   ipcClosed = false;
-  scheduledIntervalMs = 0;
   scheduledIntervalCallback = null;
-  clearedIntervalToken = null;
   exitCode = null;
 
   // Reset to default: clean start (no existing socket)
@@ -231,7 +223,7 @@ afterEach(async () => {
 });
 
 describe("startDaemon", () => {
-  test("registers IPC handlers, watcher targets, and the pull interval from config", async () => {
+  test("registers IPC handlers and watcher targets, and schedules no auto-pull timer", async () => {
     await daemonModule.startDaemon();
 
     expect(listenedSocketPath).toBe(resolveDaemonSocketPath());
@@ -246,7 +238,8 @@ describe("startDaemon", () => {
       AgentPaths.copilot.instructionsDir,
     ]);
     expect(watcherAdds.every((entry) => entry.debounceMs === 2000)).toBe(true);
-    expect(scheduledIntervalMs).toBe(12_345);
+    // v2: the vault is push-only backup, so the daemon arms no periodic pull.
+    expect(scheduledIntervalCallback).toBeNull();
     expect(signalHandlers.has("SIGTERM")).toBe(true);
     expect(signalHandlers.has("SIGINT")).toBe(true);
   });
@@ -257,13 +250,11 @@ describe("startDaemon", () => {
     await ipcHandlers.get("pull")?.();
     await ipcHandlers.get("push")?.();
     await watcherAdds[0]?.callback(watcherAdds[0].target);
-    await scheduledIntervalCallback?.();
     await signalHandlers.get("SIGTERM")?.();
 
     expect(errorLogs.length).toBeGreaterThan(0);
     expect(errorLogs.some((message) => message.includes("fatal:"))).toBe(true);
     expect(watcherClosed).toBe(true);
-    expect(clearedIntervalToken).toBe("daemon-interval");
     expect(exitCode).toBe(0);
   });
 });
@@ -306,14 +297,12 @@ describe("clean shutdown", () => {
 
     expect(exitCode).toBe(0);
     expect(watcherClosed).toBe(true);
-    expect(clearedIntervalToken).toBe("daemon-interval");
   });
 
-  test("shutdown sequence: clearInterval → ipc.close → watcher.close → exit(0)", async () => {
+  test("shutdown sequence: ipc.close → watcher.close → exit(0)", async () => {
     await daemonModule.startDaemon();
     await signalHandlers.get("SIGTERM")?.();
 
-    expect(clearedIntervalToken).toBe("daemon-interval");
     expect(ipcClosed).toBe(true);
     expect(watcherClosed).toBe(true);
     expect(exitCode).toBe(0);

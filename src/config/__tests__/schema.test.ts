@@ -7,7 +7,7 @@ import { AgentSyncConfigSchema, AgePublicKeySchema } from "../schema";
 const VALID_RECIPIENT = "age1qpzry9x8gf2tvdw0s3jn54khce6mua7l";
 
 const VALID_BASE = {
-  version: "1",
+  version: 2,
   recipients: { local: VALID_RECIPIENT },
   agents: {
     cursor: true,
@@ -20,8 +20,6 @@ const VALID_BASE = {
   sync: {
     debounceMs: 300,
     autoPush: true,
-    autoPull: true,
-    pullIntervalMs: 300_000,
   },
 } as const;
 
@@ -120,8 +118,6 @@ describe("AgentSyncConfigSchema", () => {
       sync: {
         debounceMs: 10,
         autoPush: true,
-        autoPull: true,
-        pullIntervalMs: 300_000,
       },
     });
     expect(result.success).toBe(false);
@@ -133,8 +129,6 @@ describe("AgentSyncConfigSchema", () => {
       sync: {
         debounceMs: 99_999,
         autoPush: true,
-        autoPull: true,
-        pullIntervalMs: 300_000,
       },
     });
     expect(result.success).toBe(false);
@@ -159,15 +153,21 @@ describe("AgentSyncConfigSchema", () => {
     expect(result.success).toBe(false);
   });
 
-  test("version field accepts any string", () => {
-    const parsed = AgentSyncConfigSchema.parse({ ...VALID_BASE, version: "2" });
-    expect(parsed.version).toBe("2");
+  test("version must be the integer 2 (the v2 format)", () => {
+    const parsed = AgentSyncConfigSchema.parse(VALID_BASE);
+    expect(parsed.version).toBe(2);
   });
 
-  test("defaults version to '1' when omitted", () => {
+  test("rejects a string version — the old-binary block", () => {
+    // v1 wrote `version` as a string; the v2 schema must reject it so a v1
+    // vault never loads under v2 (and vice versa) without going through upgrade.
+    expect(AgentSyncConfigSchema.safeParse({ ...VALID_BASE, version: "2" }).success).toBe(false);
+    expect(AgentSyncConfigSchema.safeParse({ ...VALID_BASE, version: "1" }).success).toBe(false);
+  });
+
+  test("rejects a missing version", () => {
     const { version: _v, ...withoutVersion } = VALID_BASE;
-    const parsed = AgentSyncConfigSchema.parse(withoutVersion);
-    expect(parsed.version).toBe("1");
+    expect(AgentSyncConfigSchema.safeParse(withoutVersion).success).toBe(false);
   });
 });
 

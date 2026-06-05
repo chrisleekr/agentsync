@@ -12,7 +12,7 @@ import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { readFile, rm } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { join } from "node:path";
-import { AgentPaths } from "../../config/paths";
+import { AgentPaths, machineVaultRoot } from "../../config/paths";
 import {
   createBareRepo,
   createMachineFixture,
@@ -174,12 +174,26 @@ describe("performPush — never-sync inside skill", () => {
 
     // Belt and braces: no skill artifacts should have been written for either
     // skill — the gate aborts before any encryption.
-    expect(existsSync(join(machine.vaultDir, "copilot", "skills", "clean-skill.tar.age"))).toBe(
-      false,
-    );
-    expect(existsSync(join(machine.vaultDir, "copilot", "skills", "dirty-skill.tar.age"))).toBe(
-      false,
-    );
+    expect(
+      existsSync(
+        join(
+          machineVaultRoot(machine.vaultDir, machine.machineName),
+          "copilot",
+          "skills",
+          "clean-skill.tar.age",
+        ),
+      ),
+    ).toBe(false);
+    expect(
+      existsSync(
+        join(
+          machineVaultRoot(machine.vaultDir, machine.machineName),
+          "copilot",
+          "skills",
+          "dirty-skill.tar.age",
+        ),
+      ),
+    ).toBe(false);
   });
 });
 
@@ -261,7 +275,12 @@ describe("performPush — additive default for local deletes", () => {
     expect(firstResult.fatal).toBe(false);
     expect(firstResult.pushed).toBeGreaterThanOrEqual(1);
 
-    const vaultArtifact = join(machine.vaultDir, "copilot", "skills", "long-lived-skill.tar.age");
+    const vaultArtifact = join(
+      machineVaultRoot(machine.vaultDir, machine.machineName),
+      "copilot",
+      "skills",
+      "long-lived-skill.tar.age",
+    );
     expect(existsSync(vaultArtifact)).toBe(true);
     const firstBytes = await readFile(vaultArtifact);
     expect(firstBytes.length).toBeGreaterThan(0);
@@ -373,9 +392,16 @@ describe("performPush — literal secret embedded in markdown body", () => {
     expect(result.errors.some((e) => e.includes("leaky.prompt.md"))).toBe(true);
 
     // Belt and braces: no encrypted artifact written for the prompt.
-    expect(existsSync(join(machine.vaultDir, "copilot", "prompts", "leaky.prompt.md.age"))).toBe(
-      false,
-    );
+    expect(
+      existsSync(
+        join(
+          machineVaultRoot(machine.vaultDir, machine.machineName),
+          "copilot",
+          "prompts",
+          "leaky.prompt.md.age",
+        ),
+      ),
+    ).toBe(false);
   });
 
   test("vaultPaths allowlist skips the secret scan for unselected files", async () => {
@@ -402,11 +428,26 @@ describe("performPush — literal secret embedded in markdown body", () => {
     // Push succeeds because the leaky file is filtered out before the scan.
     expect(result.fatal).toBe(false);
     expect(result.pushed).toBeGreaterThan(0);
-    expect(existsSync(join(machine.vaultDir, "copilot", "instructions.md.age"))).toBe(true);
+    expect(
+      existsSync(
+        join(
+          machineVaultRoot(machine.vaultDir, machine.machineName),
+          "copilot",
+          "instructions.md.age",
+        ),
+      ),
+    ).toBe(true);
     // The unselected leaky file was never encrypted.
-    expect(existsSync(join(machine.vaultDir, "copilot", "prompts", "leaky.prompt.md.age"))).toBe(
-      false,
-    );
+    expect(
+      existsSync(
+        join(
+          machineVaultRoot(machine.vaultDir, machine.machineName),
+          "copilot",
+          "prompts",
+          "leaky.prompt.md.age",
+        ),
+      ),
+    ).toBe(false);
   });
 
   test("vaultPaths allowlist still aborts when a SELECTED file contains a secret", async () => {
@@ -523,9 +564,16 @@ describe("performPush — literal secret embedded inside a skill bundle body", (
 
     // No encrypted artifact written for the leaky skill — the walker drops
     // the artifact before encryption.
-    expect(existsSync(join(machine.vaultDir, "copilot", "skills", "leaky-bundle.tar.age"))).toBe(
-      false,
-    );
+    expect(
+      existsSync(
+        join(
+          machineVaultRoot(machine.vaultDir, machine.machineName),
+          "copilot",
+          "skills",
+          "leaky-bundle.tar.age",
+        ),
+      ),
+    ).toBe(false);
   });
 });
 
@@ -629,7 +677,14 @@ describe("performPush — dry-run still runs Phase 1 security gates", () => {
 
     // No encrypted artifact written even though the operation was a dry-run.
     expect(
-      existsSync(join(machine.vaultDir, "copilot", "prompts", "dry-leaky.prompt.md.age")),
+      existsSync(
+        join(
+          machineVaultRoot(machine.vaultDir, machine.machineName),
+          "copilot",
+          "prompts",
+          "dry-leaky.prompt.md.age",
+        ),
+      ),
     ).toBe(false);
   });
 
@@ -661,12 +716,26 @@ describe("performPush — dry-run still runs Phase 1 security gates", () => {
     // Phase 1 aborts before any preview entry is emitted.
     expect(previews).toHaveLength(0);
 
-    expect(existsSync(join(machine.vaultDir, "copilot", "skills", "clean-skill.tar.age"))).toBe(
-      false,
-    );
-    expect(existsSync(join(machine.vaultDir, "copilot", "skills", "dirty-skill.tar.age"))).toBe(
-      false,
-    );
+    expect(
+      existsSync(
+        join(
+          machineVaultRoot(machine.vaultDir, machine.machineName),
+          "copilot",
+          "skills",
+          "clean-skill.tar.age",
+        ),
+      ),
+    ).toBe(false);
+    expect(
+      existsSync(
+        join(
+          machineVaultRoot(machine.vaultDir, machine.machineName),
+          "copilot",
+          "skills",
+          "dirty-skill.tar.age",
+        ),
+      ),
+    ).toBe(false);
   });
 });
 

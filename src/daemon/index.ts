@@ -106,8 +106,6 @@ export async function startDaemon(): Promise<void> {
     // ENOENT = no socket file, clean start — continue
   }
 
-  const pullIntervalMs = config.sync.pullIntervalMs ?? 5 * 60 * 1000;
-
   // ── SyncQueue ──────────────────────────────────────────────────────
   const queue = new SyncQueue();
 
@@ -201,33 +199,12 @@ export async function startDaemon(): Promise<void> {
     });
   }
 
-  // Periodic pull using interval from config
-  const pullTimer = setInterval(async () => {
-    await queue
-      .enqueue(async () => {
-        try {
-          const result = await withRetry(() => performPull());
-          if (result.fatal) {
-            for (const err of result.errors) {
-              log.error(`${ts()} ${err}`);
-            }
-            recordFailure("pull", result.errors.join("; "));
-          } else {
-            recordSuccess();
-          }
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err);
-          recordFailure("pull", msg);
-        }
-      })
-      .catch(() => {
-        // Queue closed during shutdown — safe to ignore
-      });
-  }, pullIntervalMs);
+  // No periodic pull: the vault is push-only backup. Each machine's local
+  // config is its own source of truth, so the daemon only auto-pushes on change.
+  // A manual pull remains available over IPC.
 
   // ── Graceful shutdown ──────────────────────────────────────────────
   const shutdown = async () => {
-    clearInterval(pullTimer);
     ipc.close();
     queue.close();
     // Drain in-flight sync operations with a hard timeout

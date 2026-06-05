@@ -26,7 +26,7 @@ The flag-driven equivalents still work when you need scripted output:
 
 ## Daemon
 
-The daemon is a long-running process that watches your enabled agent paths and pushes on change. It debounces rapid edits, serialises sync operations through a queue so two pushes can never race, and runs periodic pulls at a configurable interval.
+The daemon is a long-running process that watches your enabled agent paths and pushes on change. It debounces rapid edits and serialises sync operations through a queue so two pushes can never race. It is push-only: the vault is per-machine backup, so the daemon never auto-pulls.
 
 ### Install per OS
 
@@ -65,7 +65,7 @@ The daemon moves through a small number of phases. Each phase has a well-defined
 |---|---|
 | Validating | Verifies the vault directory, the config file, and the encryption key are reachable. Exits immediately on failure. |
 | Second-instance check | Sends an IPC `status` ping. If a daemon is already running, exits. Unlinks a stale socket if the prior daemon died ungracefully. |
-| Running | IPC server is listening. File watchers and the periodic pull timer are active. `status` returns the current pid, consecutive-failure counter, and last error. |
+| Running | IPC server is listening and file watchers are active (push-only; no pull timer). `status` returns the current pid, consecutive-failure counter, and last error. |
 | Syncing | A push or pull is executing inside the sync queue. Only one sync runs at a time. |
 | Retry once | Automatic single retry after a transient failure. If both attempts fail, the error is recorded but the daemon stays alive so the next change can still trigger a push. |
 | Shutting down | Drains the sync queue with a hard ten-second timeout, closes IPC, stops watchers, unlinks the socket, exits cleanly. |
@@ -78,8 +78,6 @@ Daemon behaviour is driven by the `[sync]` table in `agentsync.toml`:
 [sync]
 debounceMs = 300        # quiet window after a file change before push fires; 50 to 10000
 autoPush = true         # disable to make the daemon read-only
-autoPull = true         # disable to opt out of periodic pull
-pullIntervalMs = 300000 # how often periodic pull runs, in milliseconds; minimum 1000
 
 [agents]
 cursor = true           # enable cursor adapter

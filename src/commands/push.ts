@@ -4,6 +4,7 @@ import { log } from "@clack/prompts";
 import { defineCommand } from "citty";
 import { type AgentDefinition, type AgentName, Agents } from "../agents/registry";
 import { NEVER_SYNC_WARNING_PREFIX, WALKER_SECRET_WARNING_PREFIX } from "../agents/skills-walker";
+import { machineVaultRoot } from "../config/paths";
 import { encryptString } from "../core/encryptor";
 import { GitClient } from "../core/git";
 import { scanForSecrets, shouldNeverSync } from "../core/sanitizer";
@@ -81,6 +82,8 @@ export async function performPush(
 
   const runtime = await resolveRuntimeContext();
   const config = await loadVaultConfigOrExit(runtime.vaultDir);
+  // v2: every artifact lands under this machine's namespace, never the flat root.
+  const machineRoot = machineVaultRoot(runtime.vaultDir, runtime.machineName);
   const recipients = Object.values(config.recipients);
 
   if (recipients.length === 0) {
@@ -228,7 +231,7 @@ export async function performPush(
     }
 
     for (const artifact of snapshot.artifacts) {
-      const target = join(runtime.vaultDir, artifact.vaultPath);
+      const target = join(machineRoot, artifact.vaultPath);
 
       // Guard: never sync files matching global never-sync patterns. In
       // dry-run, the SKIP signal goes only through onPreview so the CLI

@@ -274,7 +274,7 @@ agentsync upgrade --check  # report only, install nothing
 
 ## daemon
 
-**Why**: Run AgentSync as a background process that watches your agent paths, debounces pushes, and runs periodic pulls.
+**Why**: Run AgentSync as a background process that watches your agent paths and debounces pushes on change. It is push-only and does not auto-pull.
 
 **Usage**:
 

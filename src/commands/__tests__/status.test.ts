@@ -4,7 +4,7 @@ import { mkdir, rm } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import pc from "picocolors";
-import { AgentPaths } from "../../config/paths";
+import { AgentPaths, machineVaultRoot } from "../../config/paths";
 import {
   createBareRepo,
   createMachineFixture,
@@ -204,7 +204,12 @@ describe("status surfaces skill drift", () => {
     const recipient = machine.recipient;
     const encrypted = await encryptString(snap.artifacts[0]?.plaintext ?? "", [recipient]);
 
-    const vaultArtPath = join(machine.vaultDir, "copilot", "skills", "drift-test-skill.tar.age");
+    const vaultArtPath = join(
+      machineVaultRoot(machine.vaultDir, machine.machineName),
+      "copilot",
+      "skills",
+      "drift-test-skill.tar.age",
+    );
     await mkdir(dirname(vaultArtPath), { recursive: true });
     writeFileSync(vaultArtPath, encrypted, "utf8");
 
@@ -240,7 +245,12 @@ describe("status surfaces skill drift", () => {
     const encryptedV1 = await encryptString(snapV1.artifacts[0]?.plaintext ?? "", [
       machine.recipient,
     ]);
-    const vaultArtPath = join(machine.vaultDir, "copilot", "skills", "mutating-skill.tar.age");
+    const vaultArtPath = join(
+      machineVaultRoot(machine.vaultDir, machine.machineName),
+      "copilot",
+      "skills",
+      "mutating-skill.tar.age",
+    );
     await mkdir(dirname(vaultArtPath), { recursive: true });
     writeFileSync(vaultArtPath, encryptedV1, "utf8");
 

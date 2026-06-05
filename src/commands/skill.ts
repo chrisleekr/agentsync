@@ -2,8 +2,14 @@ import { stat, unlink } from "node:fs/promises";
 import { join } from "node:path";
 import { log } from "@clack/prompts";
 import { defineCommand } from "citty";
+import { machineVaultRoot } from "../config/paths";
 import { GitClient } from "../core/git";
-import { loadVaultConfigOrExit, resolveRuntimeContext } from "./shared";
+import {
+  InvalidMachineNameError,
+  loadVaultConfigOrExit,
+  resolveRuntimeContext,
+  validateMachineName,
+} from "./shared";
 
 /**
  * Agents that participate in the skill sync feature. `vscode` is intentionally
@@ -20,6 +26,7 @@ function isSkillBearingAgent(value: string): value is SkillBearingAgent {
 export type SkillRemoveResult =
   | { status: "success"; path: string; commitSha: string | null }
   | { status: "unknown-agent"; provided: string; supported: readonly string[] }
+  | { status: "invalid-machine"; provided: string; reason: string }
   | { status: "not-found"; path: string }
   | { status: "reconcile-error"; error: string }
   | { status: "git-error"; path: string; error: string };
@@ -36,11 +43,13 @@ export type SkillRemoveResult =
  *
  * @param options.agent Name of the skill-bearing agent.
  * @param options.name  Basename of the skill in the vault (no `.tar.age` suffix).
+ * @param options.machine Namespace to remove from; defaults to this machine.
  * @returns A {@link SkillRemoveResult} describing the outcome.
  */
 export async function performSkillRemove(options: {
   agent: string;
   name: string;
+  machine?: string;
 }): Promise<SkillRemoveResult> {
   if (!isSkillBearingAgent(options.agent)) {
     return {
@@ -50,9 +59,31 @@ export async function performSkillRemove(options: {
     };
   }
 
+  // A user-supplied --machine becomes a vault directory segment, so it must
+  // pass the same path-traversal gate as the resolved machine name; otherwise
+  // `--machine ..` would escape the namespace and delete (and push) arbitrary
+  // vault paths. The resolved machineName is already validated upstream.
+  if (options.machine !== undefined) {
+    try {
+      validateMachineName(options.machine);
+    } catch (err) {
+      if (err instanceof InvalidMachineNameError) {
+        return { status: "invalid-machine", provided: err.provided, reason: err.reason };
+      }
+      throw err;
+    }
+  }
+
   const runtime = await resolveRuntimeContext();
   const config = await loadVaultConfigOrExit(runtime.vaultDir);
-  const targetPath = join(runtime.vaultDir, options.agent, "skills", `${options.name}.tar.age`);
+  // Default to this machine's namespace; --machine targets another machine's.
+  const targetMachine = options.machine ?? runtime.machineName;
+  const targetPath = join(
+    machineVaultRoot(runtime.vaultDir, targetMachine),
+    options.agent,
+    "skills",
+    `${options.name}.tar.age`,
+  );
 
   try {
     await stat(targetPath);
@@ -154,11 +185,16 @@ export const skillCommand = defineCommand({
           required: true,
           description: "Basename of the skill in the vault",
         },
+        machine: {
+          type: "string",
+          description: "Machine namespace to remove from (defaults to this machine)",
+        },
       },
       async run({ args }) {
         const result = await performSkillRemove({
           agent: String(args.agent),
           name: String(args.name),
+          machine: args.machine ? String(args.machine) : undefined,
         });
 
         switch (result.status) {
@@ -171,6 +207,11 @@ export const skillCommand = defineCommand({
             log.error(
               `Unknown agent: ${result.provided}. Supported: ${result.supported.join(", ")}`,
             );
+            process.exitCode = 1;
+            return;
+          }
+          case "invalid-machine": {
+            log.error(`Invalid --machine ${JSON.stringify(result.provided)}: ${result.reason}.`);
             process.exitCode = 1;
             return;
           }

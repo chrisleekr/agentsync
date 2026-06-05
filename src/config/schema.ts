@@ -30,9 +30,17 @@ const RemoteUrlSchema = z
     message: "remote.url does not look like a git URL (expected ':' or '/')",
   });
 
+/**
+ * Current vault format. v2 lays the vault out as `machines/<name>/<agent>/…`
+ * and writes `version` as an INTEGER. This is the old-binary hard block: a v1
+ * binary's `version: z.string()` schema throws on the integer, so it can never
+ * load a v2 vault and write flat dirs beside `machines/`.
+ */
+export const CURRENT_VAULT_VERSION = 2;
+
 /** Schema for the vault configuration file shared by every command and test. */
 export const AgentSyncConfigSchema = z.object({
-  version: z.string().default("1"),
+  version: z.literal(CURRENT_VAULT_VERSION),
   recipients: z
     .record(z.string().min(1), AgePublicKeySchema)
     .refine((r) => Object.keys(r).length > 0, {
@@ -52,8 +60,6 @@ export const AgentSyncConfigSchema = z.object({
   sync: z.object({
     debounceMs: z.number().int().min(50).max(10_000).default(300),
     autoPush: z.boolean().default(true),
-    autoPull: z.boolean().default(true),
-    pullIntervalMs: z.number().int().min(1_000).default(300_000),
   }),
   // Per-agent plugin opt-ins (issue #31). Optional with safe defaults so
   // existing agentsync.toml files continue to validate without changes.

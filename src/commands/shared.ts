@@ -6,6 +6,7 @@ import {
   formatConfigError,
   isConfigParseError,
   loadConfig,
+  peekVaultVersion,
   resolveConfigPath,
 } from "../config/loader";
 import { resolveAgentSyncHome } from "../config/paths";
@@ -150,15 +151,41 @@ export async function loadPrivateKey(path: string): Promise<string> {
  */
 export async function loadVaultConfigOrExit(vaultDir: string): Promise<AgentSyncConfig> {
   const configPath = resolveConfigPath(vaultDir);
+
+  // Two-phase load: probe the raw version before the v2 schema runs so a v1
+  // vault routes to `vault upgrade` instead of failing with an opaque Zod type
+  // error, and a newer format tells the user to upgrade agentsync.
   try {
-    return await loadConfig(configPath);
-  } catch (err) {
-    if (isFileNotFoundError(err)) {
+    const probe = await peekVaultVersion(configPath);
+    if (probe.kind === "absent") {
       log.error(
         `Vault not initialized at ${vaultDir}. Run \`agentsync init --remote <git-url>\` first.`,
       );
       process.exit(1);
     }
+    if (probe.kind === "v1") {
+      log.error(
+        `Vault at ${vaultDir} uses the old flat layout. Run \`agentsync vault upgrade\` to migrate it to the per-machine format.`,
+      );
+      process.exit(1);
+    }
+    if (probe.kind === "unsupported") {
+      log.error(
+        `Vault at ${vaultDir} uses format v${probe.version}, newer than this agentsync. Run \`agentsync upgrade\` to update agentsync first.`,
+      );
+      process.exit(1);
+    }
+  } catch (err) {
+    // Malformed TOML surfaces here (peek parses too); format it the same way.
+    if (isConfigParseError(err)) {
+      throw new Error(formatConfigError(err, configPath));
+    }
+    throw err;
+  }
+
+  try {
+    return await loadConfig(configPath);
+  } catch (err) {
     if (isConfigParseError(err)) {
       throw new Error(formatConfigError(err, configPath));
     }

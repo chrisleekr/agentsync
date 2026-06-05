@@ -6,6 +6,17 @@ const HOME = homedir();
 const PLATFORM = process.platform;
 
 /**
+ * Root of one machine's namespace inside the vault: `<vaultDir>/machines/<name>`.
+ * Vault format v2 stores every artifact under this prefix so each machine backs
+ * up into its own directory and never overwrites another's. The single
+ * chokepoint for the per-machine layout — push writes here, and pull/status read
+ * from here by passing this as the "vault dir" to the apply/scan layer.
+ */
+export function machineVaultRoot(vaultDir: string, machineName: string): string {
+  return join(vaultDir, "machines", machineName);
+}
+
+/**
  * Resolve the Windows %APPDATA% base (= %USERPROFILE%\AppData\Roaming).
  *
  * nonBlank collapses an exported-but-empty APPDATA to undefined so the result

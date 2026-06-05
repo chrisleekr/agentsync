@@ -134,40 +134,42 @@ See [Recover from divergence](operations.md#recover-from-divergence) for the run
 
 ## Vault layout
 
-The vault is a regular Git repository. Inside it, every artefact is suffixed with `.age` and is age-encrypted to the recipient set defined in `agentsync.toml`. The on-disk layout is namespaced per agent:
+The vault is a regular Git repository. Inside it, every artefact is suffixed with `.age` and is age-encrypted to the recipient set defined in `agentsync.toml`. As of vault format v2 the layout is namespaced per machine, then per agent: each machine backs up into its own `machines/<name>/` directory so one machine never overwrites another's. The vault-global `agentsync.toml` stays at the root.
 
 ```text
 <vault-root>/
-├── agentsync.toml                 # recipient list, branch, remote, sync options
-├── claude/
-│   ├── settings.json.age
-│   ├── hooks.json.age
-│   ├── mcp.json.age
-│   ├── marketplace.json.age       # only when claudePlugins.syncMarketplace = true
-│   ├── commands/
-│   │   └── <name>.md.age
-│   ├── skills/
-│   │   └── <name>.tar.age         # tar bundle per skill
-│   └── plugins/
-│       └── <name>/                # one subtree per Claude plugin
-│           ├── plugin.json.age
-│           ├── commands/<name>.md.age
-│           ├── agents/<name>.md.age
-│           ├── hooks/<name>.json.age
-│           └── mcp.json.age
-├── codex/
-│   ├── AGENTS.md.age
-│   └── skills/<name>.tar.age
-├── cursor/
-│   ├── settings.json.age
-│   ├── rules/<name>.mdc.age
-│   └── skills/<name>.tar.age
-└── copilot/
-    ├── instructions.md.age
-    └── skills/<name>.tar.age
+├── agentsync.toml                 # version, recipient list, branch, remote, sync options
+└── machines/
+    └── <name>/                    # one directory per machine (its own backup namespace)
+        ├── claude/
+        │   ├── settings.json.age
+        │   ├── hooks.json.age
+        │   ├── mcp.json.age
+        │   ├── marketplace.json.age   # only when claudePlugins.syncMarketplace = true
+        │   ├── commands/
+        │   │   └── <name>.md.age
+        │   ├── skills/
+        │   │   └── <name>.tar.age      # tar bundle per skill
+        │   └── plugins/
+        │       └── <name>/             # one subtree per Claude plugin
+        │           ├── plugin.json.age
+        │           ├── commands/<name>.md.age
+        │           ├── agents/<name>.md.age
+        │           ├── hooks/<name>.json.age
+        │           └── mcp.json.age
+        ├── codex/
+        │   ├── AGENTS.md.age
+        │   └── skills/<name>.tar.age
+        ├── cursor/
+        │   ├── settings.json.age
+        │   ├── rules/<name>.mdc.age
+        │   └── skills/<name>.tar.age
+        └── copilot/
+            ├── instructions.md.age
+            └── skills/<name>.tar.age
 ```
 
-Skill bundles are tar archives so directory-shaped assets round-trip cleanly. Plugins under `claude/plugins/<name>/` are first-class subtrees so installing a Claude plugin on one machine and pulling on another reproduces every artefact under the same plugin namespace.
+Skill bundles are tar archives so directory-shaped assets round-trip cleanly. Plugins under `machines/<name>/claude/plugins/<name>/` are first-class subtrees so installing a Claude plugin on one machine reproduces every artefact under the same plugin namespace.
 
 `marketplace.json.age` is only emitted, and only applied on pull, when `claudePlugins.syncMarketplace = true` is set in `agentsync.toml` on both machines. The default is false so a vault snapshot does not silently propagate a Claude marketplace opt-in.
 
@@ -244,7 +246,7 @@ Every agent path is resolved through a single resolver that maps `<agent>.<dir>`
 
 ## Vault format versioning
 
-The vault carries a `version` field in `agentsync.toml` (default `"1"`) that future backwards-incompatible changes (a renamed namespace, a new sanitiser rule that would reject already-published content, a new encryption-recipient encoding) will use to gate migrations. Each migration lives under `src/migrate/` and is documented in [Migrate](migrate.md). The current schema treats the field as informational; a forward-incompatibility refusal will land alongside the first breaking change.
+The vault carries an integer `version` field in `agentsync.toml`. Format v2 sets `version = 2` and is the per-machine layout (`machines/<name>/…`). The field is the old-binary hard block: a v1 binary's schema expected a string, so it cannot load a v2 vault and write flat dirs beside `machines/`. Loading is two-phase — `peekVaultVersion` reads the raw `version` before the schema runs, so a legacy v1 vault (string or absent `version`) is routed to `agentsync vault upgrade` instead of failing with an opaque error, and an integer above the current version tells the user to upgrade agentsync itself. `agentsync vault upgrade` performs the one-time v1→v2 relocation (distinct from the cross-agent translators under `src/migrate/`, documented in [Migrate](migrate.md)).
 
 ## Source map
 

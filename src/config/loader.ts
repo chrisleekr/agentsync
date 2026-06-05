@@ -3,7 +3,7 @@ import { mkdir, open, readFile, rename, unlink } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { parse, stringify } from "@iarna/toml";
 import { z } from "zod";
-import { type AgentSyncConfig, AgentSyncConfigSchema } from "./schema";
+import { type AgentSyncConfig, AgentSyncConfigSchema, CURRENT_VAULT_VERSION } from "./schema";
 
 /** Read and validate the vault config, stripping TOML symbol metadata before Zod parsing. */
 export async function loadConfig(configPath: string): Promise<AgentSyncConfig> {
@@ -13,6 +13,40 @@ export async function loadConfig(configPath: string): Promise<AgentSyncConfig> {
   // Zod v4 z.record() uses Reflect.ownKeys() which includes Symbol keys, causing
   // ZodError 'invalid_key'. structuredClone() strips Symbol-keyed properties.
   return AgentSyncConfigSchema.parse(structuredClone(parsed));
+}
+
+/** Result of probing a vault's format version before the v2 Zod schema runs. */
+export type VaultVersionProbe =
+  | { kind: "absent" }
+  | { kind: "v1" }
+  | { kind: "v2" }
+  | { kind: "unsupported"; version: number };
+
+/**
+ * Read the vault format version WITHOUT the v2 schema so commands can route a v1
+ * vault to `vault upgrade` instead of failing with an opaque Zod type error. v1
+ * wrote `version` as a string ("1") or omitted it; v2 writes the integer 2. A
+ * missing config file is `absent` (fresh init). A non-integer, missing, or <2
+ * version is legacy (`v1`); an integer >2 is a newer format this binary cannot
+ * read. A malformed TOML file throws (a TomlError) so callers format it the same
+ * way loadConfig does.
+ */
+export async function peekVaultVersion(configPath: string): Promise<VaultVersionProbe> {
+  let raw: string;
+  try {
+    raw = await readFile(configPath, "utf8");
+  } catch (err) {
+    if (err instanceof Error && (err as { code?: string }).code === "ENOENT") {
+      return { kind: "absent" };
+    }
+    throw err;
+  }
+  const version = (parse(raw) as { version?: unknown }).version;
+  if (typeof version === "number" && Number.isInteger(version)) {
+    if (version === CURRENT_VAULT_VERSION) return { kind: "v2" };
+    if (version > CURRENT_VAULT_VERSION) return { kind: "unsupported", version };
+  }
+  return { kind: "v1" };
 }
 
 /**
