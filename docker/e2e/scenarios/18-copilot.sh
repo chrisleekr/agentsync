@@ -63,7 +63,7 @@ step "Agent blob decrypts to plaintext markdown (NOT a tar bundle — B15)"
 # Decrypt to a temp file so we can detect tar magic vs markdown headers
 # without bash string truncation on NUL bytes (bash variables can't hold NUL).
 TMP_AGENT=/tmp/copilot-agent-dec
-git --git-dir="$VAULT_PATH" show HEAD:copilot/agents/bug-triager.agent.md.age \
+vshow "$VAULT_PATH" "copilot/agents/bug-triager.agent.md.age" \
   | age -d -i "$A_KEY" > "$TMP_AGENT"
 # Single-file shape proof: gzipped tar archives start with the gzip magic
 # bytes 0x1f 0x8b. Markdown bodies (with or without YAML frontmatter) never do.

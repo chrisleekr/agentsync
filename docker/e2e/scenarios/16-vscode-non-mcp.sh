@@ -38,10 +38,11 @@ sed -i 's/^vscode = false$/vscode = true/' "$TOML"
 HOME="$MACHINE_A" bun run src/cli.ts push --message "vscode mcp-only seed"
 
 step "CRITICAL: vault vscode/ subtree contains only mcp.json.age"
-# Enumerate every entry under vscode/ in HEAD. Filter to the prefix once and
-# compare to the exact-expected single line so unintended siblings fail loud.
-vscode_entries=$(git --git-dir="$VAULT_PATH" ls-tree -r HEAD \
-  | awk '{print $4}' | grep '^vscode/' || true)
+# Enumerate every vscode/ entry in HEAD. v2 prefixes paths with machines/<name>/,
+# so match the agent-relative suffix and compare to the exact-expected single
+# line so unintended siblings fail loud.
+vscode_entries=$(git --git-dir="$VAULT_PATH" ls-tree -r --name-only HEAD \
+  | grep -oE 'vscode/.*' || true)
 echo "$vscode_entries" | sed 's/^/    /'
 [ "$vscode_entries" = "vscode/mcp.json.age" ] \
   || fail "vscode/ contains more than the expected single mcp.json.age entry"

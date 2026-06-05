@@ -58,7 +58,7 @@ pass "vault HEAD intact at ${post_dryrun_head:0:10}"
 step "CRITICAL: vault HEAD blob does NOT contain the new mutation marker"
 # Decrypt the current vault CLAUDE.md.age and assert the new section is
 # absent — proves dry-run wrote nothing through the encryptor either.
-plaintext=$(git --git-dir="$VAULT_PATH" show "HEAD:claude/CLAUDE.md.age" \
+plaintext=$(vshow "$VAULT_PATH" "claude/CLAUDE.md.age" \
             | age -d -i "$MACHINE/.config/agentsync/key.txt")
 if echo "$plaintext" | grep -qF "new section added between snapshots"; then
   fail "dry-run leaked the new content into the vault blob"
@@ -70,7 +70,7 @@ HOME="$MACHINE" bun run src/cli.ts push --message "real push after dry-run"
 post_real_head=$(git --git-dir="$VAULT_PATH" rev-parse HEAD)
 [ "$pre_head" != "$post_real_head" ] \
   || fail "real push didn't advance vault HEAD"
-new_plaintext=$(git --git-dir="$VAULT_PATH" show "HEAD:claude/CLAUDE.md.age" \
+new_plaintext=$(vshow "$VAULT_PATH" "claude/CLAUDE.md.age" \
                 | age -d -i "$MACHINE/.config/agentsync/key.txt")
 echo "$new_plaintext" | grep -qF "new section added between snapshots" \
   || fail "real push didn't write the mutated content"
