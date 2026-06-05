@@ -6,7 +6,12 @@ import { loadConfig, resolveConfigPath, writeConfig } from "../config/loader";
 import { resolveAgentSyncHome } from "../config/paths";
 import { generateIdentity, identityToRecipient } from "../core/encryptor";
 import { GitClient } from "../core/git";
-import { isFileNotFoundError, loadPrivateKey, resolveRuntimeContext } from "./shared";
+import {
+  isFileNotFoundError,
+  loadPrivateKey,
+  pinMachineNameIfAbsent,
+  resolveRuntimeContext,
+} from "./shared";
 
 const DEFAULT_AGENTS = {
   cursor: true,
@@ -153,6 +158,11 @@ export async function performInit(options: InitOptions): Promise<InitResult> {
     };
 
     await writeConfig(configPath, config);
+
+    // Pin the machine name to local state so a later hostname change cannot
+    // re-derive a different name and orphan this machine's vault namespace
+    // (machines/<name>/ in v2). Idempotent: a no-op once pinned.
+    await pinMachineNameIfAbsent(runtime.machineFilePath, runtime.machineName);
 
     const gitignorePath = join(runtime.vaultDir, ".gitignore");
     await writeFile(gitignorePath, "*.tmp\n", "utf8");

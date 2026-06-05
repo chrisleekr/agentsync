@@ -1,6 +1,6 @@
-import { mkdir, readFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { hostname } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { log } from "@clack/prompts";
 import {
   formatConfigError,
@@ -17,23 +17,118 @@ export interface RuntimeContext {
   vaultDir: string;
   privateKeyPath: string;
   machineName: string;
+  machineFilePath: string;
 }
 
-/** Resolve the working directories and machine label that all commands share. */
+/** A machine name that cannot safely become a vault namespace directory. */
+export class InvalidMachineNameError extends Error {
+  constructor(
+    readonly provided: string,
+    readonly reason: string,
+  ) {
+    super(
+      `Invalid machine name ${JSON.stringify(provided)}: ${reason}. ` +
+        "Set a valid name via AGENTSYNC_MACHINE, or fix the pinned name in the machine file.",
+    );
+    this.name = "InvalidMachineNameError";
+  }
+}
+
+/**
+ * Reject names that cannot safely become a directory segment. In vault format
+ * v2 the machine name is the namespace directory under `machines/`, and a vault
+ * pinned on one OS is cloned and walked on another, so the name must be a legal
+ * path segment on EVERY platform. Beyond the POSIX checks shared with
+ * validateSkillName / validatePluginName (separators, control chars, dot
+ * names), this rejects the Windows-illegal set so a name pinned on Unix cannot
+ * break — or, via the NTFS `name:stream` syntax, mis-target — a Windows
+ * checkout. Fail loudly rather than pinning or using a bad name.
+ */
+export function validateMachineName(name: string): void {
+  if (name.length === 0) throw new InvalidMachineNameError(name, "empty");
+  if (name === "." || name === "..") throw new InvalidMachineNameError(name, "reserved name");
+  if (name.startsWith(".")) {
+    throw new InvalidMachineNameError(name, "leading dot is reserved for hidden entries");
+  }
+  for (let i = 0; i < name.length; i++) {
+    const code = name.charCodeAt(i);
+    if (code < 0x20) throw new InvalidMachineNameError(name, "contains control character");
+    if (code === 0x2f || code === 0x5c) {
+      throw new InvalidMachineNameError(name, "contains path separator");
+    }
+  }
+  // Cross-OS path-segment safety: the vault is created on one platform and
+  // checked out on another, so reject names that are illegal directory
+  // segments on Windows even when the current host is Unix.
+  if (/[:*?"<>|]/.test(name)) {
+    throw new InvalidMachineNameError(name, "contains a Windows-reserved character");
+  }
+  if (name.endsWith(".") || name.endsWith(" ")) {
+    throw new InvalidMachineNameError(name, "trailing dot or space is not a valid directory name");
+  }
+  const stem = (name.split(".")[0] ?? "").toUpperCase();
+  if (/^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])$/.test(stem)) {
+    throw new InvalidMachineNameError(name, "Windows-reserved device name");
+  }
+}
+
+/** Read the pinned machine name, treating a missing or blank file as absent. */
+async function readPinnedMachineName(path: string): Promise<string | undefined> {
+  try {
+    return nonBlank(await readFile(path, "utf8"));
+  } catch (err) {
+    if (isFileNotFoundError(err)) return undefined;
+    throw err;
+  }
+}
+
+/**
+ * Resolve the working directories and machine label that all commands share.
+ * The machine name prefers the pinned file so a hostname change after init
+ * cannot silently orphan a machine's vault namespace; the env chain is only the
+ * first-run fallback. The resolved name is validated because v2 turns it into a
+ * directory segment. This resolver is read-only — `init` owns pinning the file.
+ */
 export async function resolveRuntimeContext(): Promise<RuntimeContext> {
   const baseDir = resolveAgentSyncHome();
   await mkdir(baseDir, { recursive: true });
 
+  const privateKeyPath = nonBlank(process.env.AGENTSYNC_KEY_PATH) ?? join(baseDir, "key.txt");
+  // Sibling of key.txt by default (identical to resolveAgentSyncHome()/machine
+  // in the default layout); follows AGENTSYNC_KEY_PATH so a sandboxed key path
+  // keeps the pin isolated. AGENTSYNC_MACHINE_FILE is the per-machine test seam.
+  const machineFilePath =
+    nonBlank(process.env.AGENTSYNC_MACHINE_FILE) ?? join(dirname(privateKeyPath), "machine");
+
+  const machineName =
+    (await readPinnedMachineName(machineFilePath)) ??
+    nonBlank(process.env.AGENTSYNC_MACHINE) ??
+    nonBlank(process.env.HOSTNAME) ??
+    nonBlank(hostname()) ??
+    "local-machine";
+  validateMachineName(machineName);
+
   return {
     vaultDir: nonBlank(process.env.AGENTSYNC_VAULT_DIR) ?? join(baseDir, "vault"),
-    privateKeyPath: nonBlank(process.env.AGENTSYNC_KEY_PATH) ?? join(baseDir, "key.txt"),
-    // AGENTSYNC_MACHINE env var > HOSTNAME env var > os.hostname() > static fallback
-    machineName:
-      nonBlank(process.env.AGENTSYNC_MACHINE) ??
-      nonBlank(process.env.HOSTNAME) ??
-      nonBlank(hostname()) ??
-      "local-machine",
+    privateKeyPath,
+    machineName,
+    machineFilePath,
   };
+}
+
+/**
+ * Persist the resolved machine name once so the namespace is stable across
+ * hostname changes. No-op on a later run that observes an existing pin. Returns
+ * true when it wrote. Called by `init`.
+ */
+export async function pinMachineNameIfAbsent(path: string, name: string): Promise<boolean> {
+  if ((await readPinnedMachineName(path)) !== undefined) return false;
+  validateMachineName(name);
+  // The pin can sit outside the key dir (AGENTSYNC_MACHINE_FILE), so ensure its
+  // parent exists rather than assuming a prior key write created it.
+  await mkdir(dirname(path), { recursive: true });
+  await writeFile(path, `${name}\n`, { mode: 0o600 });
+  return true;
 }
 
 /** Read the local age identity and trim trailing newlines before use. */

@@ -202,6 +202,7 @@ describe("performDestroy", () => {
       machineName: "ghost",
       vaultDir: join(tmpDir, "ghost-vault"),
       keyPath: join(tmpDir, "ghost-key.txt"),
+      machineFilePath: join(tmpDir, "ghost-machine"),
       identity: "AGE-SECRET-KEY-1NEVERUSED",
       recipient: "age1never",
     };

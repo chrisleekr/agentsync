@@ -13,6 +13,7 @@ describe("resolveRuntimeContext", () => {
   let prevVaultDir: string | undefined;
   let prevKeyPath: string | undefined;
   let prevMachine: string | undefined;
+  let prevMachineFile: string | undefined;
   let prevHostname: string | undefined;
   let prevDir: string | undefined;
 
@@ -21,6 +22,7 @@ describe("resolveRuntimeContext", () => {
     prevVaultDir = process.env.AGENTSYNC_VAULT_DIR;
     prevKeyPath = process.env.AGENTSYNC_KEY_PATH;
     prevMachine = process.env.AGENTSYNC_MACHINE;
+    prevMachineFile = process.env.AGENTSYNC_MACHINE_FILE;
     prevHostname = process.env.HOSTNAME;
     prevDir = process.env.AGENTSYNC_DIR;
     // Redirect the AgentSync base dir into the per-test temp dir so the
@@ -38,6 +40,7 @@ describe("resolveRuntimeContext", () => {
     restore("AGENTSYNC_VAULT_DIR", prevVaultDir);
     restore("AGENTSYNC_KEY_PATH", prevKeyPath);
     restore("AGENTSYNC_MACHINE", prevMachine);
+    restore("AGENTSYNC_MACHINE_FILE", prevMachineFile);
     restore("HOSTNAME", prevHostname);
     restore("AGENTSYNC_DIR", prevDir);
     await rm(tmpDir, { recursive: true, force: true });
@@ -57,6 +60,21 @@ describe("resolveRuntimeContext", () => {
     expect(ctx.vaultDir).toBe(vaultDir);
     expect(ctx.privateKeyPath).toBe(keyPath);
     expect(ctx.machineName).toBe("ci-runner");
+  });
+
+  test("prefers the pinned machine file over AGENTSYNC_MACHINE", async () => {
+    const { resolveRuntimeContext } = await import("../shared");
+
+    const keyPath = join(tmpDir, "key.txt");
+    process.env.AGENTSYNC_KEY_PATH = keyPath;
+    process.env.AGENTSYNC_VAULT_DIR = join(tmpDir, "vault");
+    // A hostname change (env) must NOT win once a name is pinned, otherwise the
+    // machine's vault namespace (machines/<name>/ in v2) would silently orphan.
+    process.env.AGENTSYNC_MACHINE = "env-machine";
+    await writeFile(join(tmpDir, "machine"), "pinned-machine\n", "utf8");
+
+    const ctx = await resolveRuntimeContext();
+    expect(ctx.machineName).toBe("pinned-machine");
   });
 
   test("falls back to HOSTNAME env var when AGENTSYNC_MACHINE is unset", async () => {
@@ -169,6 +187,144 @@ describe("resolveRuntimeContext", () => {
     const ctx = await resolveRuntimeContext();
     expect(ctx.vaultDir).toBe(join(tmpDir, "vault"));
     expect(ctx.privateKeyPath).toBe(join(tmpDir, "key.txt"));
+  });
+
+  test("machineFilePath defaults to a sibling of the resolved key path", async () => {
+    const { resolveRuntimeContext } = await import("../shared");
+
+    const keyDir = join(tmpDir, "state");
+    await mkdir(keyDir, { recursive: true });
+    process.env.AGENTSYNC_KEY_PATH = join(keyDir, "key.txt");
+    process.env.AGENTSYNC_MACHINE = "host-1";
+
+    const ctx = await resolveRuntimeContext();
+    expect(ctx.machineFilePath).toBe(join(keyDir, "machine"));
+  });
+
+  test("AGENTSYNC_MACHINE_FILE overrides the pin path", async () => {
+    const { resolveRuntimeContext } = await import("../shared");
+
+    const pinPath = join(tmpDir, "custom-machine");
+    await writeFile(pinPath, "pinned-elsewhere\n", "utf8");
+    process.env.AGENTSYNC_MACHINE_FILE = pinPath;
+    process.env.AGENTSYNC_MACHINE = "env-machine";
+
+    const ctx = await resolveRuntimeContext();
+    expect(ctx.machineFilePath).toBe(pinPath);
+    expect(ctx.machineName).toBe("pinned-elsewhere");
+  });
+
+  test("a blank pin file falls through to the env chain", async () => {
+    const { resolveRuntimeContext } = await import("../shared");
+
+    process.env.AGENTSYNC_KEY_PATH = join(tmpDir, "key.txt");
+    await writeFile(join(tmpDir, "machine"), "  \n", "utf8");
+    process.env.AGENTSYNC_MACHINE = "env-machine";
+
+    const ctx = await resolveRuntimeContext();
+    expect(ctx.machineName).toBe("env-machine");
+  });
+
+  test("rejects an invalid resolved machine name", async () => {
+    const { resolveRuntimeContext, InvalidMachineNameError } = await import("../shared");
+
+    process.env.AGENTSYNC_KEY_PATH = join(tmpDir, "key.txt");
+    process.env.AGENTSYNC_MACHINE = "bad/name";
+
+    await expect(resolveRuntimeContext()).rejects.toBeInstanceOf(InvalidMachineNameError);
+  });
+
+  test("rejects a hand-edited pin containing a path separator", async () => {
+    const { resolveRuntimeContext } = await import("../shared");
+
+    process.env.AGENTSYNC_KEY_PATH = join(tmpDir, "key.txt");
+    await writeFile(join(tmpDir, "machine"), "evil/../escape\n", "utf8");
+
+    await expect(resolveRuntimeContext()).rejects.toThrow("path separator");
+  });
+});
+
+describe("validateMachineName", () => {
+  test("rejects empty, dot, traversal, control, and separator names", async () => {
+    const { validateMachineName } = await import("../shared");
+
+    for (const bad of ["", ".", "..", ".hidden", "a/b", "a\\b", "tab\tname"]) {
+      expect(() => validateMachineName(bad)).toThrow();
+    }
+  });
+
+  test("rejects names illegal as a directory segment on Windows", async () => {
+    const { validateMachineName } = await import("../shared");
+
+    // The vault is created on one OS and checked out on another, so a name
+    // pinned on Unix must still be a legal Windows path segment. `:` is the
+    // sharpest (NTFS name:stream), plus reserved chars, device names, and
+    // trailing dot/space.
+    for (const bad of [
+      "host:stream",
+      "name*",
+      'q"x',
+      "a<b",
+      "a>b",
+      "a|b",
+      "trail.",
+      "trail ",
+      "con",
+      "NUL",
+      "Com1",
+      "lpt9",
+    ]) {
+      expect(() => validateMachineName(bad)).toThrow();
+    }
+  });
+
+  test("accepts ordinary host-like names", async () => {
+    const { validateMachineName } = await import("../shared");
+
+    // Spaces are neither a path separator nor a control char, so they are kept.
+    for (const ok of ["my-laptop", "ci-runner", "host_01", "Work.Mac", "name with space"]) {
+      expect(() => validateMachineName(ok)).not.toThrow();
+    }
+  });
+});
+
+describe("pinMachineNameIfAbsent", () => {
+  let tmpDir: string;
+
+  beforeEach(async () => {
+    tmpDir = await createTmpDir();
+  });
+
+  afterEach(async () => {
+    await rm(tmpDir, { recursive: true, force: true });
+  });
+
+  test("writes the name when no pin exists", async () => {
+    const { pinMachineNameIfAbsent } = await import("../shared");
+
+    const path = join(tmpDir, "machine");
+    const wrote = await pinMachineNameIfAbsent(path, "my-laptop");
+
+    expect(wrote).toBe(true);
+    expect((await Bun.file(path).text()).trim()).toBe("my-laptop");
+  });
+
+  test("does not overwrite an existing pin", async () => {
+    const { pinMachineNameIfAbsent } = await import("../shared");
+
+    const path = join(tmpDir, "machine");
+    await writeFile(path, "first\n", "utf8");
+    const wrote = await pinMachineNameIfAbsent(path, "second");
+
+    expect(wrote).toBe(false);
+    expect((await Bun.file(path).text()).trim()).toBe("first");
+  });
+
+  test("refuses to pin an invalid name", async () => {
+    const { pinMachineNameIfAbsent } = await import("../shared");
+
+    const path = join(tmpDir, "machine");
+    await expect(pinMachineNameIfAbsent(path, "bad/name")).rejects.toThrow("path separator");
   });
 });
 
