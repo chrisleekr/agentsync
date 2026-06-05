@@ -52,6 +52,9 @@ export interface TestMachineFixture {
   machineName: string;
   vaultDir: string;
   keyPath: string;
+  // Per-machine pinned-identity file. Machines share a fixture root, so the
+  // default sibling-of-key path would collide; each machine gets its own.
+  machineFilePath: string;
   identity: string;
   recipient: string;
 }
@@ -122,6 +125,7 @@ export async function createMachineFixture(
 ): Promise<TestMachineFixture> {
   const vaultDir = join(root, `${machineName}-vault`);
   const keyPath = join(root, `${machineName}-key.txt`);
+  const machineFilePath = join(root, `${machineName}-machine`);
   const { identity, recipient } = await createAgeIdentity();
 
   mkdirSync(vaultDir, { recursive: true });
@@ -131,6 +135,7 @@ export async function createMachineFixture(
     machineName,
     vaultDir,
     keyPath,
+    machineFilePath,
     identity,
     recipient,
   };

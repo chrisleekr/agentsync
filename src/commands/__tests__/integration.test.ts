@@ -77,7 +77,12 @@ let pullMod: PullMod;
 let initMod: InitMod;
 let keyMod: KeyMod;
 
-const RUNTIME_ENV_KEYS = ["AGENTSYNC_VAULT_DIR", "AGENTSYNC_KEY_PATH", "AGENTSYNC_MACHINE"];
+const RUNTIME_ENV_KEYS = [
+  "AGENTSYNC_VAULT_DIR",
+  "AGENTSYNC_KEY_PATH",
+  "AGENTSYNC_MACHINE",
+  "AGENTSYNC_MACHINE_FILE",
+];
 
 async function withMachineEnv<T>(machine: TestMachineFixture, run: () => Promise<T>): Promise<T> {
   const saved = Object.fromEntries(RUNTIME_ENV_KEYS.map((key) => [key, process.env[key]]));
@@ -85,6 +90,7 @@ async function withMachineEnv<T>(machine: TestMachineFixture, run: () => Promise
   process.env.AGENTSYNC_VAULT_DIR = machine.vaultDir;
   process.env.AGENTSYNC_KEY_PATH = machine.keyPath;
   process.env.AGENTSYNC_MACHINE = machine.machineName;
+  process.env.AGENTSYNC_MACHINE_FILE = machine.machineFilePath;
 
   try {
     return await run();
@@ -182,6 +188,7 @@ describe("integration", () => {
     process.env.AGENTSYNC_VAULT_DIR = vaultDir;
     process.env.AGENTSYNC_KEY_PATH = keyPath;
     process.env.AGENTSYNC_MACHINE = machineName;
+    process.env.AGENTSYNC_MACHINE_FILE = machine.machineFilePath;
 
     seedVaultRepo({ machine, bareRepoPath });
   });
@@ -233,6 +240,43 @@ describe("integration", () => {
     expect(configContent).toMatch(/recipients/);
     expect(configContent).toMatch(/init-machine/);
     expect(runGit(["rev-parse", "--abbrev-ref", "HEAD"], initMachine.vaultDir)).toBe("main");
+
+    // init pins the resolved machine name to local state (outside the vault) so
+    // a later hostname change cannot re-derive a different namespace.
+    expect(existsSync(initMachine.machineFilePath)).toBe(true);
+    expect((await readFile(initMachine.machineFilePath, "utf8")).trim()).toBe("init-machine");
+  });
+
+  test("a hostname change after init does not change the resolved machine name", async () => {
+    const initRoot = join(tmpDir, "init-host-rename");
+    mkdirSync(initRoot, { recursive: true });
+    const initBare = await createBareRepo(initRoot);
+    const initMachine = await createMachineFixture(initRoot, "pinned-host");
+
+    await withMachineEnv(initMachine, async () => {
+      await initMod.initCommand.run?.({
+        args: { remote: initBare, branch: "main" },
+        rawArgs: [],
+        cmd: {} as never,
+      } as never);
+
+      // Simulate a host rename: drop AGENTSYNC_MACHINE so resolution would fall
+      // through to HOSTNAME/os.hostname() if the pin were not honored.
+      const prevMachine = process.env.AGENTSYNC_MACHINE;
+      const prevHostname = process.env.HOSTNAME;
+      delete process.env.AGENTSYNC_MACHINE;
+      process.env.HOSTNAME = "renamed-host";
+      try {
+        const { resolveRuntimeContext } = await import("../../commands/shared");
+        const ctx = await resolveRuntimeContext();
+        expect(ctx.machineName).toBe("pinned-host");
+      } finally {
+        if (prevMachine === undefined) delete process.env.AGENTSYNC_MACHINE;
+        else process.env.AGENTSYNC_MACHINE = prevMachine;
+        if (prevHostname === undefined) delete process.env.HOSTNAME;
+        else process.env.HOSTNAME = prevHostname;
+      }
+    });
   });
 
   test("init joins an existing remote vault without creating a non-fast-forward local-first history", async () => {

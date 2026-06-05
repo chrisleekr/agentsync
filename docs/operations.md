@@ -101,9 +101,11 @@ Defaults are chosen so you can install and forget. Tune them only if you observe
 | `AGENTSYNC_DIR` | Base directory for AgentSync state (vault clone, private key, update-check cache; also the daemon socket on Unix — Windows uses a fixed named pipe) | `~/.config/agentsync` (Unix), `%APPDATA%/agentsync` (Windows) |
 | `AGENTSYNC_VAULT_DIR` | Vault clone directory | `<AGENTSYNC_DIR>/vault` |
 | `AGENTSYNC_KEY_PATH` | Private key file | `<AGENTSYNC_DIR>/key.txt` |
-| `AGENTSYNC_MACHINE` | Machine identifier in recipient names | `HOSTNAME` if set, else the `os.hostname()` call, else the literal `local-machine` |
-| `HOSTNAME` | Machine identifier when `AGENTSYNC_MACHINE` is unset (fallback only, not a recommended knob) | the `os.hostname()` call, else the literal `local-machine` |
+| `AGENTSYNC_MACHINE` | Machine identifier in recipient names — applies only before a name is pinned; `init` pins the resolved name | pinned machine file (`<AGENTSYNC_DIR>/machine`) if present, else `HOSTNAME`, else the `os.hostname()` call, else the literal `local-machine` |
+| `HOSTNAME` | Machine identifier when no name is pinned and `AGENTSYNC_MACHINE` is unset (fallback only, not a recommended knob) | the `os.hostname()` call, else the literal `local-machine` |
 | `CODEX_HOME` | Codex root directory | `~/.codex` |
+
+`init` pins the resolved machine name to `<AGENTSYNC_DIR>/machine` (a sibling of the private key) so a later hostname change cannot re-derive a different name and orphan this machine's vault namespace. Once pinned, the pinned name wins over every other source, including `AGENTSYNC_MACHINE`; the chain below applies only until the pin exists.
 
 `HOSTNAME` is consulted only as a fallback for the machine identifier. It is a bash-shell convenience variable, not a portable environment variable: it is generally absent under `sh`/`dash`/`zsh`, absent on macOS and Windows, and defaults to the container ID inside Docker. Two machines with the same `os.hostname()` but different exported `HOSTNAME` therefore resolve to different recipient names, and conversely, when neither variable is set, two machines whose `os.hostname()` returns the same value resolve to the same name. Set `AGENTSYNC_MACHINE` explicitly to make the identifier deterministic. See [Recipient naming](#recipient-naming) for why this value matters.
 
@@ -139,7 +141,7 @@ Rotation requires the existing private key to still be readable, because every v
 
 ### Recipient naming
 
-Recipient names are stable config keys. Use machine names that describe the device clearly (`work-mbp`, `home-desktop`). Names are visible to anyone who can read the vault repository — they are not secret, but they should not encode anything you do not want associated with a public Git remote. When `AGENTSYNC_MACHINE` is unset the name is derived automatically; see the [Configuration](#configuration) section for the full `HOSTNAME` → `os.hostname()` → `local-machine` resolution chain.
+Recipient names are stable config keys. Use machine names that describe the device clearly (`work-mbp`, `home-desktop`). Names are visible to anyone who can read the vault repository — they are not secret, but they should not encode anything you do not want associated with a public Git remote. When no name is pinned and `AGENTSYNC_MACHINE` is unset the name is derived automatically; see the [Configuration](#configuration) section for the full pinned-file → `AGENTSYNC_MACHINE` → `HOSTNAME` → `os.hostname()` → `local-machine` resolution chain.
 
 ## Verifying release binaries
 
