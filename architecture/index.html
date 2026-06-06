@@ -1105,37 +1105,39 @@
 <p>The reasoning: a configuration vault is a flat record of intent. Three-way merge on encrypted blobs would either produce nonsense or require trust in a merge driver that has no way to inspect the plaintext. Failing closed forces the human to decide which branch is canonical.</p>
 <p>See <a href="../operations/#recover-from-divergence">Recover from divergence</a> for the runbook.</p>
 <h2 id="vault-layout">Vault layout<a class="headerlink" href="#vault-layout" title="Permanent link">&para;</a></h2>
-<p>The vault is a regular Git repository. Inside it, every artefact is suffixed with <code>.age</code> and is age-encrypted to the recipient set defined in <code>agentsync.toml</code>. The on-disk layout is namespaced per agent:</p>
+<p>The vault is a regular Git repository. Inside it, every artefact is suffixed with <code>.age</code> and is age-encrypted to the recipient set defined in <code>agentsync.toml</code>. As of vault format v2 the layout is namespaced per machine, then per agent: each machine backs up into its own <code>machines/&lt;name&gt;/</code> directory so one machine never overwrites another's. The vault-global <code>agentsync.toml</code> stays at the root.</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>&lt;vault-root&gt;/
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>├── agentsync.toml                 # recipient list, branch, remote, sync options
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>├── claude/
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>│   ├── settings.json.age
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>│   ├── hooks.json.age
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>│   ├── mcp.json.age
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>│   ├── marketplace.json.age       # only when claudePlugins.syncMarketplace = true
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>│   ├── commands/
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>│   │   └── &lt;name&gt;.md.age
-</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>│   ├── skills/
-</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>│   │   └── &lt;name&gt;.tar.age         # tar bundle per skill
-</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>│   └── plugins/
-</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>│       └── &lt;name&gt;/                # one subtree per Claude plugin
-</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>│           ├── plugin.json.age
-</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>│           ├── commands/&lt;name&gt;.md.age
-</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>│           ├── agents/&lt;name&gt;.md.age
-</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>│           ├── hooks/&lt;name&gt;.json.age
-</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>│           └── mcp.json.age
-</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>├── codex/
-</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a>│   ├── AGENTS.md.age
-</span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a>│   └── skills/&lt;name&gt;.tar.age
-</span><span id="__span-0-22"><a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a>├── cursor/
-</span><span id="__span-0-23"><a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a>│   ├── settings.json.age
-</span><span id="__span-0-24"><a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a>│   ├── rules/&lt;name&gt;.mdc.age
-</span><span id="__span-0-25"><a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a>│   └── skills/&lt;name&gt;.tar.age
-</span><span id="__span-0-26"><a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a>└── copilot/
-</span><span id="__span-0-27"><a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a>    ├── instructions.md.age
-</span><span id="__span-0-28"><a id="__codelineno-0-28" name="__codelineno-0-28" href="#__codelineno-0-28"></a>    └── skills/&lt;name&gt;.tar.age
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>├── agentsync.toml                 # version, recipient list, branch, remote, sync options
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>└── machines/
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    └── &lt;name&gt;/                    # one directory per machine (its own backup namespace)
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>        ├── claude/
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>        │   ├── settings.json.age
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>        │   ├── hooks.json.age
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>        │   ├── mcp.json.age
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>        │   ├── marketplace.json.age   # only when claudePlugins.syncMarketplace = true
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>        │   ├── commands/
+</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>        │   │   └── &lt;name&gt;.md.age
+</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>        │   ├── skills/
+</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>        │   │   └── &lt;name&gt;.tar.age      # tar bundle per skill
+</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>        │   └── plugins/
+</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>        │       └── &lt;name&gt;/             # one subtree per Claude plugin
+</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>        │           ├── plugin.json.age
+</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>        │           ├── commands/&lt;name&gt;.md.age
+</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>        │           ├── agents/&lt;name&gt;.md.age
+</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>        │           ├── hooks/&lt;name&gt;.json.age
+</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a>        │           └── mcp.json.age
+</span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a>        ├── codex/
+</span><span id="__span-0-22"><a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a>        │   ├── AGENTS.md.age
+</span><span id="__span-0-23"><a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a>        │   └── skills/&lt;name&gt;.tar.age
+</span><span id="__span-0-24"><a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a>        ├── cursor/
+</span><span id="__span-0-25"><a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a>        │   ├── settings.json.age
+</span><span id="__span-0-26"><a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a>        │   ├── rules/&lt;name&gt;.mdc.age
+</span><span id="__span-0-27"><a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a>        │   └── skills/&lt;name&gt;.tar.age
+</span><span id="__span-0-28"><a id="__codelineno-0-28" name="__codelineno-0-28" href="#__codelineno-0-28"></a>        └── copilot/
+</span><span id="__span-0-29"><a id="__codelineno-0-29" name="__codelineno-0-29" href="#__codelineno-0-29"></a>            ├── instructions.md.age
+</span><span id="__span-0-30"><a id="__codelineno-0-30" name="__codelineno-0-30" href="#__codelineno-0-30"></a>            └── skills/&lt;name&gt;.tar.age
 </span></code></pre></div>
-<p>Skill bundles are tar archives so directory-shaped assets round-trip cleanly. Plugins under <code>claude/plugins/&lt;name&gt;/</code> are first-class subtrees so installing a Claude plugin on one machine and pulling on another reproduces every artefact under the same plugin namespace.</p>
+<p>Skill bundles are tar archives so directory-shaped assets round-trip cleanly. Plugins under <code>machines/&lt;name&gt;/claude/plugins/&lt;name&gt;/</code> are first-class subtrees so installing a Claude plugin on one machine reproduces every artefact under the same plugin namespace.</p>
 <p><code>marketplace.json.age</code> is only emitted, and only applied on pull, when <code>claudePlugins.syncMarketplace = true</code> is set in <code>agentsync.toml</code> on both machines. The default is false so a vault snapshot does not silently propagate a Claude marketplace opt-in.</p>
 <h2 id="skills-and-plugins">Skills and plugins<a class="headerlink" href="#skills-and-plugins" title="Permanent link">&para;</a></h2>
 <p>Skills and plugins follow the same walker contract on every agent:</p>
@@ -1194,7 +1196,7 @@ because every request goes through the same sync queue.</p>
 <h2 id="path-resolution">Path resolution<a class="headerlink" href="#path-resolution" title="Permanent link">&para;</a></h2>
 <p>Every agent path is resolved through a single resolver that maps <code>&lt;agent&gt;.&lt;dir&gt;</code> to an absolute path on the current OS. Tests and platform overrides drive the resolver through environment variables rather than rewriting paths inline. The consequence: AgentSync runs identically inside the Docker E2E harness, on a developer laptop, and in CI, without command-implementation sites needing to branch on platform — platform-specific decisions live in <code>src/config/paths.ts</code> and <code>src/daemon/installer-*.ts</code> and nowhere else.</p>
 <h2 id="vault-format-versioning">Vault format versioning<a class="headerlink" href="#vault-format-versioning" title="Permanent link">&para;</a></h2>
-<p>The vault carries a <code>version</code> field in <code>agentsync.toml</code> (default <code>"1"</code>) that future backwards-incompatible changes (a renamed namespace, a new sanitiser rule that would reject already-published content, a new encryption-recipient encoding) will use to gate migrations. Each migration lives under <code>src/migrate/</code> and is documented in <a href="../migrate/">Migrate</a>. The current schema treats the field as informational; a forward-incompatibility refusal will land alongside the first breaking change.</p>
+<p>The vault carries an integer <code>version</code> field in <code>agentsync.toml</code>. Format v2 sets <code>version = 2</code> and is the per-machine layout (<code>machines/&lt;name&gt;/…</code>). The field is the old-binary hard block: a v1 binary's schema expected a string, so it cannot load a v2 vault and write flat dirs beside <code>machines/</code>. Loading is two-phase — <code>peekVaultVersion</code> reads the raw <code>version</code> before the schema runs, so a legacy v1 vault (string or absent <code>version</code>) is routed to <code>agentsync vault upgrade</code> instead of failing with an opaque error, and an integer above the current version tells the user to upgrade agentsync itself. <code>agentsync vault upgrade</code> performs the one-time v1→v2 relocation (distinct from the cross-agent translators under <code>src/migrate/</code>, documented in <a href="../migrate/">Migrate</a>).</p>
 <h2 id="source-map">Source map<a class="headerlink" href="#source-map" title="Permanent link">&para;</a></h2>
 <p>If you are reading the code, this is the rough mapping from concept to module. Keep this list short and link by responsibility rather than file path so renames do not silently invalidate it.</p>
 <table>

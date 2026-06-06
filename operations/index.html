@@ -1476,7 +1476,7 @@ live state without you re-running <code>agentsync status</code>.</p>
 <li><code>agentsync doctor</code> — local environment, key, vault, and daemon checks.</li>
 </ul>
 <h2 id="daemon">Daemon<a class="headerlink" href="#daemon" title="Permanent link">&para;</a></h2>
-<p>The daemon is a long-running process that watches your enabled agent paths and pushes on change. It debounces rapid edits, serialises sync operations through a queue so two pushes can never race, and runs periodic pulls at a configurable interval.</p>
+<p>The daemon is a long-running process that watches your enabled agent paths and pushes on change. It debounces rapid edits and serialises sync operations through a queue so two pushes can never race. It is push-only: the vault is per-machine backup, so the daemon never auto-pulls.</p>
 <h3 id="install-per-os">Install per OS<a class="headerlink" href="#install-per-os" title="Permanent link">&para;</a></h3>
 <p>The CLI dispatches to the right backend automatically. The same command works on every platform:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>agentsync<span class="w"> </span>daemon<span class="w"> </span>install<span class="w">   </span><span class="c1"># write the OS service descriptor</span>
@@ -1538,7 +1538,7 @@ live state without you re-running <code>agentsync status</code>.</p>
 </tr>
 <tr>
 <td>Running</td>
-<td>IPC server is listening. File watchers and the periodic pull timer are active. <code>status</code> returns the current pid, consecutive-failure counter, and last error.</td>
+<td>IPC server is listening and file watchers are active (push-only; no pull timer). <code>status</code> returns the current pid, consecutive-failure counter, and last error.</td>
 </tr>
 <tr>
 <td>Syncing</td>
@@ -1559,20 +1559,18 @@ live state without you re-running <code>agentsync status</code>.</p>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">[sync]</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">debounceMs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">300</span><span class="w">        </span><span class="c1"># quiet window after a file change before push fires; 50 to 10000</span>
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">autoPush</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span><span class="w">         </span><span class="c1"># disable to make the daemon read-only</span>
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="n">autoPull</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span><span class="w">         </span><span class="c1"># disable to opt out of periodic pull</span>
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="n">pullIntervalMs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">300000</span><span class="w"> </span><span class="c1"># how often periodic pull runs, in milliseconds; minimum 1000</span>
-</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>
-</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="k">[agents]</span>
-</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="n">cursor</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span><span class="w">           </span><span class="c1"># enable cursor adapter</span>
-</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="n">claude</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span><span class="w">           </span><span class="c1"># enable claude adapter</span>
-</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="n">codex</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span><span class="w">            </span><span class="c1"># enable codex adapter</span>
-</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="n">copilot</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span><span class="w">          </span><span class="c1"># enable copilot adapter</span>
-</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="n">vscode</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">false</span><span class="w">          </span><span class="c1"># opt-in; vscode&#39;s surface is MCP-only</span>
-</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a>
-</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="k">[claudePlugins]</span>
-</span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="n">syncMarketplace</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">false</span><span class="w"> </span><span class="c1"># opt-in: include ~/.claude/marketplace.json in push/pull</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="k">[agents]</span>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="n">cursor</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span><span class="w">           </span><span class="c1"># enable cursor adapter</span>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="n">claude</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span><span class="w">           </span><span class="c1"># enable claude adapter</span>
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="n">codex</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span><span class="w">            </span><span class="c1"># enable codex adapter</span>
+</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="n">copilot</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span><span class="w">          </span><span class="c1"># enable copilot adapter</span>
+</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="n">vscode</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">false</span><span class="w">          </span><span class="c1"># opt-in; vscode&#39;s surface is MCP-only</span>
+</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>
+</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="k">[claudePlugins]</span>
+</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="n">syncMarketplace</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">false</span><span class="w"> </span><span class="c1"># opt-in: include ~/.claude/marketplace.json in push/pull</span>
 </span></code></pre></div>
-<p>Defaults are chosen so you can install and forget. Tune them only if you observe excessive push churn or want to widen the pull cadence. Values outside the supported range are rejected at config load.</p>
+<p>Defaults are chosen so you can install and forget. Tune them only if you observe excessive push churn. Values outside the supported range are rejected at config load.</p>
 <p><strong>Environment-variable escape hatches.</strong> For tests, CI, and air-gapped setups, the following variables override the resolved defaults:</p>
 <table>
 <thead>

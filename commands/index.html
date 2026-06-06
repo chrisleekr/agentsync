@@ -1499,7 +1499,7 @@ that <code>agentsync skill remove</code> does, once per selected skill.</p>
 <li>The result is cached for 24 hours at <code>~/.config/agentsync/update-check.json</code> (<code>%APPDATA%/agentsync</code> on Windows). <code>agentsync upgrade</code> always re-checks and ignores the cache.</li>
 </ul>
 <h2 id="daemon">daemon<a class="headerlink" href="#daemon" title="Permanent link">&para;</a></h2>
-<p><strong>Why</strong>: Run AgentSync as a background process that watches your agent paths, debounces pushes, and runs periodic pulls.</p>
+<p><strong>Why</strong>: Run AgentSync as a background process that watches your agent paths and debounces pushes on change. It is push-only and does not auto-pull.</p>
 <p><strong>Usage</strong>:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>agentsync<span class="w"> </span>daemon<span class="w"> </span>install<span class="w">     </span><span class="c1"># write the OS service descriptor</span>
 </span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>agentsync<span class="w"> </span>daemon<span class="w"> </span>start<span class="w">       </span><span class="c1"># idempotent</span>
