@@ -7,7 +7,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { stringify as tomlStringify } from "@iarna/toml";
-import type { AgentSyncConfig } from "../config/schema";
+import { type AgentSyncConfig, CURRENT_VAULT_VERSION } from "../config/schema";
 import { generateIdentity, identityToRecipient } from "../core/encryptor";
 
 /**
@@ -22,11 +22,11 @@ export function createTestAgentSyncConfig(
   overrides: Partial<AgentSyncConfig> = {},
 ): AgentSyncConfig {
   return {
-    version: "1",
+    version: CURRENT_VAULT_VERSION,
     recipients: {},
     agents: { cursor: true, claude: true, codex: true, copilot: true, vscode: true },
     remote: { url: "test://vault", branch: "main" },
-    sync: { debounceMs: 300, autoPush: true, autoPull: true, pullIntervalMs: 300_000 },
+    sync: { debounceMs: 300, autoPush: true },
     claudePlugins: { syncMarketplace: false },
     ...overrides,
   };
@@ -43,8 +43,6 @@ const DEFAULT_AGENTS = {
 const DEFAULT_SYNC = {
   debounceMs: 300,
   autoPush: true,
-  autoPull: true,
-  pullIntervalMs: 300_000,
 };
 
 /** Runtime fixture paths and key material for one logical machine. */
@@ -152,7 +150,7 @@ export function seedVaultRepo(options: {
   const { machine, bareRepoPath } = options;
   const branch = options.branch ?? "main";
   const configData = {
-    version: "1",
+    version: CURRENT_VAULT_VERSION,
     recipients: options.recipients ?? { [machine.machineName]: machine.recipient },
     agents: {
       ...DEFAULT_AGENTS,

@@ -12,7 +12,7 @@ import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { rm, stat } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { join } from "node:path";
-import { AgentPaths } from "../../config/paths";
+import { AgentPaths, machineVaultRoot } from "../../config/paths";
 import {
   createBareRepo,
   createMachineFixture,
@@ -156,7 +156,11 @@ describe("performSkillRemove — contract rows", () => {
     // only `stat`s the file and then unlinks it. The file must be committed
     // (and pushed) first so that the subsequent unlink+commit actually has a
     // file to remove from git's index.
-    const skillsVaultDir = join(machine.vaultDir, "claude", "skills");
+    const skillsVaultDir = join(
+      machineVaultRoot(machine.vaultDir, machine.machineName),
+      "claude",
+      "skills",
+    );
     mkdirSync(skillsVaultDir, { recursive: true });
     writeFileSync(join(skillsVaultDir, "my-skill.tar.age"), "placeholder-bytes", "utf8");
     runGit(["add", "."], machine.vaultDir);
@@ -202,6 +206,19 @@ describe("performSkillRemove — contract rows", () => {
     if (result.status === "unknown-agent") {
       expect(result.provided).toBe("vscode");
       expect(result.supported).toEqual(["claude", "cursor", "codex", "copilot"]);
+    }
+  });
+
+  test("rejects a path-traversal --machine before touching the vault", async () => {
+    // --machine becomes a vault directory segment; `..` would escape the
+    // namespace and let the commit/push delete an arbitrary vault path.
+    for (const bad of ["..", "../../etc", "a/b", ""]) {
+      const result = await skillMod.performSkillRemove({
+        agent: "claude",
+        name: "x",
+        machine: bad,
+      });
+      expect(result.status).toBe("invalid-machine");
     }
   });
 
@@ -294,7 +311,11 @@ describe("skillCommand — citty wrapper", () => {
   });
 
   test("success leaves process.exitCode at 0 and logs the commit sha", async () => {
-    const skillsVaultDir = join(machine.vaultDir, "claude", "skills");
+    const skillsVaultDir = join(
+      machineVaultRoot(machine.vaultDir, machine.machineName),
+      "claude",
+      "skills",
+    );
     mkdirSync(skillsVaultDir, { recursive: true });
     writeFileSync(join(skillsVaultDir, "cli-skill.tar.age"), "placeholder", "utf8");
     runGit(["add", "."], machine.vaultDir);

@@ -118,16 +118,42 @@ assert_no_literal_in_vault() {
   pass "no plaintext match for '$regex' across vault"
 }
 
-# tar_age_extract <vault-git-dir> <vault-path> <out-dir> <key-file>
-# Decrypts a tar.age skill bundle and extracts it. <vault-path> is the path
-# inside the bare git tree (e.g. "claude/skills/postgres-helper.tar.age").
+# resolve_vault_path <vault-git-dir> <logical-suffix>
+# Print the single HEAD path ending in <logical-suffix>. Vault format v2 prefixes
+# every artifact with machines/<name>/, so scenarios reference the agent-relative
+# suffix (e.g. "claude/CLAUDE.md.age") and this resolves the full path without
+# needing to know the (container-derived) machine name. Fails unless exactly one
+# entry matches.
+resolve_vault_path() {
+  local vault="$1" suffix="$2" matches count
+  # End-of-path (suffix) match, not substring, so "claude/x.age" cannot also hit
+  # a path that merely contains it mid-string.
+  matches=$(git --git-dir="$vault" ls-tree -r --name-only HEAD \
+    | awk -v s="$suffix" 'length($0) >= length(s) && substr($0, length($0) - length(s) + 1) == s')
+  count=$(printf '%s\n' "$matches" | grep -c . || true)
+  [ "$count" -eq 1 ] || fail "expected exactly one vault path matching '$suffix', got $count: $matches"
+  printf '%s' "$matches"
+}
+
+# vshow <vault-git-dir> <logical-suffix>
+# `git show HEAD:<full-path>` with the full path resolved from the logical suffix.
+vshow() {
+  local vault="$1" suffix="$2" full
+  full=$(resolve_vault_path "$vault" "$suffix")
+  git --git-dir="$vault" show "HEAD:${full}"
+}
+
+# tar_age_extract <vault-git-dir> <logical-suffix> <out-dir> <key-file>
+# Decrypts a tar.age skill bundle and extracts it. <logical-suffix> is the
+# agent-relative path (e.g. "claude/skills/postgres-helper.tar.age"); the full
+# machines/<name>/ path is resolved internally.
 tar_age_extract() {
   local vault="$1" vault_path="$2" out_dir="$3" key_file="$4"
   mkdir -p "$out_dir"
   # Skill artifact pipeline (see src/agents/skills-walker.ts:256):
   #   disk → archiveDirectory (tar.gz buffer) → base64 string → encryptString
   # On extract: age-decrypt → base64 decode → tar -xz.
-  git --git-dir="$vault" show "HEAD:${vault_path}" \
+  vshow "$vault" "$vault_path" \
     | age -d -i "$key_file" \
     | base64 -d \
     | tar -xz -C "$out_dir"

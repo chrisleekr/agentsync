@@ -13,7 +13,9 @@ import { createRequire } from "node:module";
 import { join } from "node:path";
 import type { CommandDef } from "citty";
 import type { SnapshotArtifact } from "../../agents/_utils";
-import { loadConfig, resolveConfigPath, writeConfig } from "../../config/loader";
+import { loadConfig, peekVaultVersion, resolveConfigPath, writeConfig } from "../../config/loader";
+import { machineVaultRoot } from "../../config/paths";
+import { CURRENT_VAULT_VERSION } from "../../config/schema";
 import {
   createAgeIdentity,
   createBareRepo,
@@ -170,6 +172,8 @@ beforeAll(async () => {
 describe("integration", () => {
   let tmpDir: string;
   let vaultDir: string;
+  // v2: this machine's artifacts live under machines/<machineName>/ in the vault.
+  let machineRoot: string;
   let keyPath: string;
   let machine: TestMachineFixture;
   const machineName = "test-machine";
@@ -180,6 +184,7 @@ describe("integration", () => {
     const bareRepoPath = await createBareRepo(tmpDir);
     machine = await createMachineFixture(tmpDir, machineName);
     vaultDir = machine.vaultDir;
+    machineRoot = machineVaultRoot(vaultDir, machineName);
     keyPath = machine.keyPath;
 
     for (const key of RUNTIME_ENV_KEYS) {
@@ -239,6 +244,8 @@ describe("integration", () => {
     const configContent = await readFile(join(initMachine.vaultDir, "agentsync.toml"), "utf8");
     expect(configContent).toMatch(/recipients/);
     expect(configContent).toMatch(/init-machine/);
+    // v2: a fresh init writes the integer version, not the legacy string "1".
+    expect(await peekVaultVersion(resolveConfigPath(initMachine.vaultDir))).toEqual({ kind: "v2" });
     expect(runGit(["rev-parse", "--abbrev-ref", "HEAD"], initMachine.vaultDir)).toBe("main");
 
     // init pins the resolved machine name to local state (outside the vault) so
@@ -435,7 +442,7 @@ describe("integration", () => {
     seedVaultRepo({ machine: machineA, bareRepoPath });
 
     await writeConfig(resolveConfigPath(machineB.vaultDir), {
-      version: "1",
+      version: CURRENT_VAULT_VERSION,
       recipients: { [machineB.machineName]: machineB.recipient },
       agents: {
         cursor: false,
@@ -451,8 +458,6 @@ describe("integration", () => {
       sync: {
         debounceMs: 300,
         autoPush: true,
-        autoPull: true,
-        pullIntervalMs: 300_000,
       },
       claudePlugins: { syncMarketplace: false },
     });
@@ -623,7 +628,7 @@ describe("integration", () => {
     seedVaultRepo({ machine: machineA, bareRepoPath });
 
     await writeConfig(resolveConfigPath(machineB.vaultDir), {
-      version: "1",
+      version: CURRENT_VAULT_VERSION,
       recipients: { [machineB.machineName]: machineB.recipient },
       agents: {
         cursor: false,
@@ -639,8 +644,6 @@ describe("integration", () => {
       sync: {
         debounceMs: 300,
         autoPush: true,
-        autoPull: true,
-        pullIntervalMs: 300_000,
       },
       claudePlugins: { syncMarketplace: false },
     });
@@ -687,7 +690,7 @@ describe("integration", () => {
     expect(result.pushed).toBe(1);
     expect(result.errors).toHaveLength(0);
 
-    const ageFile = join(vaultDir, "claude", "CLAUDE.age");
+    const ageFile = join(machineRoot, "claude", "CLAUDE.age");
     expect(existsSync(ageFile)).toBe(true);
 
     const content = await readFile(ageFile, "utf8");
@@ -700,7 +703,8 @@ describe("integration", () => {
     expect(result.fatal).toBe(false);
     expect(result.errors).toHaveLength(0);
     expect(result.applied).toBe(1);
-    expect(fakeApplyCalls).toContain(vaultDir);
+    // v2: pull applies from this machine's namespace, not the flat vault root.
+    expect(fakeApplyCalls).toContain(machineRoot);
   });
 
   test("performPush aborts when an artifact warning contains 'Detected literal secret'", async () => {
@@ -814,7 +818,7 @@ describe("integration", () => {
     expect(configContent).toContain("work-laptop");
     expect(configContent).toContain(newRecipient);
 
-    const ageFile = join(vaultDir, "claude", "CLAUDE.age");
+    const ageFile = join(machineRoot, "claude", "CLAUDE.age");
     expect(existsSync(ageFile)).toBe(true);
     const content = await readFile(ageFile, "utf8");
     expect(content).toContain("BEGIN AGE ENCRYPTED FILE");
@@ -900,7 +904,7 @@ describe("integration", () => {
     const configBefore = await loadConfig(configPath);
     const oldKeyContent = await readFile(keyPath, "utf8");
 
-    writeFileSync(join(vaultDir, "claude", "broken.age"), "not a valid age payload", "utf8");
+    writeFileSync(join(machineRoot, "claude", "broken.age"), "not a valid age payload", "utf8");
     fakeLogs.error.length = 0;
     process.exitCode = 0;
 
@@ -932,7 +936,7 @@ describe("integration", () => {
       cmd: {} as never,
     } as never);
 
-    expect(existsSync(join(vaultDir, "claude", "dry-cli.age"))).toBe(false);
+    expect(existsSync(join(machineRoot, "claude", "dry-cli.age"))).toBe(false);
   });
 
   test("pushCommand.run with dryRun=true aborts when an artifact warning reports a literal secret", async () => {
@@ -962,7 +966,7 @@ describe("integration", () => {
     expect(fakeLogs.error.some((message) => message.includes("Detected literal secret"))).toBe(
       true,
     );
-    expect(existsSync(join(vaultDir, "claude", "leaky-cli.age"))).toBe(false);
+    expect(existsSync(join(machineRoot, "claude", "leaky-cli.age"))).toBe(false);
 
     fakeArtifacts.length = 0;
     process.exitCode = 0;
@@ -1002,7 +1006,7 @@ describe("integration", () => {
     expect(authJsonLines[0]).toContain("SKIP");
     expect(authJsonLines[0]).toContain("never-sync");
     expect(fakeLogs.warn.some((m) => m.includes("matches never-sync pattern"))).toBe(false);
-    expect(existsSync(join(vaultDir, "claude", "auth.json.age"))).toBe(false);
+    expect(existsSync(join(machineRoot, "claude", "auth.json.age"))).toBe(false);
 
     fakeArtifacts.length = 0;
   });
@@ -1075,8 +1079,8 @@ describe("integration", () => {
         (e) => e.includes("/fake/.claude/auth.json") && e.includes("matches never-sync pattern"),
       ),
     ).toBe(true);
-    expect(existsSync(join(vaultDir, "claude", "auth.json.age"))).toBe(false);
-    expect(existsSync(join(vaultDir, "claude", "sibling.age"))).toBe(true);
+    expect(existsSync(join(machineRoot, "claude", "auth.json.age"))).toBe(false);
+    expect(existsSync(join(machineRoot, "claude", "sibling.age"))).toBe(true);
 
     fakeArtifacts.length = 0;
   });
@@ -1095,7 +1099,7 @@ describe("integration", () => {
       cmd: {} as never,
     } as never);
 
-    expect(existsSync(join(vaultDir, "claude", "cli-push.age"))).toBe(true);
+    expect(existsSync(join(machineRoot, "claude", "cli-push.age"))).toBe(true);
   });
 
   test("performPush returns early when no agents match requested name", async () => {
@@ -1151,7 +1155,11 @@ describe("integration", () => {
         message.includes("AgentSync only supports fast-forward sync"),
       ),
     ).toBe(true);
-    expect(existsSync(join(machineB.vaultDir, "claude", "blocked.age"))).toBe(false);
+    expect(
+      existsSync(
+        join(machineVaultRoot(machineB.vaultDir, machineB.machineName), "claude", "blocked.age"),
+      ),
+    ).toBe(false);
   }, 20000);
 });
 
@@ -1281,13 +1289,15 @@ describe("skills sync integration guarantees", () => {
     const base64 = tarBuffer.toString("base64");
     const encrypted = await encryptString(base64, [recipient]);
 
-    const skillsVaultDir = join(machine.vaultDir, "claude", "skills");
+    // v2: apply reads this machine's namespace, so seed + apply use the same root.
+    const machineScopedRoot = machineVaultRoot(machine.vaultDir, machine.machineName);
+    const skillsVaultDir = join(machineScopedRoot, "claude", "skills");
     await mkdirAsync(skillsVaultDir, { recursive: true });
     const vaultFile = join(skillsVaultDir, "my-skill.tar.age");
     await writeFileAsync(vaultFile, encrypted, "utf8");
 
     // First pull: populates the local ~/.claude/skills/my-skill/ directory.
-    await claude.applyClaudeVault(machine.vaultDir, identity, false, createTestAgentSyncConfig());
+    await claude.applyClaudeVault(machineScopedRoot, identity, false, createTestAgentSyncConfig());
 
     const localSkillDir = join(mutableClaudePaths.skillsDir, "my-skill");
     expect(existsSync(join(localSkillDir, "SKILL.md"))).toBe(true);
@@ -1300,7 +1310,7 @@ describe("skills sync integration guarantees", () => {
     // Second pull against the now-empty vault. The local skill directory
     // MUST remain intact, no file added, no file removed: vault delete is
     // additive-only on the pull side.
-    await claude.applyClaudeVault(machine.vaultDir, identity, false, createTestAgentSyncConfig());
+    await claude.applyClaudeVault(machineScopedRoot, identity, false, createTestAgentSyncConfig());
 
     expect(existsSync(join(localSkillDir, "SKILL.md"))).toBe(true);
     expect(existsSync(join(localSkillDir, "notes.md"))).toBe(true);
@@ -1348,7 +1358,11 @@ describe("skills sync integration guarantees", () => {
     expect(result.pushed).toBeGreaterThanOrEqual(1);
 
     // Assertion 1: no vendored.tar.age artifact was written.
-    const skillsVaultDir = join(machine.vaultDir, "claude", "skills");
+    const skillsVaultDir = join(
+      machineVaultRoot(machine.vaultDir, machine.machineName),
+      "claude",
+      "skills",
+    );
     expect(existsSync(join(skillsVaultDir, "vendored.tar.age"))).toBe(false);
 
     // Assertion 2: decrypt every .tar.age in claude/skills/, extract it to a

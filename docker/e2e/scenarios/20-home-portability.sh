@@ -101,7 +101,7 @@ assert_file_exists "$A_KEY"
 
 # ─── Vault-side: placeholder is what's encrypted, not the literal path ───────
 step "Negative control: vault stores ${PLACEHOLDER} (not /tmp/alpha)"
-DEC_CLAUDE_JSON=$(git --git-dir="$VAULT_PATH" show HEAD:claude/claude.json.age \
+DEC_CLAUDE_JSON=$(vshow "$VAULT_PATH" "claude/claude.json.age" \
   | age -d -i "$A_KEY")
 case "$DEC_CLAUDE_JSON" in
   *"$PLACEHOLDER"*) pass "claude.json blob carries placeholder" ;;

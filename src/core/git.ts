@@ -360,6 +360,11 @@ export class GitClient {
     await this.git.push(remote, branch, options);
   }
 
+  /** Move a tracked path with `git mv` so the file history is preserved across the rename. */
+  async move(from: string, to: string): Promise<void> {
+    await this.git.raw(["mv", from, to]);
+  }
+
   /** Return the checked-out local branch name for this repository. */
   async currentBranch(): Promise<string> {
     const branch = await this.git.branchLocal();

@@ -2,8 +2,9 @@ import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { log } from "@clack/prompts";
 import { defineCommand } from "citty";
-import { loadConfig, resolveConfigPath, writeConfig } from "../config/loader";
+import { loadConfig, peekVaultVersion, resolveConfigPath, writeConfig } from "../config/loader";
 import { resolveAgentSyncHome } from "../config/paths";
+import { CURRENT_VAULT_VERSION } from "../config/schema";
 import { generateIdentity, identityToRecipient } from "../core/encryptor";
 import { GitClient } from "../core/git";
 import {
@@ -24,8 +25,6 @@ const DEFAULT_AGENTS = {
 const DEFAULT_SYNC = {
   debounceMs: 300,
   autoPush: true,
-  autoPull: true,
-  pullIntervalMs: 300_000,
 };
 
 /** Discriminated result of a `performInit` invocation — lets non-CLI callers
@@ -41,6 +40,8 @@ export type InitResult =
       privateKeyPath: string;
     }
   | { status: "remote-probe-failed"; error: string }
+  | { status: "vault-needs-upgrade"; vaultDir: string }
+  | { status: "unsupported-version"; version: number }
   | { status: "failed"; error: string; keyRolledBack: boolean };
 
 export interface InitOptions {
@@ -81,6 +82,25 @@ async function ensureKeypair(
 }
 
 /**
+ * Remove a key generated on this invocation when init aborts, so a retry is not
+ * bound to material that never made it into a successful init. A pre-existing
+ * key (keyIsNew false) is preserved untouched. Returns whether it removed one.
+ */
+async function rollbackFreshKey(keyIsNew: boolean, path: string): Promise<boolean> {
+  if (!keyIsNew) return false;
+  try {
+    await rm(path, { force: true });
+    return true;
+  } catch (rmErr) {
+    const rmMessage = rmErr instanceof Error ? rmErr.message : String(rmErr);
+    log.warn(
+      `Failed to roll back freshly generated key at ${path}: ${rmMessage}.\nRemove key.txt manually before retrying.`,
+    );
+    return false;
+  }
+}
+
+/**
  * Bootstrap a vault, local key material, and the initial git remote wiring.
  * Returns a discriminated {@link InitResult} so both the CLI wrapper and the
  * TUI wizard can render their own feedback. Never calls `process.exit*` —
@@ -107,6 +127,7 @@ export async function performInit(options: InitOptions): Promise<InitResult> {
   let git = new GitClient(runtime.vaultDir);
 
   let keyIsNew = false;
+  let pushAttempted = false;
   try {
     const { recipient, isNew } = await ensureKeypair(runtime.privateKeyPath);
     keyIsNew = isNew;
@@ -132,6 +153,19 @@ export async function performInit(options: InitOptions): Promise<InitResult> {
 
     const configPath = resolveConfigPath(runtime.vaultDir);
 
+    // Refuse to join a vault this binary cannot safely write. A v1 vault must be
+    // upgraded first — otherwise the v2 schema fails to load it, we treat it as
+    // fresh, and re-create a config that drops every other machine's recipient.
+    const probe = await peekVaultVersion(configPath);
+    if (probe.kind === "v1" || probe.kind === "unsupported") {
+      // Refusing to join — roll back a key generated this run so it does not
+      // linger unused (mirrors the failure path below).
+      await rollbackFreshKey(keyIsNew, runtime.privateKeyPath);
+      return probe.kind === "v1"
+        ? { status: "vault-needs-upgrade", vaultDir: runtime.vaultDir }
+        : { status: "unsupported-version", version: probe.version };
+    }
+
     let existing = null;
     try {
       existing = await loadConfig(configPath);
@@ -142,8 +176,8 @@ export async function performInit(options: InitOptions): Promise<InitResult> {
     const joinedExistingVault =
       existing !== null && existing.recipients[runtime.machineName] !== recipient;
 
-    const config = {
-      version: existing?.version ?? "1",
+    await writeConfig(configPath, {
+      version: CURRENT_VAULT_VERSION,
       recipients: {
         ...(existing?.recipients ?? {}),
         [runtime.machineName]: recipient,
@@ -155,9 +189,7 @@ export async function performInit(options: InitOptions): Promise<InitResult> {
       },
       sync: existing?.sync ?? DEFAULT_SYNC,
       claudePlugins: existing?.claudePlugins ?? { syncMarketplace: false },
-    };
-
-    await writeConfig(configPath, config);
+    });
 
     // Pin the machine name to local state so a later hostname change cannot
     // re-derive a different name and orphan this machine's vault namespace
@@ -172,6 +204,7 @@ export async function performInit(options: InitOptions): Promise<InitResult> {
 
     const committed = await git.commit({ message: `init: ${runtime.machineName}` });
     if (committed) {
+      pushAttempted = true;
       await git.push("origin", options.branch, remoteState.exists ? [] : ["--set-upstream"]);
     }
 
@@ -185,22 +218,14 @@ export async function performInit(options: InitOptions): Promise<InitResult> {
       privateKeyPath: runtime.privateKeyPath,
     };
   } catch (err) {
-    // The remote probe passed but a later step failed. If we generated the
-    // key on this invocation, delete it so a retry is not bound to material
-    // that never made it into a successful init. A pre-existing key is
-    // preserved untouched.
-    let keyRolledBack = false;
-    if (keyIsNew) {
-      try {
-        await rm(runtime.privateKeyPath, { force: true });
-        keyRolledBack = true;
-      } catch (rmErr) {
-        const rmMessage = rmErr instanceof Error ? rmErr.message : String(rmErr);
-        log.warn(
-          `Failed to roll back freshly generated key at ${runtime.privateKeyPath}: ${rmMessage}.\nRemove key.txt manually before retrying.`,
-        );
-      }
-    }
+    // The remote probe passed but a later step failed. Roll back a key generated
+    // this invocation so a retry is not bound to material that never made it into
+    // a successful init. A pre-existing key is preserved untouched. Do NOT roll
+    // back once a push was attempted: the commit (registering this machine's
+    // recipient) may already be local or pushed, and a retry must reuse this key.
+    const keyRolledBack = pushAttempted
+      ? false
+      : await rollbackFreshKey(keyIsNew, runtime.privateKeyPath);
     return {
       status: "failed",
       error: err instanceof Error ? err.message : String(err),
@@ -233,6 +258,22 @@ export const initCommand = defineCommand({
 
     if (result.status === "remote-probe-failed") {
       log.error(result.error);
+      process.exitCode = 1;
+      return;
+    }
+
+    if (result.status === "vault-needs-upgrade") {
+      log.error(
+        `Vault at ${result.vaultDir} uses the old flat layout. An existing member must run \`agentsync vault upgrade\` to migrate it before this machine can join.`,
+      );
+      process.exitCode = 1;
+      return;
+    }
+
+    if (result.status === "unsupported-version") {
+      log.error(
+        `Vault uses format v${result.version}, newer than this agentsync. Run \`agentsync upgrade\` to update agentsync first.`,
+      );
       process.exitCode = 1;
       return;
     }

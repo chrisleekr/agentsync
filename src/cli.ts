@@ -12,6 +12,7 @@ import { skillCommand } from "./commands/skill";
 import { statusCommand } from "./commands/status";
 import { tuiCommand } from "./commands/tui";
 import { upgradeCommand } from "./commands/upgrade";
+import { vaultCommand } from "./commands/vault";
 
 /** Root CLI command that wires every user-facing subcommand into a single entry point. */
 const main = defineCommand({
@@ -32,6 +33,7 @@ const main = defineCommand({
     skill: skillCommand,
     destroy: destroyCommand,
     upgrade: upgradeCommand,
+    vault: vaultCommand,
     tui: tuiCommand,
   },
 });

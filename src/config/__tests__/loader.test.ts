@@ -8,10 +8,11 @@ import {
   formatConfigError,
   isConfigParseError,
   loadConfig,
+  peekVaultVersion,
   resolveConfigPath,
   writeConfig,
 } from "../loader";
-import { AgentSyncConfigSchema } from "../schema";
+import { AgentSyncConfigSchema, CURRENT_VAULT_VERSION } from "../schema";
 
 // Defensive re-install of the real node:fs/promises — see migrate.test.ts
 // for the full explanation of the bleed this guards against.
@@ -22,7 +23,7 @@ import { AgentSyncConfigSchema } from "../schema";
 }
 
 const MINIMAL_TOML = `
-version = "1"
+version = 2
 
 [recipients]
 alice = "age1qyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqs8xmq8"
@@ -41,8 +42,6 @@ branch = "main"
 [sync]
 debounceMs = 300
 autoPush = true
-autoPull = true
-pullIntervalMs = 300000
 `;
 
 describe("loader", () => {
@@ -63,7 +62,7 @@ describe("loader", () => {
   test("loadConfig parses a valid TOML file", async () => {
     await writeFile(configPath, MINIMAL_TOML, "utf8");
     const config = await loadConfig(configPath);
-    expect(config.version).toBe("1");
+    expect(config.version).toBe(2);
     expect(config.remote.url).toBe("git@github.com:alice/vault.git");
     expect(config.agents.cursor).toBeTrue();
     expect(config.agents.vscode).toBeFalse();
@@ -103,7 +102,7 @@ describe("loader", () => {
     // The temp file must have been renamed over the destination, not left behind.
     const leftovers = (await readdir(tmpDir)).filter((f) => f.endsWith(".tmp"));
     expect(leftovers).toEqual([]);
-    expect((await loadConfig(configPath)).version).toBe("1");
+    expect((await loadConfig(configPath)).version).toBe(2);
   });
 
   test("writeConfig preserves the destination and removes the temp when rename fails", async () => {
@@ -126,7 +125,38 @@ describe("loader", () => {
     const config = await loadConfig(configPath);
     await expect(writeConfig(nestedPath, config)).resolves.toBeUndefined();
     const reloaded = await loadConfig(nestedPath);
-    expect(reloaded.version).toBe("1");
+    expect(reloaded.version).toBe(2);
+  });
+
+  // peekVaultVersion — the two-phase load probe (routes v1 to `vault upgrade`)
+
+  test("peekVaultVersion reports absent for a missing config file", async () => {
+    expect(await peekVaultVersion(join(tmpDir, "nope.toml"))).toEqual({ kind: "absent" });
+  });
+
+  test("peekVaultVersion reports v2 for the integer version 2", async () => {
+    await writeFile(configPath, 'version = 2\n[remote]\nurl = "x"\n', "utf8");
+    expect(await peekVaultVersion(configPath)).toEqual({ kind: "v2" });
+  });
+
+  test("peekVaultVersion reports v1 for a string version (the legacy flat layout)", async () => {
+    await writeFile(configPath, 'version = "1"\n[remote]\nurl = "x"\n', "utf8");
+    expect(await peekVaultVersion(configPath)).toEqual({ kind: "v1" });
+  });
+
+  test("peekVaultVersion reports v1 when the version field is absent", async () => {
+    await writeFile(configPath, '[remote]\nurl = "x"\n', "utf8");
+    expect(await peekVaultVersion(configPath)).toEqual({ kind: "v1" });
+  });
+
+  test("peekVaultVersion reports unsupported for an integer above the current version", async () => {
+    await writeFile(configPath, 'version = 3\n[remote]\nurl = "x"\n', "utf8");
+    expect(await peekVaultVersion(configPath)).toEqual({ kind: "unsupported", version: 3 });
+  });
+
+  test("peekVaultVersion propagates a TOML parse error", async () => {
+    await writeFile(configPath, "this is = not [ valid toml", "utf8");
+    await expect(peekVaultVersion(configPath)).rejects.toThrow();
   });
 
   // resolveConfigPath
@@ -144,10 +174,11 @@ describe("formatConfigError", () => {
   // produces a single isolated issue, independent of Zod's issue ordering or
   // formatConfigError's 3-issue cap.
   const validBase = {
+    version: CURRENT_VAULT_VERSION,
     recipients: { me: "age1qpzry9x8gf2tvdw0s3jn54khce6mua7l" },
     agents: { cursor: true, claude: true, codex: true, copilot: true, vscode: false },
     remote: { url: "git@github.com:user/vault.git", branch: "main" },
-    sync: { debounceMs: 300, autoPush: true, autoPull: true, pullIntervalMs: 300_000 },
+    sync: { debounceMs: 300, autoPush: true },
   };
 
   test("names the offending recipient alias for a schema (Zod) error", () => {

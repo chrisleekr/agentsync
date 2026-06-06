@@ -1,6 +1,7 @@
 import { log } from "@clack/prompts";
 import { defineCommand } from "citty";
 import { type AgentDefinition, type AgentName, Agents } from "../agents/registry";
+import { machineVaultRoot } from "../config/paths";
 import { identityToRecipient } from "../core/encryptor";
 import { GitClient } from "../core/git";
 import { loadPrivateKey, loadVaultConfigOrExit, resolveRuntimeContext } from "./shared";
@@ -41,6 +42,10 @@ export async function performPull(
       force: options.dryRun ? false : options.force,
     });
 
+    // v2: restore only from THIS machine's namespace. Copying another machine's
+    // artifacts is the `copy` command's job, not pull's.
+    const machineRoot = machineVaultRoot(runtime.vaultDir, runtime.machineName);
+
     const requestedAgent = options.agent as AgentName | undefined;
     const agentsToSync = agentDefinitions.filter((a) => {
       if (requestedAgent) return a.name === requestedAgent;
@@ -49,7 +54,7 @@ export async function performPull(
 
     for (const agent of agentsToSync) {
       try {
-        await agent.apply(runtime.vaultDir, key, options.dryRun ?? false, config);
+        await agent.apply(machineRoot, key, options.dryRun ?? false, config);
         applied++;
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);

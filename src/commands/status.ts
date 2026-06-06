@@ -7,6 +7,7 @@ import { defineCommand } from "citty";
 import pc from "picocolors";
 import type { AgentDefinition, SnapshotArtifact } from "../agents/registry";
 import { Agents } from "../agents/registry";
+import { machineVaultRoot } from "../config/paths";
 import type { AgentSyncConfig } from "../config/schema";
 import { decryptString } from "../core/encryptor";
 import {
@@ -109,6 +110,8 @@ export async function computeSyncStatus(
   const registry = opts.agentsOverride ?? agentDefinitionsForStatus;
   const enabledAgents = registry.filter((a) => config.agents[a.name as keyof typeof config.agents]);
   const rows: SyncRow[] = [];
+  // v2: status compares local state against THIS machine's namespace only.
+  const machineRoot = machineVaultRoot(runtime.vaultDir, runtime.machineName);
 
   for (const agent of enabledAgents) {
     let artifacts: SnapshotArtifact[] = [];
@@ -132,7 +135,7 @@ export async function computeSyncStatus(
     }
 
     for (const artifact of artifacts) {
-      const vaultAbsPath = join(runtime.vaultDir, artifact.vaultPath);
+      const vaultAbsPath = join(machineRoot, artifact.vaultPath);
       const localHash = sha256(artifact.plaintext);
       const isSkill = artifact.vaultPath.endsWith(".tar.age");
       let vaultHash: string | null = null;
@@ -173,8 +176,8 @@ export async function computeSyncStatus(
   if (privateKey) {
     const knownVaultPaths = new Set(rows.map((r) => r.vaultPath));
     for (const agent of enabledAgents) {
-      const agentVaultDir = join(runtime.vaultDir, agent.name);
-      const ageFiles = await collectAgeFiles(agentVaultDir, runtime.vaultDir);
+      const agentVaultDir = join(machineRoot, agent.name);
+      const ageFiles = await collectAgeFiles(agentVaultDir, machineRoot);
       for (const vaultRelPath of ageFiles) {
         if (!knownVaultPaths.has(vaultRelPath)) {
           rows.push({
@@ -182,7 +185,7 @@ export async function computeSyncStatus(
             displayName: stripAgeExt(vaultRelPath),
             sourcePath: null,
             vaultPath: vaultRelPath,
-            vaultAbsPath: join(runtime.vaultDir, vaultRelPath),
+            vaultAbsPath: join(machineRoot, vaultRelPath),
             isSkill: vaultRelPath.endsWith(".tar.age"),
             status: "vault-only",
             detail: "not on this machine",
