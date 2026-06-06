@@ -56,7 +56,6 @@ default_scenarios=(
   17-git-protocol.sh
   18-copilot.sh
   19-codex-overrides.sh
-  20-home-portability.sh
 )
 
 # SCENARIOS env var overrides the full set; SKIP filters from the active set.

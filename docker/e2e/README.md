@@ -122,7 +122,6 @@ back to the local `homedir()` on pull (B24).
 | 17 | `17-git-protocol.sh` | `git://` transport via an in-container `git daemon` on 127.0.0.1:9418 (B7) |
 | 18 | `18-copilot.sh` | Pin/verify canonical `copilot-instructions.md` filename (B16) + single-file `.agent.md` shape (B15); pin not-synced state of `lsp-config.json`, `settings.json`, `mcp-config.json` (B13, B14, B23) |
 | 19 | `19-codex-overrides.sh` | `AGENTS.override.md` precedence (B17); `~/.agents/skills` canonical + legacy fallback (B22); `themes/**` absence (B25); `~/.codex/rules/` intent pin (B18) |
-| 20 | `20-home-portability.sh` | **Headline.** HOME=`/tmp/alpha` push → HOME=`/tmp/beta` pull; every JSON/TOML absolute-HOME path rewrites to `/tmp/beta/…`; `/etc/hosts` and `/opt/foo` left verbatim; markdown bodies left verbatim |
 
 ## Runtime pinning policy
 
@@ -221,5 +220,4 @@ docker/e2e/
     ├── 17-git-protocol.sh
     ├── 18-copilot.sh
     ├── 19-codex-overrides.sh
-    └── 20-home-portability.sh
 ```

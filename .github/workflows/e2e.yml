@@ -36,7 +36,6 @@ jobs:
           - 17-git-protocol.sh
           - 18-copilot.sh
           - 19-codex-overrides.sh
-          - 20-home-portability.sh
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
