@@ -89,7 +89,7 @@ assert_not_in_vault "$VAULT_PATH" "copilot/lsp-config"
 # the adapter writes the vault entry as `instructions.md.age`.
 assert_not_in_vault "$VAULT_PATH" "copilot/copilot-instructions.md"
 
-# ─── Machine B: pull and assert layout on disk ───────────────────────────────
+# ─── Machine B: copy and assert layout on disk ───────────────────────────────
 B=/tmp/copilot-b
 step "Machine B: clean clone with A's key"
 rm -rf "$B"
@@ -121,7 +121,7 @@ step "Unsupported Copilot files must NOT materialize on Machine B"
 # set today. If the adapter is extended, flip this to assert_file_exists.
 assert_file_absent "$B/.copilot/lsp-config.json"
 # settings.json / mcp-config.json — never planted on A, and a stray sibling
-# on B after pull would mean the adapter invented a write target.
+# on B after copy would mean the adapter invented a write target.
 assert_file_absent "$B/.copilot/settings.json"
 assert_file_absent "$B/.copilot/mcp-config.json"
 

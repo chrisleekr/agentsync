@@ -99,7 +99,7 @@ cp "$MACHINE_A/.config/agentsync/key.txt" "$MACHINE_B/.config/agentsync/key.txt"
 chmod 600 "$MACHINE_B/.config/agentsync/key.txt"
 HOME="$MACHINE_B" bun run src/cli.ts init --remote "$GIT_REMOTE" --branch main
 
-step "Machine B: pull via git://"
+step "Machine B: copy claude/ via git://"
 copy_self "$MACHINE_B" claude/
 
 step "CRITICAL: CLAUDE.md round-trips byte-equal A → B over git://"

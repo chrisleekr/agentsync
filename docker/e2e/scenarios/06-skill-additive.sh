@@ -3,7 +3,7 @@ set -euo pipefail
 # shellcheck source=/home/agent/scenarios/_lib.sh
 source /home/agent/scenarios/_lib.sh
 
-# Scenario 6 — pull is additive for skills: removing a skill from disk and
+# Scenario 6 — copy is additive for skills: removing a skill from disk and
 # pulling does not delete the vault's copy from disk; explicit
 # `agentsync skill remove` is the only way to drop a skill from the vault.
 # Plus: bundle content equality via tar_age_extract.

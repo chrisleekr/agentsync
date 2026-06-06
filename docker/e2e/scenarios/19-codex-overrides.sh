@@ -64,7 +64,7 @@ step "B18 pin: ~/.codex/rules/*.md IS synced (codex/rules/<name>.md.age)"
 # stays loud.
 assert_in_vault "$VAULT_PATH" "codex/rules/general.md.age"
 
-# ─── Machine B: pull, then round-trip checks ─────────────────────────────────
+# ─── Machine B: copy, then round-trip checks ─────────────────────────────────
 B=/tmp/codex-ov-b
 step "Machine B: clean clone with A's key"
 rm -rf "$B"
@@ -112,7 +112,7 @@ assert_in_vault "$VAULT_PATH" "codex/skills/legacy-skill.tar.age"
 # Canonical skill from first push still present.
 assert_in_vault "$VAULT_PATH" "codex/skills/sql-formatter.tar.age"
 
-step "B22: pulling on B writes BOTH skills to canonical \$HOME/.agents/skills"
+step "B22: copying on B writes BOTH skills to canonical \$HOME/.agents/skills"
 copy_self "$B" codex/
 assert_dir_exists  "$B/.agents/skills/sql-formatter"
 assert_dir_exists  "$B/.agents/skills/legacy-skill"

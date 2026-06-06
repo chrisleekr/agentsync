@@ -274,6 +274,20 @@ function handleKey(key: KeyEvent, ctx: AppContext, quit: () => void): void {
   }
 
   if (key.name === "p" && !key.shift) {
+    // While a Sync modal is open (diff, skill drill-in, confirm-remove, or the
+    // key prompt), `p` belongs to that modal — let the tab handle it instead of
+    // firing a global push that would publish the current selection by accident.
+    const state = ctx.store.getState();
+    if (
+      state.activeTab === "sync" &&
+      (state.sync.diff ||
+        state.sync.skillDrillIn ||
+        state.sync.confirmRemove ||
+        state.sync.keyPrompt === "pending")
+    ) {
+      delegateTabKey(key, ctx);
+      return;
+    }
     invokeSyncOp(ctx);
     return;
   }

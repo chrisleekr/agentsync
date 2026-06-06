@@ -53,15 +53,15 @@ assert_not_in_vault "$VAULT_PATH" "vscode/settings.json"
 assert_not_in_vault "$VAULT_PATH" "vscode/keybindings.json"
 assert_not_in_vault "$VAULT_PATH" "vscode/snippets"
 
-# ─── Machine B: pull restores ONLY mcp.json ──────────────────────────────────
+# ─── Machine B: copy restores ONLY mcp.json ──────────────────────────────────
 
-step "Machine B: fresh HOME with shared age key, init + pull"
+step "Machine B: fresh HOME with shared age key, init + copy"
 rm -rf "$MACHINE_B"
 mkdir -p "$MACHINE_B/.config/agentsync"
 cp "$MACHINE_A/.config/agentsync/key.txt" "$MACHINE_B/.config/agentsync/key.txt"
 chmod 600 "$MACHINE_B/.config/agentsync/key.txt"
 HOME="$MACHINE_B" bun run src/cli.ts init --remote "$VAULT_URL" --branch main
-# Mirror the syncMarketplace-style toggle: B's agentsync.toml is pulled from
+# Mirror the syncMarketplace-style toggle: B's agentsync.toml comes from
 # vault HEAD on init, so vscode=true already, no edit needed.
 copy_self "$MACHINE_B" vscode/
 

@@ -62,8 +62,9 @@ agentsync init --remote git@github.com:<you>/agentsync-vault.git --branch main
 # Push local agent configuration into the encrypted vault
 agentsync push
 
-# On another machine, after running init with the same remote, restore from the vault
-agentsync copy self claude/
+# On a new machine, after running init with the same remote, restore another
+# machine's config from its vault namespace (use `copy self …` to restore your own)
+agentsync copy <other-machine> claude/
 ```
 
 The full quickstart, command reference, and architecture model live at the documentation site: **<https://chrisleekr.github.io/agentsync/>**.
