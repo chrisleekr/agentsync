@@ -710,6 +710,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#plugin" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        plugin
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#migrate" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1049,6 +1060,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#plugin" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        plugin
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#migrate" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1178,6 +1200,10 @@
 <tr>
 <td><a href="#skill"><code>skill</code></a></td>
 <td>Remove a skill from the vault.</td>
+</tr>
+<tr>
+<td><a href="#plugin"><code>plugin</code></a></td>
+<td>List or reinstall a machine's Claude plugins from its vault manifest.</td>
 </tr>
 <tr>
 <td><a href="#migrate"><code>migrate</code></a></td>
@@ -1536,10 +1562,24 @@ that <code>agentsync skill remove</code> does, once per selected skill.</p>
 <li>After <code>skill remove</code>, every machine that pulled the skill previously still has the local directory until you delete it manually there. See <a href="../operations/#a-skill-i-deleted-reappears-after-pull-on-another-machine">A skill I deleted reappears after pull on another machine</a>.</li>
 <li>To snapshot or apply a single skill, use the bulk <code>push</code> and <code>pull</code> commands with <code>--agent</code>. There is no targeted <code>skill push</code> or <code>skill pull</code>; the snapshot for an agent always includes every skill that survives the walker contract.</li>
 </ul>
+<h2 id="plugin">plugin<a class="headerlink" href="#plugin" title="Permanent link">&para;</a></h2>
+<p><strong>Why</strong>: Reproduce a machine's Claude plugins on another machine. AgentSync does not encrypt the plugin tree; the marketplace is the source of truth. <code>push</code> (with <code>[claudePlugins] syncPlugins = true</code>) records a distilled manifest — each plugin's <code>name@marketplace</code>, scope, and enabled flag — and <code>plugin install</code> reinstalls from it via the local <code>claude</code> CLI.</p>
+<p><strong>Usage</strong>:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>agentsync<span class="w"> </span>plugin<span class="w"> </span>list<span class="w"> </span>&lt;machine&gt;<span class="w">            </span><span class="c1"># print the recorded manifest</span>
+</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>agentsync<span class="w"> </span>plugin<span class="w"> </span>install<span class="w"> </span>&lt;machine&gt;<span class="w"> </span><span class="o">[</span>name<span class="o">]</span><span class="w">  </span><span class="c1"># reinstall all, or one named plugin</span>
+</span></code></pre></div>
+<p>Use <code>self</code> as <code>&lt;machine&gt;</code> to act on this machine's own manifest.</p>
+<p><strong>Outcome</strong>: <code>install</code> registers each referenced marketplace (<code>claude plugin marketplace add</code>), installs each plugin at its recorded scope (<code>claude plugin install &lt;name&gt;@&lt;marketplace&gt; -s &lt;scope&gt;</code>), then enables or disables it to match the manifest.</p>
+<p><strong>Caveats</strong>:</p>
+<ul>
+<li>Requires the <code>claude</code> CLI on <code>PATH</code>; a missing binary fails loudly rather than skipping silently.</li>
+<li>Reinstall fetches the <strong>latest</strong> version — there is no version pin.</li>
+<li>Local edits to plugin files are not preserved; only the manifest (marketplace + name + scope + enabled) round-trips.</li>
+</ul>
 <h2 id="migrate">migrate<a class="headerlink" href="#migrate" title="Permanent link">&para;</a></h2>
 <p><strong>Why</strong>: Translate configuration between Claude, Cursor, Codex, Copilot, and VS Code without touching the vault.</p>
 <p><strong>Usage</strong>:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>agentsync<span class="w"> </span>migrate<span class="w"> </span>--from<span class="w"> </span>&lt;agent&gt;<span class="w"> </span>--to<span class="w"> </span>&lt;agent<span class="p">|</span>all&gt;<span class="w"> </span><span class="o">[</span>--type<span class="w"> </span>&lt;type&gt;<span class="o">]</span><span class="w"> </span><span class="o">[</span>--name<span class="w"> </span>&lt;file&gt;<span class="o">]</span><span class="w"> </span><span class="o">[</span>--dry-run<span class="o">]</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>agentsync<span class="w"> </span>migrate<span class="w"> </span>--from<span class="w"> </span>&lt;agent&gt;<span class="w"> </span>--to<span class="w"> </span>&lt;agent<span class="p">|</span>all&gt;<span class="w"> </span><span class="o">[</span>--type<span class="w"> </span>&lt;type&gt;<span class="o">]</span><span class="w"> </span><span class="o">[</span>--name<span class="w"> </span>&lt;file&gt;<span class="o">]</span><span class="w"> </span><span class="o">[</span>--dry-run<span class="o">]</span>
 </span></code></pre></div>
 <p><strong>Flags</strong>:</p>
 <table>
@@ -1603,9 +1643,9 @@ in <code>src/commands/destroy.ts</code>) and by test (three sha256+mtime
 invariants in <code>destroy.test.ts</code>).</p>
 </blockquote>
 <p><strong>Usage</strong>:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>agentsync<span class="w"> </span>destroy<span class="w">                       </span><span class="c1"># local-only, default</span>
-</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>agentsync<span class="w"> </span>destroy<span class="w"> </span>--scope<span class="o">=</span>remote<span class="w">        </span><span class="c1"># wipe remote via commit</span>
-</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a>agentsync<span class="w"> </span>destroy<span class="w"> </span>--scope<span class="o">=</span>all<span class="w">           </span><span class="c1"># both</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>agentsync<span class="w"> </span>destroy<span class="w">                       </span><span class="c1"># local-only, default</span>
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>agentsync<span class="w"> </span>destroy<span class="w"> </span>--scope<span class="o">=</span>remote<span class="w">        </span><span class="c1"># wipe remote via commit</span>
+</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>agentsync<span class="w"> </span>destroy<span class="w"> </span>--scope<span class="o">=</span>all<span class="w">           </span><span class="c1"># both</span>
 </span></code></pre></div>
 <p><strong>Flags</strong>:</p>
 <table>

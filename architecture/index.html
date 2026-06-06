@@ -1111,42 +1111,34 @@
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>└── machines/
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    └── &lt;name&gt;/                    # one directory per machine (its own backup namespace)
 </span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>        ├── claude/
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>        │   ├── settings.json.age
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>        │   ├── hooks.json.age
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>        │   ├── mcp.json.age
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>        │   ├── marketplace.json.age   # only when claudePlugins.syncMarketplace = true
-</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>        │   ├── commands/
-</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>        │   │   └── &lt;name&gt;.md.age
-</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>        │   ├── skills/
-</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>        │   │   └── &lt;name&gt;.tar.age      # tar bundle per skill
-</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>        │   └── plugins/
-</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>        │       └── &lt;name&gt;/             # one subtree per Claude plugin
-</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>        │           ├── plugin.json.age
-</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>        │           ├── commands/&lt;name&gt;.md.age
-</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>        │           ├── agents/&lt;name&gt;.md.age
-</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>        │           ├── hooks/&lt;name&gt;.json.age
-</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a>        │           └── mcp.json.age
-</span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a>        ├── codex/
-</span><span id="__span-0-22"><a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a>        │   ├── AGENTS.md.age
-</span><span id="__span-0-23"><a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a>        │   └── skills/&lt;name&gt;.tar.age
-</span><span id="__span-0-24"><a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a>        ├── cursor/
-</span><span id="__span-0-25"><a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a>        │   ├── settings.json.age
-</span><span id="__span-0-26"><a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a>        │   ├── rules/&lt;name&gt;.mdc.age
-</span><span id="__span-0-27"><a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a>        │   └── skills/&lt;name&gt;.tar.age
-</span><span id="__span-0-28"><a id="__codelineno-0-28" name="__codelineno-0-28" href="#__codelineno-0-28"></a>        └── copilot/
-</span><span id="__span-0-29"><a id="__codelineno-0-29" name="__codelineno-0-29" href="#__codelineno-0-29"></a>            ├── instructions.md.age
-</span><span id="__span-0-30"><a id="__codelineno-0-30" name="__codelineno-0-30" href="#__codelineno-0-30"></a>            └── skills/&lt;name&gt;.tar.age
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>        │   ├── settings.hooks.json.age
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>        │   ├── claude.json.age
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>        │   ├── plugins.manifest.json.age  # only when claudePlugins.syncPlugins = true
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>        │   ├── commands/
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>        │   │   └── &lt;name&gt;.md.age
+</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>        │   └── skills/
+</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>        │       └── &lt;name&gt;.tar.age      # tar bundle per skill
+</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>        ├── codex/
+</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>        │   ├── AGENTS.md.age
+</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>        │   └── skills/&lt;name&gt;.tar.age
+</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>        ├── cursor/
+</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>        │   ├── settings.json.age
+</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>        │   ├── rules/&lt;name&gt;.mdc.age
+</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>        │   └── skills/&lt;name&gt;.tar.age
+</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a>        └── copilot/
+</span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a>            ├── instructions.md.age
+</span><span id="__span-0-22"><a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a>            └── skills/&lt;name&gt;.tar.age
 </span></code></pre></div>
-<p>Skill bundles are tar archives so directory-shaped assets round-trip cleanly. Plugins under <code>machines/&lt;name&gt;/claude/plugins/&lt;name&gt;/</code> are first-class subtrees so installing a Claude plugin on one machine reproduces every artefact under the same plugin namespace.</p>
-<p><code>marketplace.json.age</code> is only emitted, and only applied on pull, when <code>claudePlugins.syncMarketplace = true</code> is set in <code>agentsync.toml</code> on both machines. The default is false so a vault snapshot does not silently propagate a Claude marketplace opt-in.</p>
+<p>Skill bundles are tar archives so directory-shaped assets round-trip cleanly.</p>
+<p>Claude plugins are not stored as an encrypted tree. The marketplace is the source of truth, so <code>push</code> distils <code>~/.claude/plugins/installed_plugins.json</code> + <code>known_marketplaces.json</code> into a single <code>plugins.manifest.json.age</code> recording each plugin's <code>name@marketplace</code>, scope, and enabled flag (machine-specific absolute paths are dropped). <code>agentsync plugin install &lt;machine&gt;</code> reinstalls from that manifest by shelling out to the <code>claude</code> CLI. The manifest is never applied on pull — a <code>copy</code> sweep skips it — so reinstall is always an explicit step. It is only emitted when <code>claudePlugins.syncPlugins = true</code>, because the manifest can reference third-party marketplaces. Tradeoff: reinstall fetches the latest version (no pin), and local edits to plugin files are not preserved.</p>
 <h2 id="skills-and-plugins">Skills and plugins<a class="headerlink" href="#skills-and-plugins" title="Permanent link">&para;</a></h2>
-<p>Skills and plugins follow the same walker contract on every agent:</p>
+<p>Skills follow the same walker contract on every agent (Claude plugins are manifest-only — see above):</p>
 <ul>
 <li>A missing or symlinked root is skipped silently (it is a legitimate "this agent has no skills directory" signal, not a failure).</li>
 <li>Dot-prefixed names are skipped silently (hidden directories belong to other tools).</li>
-<li>A name that fails validation (containing <code>..</code>, separators, control characters, or the reserved <code>.</code> / <code>..</code>) is rejected with a printed error. Validation guards every place a name becomes a filesystem path.</li>
-<li>A Claude plugin must contain a real <code>.claude-plugin/plugin.json</code> file (lstat-checked, so symlinked manifests are rejected) before any of its assets are emitted.</li>
+<li>A name that fails validation (containing <code>..</code>, separators, control characters, a leading dash, or the reserved <code>.</code> / <code>..</code>) is rejected with a printed error. Validation guards every place a name becomes a filesystem path or a CLI argument.</li>
 </ul>
+<p>Claude plugins are not walked as a file tree. They are represented solely by <code>plugins.manifest.json.age</code> (emitted when <code>claudePlugins.syncPlugins = true</code>); no plugin asset tree is emitted on push or applied on pull.</p>
 <p>Once admitted, each artefact is sanitised through the relevant rule set, encrypted, and emitted to its vault path. Sanitiser warnings about redacted secrets are surfaced in the push output so the user knows their literal credential was rejected rather than silently scrubbed.</p>
 <h2 id="daemon-model">Daemon model<a class="headerlink" href="#daemon-model" title="Permanent link">&para;</a></h2>
 <p>The daemon is a long-running process under platform supervision (launchd on macOS, systemd-user on Linux, Task Scheduler on Windows). It exposes <code>status</code>, <code>push</code>, and <code>pull</code> over a newline-delimited IPC protocol on a per-user socket.</p>

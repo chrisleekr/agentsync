@@ -1568,7 +1568,7 @@ live state without you re-running <code>agentsync status</code>.</p>
 </span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="n">vscode</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">false</span><span class="w">          </span><span class="c1"># opt-in; vscode&#39;s surface is MCP-only</span>
 </span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>
 </span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="k">[claudePlugins]</span>
-</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="n">syncMarketplace</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">false</span><span class="w"> </span><span class="c1"># opt-in: include ~/.claude/marketplace.json in push/pull</span>
+</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="n">syncPlugins</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">false</span><span class="w">     </span><span class="c1"># opt-in: back up a reinstall manifest of ~/.claude/plugins</span>
 </span></code></pre></div>
 <p>Defaults are chosen so you can install and forget. Tune them only if you observe excessive push churn. Values outside the supported range are rejected at config load.</p>
 <p><strong>Environment-variable escape hatches.</strong> For tests, CI, and air-gapped setups, the following variables override the resolved defaults:</p>
