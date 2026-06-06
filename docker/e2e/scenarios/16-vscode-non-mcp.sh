@@ -61,7 +61,7 @@ mkdir -p "$MACHINE_B/.config/agentsync"
 cp "$MACHINE_A/.config/agentsync/key.txt" "$MACHINE_B/.config/agentsync/key.txt"
 chmod 600 "$MACHINE_B/.config/agentsync/key.txt"
 HOME="$MACHINE_B" bun run src/cli.ts init --remote "$VAULT_URL" --branch main
-# Mirror the syncMarketplace-style toggle: B's agentsync.toml comes from
+# Mirror the syncPlugins-style opt-in toggle: B's agentsync.toml comes from
 # vault HEAD on init, so vscode=true already, no edit needed.
 copy_self "$MACHINE_B" vscode/
 

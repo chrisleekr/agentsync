@@ -129,9 +129,9 @@ export async function performCopy(options: {
   let count = 0;
   for (const target of targets) {
     try {
-      // A directory sweep honours each directive's `enabled` gate (so e.g.
-      // marketplace.json is skipped when syncMarketplace is off); an explicit
-      // single-file copy applies what the user named regardless.
+      // A directory sweep honours each directive's `enabled` gate (a disabled
+      // artifact is skipped); an explicit single-file copy applies what the
+      // user named regardless.
       await applySingleArtifact(plan, target, machineRoot, key, dryRun, sourceIsDir);
       count++;
     } catch (err) {

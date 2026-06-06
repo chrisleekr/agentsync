@@ -61,16 +61,31 @@ export const AgentSyncConfigSchema = z.object({
     debounceMs: z.number().int().min(50).max(10_000).default(300),
     autoPush: z.boolean().default(true),
   }),
-  // Per-agent plugin opt-ins (issue #31). Optional with safe defaults so
-  // existing agentsync.toml files continue to validate without changes.
-  claudePlugins: z
-    .object({
-      // Sync `~/.claude/.claude-plugin/marketplace.json` through the vault.
-      // Off by default — the catalog can pin third-party sources, so teams
-      // opt in explicitly.
-      syncMarketplace: z.boolean().default(false),
-    })
-    .default({ syncMarketplace: false }),
+  // Per-agent plugin opt-ins. Optional with safe defaults so existing
+  // agentsync.toml files continue to validate without changes.
+  claudePlugins: z.preprocess(
+    // Back-compat: the opt-in was renamed `syncMarketplace` → `syncPlugins`
+    // when plugin sync moved from encrypting the marketplace-catalog tree to a
+    // distilled reinstall manifest. Map a legacy key so old configs keep loading.
+    (val) => {
+      if (val && typeof val === "object" && !Array.isArray(val)) {
+        const obj = val as Record<string, unknown>;
+        if (!("syncPlugins" in obj) && "syncMarketplace" in obj) {
+          const { syncMarketplace, ...rest } = obj;
+          return { ...rest, syncPlugins: syncMarketplace };
+        }
+      }
+      return val;
+    },
+    z
+      .object({
+        // Capture `~/.claude/plugins/` as a reinstall manifest in the vault.
+        // Off by default — the manifest can reference third-party marketplaces,
+        // so teams opt in explicitly.
+        syncPlugins: z.boolean().default(false),
+      })
+      .default({ syncPlugins: false }),
+  ),
 });
 
 /** Normalized runtime shape derived from the validated config schema. */

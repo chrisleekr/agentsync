@@ -27,7 +27,7 @@ export function createTestAgentSyncConfig(
     agents: { cursor: true, claude: true, codex: true, copilot: true, vscode: true },
     remote: { url: "test://vault", branch: "main" },
     sync: { debounceMs: 300, autoPush: true },
-    claudePlugins: { syncMarketplace: false },
+    claudePlugins: { syncPlugins: false },
     ...overrides,
   };
 }

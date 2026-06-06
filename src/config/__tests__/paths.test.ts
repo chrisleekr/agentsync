@@ -4,7 +4,6 @@ import { isAbsolute, join } from "node:path";
 import {
   AgentPaths,
   resolveAgentSyncHome,
-  resolveClaudePluginPaths,
   resolveDaemonSocketPath,
   resolveWindowsAppData,
 } from "../paths";
@@ -79,28 +78,19 @@ describe("paths", () => {
     expect(AgentPaths.vscode.mcpJson.length).toBeGreaterThan(0);
   });
 
-  // Claude plugin path entries (issue #31)
+  // Claude plugin state files — distilled into the reinstall manifest.
 
   test("AgentPaths.claude.pluginsDir is ~/.claude/plugins/", () => {
     expect(AgentPaths.claude.pluginsDir).toBe(join(HOME, ".claude", "plugins"));
   });
 
-  test("AgentPaths.claude.marketplaceJson is ~/.claude/.claude-plugin/marketplace.json", () => {
-    expect(AgentPaths.claude.marketplaceJson).toBe(
-      join(HOME, ".claude", ".claude-plugin", "marketplace.json"),
+  test("AgentPaths.claude.installedPluginsJson / knownMarketplacesJson live under plugins/", () => {
+    expect(AgentPaths.claude.installedPluginsJson).toBe(
+      join(HOME, ".claude", "plugins", "installed_plugins.json"),
     );
-  });
-
-  test("resolveClaudePluginPaths returns the canonical plugin sub-paths", () => {
-    const root = join(HOME, ".claude", "plugins", "my-plugin");
-    const paths = resolveClaudePluginPaths(root);
-    expect(paths.root).toBe(root);
-    expect(paths.manifest).toBe(join(root, ".claude-plugin", "plugin.json"));
-    expect(paths.commandsDir).toBe(join(root, "commands"));
-    expect(paths.agentsDir).toBe(join(root, "agents"));
-    expect(paths.hooksDir).toBe(join(root, "hooks"));
-    expect(paths.mcpJson).toBe(join(root, ".mcp.json"));
-    expect(paths.skillsDir).toBe(join(root, "skills"));
+    expect(AgentPaths.claude.knownMarketplacesJson).toBe(
+      join(HOME, ".claude", "plugins", "known_marketplaces.json"),
+    );
   });
 
   // resolveAgentSyncHome / resolveDaemonSocketPath

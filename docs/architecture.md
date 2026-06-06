@@ -142,21 +142,13 @@ The vault is a regular Git repository. Inside it, every artefact is suffixed wit
 └── machines/
     └── <name>/                    # one directory per machine (its own backup namespace)
         ├── claude/
-        │   ├── settings.json.age
-        │   ├── hooks.json.age
-        │   ├── mcp.json.age
-        │   ├── marketplace.json.age   # only when claudePlugins.syncMarketplace = true
+        │   ├── settings.hooks.json.age
+        │   ├── claude.json.age
+        │   ├── plugins.manifest.json.age  # only when claudePlugins.syncPlugins = true
         │   ├── commands/
         │   │   └── <name>.md.age
-        │   ├── skills/
-        │   │   └── <name>.tar.age      # tar bundle per skill
-        │   └── plugins/
-        │       └── <name>/             # one subtree per Claude plugin
-        │           ├── plugin.json.age
-        │           ├── commands/<name>.md.age
-        │           ├── agents/<name>.md.age
-        │           ├── hooks/<name>.json.age
-        │           └── mcp.json.age
+        │   └── skills/
+        │       └── <name>.tar.age      # tar bundle per skill
         ├── codex/
         │   ├── AGENTS.md.age
         │   └── skills/<name>.tar.age
@@ -169,18 +161,19 @@ The vault is a regular Git repository. Inside it, every artefact is suffixed wit
             └── skills/<name>.tar.age
 ```
 
-Skill bundles are tar archives so directory-shaped assets round-trip cleanly. Plugins under `machines/<name>/claude/plugins/<name>/` are first-class subtrees so installing a Claude plugin on one machine reproduces every artefact under the same plugin namespace.
+Skill bundles are tar archives so directory-shaped assets round-trip cleanly.
 
-`marketplace.json.age` is only emitted, and only applied on pull, when `claudePlugins.syncMarketplace = true` is set in `agentsync.toml` on both machines. The default is false so a vault snapshot does not silently propagate a Claude marketplace opt-in.
+Claude plugins are not stored as an encrypted tree. The marketplace is the source of truth, so `push` distils `~/.claude/plugins/installed_plugins.json` + `known_marketplaces.json` into a single `plugins.manifest.json.age` recording each plugin's `name@marketplace`, scope, and enabled flag (machine-specific absolute paths are dropped). `agentsync plugin install <machine>` reinstalls from that manifest by shelling out to the `claude` CLI. The manifest is never applied on pull — a `copy` sweep skips it — so reinstall is always an explicit step. It is only emitted when `claudePlugins.syncPlugins = true`, because the manifest can reference third-party marketplaces. Tradeoff: reinstall fetches the latest version (no pin), and local edits to plugin files are not preserved.
 
 ## Skills and plugins
 
-Skills and plugins follow the same walker contract on every agent:
+Skills follow the same walker contract on every agent (Claude plugins are manifest-only — see above):
 
 - A missing or symlinked root is skipped silently (it is a legitimate "this agent has no skills directory" signal, not a failure).
 - Dot-prefixed names are skipped silently (hidden directories belong to other tools).
-- A name that fails validation (containing `..`, separators, control characters, or the reserved `.` / `..`) is rejected with a printed error. Validation guards every place a name becomes a filesystem path.
-- A Claude plugin must contain a real `.claude-plugin/plugin.json` file (lstat-checked, so symlinked manifests are rejected) before any of its assets are emitted.
+- A name that fails validation (containing `..`, separators, control characters, a leading dash, or the reserved `.` / `..`) is rejected with a printed error. Validation guards every place a name becomes a filesystem path or a CLI argument.
+
+Claude plugins are not walked as a file tree. They are represented solely by `plugins.manifest.json.age` (emitted when `claudePlugins.syncPlugins = true`); no plugin asset tree is emitted on push or applied on pull.
 
 Once admitted, each artefact is sanitised through the relevant rule set, encrypted, and emitted to its vault path. Sanitiser warnings about redacted secrets are surfaced in the push output so the user knows their literal credential was rejected rather than silently scrubbed.
 
