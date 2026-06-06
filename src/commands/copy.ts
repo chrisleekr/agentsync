@@ -19,7 +19,7 @@ export type CopyResult =
   | { status: "error"; error: string };
 
 /** List the machine namespace directories under `<vaultDir>/machines/`. */
-async function listMachines(vaultDir: string): Promise<string[]> {
+export async function listMachines(vaultDir: string): Promise<string[]> {
   try {
     const entries = await readdir(join(vaultDir, "machines"), { withFileTypes: true });
     return entries

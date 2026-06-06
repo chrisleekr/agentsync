@@ -72,15 +72,16 @@ export function renderDashboard(renderer: CliRenderer, host: BoxRenderable, stat
 
   // Hint panel
   const hint = new TextRenderable(renderer, {
-    height: 4,
+    height: 6,
     width: "100%",
     fg: "#6c7886",
     bg: "#11151a",
     content: [
       "",
-      "  [2] Sync     side-by-side vault ↔ local with status, diff, push, pull",
-      "  [3] Migrate  translate config from one agent to another",
-      "  [4] Activity recent operation log",
+      "  [2] Sync     side-by-side vault ↔ local with status, diff, push",
+      "  [3] Machines browse other machines' namespaces and copy from them",
+      "  [4] Migrate  translate config from one agent to another",
+      "  [5] Activity recent operation log",
     ].join("\n"),
   });
   wrapper.add(hint);

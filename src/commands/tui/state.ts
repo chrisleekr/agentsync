@@ -2,7 +2,7 @@ import type { DaemonStatus } from "../../config/schema";
 import { detectInstallMethod, type InstallMethod } from "../../core/version-check";
 import type { SyncRow } from "../status";
 
-export const TAB_IDS = ["dashboard", "sync", "migrate", "activity"] as const;
+export const TAB_IDS = ["dashboard", "sync", "machines", "migrate", "activity"] as const;
 export type TabId = (typeof TAB_IDS)[number];
 
 export const AGENTS = ["claude", "cursor", "codex", "copilot", "vscode"] as const;
@@ -15,7 +15,7 @@ export type MigrateField = "from" | "to" | "type" | "preview" | "apply";
 
 export interface ActivityEntry {
   ts: Date;
-  kind: "push" | "pull" | "skill-rm" | "migrate" | "preview" | "error" | "info";
+  kind: "push" | "pull" | "copy" | "skill-rm" | "migrate" | "preview" | "error" | "info";
   status: "ok" | "fail" | "running" | "info";
   message: string;
 }
@@ -30,10 +30,12 @@ export interface DaemonState {
 export type OpKind =
   | "push"
   | "pull"
+  | "copy"
   | "migrate"
   | "migrate-preview"
   | "skill-rm"
   | "sync-load"
+  | "machines-load"
   | "upgrade";
 
 /** Background update-check result. Populated once the TUI's startup check
@@ -199,6 +201,17 @@ export interface ContextAction {
   label: string;
 }
 
+/** Machines tab — browse other machines' vault namespaces and copy from them. */
+export interface MachinesSlice {
+  phase: LoadablePhase;
+  /** Machine namespace names under `vault/machines/`, sorted. */
+  list: string[];
+  cursor: number;
+  error: string | null;
+  /** Result of the most recent copy triggered from this tab. */
+  lastCopy: { machine: string; ok: boolean; message: string } | null;
+}
+
 export interface AppState {
   activeTab: TabId;
   daemon: DaemonState;
@@ -209,6 +222,7 @@ export interface AppState {
   keyHint: { key: string; expiresAt: number } | null;
   helpOpen: boolean;
   sync: SyncSlice;
+  machines: MachinesSlice;
   migrate: MigrateSlice;
   inFlight: Record<string, OperationStatus>;
   opSeq: number;
@@ -246,6 +260,13 @@ export function createInitialState(): AppState {
       lastOp: null,
       scrollOffset: 0,
       confirmRemove: null,
+    },
+    machines: {
+      phase: "idle",
+      list: [],
+      cursor: 0,
+      error: null,
+      lastCopy: null,
     },
     migrate: {
       from: "claude",
