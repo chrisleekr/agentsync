@@ -633,10 +633,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#pull" class="md-nav__link">
+  <a href="#copy" class="md-nav__link">
     <span class="md-ellipsis">
       
-        pull
+        copy
       
     </span>
   </a>
@@ -972,10 +972,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#pull" class="md-nav__link">
+  <a href="#copy" class="md-nav__link">
     <span class="md-ellipsis">
       
-        pull
+        copy
       
     </span>
   </a>
@@ -1366,46 +1366,42 @@ that <code>agentsync skill remove</code> does, once per selected skill.</p>
 <li>Reconciliation is fast-forward only. Divergence aborts the push with recovery guidance.</li>
 <li><code>--dry-run</code> exercises the snapshot, sanitiser, and encryption pipeline so previews reflect what would actually be written.</li>
 </ul>
-<h2 id="pull">pull<a class="headerlink" href="#pull" title="Permanent link">&para;</a></h2>
-<p><strong>Why</strong>: Fetch the latest vault state, decrypt for the local recipient, and apply to local agent paths.</p>
+<h2 id="copy">copy<a class="headerlink" href="#copy" title="Permanent link">&para;</a></h2>
+<p><strong>Why</strong>: Restore an artifact (or a whole subdir) from any machine's vault namespace onto local disk. In v2 the vault is push-only backup, so <code>copy</code> is the only vault→local path. <code>copy self &lt;path&gt;</code> restores your own machine's backup.</p>
 <p><strong>Usage</strong>:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>agentsync<span class="w"> </span>pull
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>agentsync<span class="w"> </span>pull<span class="w"> </span>--agent<span class="w"> </span>cursor
-</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>agentsync<span class="w"> </span>pull<span class="w"> </span>--dry-run
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>agentsync<span class="w"> </span>copy<span class="w"> </span>work-laptop<span class="w"> </span>claude/CLAUDE.md.age<span class="w">   </span><span class="c1"># from another machine&#39;s namespace</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>agentsync<span class="w"> </span>copy<span class="w"> </span>self<span class="w"> </span>claude/skills/<span class="w">                </span><span class="c1"># restore your own skills subdir</span>
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>agentsync<span class="w"> </span>copy<span class="w"> </span>work-laptop<span class="w"> </span>claude/<span class="w"> </span>--dry-run<span class="w">      </span><span class="c1"># preview the whole claude namespace</span>
 </span></code></pre></div>
-<p><strong>Flags</strong>:</p>
+<p><strong>Arguments</strong>:</p>
 <table>
 <thead>
 <tr>
-<th>Flag</th>
-<th>Default</th>
+<th>Argument</th>
 <th>Description</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td><code>--agent</code></td>
-<td>all enabled</td>
-<td>Restrict to one agent.</td>
+<td><code>&lt;machine&gt;</code></td>
+<td>Source machine namespace under <code>machines/</code>, or <code>self</code> for this machine.</td>
+</tr>
+<tr>
+<td><code>&lt;path&gt;</code></td>
+<td>Logical vault path: a single artifact (<code>claude/CLAUDE.md.age</code>) or a subdir prefix (<code>claude/skills/</code>) to copy every artifact beneath it.</td>
 </tr>
 <tr>
 <td><code>--dry-run</code></td>
-<td><code>false</code></td>
-<td>Show what would be applied without writing locally.</td>
-</tr>
-<tr>
-<td><code>--force</code></td>
-<td><code>false</code></td>
-<td>Apply the remote state without prompting on conflicts. Used by the daemon and other non-interactive callers.</td>
+<td>Preview each artifact without writing locally.</td>
 </tr>
 </tbody>
 </table>
-<p><strong>Outcome</strong>: supported local agent files are updated from the vault, including per-agent skills under <code>claude/skills/</code>, <code>codex/skills/</code>, <code>cursor/skills/</code>, and <code>copilot/skills/</code>. Claude Code plugins under <code>claude/plugins/&lt;name&gt;/</code> round-trip back to <code>~/.claude/plugins/&lt;name&gt;/</code>. <code>marketplace.json</code> is only applied when <code>claudePlugins.syncMarketplace = true</code> is set locally.</p>
+<p><strong>Outcome</strong>: the named artifacts are decrypted with the local key (encryption is to all recipients) and applied to local agent paths using the same handlers, JSONC merge, and <code>.bak</code> backups as a full restore. <code>copy</code> writes only to local disk — it never writes this machine's vault namespace; the next <code>push</code> captures the change normally. An unknown machine lists the available namespaces; a missing artifact reports the path.</p>
 <p><strong>Caveats</strong>:</p>
 <ul>
-<li>Pull is <strong>extract-only</strong>: it never removes a local file the vault does not contain. This is intentional so an in-progress local edit cannot be wiped by a remote that omits the file. See <a href="../operations/#a-skill-i-deleted-reappears-after-pull-on-another-machine">I removed a skill from the vault but it is still on my other laptop</a>.</li>
-<li>Pull applies only enabled or explicitly requested agents.</li>
+<li><code>copy</code> is <strong>additive</strong>: it applies what the source has and never deletes a local file the source omits.</li>
 <li>Reconciliation is fast-forward only.</li>
+<li>Plugins are not copyable via <code>copy</code> — they are reinstalled from the recorded manifest by <code>plugin install</code>.</li>
 </ul>
 <h2 id="status">status<a class="headerlink" href="#status" title="Permanent link">&para;</a></h2>
 <p><strong>Why</strong>: Compare the local snapshot to the decrypted vault state for the enabled agents.</p>
