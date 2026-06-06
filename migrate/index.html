@@ -1177,6 +1177,12 @@
 <h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
 <p>Translate configuration from one AI agent's format to another. The migrator reads local agent config files, transforms them through format-specific translators, and writes the result to the target agent's config location.</p>
 <p>No vault initialisation is required — migration operates on local files only.</p>
+<blockquote>
+<p><strong>Not the vault-format migration.</strong> <code>agentsync migrate</code> translates config
+between <em>agents</em> (Claude → Cursor, etc.). Upgrading an older vault to the
+current per-machine <em>format</em> is a separate command, <a href="../commands/#vault"><code>agentsync vault
+upgrade</code></a>. The two never overlap.</p>
+</blockquote>
 <h2 id="two-ways-to-run-a-migration">Two ways to run a migration<a class="headerlink" href="#two-ways-to-run-a-migration" title="Permanent link">&para;</a></h2>
 <ul>
 <li><strong>Interactive (TUI)</strong>: run <code>agentsync</code>, press <code>4</code> for the Migrate tab,

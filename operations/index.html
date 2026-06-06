@@ -888,10 +888,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#a-skill-i-deleted-reappears-after-pull-on-another-machine" class="md-nav__link">
+  <a href="#a-skill-i-deleted-reappears-after-copy-on-another-machine" class="md-nav__link">
     <span class="md-ellipsis">
       
-        A skill I deleted reappears after pull on another machine
+        A skill I deleted reappears after copy on another machine
       
     </span>
   </a>
@@ -1346,10 +1346,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#a-skill-i-deleted-reappears-after-pull-on-another-machine" class="md-nav__link">
+  <a href="#a-skill-i-deleted-reappears-after-copy-on-another-machine" class="md-nav__link">
     <span class="md-ellipsis">
       
-        A skill I deleted reappears after pull on another machine
+        A skill I deleted reappears after copy on another machine
       
     </span>
   </a>
@@ -1542,7 +1542,7 @@ live state without you re-running <code>agentsync status</code>.</p>
 </tr>
 <tr>
 <td>Syncing</td>
-<td>A push or pull is executing inside the sync queue. Only one sync runs at a time.</td>
+<td>A push is executing inside the sync queue. Only one sync runs at a time.</td>
 </tr>
 <tr>
 <td>Retry once</td>
@@ -1627,7 +1627,7 @@ live state without you re-running <code>agentsync status</code>.</p>
 <p>When a new machine joins the vault, run <code>init</code> on it, copy the public key it prints, and on an existing machine register it:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>agentsync<span class="w"> </span>key<span class="w"> </span>add<span class="w"> </span>my-laptop<span class="w"> </span>age1...
 </span></code></pre></div>
-<p>The vault is reconciled against the remote, every existing artefact is re-encrypted for the updated recipient set, and the change is pushed. The new machine can then <code>pull</code>.</p>
+<p>The vault is reconciled against the remote, every existing artefact is re-encrypted for the updated recipient set, and the change is pushed. The new machine can then <code>copy</code> the artefacts it needs from any machine's namespace.</p>
 <h3 id="rotate-the-current-machine-key">Rotate the current machine key<a class="headerlink" href="#rotate-the-current-machine-key" title="Permanent link">&para;</a></h3>
 <p>Rotation re-encrypts every artefact under a fresh keypair on the current machine:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>agentsync<span class="w"> </span>key<span class="w"> </span>rotate
@@ -1677,12 +1677,12 @@ live state without you re-running <code>agentsync status</code>.</p>
 <p>SmartScreen reputation is per-binary-hash and accrues with downloads; every new release starts from zero, so the warning recurs on each update.</p>
 <h2 id="recovery-runbooks">Recovery runbooks<a class="headerlink" href="#recovery-runbooks" title="Permanent link">&para;</a></h2>
 <h3 id="recover-from-divergence">Recover from divergence<a class="headerlink" href="#recover-from-divergence" title="Permanent link">&para;</a></h3>
-<p>Reconciliation is fast-forward only. Any command that touches the vault (<code>init</code>, <code>push</code>, <code>pull</code>, <code>key add</code>, <code>key rotate</code>) fails closed when local history has diverged from <code>origin/&lt;branch&gt;</code>.</p>
+<p>Reconciliation is fast-forward only. Any command that touches the vault (<code>init</code>, <code>push</code>, <code>copy</code>, <code>key add</code>, <code>key rotate</code>) fails closed when local history has diverged from <code>origin/&lt;branch&gt;</code>.</p>
 <p>Symptoms:</p>
 <ul>
 <li>The command reports that AgentSync only supports fast-forward sync.</li>
 <li>It prints a recovery hint telling you to reset or reclone the vault.</li>
-<li><code>pull</code> stops without printing <code>Pull completed: ...</code>.</li>
+<li><code>push</code> or <code>copy</code> stops with the divergence error instead of completing.</li>
 </ul>
 <p>Steps:</p>
 <ol>
@@ -1693,13 +1693,13 @@ live state without you re-running <code>agentsync status</code>.</p>
 </ol>
 <p>Do not resolve this with <code>git merge</code> or <code>git rebase</code>. AgentSync intentionally fails closed so every machine uses the same reconciliation model.</p>
 <h3 id="recover-a-missing-private-key">Recover a missing private key<a class="headerlink" href="#recover-a-missing-private-key" title="Permanent link">&para;</a></h3>
-<p>If <code>pull</code> cannot decrypt or <code>doctor</code> reports a missing key:</p>
+<p>If <code>copy</code> cannot decrypt or <code>doctor</code> reports a missing key:</p>
 <ol>
 <li>Confirm the expected key path with <code>agentsync doctor</code>.</li>
 <li>Restore the backed-up private key file.</li>
 <li>Ensure permissions are restrictive: on Unix, <code>chmod 600 ~/.config/agentsync/key.txt</code>.</li>
 </ol>
-<p>If the key is gone and was never backed up, the vault cannot be recovered for that machine. Generate a new identity with <code>init</code>, have the new public key added by an existing machine, then <code>pull</code>.</p>
+<p>If the key is gone and was never backed up, that machine's namespace cannot be decrypted any more. Generate a new identity with <code>init</code>, have the new public key added by an existing machine, then <code>copy</code> what you need from another machine's namespace.</p>
 <h3 id="reset-a-vault">Reset a vault<a class="headerlink" href="#reset-a-vault" title="Permanent link">&para;</a></h3>
 <p>When you want to throw away vault state and start over, reach for
 <a href="../commands/#destroy"><code>agentsync destroy</code></a> rather than <code>rm -rf</code>.</p>
@@ -1736,7 +1736,7 @@ and behaviour reference.</p>
 <h3 id="status-shows-local-only-or-vault-only-entries"><code>status</code> shows local-only or vault-only entries<a class="headerlink" href="#status-shows-local-only-or-vault-only-entries" title="Permanent link">&para;</a></h3>
 <ul>
 <li><code>local-only</code> means the machine has config that is not in the vault yet. Run <code>push</code> after reviewing the content.</li>
-<li><code>vault-only</code> means the vault has artefacts this machine did not snapshot locally. Run <code>pull</code> if the content should exist on this machine.</li>
+<li><code>vault-only</code> means this machine's namespace has artefacts the local disk does not. Run <code>copy self &lt;path&gt;</code> if the content should exist on this machine.</li>
 </ul>
 <h3 id="push-aborts-because-secrets-were-detected">Push aborts because secrets were detected<a class="headerlink" href="#push-aborts-because-secrets-were-detected" title="Permanent link">&para;</a></h3>
 <p>The sanitiser found literal tokens or credentials in content that would otherwise be encrypted and committed. Sanitiser hits are intentionally a hard stop — they prevent the agent from leaking a secret into the vault, where it would persist even after subsequent pushes.</p>
@@ -1755,8 +1755,8 @@ and behaviour reference.</p>
 <li><code>daemon status</code> can reach the local IPC endpoint.</li>
 </ol>
 <p>If the service is installed but <code>daemon status</code> cannot reach it, inspect the platform logs listed above.</p>
-<h3 id="a-skill-i-deleted-reappears-after-pull-on-another-machine">A skill I deleted reappears after pull on another machine<a class="headerlink" href="#a-skill-i-deleted-reappears-after-pull-on-another-machine" title="Permanent link">&para;</a></h3>
-<p>Working as designed. <code>pull</code> is additive: it never removes a local skill directory, even when the matching vault file is gone. The safety reasoning is that a concurrent edit on machine B should not silently vanish after machine A removes a skill.</p>
+<h3 id="a-skill-i-deleted-reappears-after-copy-on-another-machine">A skill I deleted reappears after copy on another machine<a class="headerlink" href="#a-skill-i-deleted-reappears-after-copy-on-another-machine" title="Permanent link">&para;</a></h3>
+<p>Working as designed. <code>copy</code> is additive: it never removes a local skill directory, even when the matching vault file is gone. The safety reasoning is that a concurrent edit on machine B should not silently vanish after machine A removes a skill.</p>
 <p>Two cases:</p>
 <ul>
 <li>
@@ -1765,10 +1765,10 @@ and behaviour reference.</p>
 </span></code></pre></div>
 </li>
 <li>
-<p><strong>Single file inside a skill</strong>: pull never propagates deletions, so a removed <code>helper.md</code> survives on machines that previously had it. Delete the stale file manually on each machine, then <code>status</code> to confirm.</p>
+<p><strong>Single file inside a skill</strong>: copy never propagates deletions, so a removed <code>helper.md</code> survives on machines that previously had it. Delete the stale file manually on each machine, then <code>status</code> to confirm.</p>
 </li>
 </ul>
-<p>A future release may offer <code>pull --replace-skills</code> for users who want vault-as-source-of-truth overwrite semantics, but the default will remain additive.</p>
+<p>A future release may offer <code>copy --replace-skills</code> for users who want vault-as-source-of-truth overwrite semantics, but the default will remain additive.</p>
 <h3 id="private-key-missing-or-unreadable">Private key missing or unreadable<a class="headerlink" href="#private-key-missing-or-unreadable" title="Permanent link">&para;</a></h3>
 <p>See <a href="#recover-a-missing-private-key">Recover a missing private key</a> above.</p>
 <h3 id="doctor-reports-a-sensitive-file-in-the-vault">Doctor reports a sensitive file in the vault<a class="headerlink" href="#doctor-reports-a-sensitive-file-in-the-vault" title="Permanent link">&para;</a></h3>

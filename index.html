@@ -821,7 +821,8 @@
 <blockquote>
 <p>Tip: once you have run <code>init</code> once, running <code>agentsync</code> with no arguments
 opens an interactive TUI that covers vault browsing, per-agent local view,
-push/pull, and migrate. See <a href="commands/#tui">Commands → tui</a>.</p>
+push, browsing other machines and copying from them, and migrate. See
+<a href="commands/#tui">Commands → tui</a>.</p>
 </blockquote>
 <ol>
 <li><strong>Create an empty Git repo</strong> to act as the vault. A private GitHub or GitLab repo works. Nothing in it will ever contain plaintext.</li>
@@ -836,14 +837,14 @@ push/pull, and migrate. See <a href="commands/#tui">Commands → tui</a>.</p>
 </span></code></pre></div>
 </li>
 <li>
-<p><strong>Join from another machine.</strong> On the second machine, <code>init</code> generates a fresh age keypair; on a machine that already has the vault, register the new public key as a recipient (<code>agentsync key add &lt;name&gt; &lt;pubkey&gt;</code> and push), then <code>pull</code> here.</p>
+<p><strong>Join from another machine.</strong> On the second machine, <code>init</code> generates a fresh age keypair; on a machine that already has the vault, register the new public key as a recipient (<code>agentsync key add &lt;name&gt; &lt;pubkey&gt;</code> and push). Then, back on the new machine, <code>copy</code> the config you want from any machine's namespace (use <code>copy self …</code> once it has its own backup).</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># on the new machine</span>
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>agentsync<span class="w"> </span>init<span class="w"> </span>--remote<span class="w"> </span>git@github.com:&lt;you&gt;/agentsync-vault.git<span class="w"> </span>--branch<span class="w"> </span>main
 </span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="c1"># then on a machine that already has the vault, add the new recipient and push:</span>
 </span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="c1">#   agentsync key add &lt;name&gt; &lt;pubkey-printed-by-init&gt;</span>
 </span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="c1">#   agentsync push</span>
-</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="c1"># back on the new machine</span>
-</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>agentsync<span class="w"> </span>pull
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="c1"># back on the new machine, bring down another machine&#39;s config:</span>
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>agentsync<span class="w"> </span>copy<span class="w"> </span>&lt;other-machine&gt;<span class="w"> </span>claude/
 </span></code></pre></div>
 </li>
 <li>
@@ -859,13 +860,13 @@ push/pull, and migrate. See <a href="commands/#tui">Commands → tui</a>.</p>
 <li><strong>Plaintext never crosses the network.</strong> Every artefact in the vault is encrypted to one or more age recipients before any Git operation runs.</li>
 <li><strong>Fast-forward only.</strong> Reconciliation never merges silently. If two machines diverge, AgentSync stops and prints a recovery path.</li>
 <li><strong>Sanitiser is a hard gate.</strong> Literal secrets and never-sync paths abort the push before any bytes leave the machine.</li>
-<li><strong>Skill removal is explicit.</strong> <code>pull</code> is additive by design so an in-progress local edit cannot be wiped by a remote that omits it. <code>agentsync skill remove</code> is the only command that deletes vault entries.</li>
-<li><strong>Interactive TUI.</strong> Running <code>agentsync</code> with no subcommand opens a tabbed UI to browse the vault, inspect per-agent local content, trigger push/pull, and migrate config — without memorising flags.</li>
+<li><strong>Skill removal is explicit.</strong> <code>copy</code> is additive by design so an in-progress local edit cannot be wiped by a remote that omits it. <code>agentsync skill remove</code> is the only command that deletes vault entries.</li>
+<li><strong>Interactive TUI.</strong> Running <code>agentsync</code> with no subcommand opens a tabbed UI to browse the vault, inspect per-agent local content, trigger a push, browse machines and copy from them, and migrate config — without memorising flags.</li>
 </ul>
 <h2 id="where-to-go-next">Where to go next<a class="headerlink" href="#where-to-go-next" title="Permanent link">&para;</a></h2>
 <div class="grid cards">
 <ul>
-<li><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9 2v6h2v3H5c-1.11 0-2 .89-2 2v3H1v6h6v-6H5v-3h6v3H9v6h6v-6h-2v-3h6v3h-2v6h6v-6h-2v-3c0-1.11-.89-2-2-2h-6V8h2V2z"/></svg></span> <strong><a href="architecture/">Architecture</a></strong> — system model, vault format, push and pull pipelines, daemon model, security boundaries.</li>
+<li><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9 2v6h2v3H5c-1.11 0-2 .89-2 2v3H1v6h6v-6H5v-3h6v3H9v6h6v-6h-2v-3h6v3h-2v6h6v-6h-2v-3c0-1.11-.89-2-2-2h-6V8h2V2z"/></svg></span> <strong><a href="architecture/">Architecture</a></strong> — system model, vault format, push and copy pipelines, daemon model, security boundaries.</li>
 <li><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 19V7H4v12zm0-16a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zm-7 14v-2h5v2zm-3.42-4L5.57 9H8.4l3.3 3.3c.39.39.39 1.03 0 1.42L8.42 17H5.59z"/></svg></span> <strong><a href="commands/">Commands</a></strong> — every subcommand, flag, outcome, and caveat in one reference.</li>
 <li><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m21 9-4-4v3h-7v2h7v3M7 11l-4 4 4 4v-3h7v-2H7z"/></svg></span> <strong><a href="migrate/">Migrate</a></strong> — translate config between Claude, Cursor, Codex, Copilot, and VS Code.</li>
 <li><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 15.5A3.5 3.5 0 0 1 8.5 12 3.5 3.5 0 0 1 12 8.5a3.5 3.5 0 0 1 3.5 3.5 3.5 3.5 0 0 1-3.5 3.5m7.43-2.53c.04-.32.07-.64.07-.97s-.03-.66-.07-1l2.11-1.63c.19-.15.24-.42.12-.64l-2-3.46c-.12-.22-.39-.31-.61-.22l-2.49 1c-.52-.39-1.06-.73-1.69-.98l-.37-2.65A.506.506 0 0 0 14 2h-4c-.25 0-.46.18-.5.42l-.37 2.65c-.63.25-1.17.59-1.69.98l-2.49-1c-.22-.09-.49 0-.61.22l-2 3.46c-.13.22-.07.49.12.64L4.57 11c-.04.34-.07.67-.07 1s.03.65.07.97l-2.11 1.66c-.19.15-.25.42-.12.64l2 3.46c.12.22.39.3.61.22l2.49-1.01c.52.4 1.06.74 1.69.99l.37 2.65c.04.24.25.42.5.42h4c.25 0 .46-.18.5-.42l.37-2.65c.63-.26 1.17-.59 1.69-.99l2.49 1.01c.22.08.49 0 .61-.22l2-3.46c.12-.22.07-.49-.12-.64z"/></svg></span> <strong><a href="operations/">Operations</a></strong> — daemon install per OS, key rotation, troubleshooting catalogue.</li>

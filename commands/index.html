@@ -100,7 +100,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#description-complete-agentsync-cli-reference-every-command-flag-default-and-caveat-for-init-push-pull-status-daemon-key-skill-and-the-tui" class="md-skip">
+        <a href="#description-complete-agentsync-cli-reference-every-command-flag-default-and-caveat-for-init-push-copy-status-daemon-key-skill-plugin-vault-and-the-tui" class="md-skip">
           Skip to content
         </a>
       
@@ -522,10 +522,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#description-complete-agentsync-cli-reference-every-command-flag-default-and-caveat-for-init-push-pull-status-daemon-key-skill-and-the-tui" class="md-nav__link">
+  <a href="#description-complete-agentsync-cli-reference-every-command-flag-default-and-caveat-for-init-push-copy-status-daemon-key-skill-plugin-vault-and-the-tui" class="md-nav__link">
     <span class="md-ellipsis">
       
-        description: Complete AgentSync CLI reference: every command, flag, default, and caveat for init, push, pull, status, daemon, key, skill, and the TUI.
+        description: Complete AgentSync CLI reference: every command, flag, default, and caveat for init, push, copy, status, daemon, key, skill, plugin, vault, and the TUI.
       
     </span>
   </a>
@@ -714,6 +714,17 @@
     <span class="md-ellipsis">
       
         plugin
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#vault" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        vault
       
     </span>
   </a>
@@ -872,10 +883,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#description-complete-agentsync-cli-reference-every-command-flag-default-and-caveat-for-init-push-pull-status-daemon-key-skill-and-the-tui" class="md-nav__link">
+  <a href="#description-complete-agentsync-cli-reference-every-command-flag-default-and-caveat-for-init-push-copy-status-daemon-key-skill-plugin-vault-and-the-tui" class="md-nav__link">
     <span class="md-ellipsis">
       
-        description: Complete AgentSync CLI reference: every command, flag, default, and caveat for init, push, pull, status, daemon, key, skill, and the TUI.
+        description: Complete AgentSync CLI reference: every command, flag, default, and caveat for init, push, copy, status, daemon, key, skill, plugin, vault, and the TUI.
       
     </span>
   </a>
@@ -1071,6 +1082,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#vault" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        vault
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#migrate" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1134,7 +1156,7 @@
 
 
 <hr />
-<h2 id="description-complete-agentsync-cli-reference-every-command-flag-default-and-caveat-for-init-push-pull-status-daemon-key-skill-and-the-tui">description: Complete AgentSync CLI reference: every command, flag, default, and caveat for init, push, pull, status, daemon, key, skill, and the TUI.<a class="headerlink" href="#description-complete-agentsync-cli-reference-every-command-flag-default-and-caveat-for-init-push-pull-status-daemon-key-skill-and-the-tui" title="Permanent link">&para;</a></h2>
+<h2 id="description-complete-agentsync-cli-reference-every-command-flag-default-and-caveat-for-init-push-copy-status-daemon-key-skill-plugin-vault-and-the-tui">description: Complete AgentSync CLI reference: every command, flag, default, and caveat for init, push, copy, status, daemon, key, skill, plugin, vault, and the TUI.<a class="headerlink" href="#description-complete-agentsync-cli-reference-every-command-flag-default-and-caveat-for-init-push-copy-status-daemon-key-skill-plugin-vault-and-the-tui" title="Permanent link">&para;</a></h2>
 <h1 id="commands">Commands<a class="headerlink" href="#commands" title="Permanent link">&para;</a></h1>
 <p>Every AgentSync subcommand in one reference: what it does, what it needs, what it produces, and the caveats that bite if you ignore them.</p>
 <h2 id="what-this-page-owns">What this page owns<a class="headerlink" href="#what-this-page-owns" title="Permanent link">&para;</a></h2>
@@ -1175,11 +1197,11 @@
 </tr>
 <tr>
 <td><a href="#push"><code>push</code></a></td>
-<td>Snapshot, sanitise, encrypt, and fast-forward to the vault.</td>
+<td>Snapshot, sanitise, encrypt, and fast-forward this machine's namespace to the vault.</td>
 </tr>
 <tr>
-<td><a href="#pull"><code>pull</code></a></td>
-<td>Fetch the vault, decrypt, and apply locally.</td>
+<td><a href="#copy"><code>copy</code></a></td>
+<td>Apply an artefact (or subdir) from a machine's vault namespace to local disk (<code>copy self …</code> for your own).</td>
 </tr>
 <tr>
 <td><a href="#status"><code>status</code></a></td>
@@ -1206,6 +1228,10 @@
 <td>List or reinstall a machine's Claude plugins from its vault manifest.</td>
 </tr>
 <tr>
+<td><a href="#vault"><code>vault</code></a></td>
+<td>Migrate an older vault to the current format (<code>vault upgrade</code>).</td>
+</tr>
+<tr>
 <td><a href="#migrate"><code>migrate</code></a></td>
 <td>Translate configuration between agent formats.</td>
 </tr>
@@ -1221,7 +1247,8 @@
 </table>
 <h2 id="tui">tui<a class="headerlink" href="#tui" title="Permanent link">&para;</a></h2>
 <p><strong>Why</strong>: Browse the vault, inspect what each local agent has on disk, trigger
-push / pull, and run cross-agent migrations from a single interactive screen.</p>
+a push, browse other machines and copy their config to this one, and run
+cross-agent migrations from a single interactive screen.</p>
 <p><strong>Usage</strong>:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>agentsync<span class="w">           </span><span class="c1"># bare invocation opens the TUI on a real terminal</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>agentsync<span class="w"> </span>tui<span class="w">       </span><span class="c1"># explicit alias, same behaviour</span>
@@ -1244,11 +1271,15 @@ push / pull, and run cross-agent migrations from a single interactive screen.</p
 <td>Per-artifact rows grouped by sync status (<code>local-changed</code>, <code>local-only</code>, <code>vault-only</code>, <code>unknown</code>, <code>synced</code>). Multi-select with <code>space</code>; push selected with <code>p</code>; bulk-remove skills with <code>x</code> (y/n confirm). Enter on a skill drills into its files with per-file diff.</td>
 </tr>
 <tr>
-<td>3 Migrate</td>
+<td>3 Machines</td>
+<td>The vault's <code>machines/&lt;name&gt;/</code> namespaces. Move with <code>↑</code>/<code>↓</code>; <code>enter</code> copies the selected machine's config to this machine (the same <code>performCopy</code> core as the CLI; never touches the vault).</td>
+</tr>
+<tr>
+<td>4 Migrate</td>
 <td>From / To / Type form (To and Type are multi-select with sub-cursor). Preview is mandatory before Apply enables.</td>
 </tr>
 <tr>
-<td>4 Activity</td>
+<td>5 Activity</td>
 <td>Session-only ring buffer of TUI actions.</td>
 </tr>
 </tbody>
@@ -1263,7 +1294,7 @@ push / pull, and run cross-agent migrations from a single interactive screen.</p
 </thead>
 <tbody>
 <tr>
-<td><code>1</code> – <code>4</code></td>
+<td><code>1</code> – <code>5</code></td>
 <td>Jump to tab</td>
 </tr>
 <tr>
@@ -1273,10 +1304,6 @@ push / pull, and run cross-agent migrations from a single interactive screen.</p
 <tr>
 <td><code>p</code></td>
 <td>Push vault (honours selection in the Sync tab as a per-file allowlist)</td>
-</tr>
-<tr>
-<td><code>l</code></td>
-<td>Pull vault</td>
 </tr>
 <tr>
 <td><code>r</code></td>
@@ -1293,19 +1320,21 @@ push / pull, and run cross-agent migrations from a single interactive screen.</p
 </tbody>
 </table>
 <p><strong>Outcome</strong>: every state change is additive on the same data the CLI
-subcommands operate on. Push / pull go through the same daemon IPC the
-<code>status</code> and <code>daemon</code> subcommands use; migrate calls the same planner as
-<code>agentsync migrate</code>; bulk skill removal calls the same <code>performSkillRemove</code>
-that <code>agentsync skill remove</code> does, once per selected skill.</p>
+subcommands operate on. Push goes through the same daemon IPC the <code>status</code> and
+<code>daemon</code> subcommands use; the Machines tab calls the same <code>performCopy</code> core as
+<code>agentsync copy</code>; migrate calls the same planner as <code>agentsync migrate</code>; bulk
+skill removal calls the same <code>performSkillRemove</code> that <code>agentsync skill remove</code>
+does, once per selected skill.</p>
 <p><strong>Caveats</strong>:</p>
 <ul>
 <li>The TUI is interactive-only. In a non-TTY context (piped stdin/stdout,
   <code>nohup</code>, CI runners) bare <code>agentsync</code> deliberately falls back to text
   <code>status</code> output so existing scripts continue to work.</li>
 <li>The activity log is session-scoped — closing the TUI discards history.</li>
-<li>Push / pull require the daemon to be running. If the daemon is offline,
-  the footer shows <code>daemon ● offline</code> and <code>p</code> / <code>l</code> surface an inline
-  notice rather than queueing a request that cannot be served.</li>
+<li>Push requires the daemon to be running. If the daemon is offline, the footer
+  shows <code>daemon ● offline</code> and <code>p</code> surfaces an inline notice rather than
+  queueing a request that cannot be served. (Copy runs in-process and does not
+  need the daemon.)</li>
 </ul>
 <h2 id="conventions">Conventions<a class="headerlink" href="#conventions" title="Permanent link">&para;</a></h2>
 <ul>
@@ -1455,9 +1484,9 @@ that <code>agentsync skill remove</code> does, once per selected skill.</p>
 <p><strong>Outcome</strong>: a per-agent report covering every enabled agent. Each row carries one of the following status strings, printed verbatim:</p>
 <ul>
 <li><code>synced</code> — local content matches the vault.</li>
-<li><code>local-changed</code> — both sides have the file but the content differs. Run <code>push</code> to publish the local copy, or <code>pull</code> after backing up the local copy.</li>
+<li><code>local-changed</code> — both sides have the file but the content differs. Run <code>push</code> to publish the local copy, or <code>copy self &lt;path&gt;</code> to restore the vault copy after backing up the local one.</li>
 <li><code>local-only</code> — the machine has content the vault does not. Run <code>push</code>.</li>
-<li><code>vault-only</code> — the vault has content this machine does not. Run <code>pull</code>.</li>
+<li><code>vault-only</code> — this machine's namespace has content the local disk does not. Run <code>copy self &lt;path&gt;</code> to bring it down.</li>
 <li><code>error</code> — snapshot or decryption failed for that row. The error detail is printed in the same row; address it before trusting the rest of the report.</li>
 </ul>
 <p><strong>Caveats</strong>:</p>
@@ -1554,13 +1583,31 @@ that <code>agentsync skill remove</code> does, once per selected skill.</p>
 <p><strong>Why</strong>: Remove a skill from the vault without affecting the rest of the snapshot. This is AgentSync's only explicit, non-additive operation.</p>
 <p><strong>Usage</strong>:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>agentsync<span class="w"> </span>skill<span class="w"> </span>remove<span class="w"> </span>&lt;agent&gt;<span class="w"> </span>&lt;name&gt;
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>agentsync<span class="w"> </span>skill<span class="w"> </span>remove<span class="w"> </span>&lt;agent&gt;<span class="w"> </span>&lt;name&gt;<span class="w"> </span>--machine<span class="w"> </span>&lt;namespace&gt;
 </span></code></pre></div>
+<p><strong>Flags</strong>:</p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--machine</code></td>
+<td>this machine</td>
+<td>Remove from another machine's <code>machines/&lt;name&gt;/</code> namespace. Validated against the same path-traversal rules as the resolved machine name.</td>
+</tr>
+</tbody>
+</table>
 <p><strong>Outcome</strong>: the vault artefact for that skill is deleted, the change is committed and pushed under the fast-forward reconciliation rule. The local skill directory on the current machine is left untouched.</p>
 <p><strong>Caveats</strong>:</p>
 <ul>
 <li><code>skill remove</code> is the <strong>only</strong> non-additive operation in AgentSync. It deletes the vault artefact but does not remove the local skill directory on the current or other machines.</li>
-<li>After <code>skill remove</code>, every machine that pulled the skill previously still has the local directory until you delete it manually there. See <a href="../operations/#a-skill-i-deleted-reappears-after-pull-on-another-machine">A skill I deleted reappears after pull on another machine</a>.</li>
-<li>To snapshot or apply a single skill, use the bulk <code>push</code> and <code>pull</code> commands with <code>--agent</code>. There is no targeted <code>skill push</code> or <code>skill pull</code>; the snapshot for an agent always includes every skill that survives the walker contract.</li>
+<li>After <code>skill remove</code>, every machine that copied the skill previously still has the local directory until you delete it manually there. See <a href="../operations/#a-skill-i-deleted-reappears-after-copy-on-another-machine">A skill I deleted reappears after copy on another machine</a>.</li>
+<li>To snapshot a single agent's skills, use <code>push --agent &lt;agent&gt;</code>; to bring one machine's skills onto this one, use <code>copy &lt;machine&gt; &lt;agent&gt;/skills/</code>. There is no targeted <code>skill push</code>/<code>skill copy</code>; the snapshot for an agent always includes every skill that survives the walker contract.</li>
 </ul>
 <h2 id="plugin">plugin<a class="headerlink" href="#plugin" title="Permanent link">&para;</a></h2>
 <p><strong>Why</strong>: Reproduce a machine's Claude plugins on another machine. AgentSync does not encrypt the plugin tree; the marketplace is the source of truth. <code>push</code> (with <code>[claudePlugins] syncPlugins = true</code>) records a distilled manifest — each plugin's <code>name@marketplace</code>, scope, and enabled flag — and <code>plugin install</code> reinstalls from it via the local <code>claude</code> CLI.</p>
@@ -1576,10 +1623,21 @@ that <code>agentsync skill remove</code> does, once per selected skill.</p>
 <li>Reinstall fetches the <strong>latest</strong> version — there is no version pin.</li>
 <li>Local edits to plugin files are not preserved; only the manifest (marketplace + name + scope + enabled) round-trips.</li>
 </ul>
+<h2 id="vault">vault<a class="headerlink" href="#vault" title="Permanent link">&para;</a></h2>
+<p><strong>Why</strong>: Migrate an older flat (v1) vault to the per-machine layout (v2), where every artefact lives under <code>machines/&lt;name&gt;/</code>. This is the vault-<strong>format</strong> migration — distinct from <a href="#migrate"><code>migrate</code></a>, which translates config between agents, and from <a href="#upgrade"><code>upgrade</code></a>, which updates the AgentSync binary.</p>
+<p><strong>Usage</strong>:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>agentsync<span class="w"> </span>vault<span class="w"> </span>upgrade
+</span></code></pre></div>
+<p><strong>Outcome</strong>: the existing flat content is assumed to belong to this machine and is <code>git mv</code>'d under <code>machines/&lt;this-machine&gt;/</code>, the config <code>version</code> is bumped to the integer <code>2</code>, and the change is committed and fast-forwarded to the remote. It reconciles first, so a vault another machine already upgraded is detected and the command is a no-op. Idempotent — running it on a v2 vault prints "already at format v2".</p>
+<p><strong>Caveats</strong>:</p>
+<ul>
+<li>If the vault format is <strong>newer</strong> than this binary understands, the upgrade refuses and tells you to run <code>agentsync upgrade</code> to update AgentSync first.</li>
+<li>Old (v1) binaries cannot read a v2 vault at all: <code>version</code> is an integer literal, and their string-typed schema rejects it. This is deliberate — it stops an old binary writing flat directories beside <code>machines/</code>.</li>
+</ul>
 <h2 id="migrate">migrate<a class="headerlink" href="#migrate" title="Permanent link">&para;</a></h2>
 <p><strong>Why</strong>: Translate configuration between Claude, Cursor, Codex, Copilot, and VS Code without touching the vault.</p>
 <p><strong>Usage</strong>:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>agentsync<span class="w"> </span>migrate<span class="w"> </span>--from<span class="w"> </span>&lt;agent&gt;<span class="w"> </span>--to<span class="w"> </span>&lt;agent<span class="p">|</span>all&gt;<span class="w"> </span><span class="o">[</span>--type<span class="w"> </span>&lt;type&gt;<span class="o">]</span><span class="w"> </span><span class="o">[</span>--name<span class="w"> </span>&lt;file&gt;<span class="o">]</span><span class="w"> </span><span class="o">[</span>--dry-run<span class="o">]</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>agentsync<span class="w"> </span>migrate<span class="w"> </span>--from<span class="w"> </span>&lt;agent&gt;<span class="w"> </span>--to<span class="w"> </span>&lt;agent<span class="p">|</span>all&gt;<span class="w"> </span><span class="o">[</span>--type<span class="w"> </span>&lt;type&gt;<span class="o">]</span><span class="w"> </span><span class="o">[</span>--name<span class="w"> </span>&lt;file&gt;<span class="o">]</span><span class="w"> </span><span class="o">[</span>--dry-run<span class="o">]</span>
 </span></code></pre></div>
 <p><strong>Flags</strong>:</p>
 <table>
@@ -1643,9 +1701,9 @@ in <code>src/commands/destroy.ts</code>) and by test (three sha256+mtime
 invariants in <code>destroy.test.ts</code>).</p>
 </blockquote>
 <p><strong>Usage</strong>:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>agentsync<span class="w"> </span>destroy<span class="w">                       </span><span class="c1"># local-only, default</span>
-</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>agentsync<span class="w"> </span>destroy<span class="w"> </span>--scope<span class="o">=</span>remote<span class="w">        </span><span class="c1"># wipe remote via commit</span>
-</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>agentsync<span class="w"> </span>destroy<span class="w"> </span>--scope<span class="o">=</span>all<span class="w">           </span><span class="c1"># both</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>agentsync<span class="w"> </span>destroy<span class="w">                       </span><span class="c1"># local-only, default</span>
+</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>agentsync<span class="w"> </span>destroy<span class="w"> </span>--scope<span class="o">=</span>remote<span class="w">        </span><span class="c1"># wipe remote via commit</span>
+</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>agentsync<span class="w"> </span>destroy<span class="w"> </span>--scope<span class="o">=</span>all<span class="w">           </span><span class="c1"># both</span>
 </span></code></pre></div>
 <p><strong>Flags</strong>:</p>
 <table>
@@ -1713,8 +1771,8 @@ invariants in <code>destroy.test.ts</code>).</p>
 <p><strong>Caveats</strong>:</p>
 <ul>
 <li>Other recipients are affected by <code>--scope=remote</code> / <code>--scope=all</code>. Their
-  next <code>agentsync pull</code> will see an empty vault and lose their
-  <code>agentsync.toml</code> config — they will need to re-init.</li>
+  next <code>agentsync push</code> or <code>copy</code> will reconcile against an empty vault and
+  they lose their <code>agentsync.toml</code> config — they will need to re-init.</li>
 <li>The daemon stays running after a local destroy. Its next sync attempt
   will fail until re-init. Run <code>agentsync daemon stop</code> if you want it
   quiet in the meantime.</li>
