@@ -178,7 +178,7 @@ export async function performPluginInstall(options: {
 }
 
 /** Map a non-ok manifest load to the right log line + exit code. */
-function reportLoadFailure(machine: string, result: Exclude<ManifestLoad, { status: "ok" }>): void {
+function reportLoadFailure(result: Exclude<ManifestLoad, { status: "ok" }>): void {
   switch (result.status) {
     case "unknown-machine":
       log.error(
@@ -219,7 +219,7 @@ export const pluginCommand = defineCommand({
       async run({ args }) {
         const result = await performPluginList({ fromMachine: String(args.machine) });
         if (result.status !== "ok") {
-          reportLoadFailure(String(args.machine), result);
+          reportLoadFailure(result);
           return;
         }
         const { manifest } = result;
@@ -277,7 +277,7 @@ export const pluginCommand = defineCommand({
             process.exitCode = 1;
             return;
           default:
-            reportLoadFailure(String(args.machine), result);
+            reportLoadFailure(result);
             return;
         }
       },
