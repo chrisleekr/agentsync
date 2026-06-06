@@ -142,9 +142,8 @@ The vault is a regular Git repository. Inside it, every artefact is suffixed wit
 └── machines/
     └── <name>/                    # one directory per machine (its own backup namespace)
         ├── claude/
-        │   ├── settings.json.age
-        │   ├── hooks.json.age
-        │   ├── mcp.json.age
+        │   ├── settings.hooks.json.age
+        │   ├── claude.json.age
         │   ├── plugins.manifest.json.age  # only when claudePlugins.syncPlugins = true
         │   ├── commands/
         │   │   └── <name>.md.age
@@ -168,12 +167,13 @@ Claude plugins are not stored as an encrypted tree. The marketplace is the sourc
 
 ## Skills and plugins
 
-Skills and plugins follow the same walker contract on every agent:
+Skills follow the same walker contract on every agent (Claude plugins are manifest-only — see above):
 
 - A missing or symlinked root is skipped silently (it is a legitimate "this agent has no skills directory" signal, not a failure).
 - Dot-prefixed names are skipped silently (hidden directories belong to other tools).
-- A name that fails validation (containing `..`, separators, control characters, or the reserved `.` / `..`) is rejected with a printed error. Validation guards every place a name becomes a filesystem path.
-- A Claude plugin must contain a real `.claude-plugin/plugin.json` file (lstat-checked, so symlinked manifests are rejected) before any of its assets are emitted.
+- A name that fails validation (containing `..`, separators, control characters, a leading dash, or the reserved `.` / `..`) is rejected with a printed error. Validation guards every place a name becomes a filesystem path or a CLI argument.
+
+Claude plugins are not walked as a file tree. They are represented solely by `plugins.manifest.json.age` (emitted when `claudePlugins.syncPlugins = true`); no plugin asset tree is emitted on push or applied on pull.
 
 Once admitted, each artefact is sanitised through the relevant rule set, encrypted, and emitted to its vault path. Sanitiser warnings about redacted secrets are surfaced in the push output so the user knows their literal credential was rejected rather than silently scrubbed.
 

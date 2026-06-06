@@ -73,8 +73,14 @@ async function loadManifest(fromMachine: string): Promise<ManifestLoad> {
   let encrypted: string;
   try {
     encrypted = await readFile(path, "utf8");
-  } catch {
-    return { status: "not-found", machine };
+  } catch (err) {
+    // Only a genuinely absent file is "not-found". A permission or I/O error is
+    // a real failure and must not be reported as "no manifest", which would send
+    // the user down the wrong recovery path (re-push instead of fix-permissions).
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") {
+      return { status: "not-found", machine };
+    }
+    return { status: "error", error: err instanceof Error ? err.message : String(err) };
   }
   try {
     const key = await loadPrivateKey(runtime.privateKeyPath);
@@ -191,8 +197,14 @@ function reportLoadFailure(result: Exclude<ManifestLoad, { status: "ok" }>): voi
       );
       break;
     case "reconcile-error":
+      log.error(
+        `Failed to reconcile the vault with its remote: ${result.error}. Verify git remote/branch access, then retry.`,
+      );
+      break;
     case "error":
-      log.error(result.error);
+      log.error(
+        `Failed to read the plugin manifest: ${result.error}. Verify the local private key and the manifest's integrity, then re-run \`agentsync push\` on the source machine if needed.`,
+      );
       break;
   }
   process.exitCode = 1;
