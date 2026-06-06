@@ -53,7 +53,7 @@ async function withRetry<T>(fn: () => Promise<T>): Promise<T> {
 }
 
 /**
- * Start the IPC server, file watchers, and periodic pull loop for background sync.
+ * Start the IPC server and file watchers for push-only background sync.
  * @returns A promise that resolves once the daemon has bound its IPC socket and registered watchers.
  */
 export async function startDaemon(): Promise<void> {
@@ -177,9 +177,10 @@ export async function startDaemon(): Promise<void> {
     });
   }
 
-  // No periodic pull: the vault is push-only backup. Each machine's local
-  // config is its own source of truth, so the daemon only auto-pushes on change.
-  // A manual pull remains available over IPC.
+  // No periodic pull and no pull IPC handler: the vault is push-only backup.
+  // Each machine's local config is its own source of truth, so the daemon only
+  // auto-pushes on change. Bringing vault content down is an explicit, manual
+  // `agentsync copy`, never a daemon action.
 
   // ── Graceful shutdown ──────────────────────────────────────────────
   const shutdown = async () => {

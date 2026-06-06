@@ -66,7 +66,7 @@ The daemon moves through a small number of phases. Each phase has a well-defined
 | Validating | Verifies the vault directory, the config file, and the encryption key are reachable. Exits immediately on failure. |
 | Second-instance check | Sends an IPC `status` ping. If a daemon is already running, exits. Unlinks a stale socket if the prior daemon died ungracefully. |
 | Running | IPC server is listening and file watchers are active (push-only; no pull timer). `status` returns the current pid, consecutive-failure counter, and last error. |
-| Syncing | A push or pull is executing inside the sync queue. Only one sync runs at a time. |
+| Syncing | A push is executing inside the sync queue. Only one sync runs at a time. |
 | Retry once | Automatic single retry after a transient failure. If both attempts fail, the error is recorded but the daemon stays alive so the next change can still trigger a push. |
 | Shutting down | Drains the sync queue with a hard ten-second timeout, closes IPC, stops watchers, unlinks the socket, exits cleanly. |
 
@@ -125,7 +125,7 @@ When a new machine joins the vault, run `init` on it, copy the public key it pri
 agentsync key add my-laptop age1...
 ```
 
-The vault is reconciled against the remote, every existing artefact is re-encrypted for the updated recipient set, and the change is pushed. The new machine can then `pull`.
+The vault is reconciled against the remote, every existing artefact is re-encrypted for the updated recipient set, and the change is pushed. The new machine can then `copy` the artefacts it needs from any machine's namespace.
 
 ### Rotate the current machine key
 
@@ -211,13 +211,13 @@ SmartScreen reputation is per-binary-hash and accrues with downloads; every new 
 
 ### Recover from divergence
 
-Reconciliation is fast-forward only. Any command that touches the vault (`init`, `push`, `pull`, `key add`, `key rotate`) fails closed when local history has diverged from `origin/<branch>`.
+Reconciliation is fast-forward only. Any command that touches the vault (`init`, `push`, `copy`, `key add`, `key rotate`) fails closed when local history has diverged from `origin/<branch>`.
 
 Symptoms:
 
 - The command reports that AgentSync only supports fast-forward sync.
 - It prints a recovery hint telling you to reset or reclone the vault.
-- `pull` stops without printing `Pull completed: ...`.
+- `push` or `copy` stops with the divergence error instead of completing.
 
 Steps:
 
@@ -230,13 +230,13 @@ Do not resolve this with `git merge` or `git rebase`. AgentSync intentionally fa
 
 ### Recover a missing private key
 
-If `pull` cannot decrypt or `doctor` reports a missing key:
+If `copy` cannot decrypt or `doctor` reports a missing key:
 
 1. Confirm the expected key path with `agentsync doctor`.
 2. Restore the backed-up private key file.
 3. Ensure permissions are restrictive: on Unix, `chmod 600 ~/.config/agentsync/key.txt`.
 
-If the key is gone and was never backed up, the vault cannot be recovered for that machine. Generate a new identity with `init`, have the new public key added by an existing machine, then `pull`.
+If the key is gone and was never backed up, that machine's namespace cannot be decrypted any more. Generate a new identity with `init`, have the new public key added by an existing machine, then `copy` what you need from another machine's namespace.
 
 ### Reset a vault
 
@@ -280,7 +280,7 @@ and behaviour reference.
 ### `status` shows local-only or vault-only entries
 
 - `local-only` means the machine has config that is not in the vault yet. Run `push` after reviewing the content.
-- `vault-only` means the vault has artefacts this machine did not snapshot locally. Run `pull` if the content should exist on this machine.
+- `vault-only` means this machine's namespace has artefacts the local disk does not. Run `copy self <path>` if the content should exist on this machine.
 
 ### Push aborts because secrets were detected
 
@@ -304,9 +304,9 @@ Check, in order:
 
 If the service is installed but `daemon status` cannot reach it, inspect the platform logs listed above.
 
-### A skill I deleted reappears after pull on another machine
+### A skill I deleted reappears after copy on another machine
 
-Working as designed. `pull` is additive: it never removes a local skill directory, even when the matching vault file is gone. The safety reasoning is that a concurrent edit on machine B should not silently vanish after machine A removes a skill.
+Working as designed. `copy` is additive: it never removes a local skill directory, even when the matching vault file is gone. The safety reasoning is that a concurrent edit on machine B should not silently vanish after machine A removes a skill.
 
 Two cases:
 
@@ -316,9 +316,9 @@ Two cases:
     rm -rf ~/.claude/skills/<name>     # or ~/.cursor/skills, ~/.codex/skills, ~/.copilot/skills
     ```
 
-- **Single file inside a skill**: pull never propagates deletions, so a removed `helper.md` survives on machines that previously had it. Delete the stale file manually on each machine, then `status` to confirm.
+- **Single file inside a skill**: copy never propagates deletions, so a removed `helper.md` survives on machines that previously had it. Delete the stale file manually on each machine, then `status` to confirm.
 
-A future release may offer `pull --replace-skills` for users who want vault-as-source-of-truth overwrite semantics, but the default will remain additive.
+A future release may offer `copy --replace-skills` for users who want vault-as-source-of-truth overwrite semantics, but the default will remain additive.
 
 ### Private key missing or unreadable
 
