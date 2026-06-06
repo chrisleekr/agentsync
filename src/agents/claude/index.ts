@@ -3,8 +3,8 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { AgentPaths } from "../../config/paths";
 import type { AgentSyncConfig } from "../../config/schema";
-import { denormalizeFromVault, denormalizeStringFromVault } from "../../core/path-portability";
-import { sanitizeAndNormalizeJson, shouldNeverSync } from "../../core/sanitizer";
+import { denormalizeFromVault } from "../../core/path-portability";
+import { shouldNeverSync } from "../../core/sanitizer";
 import { extractArchive } from "../../core/tar";
 import {
   atomicWrite,
@@ -16,21 +16,15 @@ import {
   setJsoncTopLevelKey,
 } from "../_utils";
 import { collectSkillArtifacts, InvalidSkillNameError, validateSkillName } from "../skills-walker";
-import { applyClaudePluginsDir } from "./plugin-apply";
-import { collectClaudePlugins } from "./plugins";
-import {
-  sanitizeClaudeHooks,
-  sanitizeClaudeMcp,
-  sanitizeClaudePluginManifest,
-  sanitizeClaudePluginMcp,
-} from "./sanitize";
+import { buildPluginManifest, serializeManifest } from "./plugin-manifest";
+import { sanitizeClaudeHooks, sanitizeClaudeMcp } from "./sanitize";
 
 /** Snapshot payload for the Claude adapter. */
 export type ClaudeSnapshotResult = SnapshotResult;
 
 /** Collect Claude files that are safe to store in the encrypted vault. */
 export async function snapshotClaude(config: AgentSyncConfig): Promise<SnapshotResult> {
-  const syncMarketplace = config.claudePlugins?.syncMarketplace ?? false;
+  const syncPlugins = config.claudePlugins?.syncPlugins ?? false;
   const artifacts: SnapshotArtifact[] = [];
   const warnings: string[] = [];
 
@@ -145,172 +139,33 @@ export async function snapshotClaude(config: AgentSyncConfig): Promise<SnapshotR
   artifacts.push(...claudeSkills.artifacts);
   warnings.push(...claudeSkills.warnings);
 
-  // Claude Code plugin bundles (issue #31). Each discovered plugin contributes
-  // a manifest plus optional commands/agents/hooks/.mcp.json/skills artifacts
-  // under the `claude/plugins/<plugin-name>/...` vault namespace. Discovery
-  // gates (manifest sentinel, dot-skip, symlink rejection) live in
-  // `collectClaudePlugins`; everything below is purely additive collection
-  // that reuses the existing encryption pipeline.
-  const plugins = await collectClaudePlugins(AgentPaths.claude.pluginsDir);
-  for (const plugin of plugins) {
-    const ns = `claude/plugins/${plugin.name}`;
-
-    const manifestRaw = await readIfExists(plugin.paths.manifest);
-    if (manifestRaw !== null && !shouldNeverSync(plugin.paths.manifest)) {
-      try {
-        const manifest = sanitizeClaudePluginManifest(manifestRaw, homedir());
-        artifacts.push(collect(manifest, plugin.paths.manifest, `${ns}/plugin.json.age`));
-        warnings.push(...manifest.warnings);
-      } catch (err) {
-        warnings.push(
-          `[claude] Skipping plugin '${plugin.name}' manifest — invalid JSON: ${
-            err instanceof Error ? err.message : String(err)
-          }`,
-        );
-      }
-    }
-
-    await collectPluginMarkdownDir(plugin.paths.commandsDir, `${ns}/commands`, artifacts);
-    await collectPluginMarkdownDir(plugin.paths.agentsDir, `${ns}/agents`, artifacts);
-    await collectPluginHooksDir(plugin.paths.hooksDir, `${ns}/hooks`, artifacts, warnings);
-
-    const pluginMcpRaw = await readIfExists(plugin.paths.mcpJson);
-    if (pluginMcpRaw !== null && !shouldNeverSync(plugin.paths.mcpJson)) {
-      try {
-        const pluginMcp = sanitizeClaudePluginMcp(pluginMcpRaw, homedir());
-        artifacts.push(collect(pluginMcp, plugin.paths.mcpJson, `${ns}/mcp.json.age`));
-        warnings.push(...pluginMcp.warnings);
-      } catch (err) {
-        warnings.push(
-          `[claude] Skipping plugin '${plugin.name}' .mcp.json — invalid JSON: ${
-            err instanceof Error ? err.message : String(err)
-          }`,
-        );
-      }
-    }
-
-    // Plugin-local skills inherit every gate the shared walker enforces. The
-    // namespace mirrors the per-plugin layout so a vault's plugin tree is
-    // self-contained and removable as a unit.
-    const pluginSkills = await collectSkillArtifacts("claude", plugin.paths.skillsDir);
-    for (const art of pluginSkills.artifacts) {
-      // Re-namespace under the plugin so the artifact lives at
-      // claude/plugins/<plugin>/skills/<skill>.tar.age instead of the global
-      // claude/skills/<skill>.tar.age slot.
-      const skillBase = art.vaultPath.replace(/^claude\/skills\//, "");
-      artifacts.push({ ...art, vaultPath: `${ns}/skills/${skillBase}` });
-    }
-    warnings.push(...pluginSkills.warnings);
-  }
-
-  // Optional marketplace catalog (`~/.claude/.claude-plugin/marketplace.json`).
-  // Off by default — teams have to opt in via `claudePlugins.syncMarketplace`
-  // because the catalog can pin third-party sources that not every team wants
-  // to standardize on through the vault.
-  if (syncMarketplace) {
-    const marketplaceRaw = await readIfExists(AgentPaths.claude.marketplaceJson);
-    if (marketplaceRaw !== null && !shouldNeverSync(AgentPaths.claude.marketplaceJson)) {
-      try {
-        const sanitized = sanitizeAndNormalizeJson(marketplaceRaw, "marketplace");
+  // Claude Code plugins. We do NOT encrypt the plugin tree; the marketplace is
+  // the source of truth. Instead we distil ~/.claude/plugins/installed_plugins
+  // .json + known_marketplaces.json into a single reinstall manifest that
+  // `agentsync plugin install` consumes. Off by default because the manifest
+  // can reference third-party marketplaces. The manifest has no apply directive
+  // (see buildClaudePlan) — it is never restored to disk on pull, only read by
+  // the plugin command, so a `copy claude/` sweep skips it like any unowned file.
+  if (syncPlugins) {
+    try {
+      const built = await buildPluginManifest(AgentPaths.claude.pluginsDir);
+      if (built) {
         artifacts.push({
-          vaultPath: "claude/marketplace.json.age",
-          sourcePath: AgentPaths.claude.marketplaceJson,
-          plaintext: sanitized.value,
-          warnings: sanitized.warnings,
+          vaultPath: "claude/plugins.manifest.json.age",
+          sourcePath: AgentPaths.claude.installedPluginsJson,
+          plaintext: serializeManifest(built.manifest),
+          warnings: built.warnings,
         });
-        warnings.push(...sanitized.warnings);
-      } catch (err) {
-        warnings.push(
-          `[claude] Skipping marketplace.json — invalid JSON: ${
-            err instanceof Error ? err.message : String(err)
-          }`,
-        );
+        warnings.push(...built.warnings);
       }
+    } catch (err) {
+      warnings.push(
+        `[claude] Skipping plugin manifest — ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
   }
 
   return { artifacts, warnings };
-}
-
-/**
- * Collect markdown files (commands or agents) from a plugin sub-directory.
- * Mirrors the top-level Claude collection loop: non-recursive, `*.md` only,
- * never-sync paths skipped, unreadable entries silently dropped.
- */
-async function collectPluginMarkdownDir(
-  dir: string,
-  vaultPrefix: string,
-  artifacts: SnapshotArtifact[],
-): Promise<void> {
-  let names: string[];
-  try {
-    names = await readdir(dir);
-  } catch {
-    return;
-  }
-  for (const name of names) {
-    if (!name.endsWith(".md")) continue;
-    const sourcePath = join(dir, name);
-    if (shouldNeverSync(sourcePath)) continue;
-    let content: string;
-    try {
-      content = await readFile(sourcePath, "utf8");
-    } catch {
-      continue;
-    }
-    artifacts.push({
-      vaultPath: `${vaultPrefix}/${name}.age`,
-      sourcePath,
-      plaintext: content,
-      warnings: [],
-    });
-  }
-}
-
-/**
- * Collect `*.json` hook bundles from a plugin sub-directory. Each hook bundle
- * is sanitized with `redactSecretLiterals` while preserving its full shape —
- * unlike the user-level `settings.json` flow which keeps only `{ hooks }`.
- */
-async function collectPluginHooksDir(
-  dir: string,
-  vaultPrefix: string,
-  artifacts: SnapshotArtifact[],
-  warnings: string[],
-): Promise<void> {
-  let names: string[];
-  try {
-    names = await readdir(dir);
-  } catch {
-    return;
-  }
-  for (const name of names) {
-    if (!name.endsWith(".json")) continue;
-    const sourcePath = join(dir, name);
-    if (shouldNeverSync(sourcePath)) continue;
-    let raw: string;
-    try {
-      raw = await readFile(sourcePath, "utf8");
-    } catch {
-      continue;
-    }
-    try {
-      const sanitized = sanitizeAndNormalizeJson(raw, "pluginHook");
-      artifacts.push({
-        vaultPath: `${vaultPrefix}/${name}.age`,
-        sourcePath,
-        plaintext: sanitized.value,
-        warnings: sanitized.warnings,
-      });
-      warnings.push(...sanitized.warnings);
-    } catch (err) {
-      warnings.push(
-        `[claude] Skipping plugin hook ${sourcePath} — invalid JSON: ${
-          err instanceof Error ? err.message : String(err)
-        }`,
-      );
-    }
-  }
 }
 
 /**
@@ -393,23 +248,17 @@ export async function applyClaudeRule(ruleName: string, content: string): Promis
   await atomicWrite(target, content);
 }
 
-// ─── Claude plugin apply helpers (issue #31) ─────────────────────────────────
-
-/** Restore the optional Claude marketplace catalog. */
-export async function applyClaudeMarketplace(content: string): Promise<void> {
-  const target = AgentPaths.claude.marketplaceJson;
-  await mkdir(join(target, ".."), { recursive: true });
-  await ensureCommandBackup(target);
-  await atomicWrite(target, denormalizeStringFromVault(content, homedir()));
-}
-
 // ─── Apply (pull side) ────────────────────────────────────────────────────────
 
 import { type ApplyPlan, defineFileArtifact, runApplyPlan } from "../_apply";
 
-/** Build the Claude apply plan. Exposed so `copy` can apply a single artifact. */
-export function buildClaudePlan(config: AgentSyncConfig): ApplyPlan {
-  const syncMarketplace = config.claudePlugins?.syncMarketplace ?? false;
+/**
+ * Build the Claude apply plan. Exposed so `copy` can apply a single artifact.
+ * Note: `claude/plugins.manifest.json.age` is deliberately NOT a directive —
+ * the manifest drives `agentsync plugin install`, it is never written to disk
+ * on pull. `_config` is unused now that nothing in the plan gates on it.
+ */
+export function buildClaudePlan(_config: AgentSyncConfig): ApplyPlan {
   return {
     agent: "claude",
     directives: [
@@ -427,14 +276,6 @@ export function buildClaudePlan(config: AgentSyncConfig): ApplyPlan {
         vaultName: "claude.json.age",
         dryRunLabel: "[dry-run] [claude] would apply ~/.claude.json mcpServers",
         apply: applyClaudeMcp,
-      }),
-      defineFileArtifact({
-        vaultName: "marketplace.json.age",
-        dryRunLabel: "[dry-run] [claude] would apply ~/.claude/.claude-plugin/marketplace.json",
-        apply: applyClaudeMarketplace,
-        // Symmetric to snapshot: opting out silently ignores a vault entry on
-        // machines that haven't enabled syncMarketplace.
-        enabled: () => syncMarketplace,
       }),
       {
         kind: "dir",
@@ -474,13 +315,6 @@ export function buildClaudePlan(config: AgentSyncConfig): ApplyPlan {
             throw err;
           }
         },
-      },
-      {
-        kind: "custom",
-        // Plugins live in a nested per-plugin tree (commands/, agents/, hooks/,
-        // mcp.json, skills/) so they don't fit the file/dir directive shape.
-        run: (agentVaultDir, decKey, dry) =>
-          applyClaudePluginsDir(join(agentVaultDir, "plugins"), decKey, dry),
       },
     ],
   };

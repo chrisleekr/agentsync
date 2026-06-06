@@ -48,6 +48,7 @@ When developing from source, replace the binary call with `bun run src/cli.ts`. 
 | [`daemon`](#daemon) | Install, start, stop, and inspect the background daemon. |
 | [`key`](#key) | Add a recipient or rotate the current machine key. |
 | [`skill`](#skill) | Remove a skill from the vault. |
+| [`plugin`](#plugin) | List or reinstall a machine's Claude plugins from its vault manifest. |
 | [`migrate`](#migrate) | Translate configuration between agent formats. |
 | [`destroy`](#destroy) | Wipe the local vault clone or the remote vault contents (via commit). |
 | [`upgrade`](#upgrade) | Check GitHub for a newer release and install it when possible. |
@@ -331,6 +332,27 @@ agentsync skill remove <agent> <name>
 - `skill remove` is the **only** non-additive operation in AgentSync. It deletes the vault artefact but does not remove the local skill directory on the current or other machines.
 - After `skill remove`, every machine that pulled the skill previously still has the local directory until you delete it manually there. See [A skill I deleted reappears after pull on another machine](operations.md#a-skill-i-deleted-reappears-after-pull-on-another-machine).
 - To snapshot or apply a single skill, use the bulk `push` and `pull` commands with `--agent`. There is no targeted `skill push` or `skill pull`; the snapshot for an agent always includes every skill that survives the walker contract.
+
+## plugin
+
+**Why**: Reproduce a machine's Claude plugins on another machine. AgentSync does not encrypt the plugin tree; the marketplace is the source of truth. `push` (with `[claudePlugins] syncPlugins = true`) records a distilled manifest — each plugin's `name@marketplace`, scope, and enabled flag — and `plugin install` reinstalls from it via the local `claude` CLI.
+
+**Usage**:
+
+```bash
+agentsync plugin list <machine>            # print the recorded manifest
+agentsync plugin install <machine> [name]  # reinstall all, or one named plugin
+```
+
+Use `self` as `<machine>` to act on this machine's own manifest.
+
+**Outcome**: `install` registers each referenced marketplace (`claude plugin marketplace add`), installs each plugin at its recorded scope (`claude plugin install <name>@<marketplace> -s <scope>`), then enables or disables it to match the manifest.
+
+**Caveats**:
+
+- Requires the `claude` CLI on `PATH`; a missing binary fails loudly rather than skipping silently.
+- Reinstall fetches the **latest** version — there is no version pin.
+- Local edits to plugin files are not preserved; only the manifest (marketplace + name + scope + enabled) round-trips.
 
 ## migrate
 

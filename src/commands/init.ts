@@ -188,7 +188,7 @@ export async function performInit(options: InitOptions): Promise<InitResult> {
         branch: options.branch,
       },
       sync: existing?.sync ?? DEFAULT_SYNC,
-      claudePlugins: existing?.claudePlugins ?? { syncMarketplace: false },
+      claudePlugins: existing?.claudePlugins ?? { syncPlugins: false },
     });
 
     // Pin the machine name to local state so a later hostname change cannot

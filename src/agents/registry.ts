@@ -23,7 +23,7 @@ export type { SnapshotArtifact, SnapshotResult };
  *
  * `config` carries the validated `agentsync.toml`. Most adapters ignore it;
  * adapters with opt-in behaviour read their own section (e.g. claude reads
- * `config.claudePlugins.syncMarketplace`). Threading the full config through
+ * `config.claudePlugins.syncPlugins`). Threading the full config through
  * the contract keeps push/pull from special-casing any single agent.
  */
 export interface AgentDefinition {

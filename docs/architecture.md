@@ -145,18 +145,11 @@ The vault is a regular Git repository. Inside it, every artefact is suffixed wit
         │   ├── settings.json.age
         │   ├── hooks.json.age
         │   ├── mcp.json.age
-        │   ├── marketplace.json.age   # only when claudePlugins.syncMarketplace = true
+        │   ├── plugins.manifest.json.age  # only when claudePlugins.syncPlugins = true
         │   ├── commands/
         │   │   └── <name>.md.age
-        │   ├── skills/
-        │   │   └── <name>.tar.age      # tar bundle per skill
-        │   └── plugins/
-        │       └── <name>/             # one subtree per Claude plugin
-        │           ├── plugin.json.age
-        │           ├── commands/<name>.md.age
-        │           ├── agents/<name>.md.age
-        │           ├── hooks/<name>.json.age
-        │           └── mcp.json.age
+        │   └── skills/
+        │       └── <name>.tar.age      # tar bundle per skill
         ├── codex/
         │   ├── AGENTS.md.age
         │   └── skills/<name>.tar.age
@@ -169,9 +162,9 @@ The vault is a regular Git repository. Inside it, every artefact is suffixed wit
             └── skills/<name>.tar.age
 ```
 
-Skill bundles are tar archives so directory-shaped assets round-trip cleanly. Plugins under `machines/<name>/claude/plugins/<name>/` are first-class subtrees so installing a Claude plugin on one machine reproduces every artefact under the same plugin namespace.
+Skill bundles are tar archives so directory-shaped assets round-trip cleanly.
 
-`marketplace.json.age` is only emitted, and only applied on pull, when `claudePlugins.syncMarketplace = true` is set in `agentsync.toml` on both machines. The default is false so a vault snapshot does not silently propagate a Claude marketplace opt-in.
+Claude plugins are not stored as an encrypted tree. The marketplace is the source of truth, so `push` distils `~/.claude/plugins/installed_plugins.json` + `known_marketplaces.json` into a single `plugins.manifest.json.age` recording each plugin's `name@marketplace`, scope, and enabled flag (machine-specific absolute paths are dropped). `agentsync plugin install <machine>` reinstalls from that manifest by shelling out to the `claude` CLI. The manifest is never applied on pull — a `copy` sweep skips it — so reinstall is always an explicit step. It is only emitted when `claudePlugins.syncPlugins = true`, because the manifest can reference third-party marketplaces. Tradeoff: reinstall fetches the latest version (no pin), and local edits to plugin files are not preserved.
 
 ## Skills and plugins
 

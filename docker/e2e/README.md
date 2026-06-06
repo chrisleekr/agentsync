@@ -84,9 +84,7 @@ back to the local `homedir()` on pull (B24).
 | Claude  | `~/.claude.json` | `mcpServers` | yes | OAuth tokens, `projects`, caches |
 | Claude  | `~/.claude/commands/*.md`, `agents/*.md`, `rules/*.md` | whole | n/a (markdown) | — |
 | Claude  | `~/.claude/skills/<n>/` | whole dir tarred → age | n/a | dotfiles, symlinks |
-| Claude  | `~/.claude/plugins/<n>/.claude-plugin/plugin.json` | whole | yes | — |
-| Claude  | `~/.claude/plugins/<n>/.mcp.json` | whole | yes | — |
-| Claude  | `~/.claude/.claude-plugin/marketplace.json` | opt-in via `syncMarketplace` | yes | not synced by default |
+| Claude  | `~/.claude/plugins/{installed_plugins,known_marketplaces}.json` | distilled → `claude/plugins.manifest.json.age` (`name@marketplace`, scope, enabled) | n/a | opt-in via `syncPlugins`; never applied on pull (drives `plugin install`); absolute paths dropped; plugin tree not synced |
 | Claude  | `~/.claude/.credentials.json`, `settings.local.json` | NEVER | — | always local |
 | Codex   | `~/.codex/AGENTS.md`, `AGENTS.override.md` | whole | n/a | — |
 | Codex   | `~/.codex/config.toml` | whole (parse → normalize → restringify) | yes | secret-like values redacted inline |

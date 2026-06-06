@@ -255,7 +255,7 @@ describe("performCopy", () => {
     if (result.status === "applied") expect(result.count).toBe(1);
   });
 
-  test("a directory sweep honours the enabled gate (marketplace skipped when off)", async () => {
+  test("a directory sweep skips the plugin manifest (no apply directive owns it)", async () => {
     const root = machineVaultRoot(machine.vaultDir, machine.machineName);
     await mkdir(join(root, "claude"), { recursive: true });
     await writeFile(
@@ -263,10 +263,10 @@ describe("performCopy", () => {
       await encryptString("# rules", [machine.recipient]),
       "utf8",
     );
-    // syncMarketplace defaults to false, so a sweep must skip marketplace.json
-    // even though an explicit single-file copy would apply it.
+    // plugins.manifest.json.age has no apply directive — it drives `plugin
+    // install`, not pull — so a sweep applies CLAUDE.md and skips the manifest.
     await writeFile(
-      join(root, "claude", "marketplace.json.age"),
+      join(root, "claude", "plugins.manifest.json.age"),
       await encryptString("{}", [machine.recipient]),
       "utf8",
     );

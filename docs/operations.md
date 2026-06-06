@@ -87,7 +87,7 @@ copilot = true          # enable copilot adapter
 vscode = false          # opt-in; vscode's surface is MCP-only
 
 [claudePlugins]
-syncMarketplace = false # opt-in: include ~/.claude/marketplace.json in push/pull
+syncPlugins = false     # opt-in: back up a reinstall manifest of ~/.claude/plugins
 ```
 
 Defaults are chosen so you can install and forget. Tune them only if you observe excessive push churn. Values outside the supported range are rejected at config load.

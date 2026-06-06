@@ -29,7 +29,7 @@ export interface FileArtifact {
   /** Single line emitted in dry-run mode. */
   dryRunLabel: string;
   apply: (decrypted: string) => Promise<void>;
-  /** Optional gate (e.g. config.claudePlugins.syncMarketplace). */
+  /** Optional gate on whether this artifact applies for the current config. */
   enabled?: () => boolean;
 }
 

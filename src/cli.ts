@@ -7,6 +7,7 @@ import { doctorCommand } from "./commands/doctor";
 import { initCommand } from "./commands/init";
 import { keyCommand } from "./commands/key";
 import { migrateCommand } from "./commands/migrate";
+import { pluginCommand } from "./commands/plugin";
 import { pushCommand } from "./commands/push";
 import { skillCommand } from "./commands/skill";
 import { statusCommand } from "./commands/status";
@@ -31,6 +32,7 @@ const main = defineCommand({
     key: keyCommand,
     migrate: migrateCommand,
     skill: skillCommand,
+    plugin: pluginCommand,
     destroy: destroyCommand,
     upgrade: upgradeCommand,
     vault: vaultCommand,

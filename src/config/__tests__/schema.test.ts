@@ -37,6 +37,29 @@ describe("AgentSyncConfigSchema", () => {
     expect(parsed.remote.branch).toBe("main");
   });
 
+  test("defaults claudePlugins.syncPlugins to false when the section is absent", () => {
+    const parsed = AgentSyncConfigSchema.parse(VALID_BASE);
+    expect(parsed.claudePlugins.syncPlugins).toBe(false);
+  });
+
+  test("maps a legacy claudePlugins.syncMarketplace key to syncPlugins", () => {
+    // Back-compat: existing v2 agentsync.toml files predate the rename and must
+    // keep loading without a manual edit.
+    const parsed = AgentSyncConfigSchema.parse({
+      ...VALID_BASE,
+      claudePlugins: { syncMarketplace: true },
+    });
+    expect(parsed.claudePlugins.syncPlugins).toBe(true);
+  });
+
+  test("prefers an explicit syncPlugins over a stale legacy syncMarketplace", () => {
+    const parsed = AgentSyncConfigSchema.parse({
+      ...VALID_BASE,
+      claudePlugins: { syncPlugins: false, syncMarketplace: true },
+    });
+    expect(parsed.claudePlugins.syncPlugins).toBe(false);
+  });
+
   test("rejects config with missing remote", () => {
     const result = AgentSyncConfigSchema.safeParse({
       recipients: { me: VALID_RECIPIENT },

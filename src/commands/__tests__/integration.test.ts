@@ -456,7 +456,7 @@ describe("integration", () => {
         debounceMs: 300,
         autoPush: true,
       },
-      claudePlugins: { syncMarketplace: false },
+      claudePlugins: { syncPlugins: false },
     });
     writeFileSync(join(machineB.vaultDir, ".gitignore"), "*.tmp\n", "utf8");
     runGit(["init"], machineB.vaultDir);
@@ -642,7 +642,7 @@ describe("integration", () => {
         debounceMs: 300,
         autoPush: true,
       },
-      claudePlugins: { syncMarketplace: false },
+      claudePlugins: { syncPlugins: false },
     });
     writeFileSync(join(machineB.vaultDir, ".gitignore"), "*.tmp\n", "utf8");
     runGit(["init"], machineB.vaultDir);

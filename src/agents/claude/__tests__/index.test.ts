@@ -9,8 +9,8 @@ import { archiveDirectory, extractArchive } from "../../../core/tar";
 import { createTestAgentSyncConfig, createTmpDir } from "../../../test-helpers/fixtures";
 
 const TEST_CONFIG = createTestAgentSyncConfig();
-const TEST_CONFIG_WITH_MARKETPLACE = createTestAgentSyncConfig({
-  claudePlugins: { syncMarketplace: true },
+const TEST_CONFIG_WITH_PLUGINS = createTestAgentSyncConfig({
+  claudePlugins: { syncPlugins: true },
 });
 
 {
@@ -29,7 +29,8 @@ type MutableClaudePaths = {
   credentials: string;
   skillsDir: string;
   pluginsDir: string;
-  marketplaceJson: string;
+  installedPluginsJson: string;
+  knownMarketplacesJson: string;
 };
 
 const testClaudePaths = AgentPaths.claude as MutableClaudePaths;
@@ -70,7 +71,8 @@ describe("snapshotClaude", () => {
     testClaudePaths.credentials = join(tmpDir, ".credentials.json");
     testClaudePaths.skillsDir = join(tmpDir, "skills");
     testClaudePaths.pluginsDir = join(tmpDir, "plugins");
-    testClaudePaths.marketplaceJson = join(tmpDir, ".claude-plugin", "marketplace.json");
+    testClaudePaths.installedPluginsJson = join(tmpDir, "plugins", "installed_plugins.json");
+    testClaudePaths.knownMarketplacesJson = join(tmpDir, "plugins", "known_marketplaces.json");
   });
 
   afterEach(async () => {
@@ -271,7 +273,8 @@ describe("apply* functions", () => {
     testClaudePaths.credentials = join(tmpDir, ".credentials.json");
     testClaudePaths.skillsDir = join(tmpDir, "skills");
     testClaudePaths.pluginsDir = join(tmpDir, "plugins");
-    testClaudePaths.marketplaceJson = join(tmpDir, ".claude-plugin", "marketplace.json");
+    testClaudePaths.installedPluginsJson = join(tmpDir, "plugins", "installed_plugins.json");
+    testClaudePaths.knownMarketplacesJson = join(tmpDir, "plugins", "known_marketplaces.json");
   });
 
   afterEach(async () => {
@@ -365,7 +368,18 @@ describe("applyClaudeVault dryRun", () => {
     testClaudePaths.credentials = join(tmpDir, "apply", ".credentials.json");
     testClaudePaths.skillsDir = join(tmpDir, "apply", "skills");
     testClaudePaths.pluginsDir = join(tmpDir, "apply", "plugins");
-    testClaudePaths.marketplaceJson = join(tmpDir, "apply", ".claude-plugin", "marketplace.json");
+    testClaudePaths.installedPluginsJson = join(
+      tmpDir,
+      "apply",
+      "plugins",
+      "installed_plugins.json",
+    );
+    testClaudePaths.knownMarketplacesJson = join(
+      tmpDir,
+      "apply",
+      "plugins",
+      "known_marketplaces.json",
+    );
   });
 
   afterEach(async () => {
@@ -507,10 +521,9 @@ describe("applyClaudeVault dryRun", () => {
   });
 });
 
-// Claude Code plugin support (issue #31) — snapshot, round-trip, marketplace,
-// and adversarial vault entries.
+// Claude Code plugins — distilled reinstall manifest (no plugin-tree encryption).
 
-describe("Claude plugin sync", () => {
+describe("Claude plugin manifest sync", () => {
   let tmpDir: string;
 
   beforeEach(async () => {
@@ -524,325 +537,121 @@ describe("Claude plugin sync", () => {
     testClaudePaths.credentials = join(tmpDir, ".credentials.json");
     testClaudePaths.skillsDir = join(tmpDir, "skills");
     testClaudePaths.pluginsDir = join(tmpDir, "plugins");
-    testClaudePaths.marketplaceJson = join(tmpDir, ".claude-plugin", "marketplace.json");
+    testClaudePaths.installedPluginsJson = join(tmpDir, "plugins", "installed_plugins.json");
+    testClaudePaths.knownMarketplacesJson = join(tmpDir, "plugins", "known_marketplaces.json");
   });
 
   afterEach(async () => {
     await rm(tmpDir, { recursive: true, force: true });
   });
 
-  function seedPlugin(pluginName: string): string {
-    const root = join(testClaudePaths.pluginsDir, pluginName);
-    mkdirSync(join(root, ".claude-plugin"), { recursive: true });
+  function seedPluginState(): void {
+    mkdirSync(testClaudePaths.pluginsDir, { recursive: true });
     writeFileSync(
-      join(root, ".claude-plugin", "plugin.json"),
+      testClaudePaths.installedPluginsJson,
       JSON.stringify({
-        name: pluginName,
-        version: "1.0.0",
-        description: "Test plugin",
-        author: "Test Author",
-        commands: [{ name: "review" }],
+        version: 2,
+        plugins: {
+          "pr-review-toolkit@claude-plugins-official": [
+            { scope: "user", installPath: "/Users/someone/.claude/cache/x", version: "1.0.0" },
+          ],
+        },
+        enabledPlugins: { "pr-review-toolkit@claude-plugins-official": true },
       }),
       "utf8",
     );
-
-    mkdirSync(join(root, "commands"), { recursive: true });
-    writeFileSync(join(root, "commands", "review.md"), "# Plugin review command", "utf8");
-
-    mkdirSync(join(root, "agents"), { recursive: true });
-    writeFileSync(join(root, "agents", "expert.md"), "# Plugin expert agent", "utf8");
-
-    mkdirSync(join(root, "hooks"), { recursive: true });
     writeFileSync(
-      join(root, "hooks", "pre-commit.json"),
-      JSON.stringify({ matcher: "*", hooks: [] }),
+      testClaudePaths.knownMarketplacesJson,
+      JSON.stringify({
+        "claude-plugins-official": {
+          source: { source: "github", repo: "anthropics/claude-plugins-official" },
+          installLocation: "/Users/someone/.claude/plugins/marketplaces/official",
+          lastUpdated: "2026-06-06T01:49:52.179Z",
+        },
+      }),
       "utf8",
     );
-
-    writeFileSync(
-      join(root, ".mcp.json"),
-      JSON.stringify({ mcpServers: { sample: { command: "node", args: ["s.js"] } } }),
-      "utf8",
-    );
-
-    const skillDir = join(root, "skills", "plugin-skill");
-    mkdirSync(skillDir, { recursive: true });
-    writeFileSync(join(skillDir, "SKILL.md"), "# plugin-local skill", "utf8");
-    writeFileSync(join(skillDir, "notes.md"), "# notes", "utf8");
-
-    return root;
   }
 
-  test("snapshotClaude emits manifest, commands, agents, hooks, mcp, and skill artifacts for a plugin", async () => {
-    seedPlugin("acme-toolkit");
-
+  test("emits nothing plugin-related when syncPlugins is off (the default)", async () => {
+    seedPluginState();
     const result = await claudeModule.snapshotClaude(TEST_CONFIG);
-    const ns = "claude/plugins/acme-toolkit";
-    const paths = result.artifacts.map((a) => a.vaultPath).sort();
-
-    expect(paths).toContain(`${ns}/plugin.json.age`);
-    expect(paths).toContain(`${ns}/commands/review.md.age`);
-    expect(paths).toContain(`${ns}/agents/expert.md.age`);
-    expect(paths).toContain(`${ns}/hooks/pre-commit.json.age`);
-    expect(paths).toContain(`${ns}/mcp.json.age`);
-    expect(paths).toContain(`${ns}/skills/plugin-skill.tar.age`);
-
-    const manifest = result.artifacts.find((a) => a.vaultPath === `${ns}/plugin.json.age`);
-    // biome-ignore lint/style/noNonNullAssertion: asserted by toContain above
-    const parsed = JSON.parse(manifest!.plaintext) as Record<string, unknown>;
-    expect(parsed.name).toBe("acme-toolkit");
-    expect(parsed.version).toBe("1.0.0");
-    expect(parsed.description).toBe("Test plugin");
+    expect(result.artifacts.some((a) => a.vaultPath.startsWith("claude/plugins"))).toBeFalse();
   });
 
-  test("snapshotClaude does not emit plugin artifacts when plugins root is missing", async () => {
-    const result = await claudeModule.snapshotClaude(TEST_CONFIG);
-    const pluginPaths = result.artifacts.filter((a) => a.vaultPath.startsWith("claude/plugins/"));
-    expect(pluginPaths).toHaveLength(0);
+  test("emits only the manifest artifact (no plugin tree) when syncPlugins is on", async () => {
+    seedPluginState();
+    const result = await claudeModule.snapshotClaude(TEST_CONFIG_WITH_PLUGINS);
+    const pluginPaths = result.artifacts
+      .map((a) => a.vaultPath)
+      .filter((p) => p.startsWith("claude/plugins"));
+    expect(pluginPaths).toEqual(["claude/plugins.manifest.json.age"]);
+    // No nested per-plugin tree under claude/plugins/<name>/...
+    expect(result.artifacts.some((a) => a.vaultPath.startsWith("claude/plugins/"))).toBeFalse();
   });
 
-  test("snapshotClaude skips a plugin without a manifest", async () => {
-    const root = join(testClaudePaths.pluginsDir, "no-manifest");
-    mkdirSync(root, { recursive: true });
-    writeFileSync(join(root, "stray.txt"), "not a plugin", "utf8");
-
-    const result = await claudeModule.snapshotClaude(TEST_CONFIG);
-    const pluginPaths = result.artifacts.filter((a) => a.vaultPath.startsWith("claude/plugins/"));
-    expect(pluginPaths).toHaveLength(0);
-  });
-
-  test("snapshotClaude skips a symlinked plugin entry", async () => {
-    const real = join(tmpDir, "vendored-elsewhere");
-    mkdirSync(join(real, ".claude-plugin"), { recursive: true });
-    writeFileSync(join(real, ".claude-plugin", "plugin.json"), "{}", "utf8");
-    mkdirSync(testClaudePaths.pluginsDir, { recursive: true });
-    symlinkSync(real, join(testClaudePaths.pluginsDir, "linked"));
-
-    const result = await claudeModule.snapshotClaude(TEST_CONFIG);
-    const pluginPaths = result.artifacts.filter((a) => a.vaultPath.startsWith("claude/plugins/"));
-    expect(pluginPaths).toHaveLength(0);
-  });
-
-  test("snapshotClaude redacts literal secrets in plugin manifests and emits warnings", async () => {
-    const root = join(testClaudePaths.pluginsDir, "secret-plugin");
-    mkdirSync(join(root, ".claude-plugin"), { recursive: true });
-    writeFileSync(
-      join(root, ".claude-plugin", "plugin.json"),
-      JSON.stringify({
-        name: "secret-plugin",
-        env: { token: `sk-${"a".repeat(30)}` },
-      }),
-      "utf8",
-    );
-
-    const result = await claudeModule.snapshotClaude(TEST_CONFIG);
+  test("the manifest distils name@marketplace records and drops absolute paths", async () => {
+    seedPluginState();
+    const result = await claudeModule.snapshotClaude(TEST_CONFIG_WITH_PLUGINS);
     const manifest = result.artifacts.find(
-      (a) => a.vaultPath === "claude/plugins/secret-plugin/plugin.json.age",
+      (a) => a.vaultPath === "claude/plugins.manifest.json.age",
     );
     expect(manifest).toBeDefined();
-    expect(manifest?.plaintext).toContain("$AGENTSYNC_REDACTED");
-    expect(result.warnings.length).toBeGreaterThan(0);
-  });
-
-  test("snapshotClaude omits marketplace.json by default", async () => {
-    mkdirSync(join(tmpDir, ".claude-plugin"), { recursive: true });
-    writeFileSync(testClaudePaths.marketplaceJson, JSON.stringify({ plugins: [] }), "utf8");
-
-    const result = await claudeModule.snapshotClaude(TEST_CONFIG);
-    const market = result.artifacts.find((a) => a.vaultPath === "claude/marketplace.json.age");
-    expect(market).toBeUndefined();
-  });
-
-  test("snapshotClaude includes marketplace.json when syncMarketplace=true", async () => {
-    mkdirSync(join(tmpDir, ".claude-plugin"), { recursive: true });
-    writeFileSync(
-      testClaudePaths.marketplaceJson,
-      JSON.stringify({ plugins: [{ name: "a", source: "github:foo/bar" }] }),
-      "utf8",
-    );
-
-    const result = await claudeModule.snapshotClaude(TEST_CONFIG_WITH_MARKETPLACE);
-    const market = result.artifacts.find((a) => a.vaultPath === "claude/marketplace.json.age");
-    expect(market).toBeDefined();
     // biome-ignore lint/style/noNonNullAssertion: asserted by toBeDefined above
-    const parsed = JSON.parse(market!.plaintext) as { plugins: { name: string }[] };
-    expect(parsed.plugins[0]?.name).toBe("a");
+    const parsed = JSON.parse(manifest!.plaintext) as {
+      marketplaces: { name: string; source: string }[];
+      plugins: { name: string; marketplace: string; scope: string; enabled: boolean }[];
+    };
+    expect(parsed.marketplaces).toEqual([
+      { name: "claude-plugins-official", source: "anthropics/claude-plugins-official" },
+    ]);
+    expect(parsed.plugins).toEqual([
+      {
+        name: "pr-review-toolkit",
+        marketplace: "claude-plugins-official",
+        scope: "user",
+        enabled: true,
+      },
+    ]);
+    // biome-ignore lint/style/noNonNullAssertion: asserted by toBeDefined above
+    expect(manifest!.plaintext).not.toContain("installPath");
+    // biome-ignore lint/style/noNonNullAssertion: asserted by toBeDefined above
+    expect(manifest!.plaintext).not.toContain("/Users/someone");
   });
 
-  test("plugin round-trip: snapshot → encrypt → decrypt → applyClaudeVault restores every surface", async () => {
+  test("emits no manifest when installed_plugins.json is absent even with syncPlugins on", async () => {
+    mkdirSync(testClaudePaths.pluginsDir, { recursive: true });
+    const result = await claudeModule.snapshotClaude(TEST_CONFIG_WITH_PLUGINS);
+    expect(result.artifacts.some((a) => a.vaultPath.startsWith("claude/plugins"))).toBeFalse();
+  });
+
+  test("a malformed installed_plugins.json becomes a warning, not an aborting throw", async () => {
+    mkdirSync(testClaudePaths.pluginsDir, { recursive: true });
+    writeFileSync(testClaudePaths.installedPluginsJson, "{not json", "utf8");
+    const result = await claudeModule.snapshotClaude(TEST_CONFIG_WITH_PLUGINS);
+    expect(result.artifacts.some((a) => a.vaultPath.startsWith("claude/plugins"))).toBeFalse();
+    expect(result.warnings.some((w) => w.includes("Skipping plugin manifest"))).toBeTrue();
+  });
+
+  test("applyClaudeVault never restores the manifest to disk — it has no apply directive", async () => {
     const { generateIdentity, identityToRecipient, encryptString } = await import(
       "../../../core/encryptor"
     );
     const identity = await generateIdentity();
     const recipient = await identityToRecipient(identity);
 
-    seedPlugin("round-trip-plugin");
-
-    const snapshot = await claudeModule.snapshotClaude(TEST_CONFIG);
-    const pluginArtifacts = snapshot.artifacts.filter((a) =>
-      a.vaultPath.startsWith("claude/plugins/round-trip-plugin/"),
-    );
-    expect(pluginArtifacts.length).toBeGreaterThan(0);
-
-    const vaultDir = join(tmpDir, "vault");
-    for (const art of pluginArtifacts) {
-      const target = join(vaultDir, art.vaultPath);
-      await mkdir(join(target, ".."), { recursive: true });
-      const encrypted = await encryptString(art.plaintext, [recipient]);
-      await writeFile(target, encrypted, "utf8");
-    }
-
-    // Move the on-disk plugin out of the way so apply restores from the vault
-    // into a fresh location. Reuse the existing pluginsDir as the apply target.
-    const restoredPluginsDir = join(tmpDir, "restored-plugins");
-    testClaudePaths.pluginsDir = restoredPluginsDir;
-
-    await claudeModule.applyClaudeVault(vaultDir, identity, false, TEST_CONFIG);
-
-    const restoredRoot = join(restoredPluginsDir, "round-trip-plugin");
-    const manifest = await Bun.file(join(restoredRoot, ".claude-plugin", "plugin.json")).text();
-    const command = await Bun.file(join(restoredRoot, "commands", "review.md")).text();
-    const agent = await Bun.file(join(restoredRoot, "agents", "expert.md")).text();
-    const hook = await Bun.file(join(restoredRoot, "hooks", "pre-commit.json")).text();
-    const mcp = await Bun.file(join(restoredRoot, ".mcp.json")).text();
-    const skillSentinel = await Bun.file(
-      join(restoredRoot, "skills", "plugin-skill", "SKILL.md"),
-    ).text();
-
-    expect(JSON.parse(manifest).name).toBe("round-trip-plugin");
-    expect(command).toBe("# Plugin review command");
-    expect(agent).toBe("# Plugin expert agent");
-    expect(JSON.parse(hook).matcher).toBe("*");
-    expect(JSON.parse(mcp).mcpServers.sample.command).toBe("node");
-    expect(skillSentinel).toBe("# plugin-local skill");
-  });
-
-  test("applyClaudeVault rejects an adversarial plugin name without traversal", async () => {
-    const { generateIdentity, identityToRecipient, encryptString } = await import(
-      "../../../core/encryptor"
-    );
-    const identity = await generateIdentity();
-    const recipient = await identityToRecipient(identity);
-
-    const vaultDir = join(tmpDir, "vault-adversarial-plugin");
-    const evilPluginVaultDir = join(vaultDir, "claude", "plugins", "..");
-    await mkdir(evilPluginVaultDir, { recursive: true });
-    const encrypted = await encryptString("LEAKED_MANIFEST", [recipient]);
-    await writeFile(join(evilPluginVaultDir, "plugin.json.age"), encrypted, "utf8");
-
-    // Must not throw; the bad entry is logged and skipped.
-    await claudeModule.applyClaudeVault(vaultDir, identity, false, TEST_CONFIG);
-
-    const escaped = join(testClaudePaths.pluginsDir, "..", ".claude-plugin", "plugin.json");
-    const leakedExists = await Bun.file(escaped).exists();
-    expect(leakedExists).toBeFalse();
-  });
-
-  test("applyClaudeVault dryRun does not touch the plugin tree", async () => {
-    const { generateIdentity, identityToRecipient, encryptString } = await import(
-      "../../../core/encryptor"
-    );
-    const identity = await generateIdentity();
-    const recipient = await identityToRecipient(identity);
-
-    const vaultDir = join(tmpDir, "vault-dry");
-    const pluginNs = join(vaultDir, "claude", "plugins", "dry-plugin");
-    await mkdir(pluginNs, { recursive: true });
-    const encrypted = await encryptString(JSON.stringify({ name: "dry-plugin" }), [recipient]);
-    await writeFile(join(pluginNs, "plugin.json.age"), encrypted, "utf8");
-
-    await claudeModule.applyClaudeVault(vaultDir, identity, true, TEST_CONFIG);
-
-    const exists = await Bun.file(
-      join(testClaudePaths.pluginsDir, "dry-plugin", ".claude-plugin", "plugin.json"),
-    ).exists();
-    expect(exists).toBeFalse();
-  });
-
-  test("applyClaudeVault ignores marketplace.json.age when syncMarketplace is off", async () => {
-    const { generateIdentity, identityToRecipient, encryptString } = await import(
-      "../../../core/encryptor"
-    );
-    const identity = await generateIdentity();
-    const recipient = await identityToRecipient(identity);
-
-    const vaultDir = join(tmpDir, "vault-market");
+    const vaultDir = join(tmpDir, "vault-manifest");
     const claudeVaultDir = join(vaultDir, "claude");
     await mkdir(claudeVaultDir, { recursive: true });
-    const encrypted = await encryptString(JSON.stringify({ plugins: [] }), [recipient]);
-    await writeFile(join(claudeVaultDir, "marketplace.json.age"), encrypted, "utf8");
+    const encrypted = await encryptString(JSON.stringify({ marketplaces: [], plugins: [] }), [
+      recipient,
+    ]);
+    await writeFile(join(claudeVaultDir, "plugins.manifest.json.age"), encrypted, "utf8");
 
-    await claudeModule.applyClaudeVault(vaultDir, identity, false, TEST_CONFIG);
-    expect(await Bun.file(testClaudePaths.marketplaceJson).exists()).toBeFalse();
-
-    await claudeModule.applyClaudeVault(vaultDir, identity, false, TEST_CONFIG_WITH_MARKETPLACE);
-    expect(await Bun.file(testClaudePaths.marketplaceJson).exists()).toBeTrue();
-  });
-});
-
-describe("Claude plugin hook HOME portability (B24)", () => {
-  let tmpDir: string;
-
-  beforeEach(async () => {
-    tmpDir = await createTmpDir();
-    testClaudePaths.claudeMd = join(tmpDir, "CLAUDE.md");
-    testClaudePaths.settingsJson = join(tmpDir, "settings.json");
-    testClaudePaths.commandsDir = join(tmpDir, "commands");
-    testClaudePaths.agentsDir = join(tmpDir, "agents");
-    testClaudePaths.rulesDir = join(tmpDir, "rules");
-    testClaudePaths.mcpJson = join(tmpDir, ".claude.json");
-    testClaudePaths.credentials = join(tmpDir, ".credentials.json");
-    testClaudePaths.skillsDir = join(tmpDir, "skills");
-    testClaudePaths.pluginsDir = join(tmpDir, "plugins");
-    testClaudePaths.marketplaceJson = join(tmpDir, ".claude-plugin", "marketplace.json");
-  });
-
-  afterEach(async () => {
-    await rm(tmpDir, { recursive: true, force: true });
-  });
-
-  test("snapshot rewrites home-rooted paths inside plugin hook JSONs", async () => {
-    const { homedir } = await import("node:os");
-    const home = homedir();
-    const root = join(testClaudePaths.pluginsDir, "hooky-plugin");
-    mkdirSync(join(root, ".claude-plugin"), { recursive: true });
-    writeFileSync(
-      join(root, ".claude-plugin", "plugin.json"),
-      JSON.stringify({ name: "hooky-plugin", version: "1.0.0" }),
-      "utf8",
-    );
-    mkdirSync(join(root, "hooks"), { recursive: true });
-    writeFileSync(
-      join(root, "hooks", "pre-commit.json"),
-      JSON.stringify({ command: `${home}/.claude/runner.sh`, cwd: `${home}/proj` }),
-      "utf8",
-    );
-
-    const result = await claudeModule.snapshotClaude(TEST_CONFIG);
-    const hook = result.artifacts.find(
-      (a) => a.vaultPath === "claude/plugins/hooky-plugin/hooks/pre-commit.json.age",
-    );
-    expect(hook).toBeDefined();
-    expect(hook?.plaintext).toContain(`${AGENTSYNC_HOME_PLACEHOLDER}/.claude/runner.sh`);
-    expect(hook?.plaintext).toContain(`${AGENTSYNC_HOME_PLACEHOLDER}/proj`);
-    expect(hook?.plaintext).not.toContain(home);
-  });
-
-  test("applyClaudePluginHook denormalizes placeholders to this machine's home", async () => {
-    const { homedir } = await import("node:os");
-    const home = homedir();
-    const incoming = `${JSON.stringify(
-      { command: `${AGENTSYNC_HOME_PLACEHOLDER}/.claude/runner.sh` },
-      null,
-      2,
-    )}\n`;
-    const { applyClaudePluginHook } = await import("../plugin-apply");
-    await applyClaudePluginHook("hooky", "pre-commit.json", incoming);
-    const written = await Bun.file(
-      join(testClaudePaths.pluginsDir, "hooky", "hooks", "pre-commit.json"),
-    ).text();
-    expect(written).toContain(`${home}/.claude/runner.sh`);
-    expect(written).not.toContain("AGENTSYNC_HOME");
+    // Must not throw and must not write any plugins file: the manifest drives
+    // `plugin install`, it is never applied through the pull plan.
+    await claudeModule.applyClaudeVault(vaultDir, identity, false, TEST_CONFIG_WITH_PLUGINS);
+    expect(await Bun.file(testClaudePaths.installedPluginsJson).exists()).toBeFalse();
   });
 });
 
@@ -860,7 +669,8 @@ describe("Claude rules sync (B19)", () => {
     testClaudePaths.credentials = join(tmpDir, ".credentials.json");
     testClaudePaths.skillsDir = join(tmpDir, "skills");
     testClaudePaths.pluginsDir = join(tmpDir, "plugins");
-    testClaudePaths.marketplaceJson = join(tmpDir, ".claude-plugin", "marketplace.json");
+    testClaudePaths.installedPluginsJson = join(tmpDir, "plugins", "installed_plugins.json");
+    testClaudePaths.knownMarketplacesJson = join(tmpDir, "plugins", "known_marketplaces.json");
   });
 
   afterEach(async () => {
@@ -936,7 +746,8 @@ describe("Claude HOME path portability wiring (B24)", () => {
     testClaudePaths.credentials = join(tmpDir, ".credentials.json");
     testClaudePaths.skillsDir = join(tmpDir, "skills");
     testClaudePaths.pluginsDir = join(tmpDir, "plugins");
-    testClaudePaths.marketplaceJson = join(tmpDir, ".claude-plugin", "marketplace.json");
+    testClaudePaths.installedPluginsJson = join(tmpDir, "plugins", "installed_plugins.json");
+    testClaudePaths.knownMarketplacesJson = join(tmpDir, "plugins", "known_marketplaces.json");
   });
 
   afterEach(async () => {
