@@ -90,7 +90,7 @@ vscode = false          # opt-in; vscode's surface is MCP-only
 syncMarketplace = false # opt-in: include ~/.claude/marketplace.json in push/pull
 ```
 
-Defaults are chosen so you can install and forget. Tune them only if you observe excessive push churn or want to widen the pull cadence. Values outside the supported range are rejected at config load.
+Defaults are chosen so you can install and forget. Tune them only if you observe excessive push churn. Values outside the supported range are rejected at config load.
 
 **Environment-variable escape hatches.** For tests, CI, and air-gapped setups, the following variables override the resolved defaults:
 

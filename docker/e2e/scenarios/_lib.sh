@@ -126,7 +126,10 @@ assert_no_literal_in_vault() {
 # entry matches.
 resolve_vault_path() {
   local vault="$1" suffix="$2" matches count
-  matches=$(git --git-dir="$vault" ls-tree -r --name-only HEAD | grep -F "$suffix" || true)
+  # End-of-path (suffix) match, not substring, so "claude/x.age" cannot also hit
+  # a path that merely contains it mid-string.
+  matches=$(git --git-dir="$vault" ls-tree -r --name-only HEAD \
+    | awk -v s="$suffix" 'length($0) >= length(s) && substr($0, length($0) - length(s) + 1) == s')
   count=$(printf '%s\n' "$matches" | grep -c . || true)
   [ "$count" -eq 1 ] || fail "expected exactly one vault path matching '$suffix', got $count: $matches"
   printf '%s' "$matches"

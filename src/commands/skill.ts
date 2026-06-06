@@ -194,7 +194,9 @@ export const skillCommand = defineCommand({
         const result = await performSkillRemove({
           agent: String(args.agent),
           name: String(args.name),
-          machine: args.machine ? String(args.machine) : undefined,
+          // Preserve an explicit --machine "" so it reaches validation (rejected)
+          // rather than being coerced to "use this machine".
+          machine: args.machine !== undefined ? String(args.machine) : undefined,
         });
 
         switch (result.status) {

@@ -66,11 +66,18 @@ export async function performVaultUpgrade(): Promise<VaultUpgradeResult> {
     return { status: "unsupported", version: initialProbe.version };
   }
 
-  const branch =
-    ((await readRawConfig(configPath)).remote as { branch?: string } | undefined)?.branch ?? "main";
   // The branch is read from the raw (pre-schema) config of a possibly shared
-  // vault and passed to git. simple-git uses argv (no shell), but a leading dash
-  // could still be read as a flag, so reject it before it reaches fetch/push.
+  // vault, so it is not yet type-narrowed and is passed to git. Reject a
+  // non-string, and a leading dash (simple-git uses argv, but a dash could still
+  // be read as a flag), before it reaches fetch/push.
+  const rawBranch = (await readRawConfig(configPath)).remote as { branch?: unknown } | undefined;
+  const branch = rawBranch?.branch ?? "main";
+  if (typeof branch !== "string") {
+    return {
+      status: "git-error",
+      error: "Invalid remote.branch in agentsync.toml: expected a string.",
+    };
+  }
   if (branch.startsWith("-")) {
     return { status: "git-error", error: `Refusing unsafe branch name: ${JSON.stringify(branch)}` };
   }

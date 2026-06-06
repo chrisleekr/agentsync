@@ -1155,7 +1155,11 @@ describe("integration", () => {
         message.includes("AgentSync only supports fast-forward sync"),
       ),
     ).toBe(true);
-    expect(existsSync(join(machineB.vaultDir, "claude", "blocked.age"))).toBe(false);
+    expect(
+      existsSync(
+        join(machineVaultRoot(machineB.vaultDir, machineB.machineName), "claude", "blocked.age"),
+      ),
+    ).toBe(false);
   }, 20000);
 });
 
@@ -1285,13 +1289,15 @@ describe("skills sync integration guarantees", () => {
     const base64 = tarBuffer.toString("base64");
     const encrypted = await encryptString(base64, [recipient]);
 
-    const skillsVaultDir = join(machine.vaultDir, "claude", "skills");
+    // v2: apply reads this machine's namespace, so seed + apply use the same root.
+    const machineScopedRoot = machineVaultRoot(machine.vaultDir, machine.machineName);
+    const skillsVaultDir = join(machineScopedRoot, "claude", "skills");
     await mkdirAsync(skillsVaultDir, { recursive: true });
     const vaultFile = join(skillsVaultDir, "my-skill.tar.age");
     await writeFileAsync(vaultFile, encrypted, "utf8");
 
     // First pull: populates the local ~/.claude/skills/my-skill/ directory.
-    await claude.applyClaudeVault(machine.vaultDir, identity, false, createTestAgentSyncConfig());
+    await claude.applyClaudeVault(machineScopedRoot, identity, false, createTestAgentSyncConfig());
 
     const localSkillDir = join(mutableClaudePaths.skillsDir, "my-skill");
     expect(existsSync(join(localSkillDir, "SKILL.md"))).toBe(true);
@@ -1304,7 +1310,7 @@ describe("skills sync integration guarantees", () => {
     // Second pull against the now-empty vault. The local skill directory
     // MUST remain intact, no file added, no file removed: vault delete is
     // additive-only on the pull side.
-    await claude.applyClaudeVault(machine.vaultDir, identity, false, createTestAgentSyncConfig());
+    await claude.applyClaudeVault(machineScopedRoot, identity, false, createTestAgentSyncConfig());
 
     expect(existsSync(join(localSkillDir, "SKILL.md"))).toBe(true);
     expect(existsSync(join(localSkillDir, "notes.md"))).toBe(true);

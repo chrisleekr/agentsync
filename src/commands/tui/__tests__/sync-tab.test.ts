@@ -520,12 +520,13 @@ describe("computeSyncStatus — structured output", () => {
     const { mkdtempSync, mkdirSync, writeFileSync } = await import("node:fs");
     const { tmpdir } = await import("node:os");
     const { join } = await import("node:path");
+    const { machineVaultRoot } = await import("../../../config/paths");
     const { computeSyncStatus, __setStatusAgentsForTesting } = await import("../../status");
 
     const tmp = mkdtempSync(join(tmpdir(), "sync-status-"));
     const vaultDir = join(tmp, "vault");
     // v2: status reads this machine's namespace (machineName "test" below).
-    const agentDir = join(vaultDir, "machines", "test", "test-agent");
+    const agentDir = join(machineVaultRoot(vaultDir, "test"), "test-agent");
     mkdirSync(agentDir, { recursive: true });
     writeFileSync(join(agentDir, "x.age"), "encrypted-bytes", "utf8");
 

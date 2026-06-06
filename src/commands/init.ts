@@ -127,6 +127,7 @@ export async function performInit(options: InitOptions): Promise<InitResult> {
   let git = new GitClient(runtime.vaultDir);
 
   let keyIsNew = false;
+  let pushAttempted = false;
   try {
     const { recipient, isNew } = await ensureKeypair(runtime.privateKeyPath);
     keyIsNew = isNew;
@@ -203,6 +204,7 @@ export async function performInit(options: InitOptions): Promise<InitResult> {
 
     const committed = await git.commit({ message: `init: ${runtime.machineName}` });
     if (committed) {
+      pushAttempted = true;
       await git.push("origin", options.branch, remoteState.exists ? [] : ["--set-upstream"]);
     }
 
@@ -218,8 +220,12 @@ export async function performInit(options: InitOptions): Promise<InitResult> {
   } catch (err) {
     // The remote probe passed but a later step failed. Roll back a key generated
     // this invocation so a retry is not bound to material that never made it into
-    // a successful init. A pre-existing key is preserved untouched.
-    const keyRolledBack = await rollbackFreshKey(keyIsNew, runtime.privateKeyPath);
+    // a successful init. A pre-existing key is preserved untouched. Do NOT roll
+    // back once a push was attempted: the commit (registering this machine's
+    // recipient) may already be local or pushed, and a retry must reuse this key.
+    const keyRolledBack = pushAttempted
+      ? false
+      : await rollbackFreshKey(keyIsNew, runtime.privateKeyPath);
     return {
       status: "failed",
       error: err instanceof Error ? err.message : String(err),

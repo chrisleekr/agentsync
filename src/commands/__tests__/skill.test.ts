@@ -212,7 +212,7 @@ describe("performSkillRemove — contract rows", () => {
   test("rejects a path-traversal --machine before touching the vault", async () => {
     // --machine becomes a vault directory segment; `..` would escape the
     // namespace and let the commit/push delete an arbitrary vault path.
-    for (const bad of ["..", "../../etc", "a/b"]) {
+    for (const bad of ["..", "../../etc", "a/b", ""]) {
       const result = await skillMod.performSkillRemove({
         agent: "claude",
         name: "x",
