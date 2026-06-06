@@ -23,25 +23,19 @@ jobs:
       matrix:
         scenario:
           - smoke.sh
-          - 02-multi-machine.sh
           - 03-diverged-history.sh
           - 04-sanitizer-aborts.sh
           - 05-key-rotate.sh
           - 06-skill-additive.sh
-          - 07-skill-mcp-fidelity.sh
-          - 08-agent-filter.sh
           - 09-key-add.sh
           - 10-migrate.sh
           - 11-daemon-ipc.sh
-          - 12-pull-force.sh
           - 13-doctor.sh
           - 14-dry-run.sh
-          - 15-plugin-marketplace.sh
           - 16-vscode-non-mcp.sh
           - 17-git-protocol.sh
           - 18-copilot.sh
           - 19-codex-overrides.sh
-          - 20-home-portability.sh
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6

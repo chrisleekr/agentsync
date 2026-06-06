@@ -3,7 +3,7 @@ set -euo pipefail
 # shellcheck source=/home/agent/scenarios/_lib.sh
 source /home/agent/scenarios/_lib.sh
 
-# Scenario 6 — pull is additive for skills: removing a skill from disk and
+# Scenario 6 — copy is additive for skills: removing a skill from disk and
 # pulling does not delete the vault's copy from disk; explicit
 # `agentsync skill remove` is the only way to drop a skill from the vault.
 # Plus: bundle content equality via tar_age_extract.
@@ -49,7 +49,7 @@ mkdir -p "$MACHINE_B/.config/agentsync"
 cp "$KEY_A" "$MACHINE_B/.config/agentsync/key.txt"
 chmod 600 "$MACHINE_B/.config/agentsync/key.txt"
 with_machine "$MACHINE_B" bun run src/cli.ts init --remote "$VAULT_URL_K" --branch main
-with_machine "$MACHINE_B" bun run src/cli.ts pull
+copy_self "$MACHINE_B" claude/
 assert_dir_exists  "$MACHINE_B/.claude/skills/postgres-helper"
 assert_file_exists "$MACHINE_B/.claude/skills/postgres-helper/SKILL.md"
 

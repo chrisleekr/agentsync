@@ -205,14 +205,9 @@ export async function applyCodexSkill(skillName: string, base64Tar: string): Pro
 
 import { type ApplyPlan, defineFileArtifact, runApplyPlan } from "../_apply";
 
-/** Decrypt and apply all Codex vault artifacts to the local machine. */
-export async function applyCodexVault(
-  vaultDir: string,
-  key: string,
-  dryRun: boolean,
-  _config?: AgentSyncConfig,
-): Promise<void> {
-  const plan: ApplyPlan = {
+/** Build the Codex apply plan. Exposed so `copy` can apply a single artifact. */
+export function buildCodexPlan(_config?: AgentSyncConfig): ApplyPlan {
+  return {
     agent: "codex",
     directives: [
       defineFileArtifact({
@@ -257,5 +252,14 @@ export async function applyCodexVault(
       },
     ],
   };
-  await runApplyPlan(plan, vaultDir, key, dryRun);
+}
+
+/** Decrypt and apply all Codex vault artifacts to the local machine. */
+export async function applyCodexVault(
+  vaultDir: string,
+  key: string,
+  dryRun: boolean,
+  config?: AgentSyncConfig,
+): Promise<void> {
+  await runApplyPlan(buildCodexPlan(config), vaultDir, key, dryRun);
 }

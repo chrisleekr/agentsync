@@ -3,7 +3,7 @@ set -euo pipefail
 # shellcheck source=/home/agent/scenarios/_lib.sh
 source /home/agent/scenarios/_lib.sh
 
-# The daemon's IPC server registers three commands: status, push, pull.
+# The daemon's IPC server registers status and push (push-only in v2; pull is rejected).
 # Protocol: newline-delimited {id, cmd, args} JSON (see src/core/ipc.ts).
 # We exercise each via the real IpcClient to avoid encoding the wire format
 # in this scenario (the _lib.sh daemon_ipc helper predates the {id,cmd}
@@ -99,12 +99,12 @@ done
 [ "$head_now" != "$head_before" ] || fail "vault HEAD unchanged after IPC push within 30s"
 pass "vault advanced via IPC push: ${head_before:0:10} → ${head_now:0:10}"
 
-step "IPC: pull returns ok"
+step "IPC: pull is rejected — the daemon is push-only in v2"
 pull_resp=$(ipc_call pull)
 echo "$pull_resp" | sed 's/^/    /'
-echo "$pull_resp" | jq -e '.ok == true' >/dev/null \
-  || fail "pull response not ok: $pull_resp"
-pass "pull verb returns ok"
+echo "$pull_resp" | jq -e '.ok == false' >/dev/null \
+  || fail "expected pull to be rejected (push-only daemon): $pull_resp"
+pass "pull verb is rejected"
 
 step "Clean shutdown: SIGTERM the daemon"
 kill -TERM "$DAEMON_PID"
@@ -119,4 +119,4 @@ fi
 pass "daemon exited cleanly"
 trap - EXIT
 
-banner "DAEMON IPC: STATUS / PUSH / PULL"
+banner "DAEMON IPC: STATUS / PUSH (pull rejected)"

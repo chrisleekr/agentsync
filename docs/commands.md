@@ -164,33 +164,33 @@ agentsync push --dry-run
 - Reconciliation is fast-forward only. Divergence aborts the push with recovery guidance.
 - `--dry-run` exercises the snapshot, sanitiser, and encryption pipeline so previews reflect what would actually be written.
 
-## pull
+## copy
 
-**Why**: Fetch the latest vault state, decrypt for the local recipient, and apply to local agent paths.
+**Why**: Restore an artifact (or a whole subdir) from any machine's vault namespace onto local disk. In v2 the vault is push-only backup, so `copy` is the only vault→local path. `copy self <path>` restores your own machine's backup.
 
 **Usage**:
 
 ```bash
-agentsync pull
-agentsync pull --agent cursor
-agentsync pull --dry-run
+agentsync copy work-laptop claude/CLAUDE.md.age   # from another machine's namespace
+agentsync copy self claude/skills/                # restore your own skills subdir
+agentsync copy work-laptop claude/ --dry-run      # preview the whole claude namespace
 ```
 
-**Flags**:
+**Arguments**:
 
-| Flag | Default | Description |
-|---|---|---|
-| `--agent` | all enabled | Restrict to one agent. |
-| `--dry-run` | `false` | Show what would be applied without writing locally. |
-| `--force` | `false` | Apply the remote state without prompting on conflicts. Used by the daemon and other non-interactive callers. |
+| Argument | Description |
+|---|---|
+| `<machine>` | Source machine namespace under `machines/`, or `self` for this machine. |
+| `<path>` | Logical vault path: a single artifact (`claude/CLAUDE.md.age`) or a subdir prefix (`claude/skills/`) to copy every artifact beneath it. |
+| `--dry-run` | Preview each artifact without writing locally. |
 
-**Outcome**: supported local agent files are updated from the vault, including per-agent skills under `claude/skills/`, `codex/skills/`, `cursor/skills/`, and `copilot/skills/`. Claude Code plugins under `claude/plugins/<name>/` round-trip back to `~/.claude/plugins/<name>/`. `marketplace.json` is only applied when `claudePlugins.syncMarketplace = true` is set locally.
+**Outcome**: the named artifacts are decrypted with the local key (encryption is to all recipients) and applied to local agent paths using the same handlers, JSONC merge, and `.bak` backups as a full restore. `copy` writes only to local disk — it never writes this machine's vault namespace; the next `push` captures the change normally. An unknown machine lists the available namespaces; a missing artifact reports the path.
 
 **Caveats**:
 
-- Pull is **extract-only**: it never removes a local file the vault does not contain. This is intentional so an in-progress local edit cannot be wiped by a remote that omits the file. See [I removed a skill from the vault but it is still on my other laptop](operations.md#a-skill-i-deleted-reappears-after-pull-on-another-machine).
-- Pull applies only enabled or explicitly requested agents.
+- `copy` is **additive**: it applies what the source has and never deletes a local file the source omits.
 - Reconciliation is fast-forward only.
+- Plugins are not copyable via `copy` — they are reinstalled from the recorded manifest by `plugin install`.
 
 ## status
 

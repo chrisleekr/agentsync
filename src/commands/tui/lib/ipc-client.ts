@@ -33,11 +33,7 @@ export class TuiIpcClient {
     return this.invoke("push");
   }
 
-  async pull(): Promise<{ ok: boolean; error?: string }> {
-    return this.invoke("pull");
-  }
-
-  private async invoke(cmd: "push" | "pull"): Promise<{ ok: boolean; error?: string }> {
+  private async invoke(cmd: "push"): Promise<{ ok: boolean; error?: string }> {
     try {
       const client = new IpcClient();
       const response = await client.send(cmd, {}, this.socketPath);

@@ -64,9 +64,10 @@ This will NOT touch:
                                             .git history is preserved.
 
 Effects on other machines:
-  - Next \`agentsync pull\` will see an empty vault and lose their
-    agentsync.toml config. They will need to re-init.
-  - History is preserved. Any machine that has not yet pulled can
+  - Each machine's local config is its own source of truth and is untouched,
+    but the shared vault backup is gone — a future \`agentsync copy\` finds
+    nothing, and a new machine cannot \`init\` against the empty vault.
+  - History is preserved. Any machine with a vault clone can
     \`git revert <destroy-commit>\` to recover the data.
   - This vault has ${recipientCount} registered recipient(s); ALL of them are affected.
 `.trimEnd();

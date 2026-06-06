@@ -169,6 +169,16 @@ with_machine() {
   ( cd /app && HOME="$home" "$@" )
 }
 
+# copy_self <home-dir> <vault-path>
+# v2 replacement for the removed `pull`: restore an artifact (or an agent
+# subdir like "claude/") from this machine's own namespace onto local disk.
+# In the e2e every machine resolves the same os.hostname() namespace, so this
+# restores whatever a sibling machine pushed — the cross-machine round trip.
+copy_self() {
+  local home="$1" path="$2"
+  with_machine "$home" bun run src/cli.ts copy self "$path"
+}
+
 # plant_fixture <fixtures-relpath> <machine-home>
 # Copies a file from the fixtures tree into the machine's HOME, preserving the
 # relative path under the source root.

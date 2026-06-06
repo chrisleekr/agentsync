@@ -62,8 +62,9 @@ agentsync init --remote git@github.com:<you>/agentsync-vault.git --branch main
 # Push local agent configuration into the encrypted vault
 agentsync push
 
-# On another machine, after running init with the same remote
-agentsync pull
+# On a new machine, after running init with the same remote, restore another
+# machine's config from its vault namespace (use `copy self …` to restore your own)
+agentsync copy <other-machine> claude/
 ```
 
 The full quickstart, command reference, and architecture model live at the documentation site: **<https://chrisleekr.github.io/agentsync/>**.
@@ -75,7 +76,7 @@ The full quickstart, command reference, and architecture model live at the docum
 | *(bare)* / `tui` | Open the interactive TUI: vault browser, per-agent local view, push/pull, and migrate. |
 | `init` | Create the local vault workspace, machine key, config, and initial remote state. |
 | `push` | Snapshot local agent configs, sanitise secrets, encrypt artefacts, and push to Git. |
-| `pull` | Pull the latest vault state and apply decrypted artefacts locally. |
+| `copy` | Restore an artefact (or subdir) from a machine's vault namespace to local disk (`copy self …` for your own). |
 | `status` | Compare local files with the vault and surface drift. |
 | `doctor` | Run environment, key, vault, and daemon diagnostics. |
 | `daemon` | Install and manage the background auto-sync daemon. |

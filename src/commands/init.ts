@@ -303,7 +303,7 @@ export const initCommand = defineCommand({
           "This machine is registered but cannot decrypt the existing vault yet.",
           "An existing recipient must run on a machine that can decrypt the vault:",
           `  agentsync key add ${result.machineName} ${result.recipient}`,
-          "Until that runs, `agentsync pull` on this machine will fail.",
+          "Until that runs, this machine cannot decrypt other machines' artifacts.",
         ].join("\n"),
       );
     }

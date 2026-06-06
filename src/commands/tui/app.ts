@@ -233,9 +233,9 @@ function handleKey(key: KeyEvent, ctx: AppContext, quit: () => void): void {
   }
 
   // Help overlay swallows everything until it's dismissed. Without this
-  // gate, pressing `p` (push) or `l` (pull) while the help text is on
-  // screen would fire the global shortcut behind the modal — the user
-  // sees a help overlay and accidentally pushes the vault.
+  // gate, pressing `p` (push) while the help text is on screen would fire
+  // the global shortcut behind the modal — the user sees a help overlay
+  // and accidentally pushes the vault.
   if (ctx.store.getState().helpOpen) {
     if (key.name === "?" || (key.shift && key.name === "/") || key.name === "escape") {
       ctx.store.dispatch((d) => {
@@ -274,11 +274,21 @@ function handleKey(key: KeyEvent, ctx: AppContext, quit: () => void): void {
   }
 
   if (key.name === "p" && !key.shift) {
-    invokeSyncOp("push", ctx);
-    return;
-  }
-  if (key.name === "l" && !key.shift) {
-    invokeSyncOp("pull", ctx);
+    // While a Sync modal is open (diff, skill drill-in, confirm-remove, or the
+    // key prompt), `p` belongs to that modal — let the tab handle it instead of
+    // firing a global push that would publish the current selection by accident.
+    const state = ctx.store.getState();
+    if (
+      state.activeTab === "sync" &&
+      (state.sync.diff ||
+        state.sync.skillDrillIn ||
+        state.sync.confirmRemove ||
+        state.sync.keyPrompt === "pending")
+    ) {
+      delegateTabKey(key, ctx);
+      return;
+    }
+    invokeSyncOp(ctx);
     return;
   }
   if (key.name === "u" && !key.shift) {
@@ -301,11 +311,11 @@ function handleKey(key: KeyEvent, ctx: AppContext, quit: () => void): void {
   delegateTabKey(key, ctx);
 }
 
-function invokeSyncOp(op: "push" | "pull", ctx: AppContext): void {
-  // Delegate to the Sync tab's runSyncOp so push/pull always populate
+function invokeSyncOp(ctx: AppContext): void {
+  // Delegate to the Sync tab's runSyncOp so every push populates
   // `sync.lastOp` — the persistent banner the user reads to see what
   // happened. Toasts alone are too short-lived for terminal errors.
-  runSyncOp(ctx.store, op);
+  runSyncOp(ctx.store);
 }
 
 /** Guards a second `u` press from launching a concurrent `bun install -g`
@@ -452,7 +462,6 @@ function renderFooter(host: TextRenderable, state: AppState): void {
   const hintKey = activeKeyHint(state);
   const globalKeys: [string, string][] = [
     ["p", "push"],
-    ["l", "pull"],
     ["r", "refresh"],
     ["?", "help"],
     ["q", "quit"],
@@ -489,7 +498,6 @@ function actionLabelFor(key: KeyEvent, state: AppState): { key: string; label: s
   }
   if (name === "tab") return { key: "tab", label: key.shift ? "prev tab" : "next tab" };
   if (name === "p" && !key.shift) return { key: "p", label: "push" };
-  if (name === "l" && !key.shift) return { key: "l", label: "pull" };
   if (name === "u" && !key.shift && state.update.available) return { key: "u", label: "update" };
   if (name === "r" && !key.shift) return { key: "r", label: "refresh" };
   if (name === "?" || (key.shift && name === "/")) return { key: "?", label: "help" };
@@ -576,7 +584,6 @@ function renderHelp(renderer: CliRenderer, host: BoxRenderable, state: AppState)
     "    1 – 4         Jump to tab",
     "    Tab / Sh+Tab  Cycle tabs",
     "    p             Push vault (direct)",
-    "    l             Pull vault (direct)",
     "    r             Refresh current tab",
     // Listed only when armed, to match the footer and action bar.
     ...(state.update.available ? ["    u             Install an available update"] : []),

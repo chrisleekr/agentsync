@@ -230,7 +230,8 @@ describe("startDaemon", () => {
     expect(infoLogs.some((message) => message.includes("AgentSync daemon started"))).toBe(true);
     expect(ipcHandlers.has("status")).toBe(true);
     expect(ipcHandlers.has("push")).toBe(true);
-    expect(ipcHandlers.has("pull")).toBe(true);
+    // Push-only daemon: no pull IPC handler.
+    expect(ipcHandlers.has("pull")).toBe(false);
     expect(watcherAdds.map((entry) => entry.target)).toEqual([
       dirname(AgentPaths.claude.claudeMd),
       dirname(AgentPaths.cursor.mcpGlobal),
@@ -244,10 +245,11 @@ describe("startDaemon", () => {
     expect(signalHandlers.has("SIGINT")).toBe(true);
   });
 
-  test("logs fatal pull and push failures through IPC handlers, watchers, and shutdown", async () => {
+  test("logs fatal push failures through the IPC handler, watchers, and shutdown", async () => {
     await daemonModule.startDaemon();
 
-    await ipcHandlers.get("pull")?.();
+    // The daemon is push-only — there is no IPC pull handler to register.
+    expect(ipcHandlers.has("pull")).toBe(false);
     await ipcHandlers.get("push")?.();
     await watcherAdds[0]?.callback(watcherAdds[0].target);
     await signalHandlers.get("SIGTERM")?.();
@@ -311,11 +313,11 @@ describe("clean shutdown", () => {
 
 // ── Failure tracking ─────────────────────────────────────────
 describe("failure tracking", () => {
-  test("after a failed pull, consecutiveFailures >= 1 and lastError is non-null", async () => {
+  test("after a failed push, consecutiveFailures >= 1 and lastError is non-null", async () => {
     await daemonModule.startDaemon();
 
-    // Pull will fail because remote doesn't exist — withRetry calls it twice
-    await ipcHandlers.get("pull")?.();
+    // Push will fail because the remote doesn't exist — withRetry calls it twice
+    await ipcHandlers.get("push")?.();
 
     const status = (await ipcHandlers.get("status")?.()) as {
       consecutiveFailures: number;
@@ -323,7 +325,7 @@ describe("failure tracking", () => {
     };
     expect(status.consecutiveFailures).toBeGreaterThanOrEqual(1);
     expect(status.lastError).not.toBeNull();
-    expect(status.lastError).toContain("[pull]");
+    expect(status.lastError).toContain("[push]");
   });
 
   test("status IPC handler returns an object matching DaemonStatusSchema shape", async () => {

@@ -181,14 +181,9 @@ export async function applyCursorSkill(skillName: string, base64Tar: string): Pr
 
 import { type ApplyPlan, defineFileArtifact, runApplyPlan } from "../_apply";
 
-/** Decrypt and apply all Cursor vault artifacts to the local machine. */
-export async function applyCursorVault(
-  vaultDir: string,
-  key: string,
-  dryRun: boolean,
-  _config?: AgentSyncConfig,
-): Promise<void> {
-  const plan: ApplyPlan = {
+/** Build the Cursor apply plan. Exposed so `copy` can apply a single artifact. */
+export function buildCursorPlan(_config?: AgentSyncConfig): ApplyPlan {
+  return {
     agent: "cursor",
     warnOnUnknownTopLevel: true,
     directives: [
@@ -229,5 +224,14 @@ export async function applyCursorVault(
       },
     ],
   };
-  await runApplyPlan(plan, vaultDir, key, dryRun);
+}
+
+/** Decrypt and apply all Cursor vault artifacts to the local machine. */
+export async function applyCursorVault(
+  vaultDir: string,
+  key: string,
+  dryRun: boolean,
+  config?: AgentSyncConfig,
+): Promise<void> {
+  await runApplyPlan(buildCursorPlan(config), vaultDir, key, dryRun);
 }
