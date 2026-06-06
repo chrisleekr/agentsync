@@ -8,7 +8,6 @@ import { decryptString } from "../../../core/encryptor";
 import { GitClient, type GitReconciliationResult } from "../../../core/git";
 import { listArchiveEntries } from "../../../core/tar";
 import { pairDiffRows, type SideBySideRow } from "../../../lib/diff";
-import { performPull } from "../../pull";
 import { performPush } from "../../push";
 import { loadPrivateKey, loadVaultConfigOrExit, resolveRuntimeContext } from "../../shared";
 import { computeSyncStatus, type SyncRow } from "../../status";
@@ -80,7 +79,7 @@ const SECTIONS: Section[] = [
   {
     key: "local-changed",
     title: "Changed — local and vault differ",
-    hint: "press p to push or l to pull",
+    hint: "press p to push",
   },
   {
     key: "local-only",
@@ -89,8 +88,8 @@ const SECTIONS: Section[] = [
   },
   {
     key: "vault-only",
-    title: "To pull: vault-only, not in local",
-    hint: "press l",
+    title: "In vault, not on this machine",
+    hint: "informational",
   },
   {
     key: "unknown",
@@ -247,17 +246,17 @@ function runKeyLoad(store: Store): void {
 }
 
 /**
- * Run a push or pull from the Sync tab. Always writes a persistent
- * `lastOp` result so the user can see what happened — even after the
- * toast fades. The global `p`/`l` keymap in app.ts delegates here so all
- * push/pull invocations go through the same plumbing.
+ * Run a push from the Sync tab. Always writes a persistent `lastOp` result so
+ * the user can see what happened — even after the toast fades. The global `p`
+ * keymap in app.ts delegates here so every push goes through the same plumbing.
+ * The vault is push-only backup in v2; there is no pull from the TUI.
  */
-export function runSyncOp(store: Store, op: "push" | "pull"): void {
+export function runSyncOp(store: Store): void {
   if (!store.getState().sync.keyCache) {
     store.dispatch((d) => {
       setToast(d, "Load private key first (press k)", "error");
       d.sync.lastOp = {
-        kind: op,
+        kind: "push",
         status: "error",
         message: "private key not loaded — press k to load",
         ts: Date.now(),
@@ -271,7 +270,7 @@ export function runSyncOp(store: Store, op: "push" | "pull"): void {
   // empty-selection here removes the ambiguity between TUI and CLI modes,
   // and prevents an accidental key-press from publishing every drift row.
   const selection = store.getState().selection;
-  if (op === "push" && selection.size === 0) {
+  if (selection.size === 0) {
     store.dispatch((d) => {
       setToast(d, "Select files to push (press space on rows)", "error");
       d.sync.lastOp = {
@@ -283,82 +282,54 @@ export function runSyncOp(store: Store, op: "push" | "pull"): void {
     });
     return;
   }
-  // Selection has no effect on pull (pull is by-agent, not by-file).
-  const selectedVaultPaths = op === "push" ? new Set(selection) : undefined;
+  const selectedVaultPaths = new Set(selection);
 
-  const runningMessage = selectedVaultPaths
-    ? `${op}ing ${selectedVaultPaths.size} selected file(s)…`
-    : `${op}…`;
+  const runningMessage = `pushing ${selectedVaultPaths.size} selected file(s)…`;
   store.dispatch((d) => {
-    d.sync.lastOp = { kind: op, status: "running", message: runningMessage, ts: Date.now() };
+    d.sync.lastOp = { kind: "push", status: "running", message: runningMessage, ts: Date.now() };
   });
   store.runOperation(
-    op,
-    `${op} vault`,
-    async () => (op === "push" ? performPush({ vaultPaths: selectedVaultPaths }) : performPull()),
+    "push",
+    "push vault",
+    async () => performPush({ vaultPaths: selectedVaultPaths }),
     {
-      activityKind: op,
+      activityKind: "push",
       onSuccess: (draft, result) => {
-        if (op === "push") {
-          const r = result as Awaited<ReturnType<typeof performPush>>;
-          if (r.fatal) {
-            // performPush returns a flat string[] where the first entry is
-            // the summary ("Push aborted: N security issue(s) detected …")
-            // and the rest are per-issue details. Split that here so the
-            // banner can render the summary inline and indent each detail
-            // beneath it — no truncation, no losing file paths.
-            const [summary = "push failed", ...details] = r.errors;
-            setToast(draft, `Push failed: ${summary}`, "error");
-            draft.sync.lastOp = {
-              kind: "push",
-              status: "error",
-              message: summary,
-              details: details.length > 0 ? details : undefined,
-              ts: Date.now(),
-            };
-          } else {
-            const msg = `pushed ${r.pushed} artifact(s)`;
-            setToast(draft, `Push ok: ${r.pushed} artifact(s)`, "success");
-            draft.sync.lastOp = { kind: "push", status: "ok", message: msg, ts: Date.now() };
-            draft.sync.phase = "idle";
-            // Drop only the paths that were actually pushed in this op,
-            // not the whole selection set. The push captured its paths via
-            // `new Set(selection)` at launch, so any rows the user space-
-            // toggled while the push was async are intentionally outside
-            // this op's scope and must survive into the next push.
-            if (selectedVaultPaths) {
-              for (const p of selectedVaultPaths) draft.selection.delete(p);
-            }
-          }
+        const r = result as Awaited<ReturnType<typeof performPush>>;
+        if (r.fatal) {
+          // performPush returns a flat string[] where the first entry is the
+          // summary ("Push aborted: N security issue(s) detected …") and the
+          // rest are per-issue details. Split that here so the banner can render
+          // the summary inline and indent each detail beneath it — no truncation.
+          const [summary = "push failed", ...details] = r.errors;
+          setToast(draft, `Push failed: ${summary}`, "error");
+          draft.sync.lastOp = {
+            kind: "push",
+            status: "error",
+            message: summary,
+            details: details.length > 0 ? details : undefined,
+            ts: Date.now(),
+          };
         } else {
-          const r = result as Awaited<ReturnType<typeof performPull>>;
-          if (r.fatal) {
-            const [summary = "pull failed", ...details] = r.errors;
-            setToast(draft, `Pull failed: ${summary}`, "error");
-            draft.sync.lastOp = {
-              kind: "pull",
-              status: "error",
-              message: summary,
-              details: details.length > 0 ? details : undefined,
-              ts: Date.now(),
-            };
-          } else {
-            const msg = `applied ${r.applied} agent(s)`;
-            setToast(draft, `Pull ok: ${r.applied} agent(s) applied`, "success");
-            draft.sync.lastOp = { kind: "pull", status: "ok", message: msg, ts: Date.now() };
-            draft.sync.phase = "idle";
-          }
+          const msg = `pushed ${r.pushed} artifact(s)`;
+          setToast(draft, `Push ok: ${r.pushed} artifact(s)`, "success");
+          draft.sync.lastOp = { kind: "push", status: "ok", message: msg, ts: Date.now() };
+          draft.sync.phase = "idle";
+          // Drop only the paths actually pushed in this op, not the whole
+          // selection set. Rows the user space-toggled while the push was async
+          // are outside this op's scope and must survive into the next push.
+          for (const p of selectedVaultPaths) draft.selection.delete(p);
         }
       },
       onError: (draft, err) => {
         draft.sync.lastOp = {
-          kind: op,
+          kind: "push",
           status: "error",
           message: err.message,
           ts: Date.now(),
         };
       },
-      errorToastPrefix: op,
+      errorToastPrefix: "push",
     },
   );
 }
@@ -909,9 +880,9 @@ export function onSyncKey(key: KeyEvent, store: Store): boolean {
     });
     return true;
   }
-  // `p` (push) and `l` (pull) are handled at the global level in app.ts
-  // via the shared invokeSyncOp → runSyncOp path so every push/pull —
-  // regardless of source tab — populates `sync.lastOp` consistently.
+  // `p` (push) is handled at the global level in app.ts via the shared
+  // invokeSyncOp → runSyncOp path so every push — regardless of source tab —
+  // populates `sync.lastOp` consistently.
   return false;
 }
 
@@ -1546,7 +1517,7 @@ export function renderSync(renderer: CliRenderer, host: BoxRenderable, state: Ap
     return;
   }
 
-  // Persistent banner for the most recent push/pull. Stays visible until
+  // Persistent banner for the most recent sync op. Stays visible until
   // the next op runs — toasts fade in 3s and that's too short for the
   // terminal-level error messages the user needs to read and act on. When
   // `details` is present (per-file secret-detection errors), each detail

@@ -10,7 +10,7 @@
 #
 # Usage:
 #   bash docker/e2e/run-all.sh
-#   SCENARIOS="smoke.sh 02-multi-machine.sh" bash docker/e2e/run-all.sh
+#   SCENARIOS="smoke.sh 03-diverged-history.sh" bash docker/e2e/run-all.sh
 #   SKIP="11-daemon-ipc.sh" bash docker/e2e/run-all.sh
 
 set -euo pipefail
@@ -36,22 +36,22 @@ yellow "▶ Initializing vault"
 docker compose -f "$COMPOSE_FILE" up -d vault-init
 
 # Default scenario set — sorted to match CI matrix ordering.
+# Down-sync (`pull`) was removed in favour of `copy`; single-agent restore
+# scenarios were converted to `copy self <agent>/`. The multi-agent round-trip,
+# per-agent filter loop, and plugin-tree marketplace scenarios were removed:
+# their copy-based equivalents (distinct-namespace `copy <machine>` and the
+# plugin manifest reinstall) land with the plugin-manifest work.
 default_scenarios=(
   smoke.sh
-  02-multi-machine.sh
   03-diverged-history.sh
   04-sanitizer-aborts.sh
   05-key-rotate.sh
   06-skill-additive.sh
-  07-skill-mcp-fidelity.sh
-  08-agent-filter.sh
   09-key-add.sh
   10-migrate.sh
   11-daemon-ipc.sh
-  12-pull-force.sh
   13-doctor.sh
   14-dry-run.sh
-  15-plugin-marketplace.sh
   16-vscode-non-mcp.sh
   17-git-protocol.sh
   18-copilot.sh

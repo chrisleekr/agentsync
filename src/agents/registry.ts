@@ -1,15 +1,16 @@
 import type { AgentSyncConfig } from "../config/schema";
+import type { ApplyPlan } from "./_apply";
 import type { SnapshotArtifact, SnapshotResult } from "./_utils";
 import type { ClaudeSnapshotResult } from "./claude";
-import { applyClaudeVault, snapshotClaude } from "./claude";
+import { applyClaudeVault, buildClaudePlan, snapshotClaude } from "./claude";
 import type { CodexSnapshotResult } from "./codex";
-import { applyCodexVault, snapshotCodex } from "./codex";
+import { applyCodexVault, buildCodexPlan, snapshotCodex } from "./codex";
 import type { CopilotSnapshotResult } from "./copilot";
-import { applyCopilotVault, snapshotCopilot } from "./copilot";
+import { applyCopilotVault, buildCopilotPlan, snapshotCopilot } from "./copilot";
 import type { CursorSnapshotResult } from "./cursor";
-import { applyCursorVault, snapshotCursor } from "./cursor";
+import { applyCursorVault, buildCursorPlan, snapshotCursor } from "./cursor";
 import type { VsCodeSnapshotResult } from "./vscode";
-import { applyVsCodeVault, snapshotVsCode } from "./vscode";
+import { applyVsCodeVault, buildVsCodePlan, snapshotVsCode } from "./vscode";
 
 /** Supported agent adapters that can snapshot to and restore from the vault. */
 export type AgentName = "cursor" | "claude" | "codex" | "copilot" | "vscode";
@@ -33,6 +34,12 @@ export interface AgentDefinition {
    * This is the counterpart to `snapshot()` and drives the pull pipeline.
    */
   apply: (vaultDir: string, key: string, dryRun: boolean, config: AgentSyncConfig) => Promise<void>;
+  /**
+   * Build this agent's declarative {@link ApplyPlan} without running it. The
+   * `copy` command uses it with `applySingleArtifact` to apply one artifact
+   * from another machine's namespace, reusing the same handlers as `apply`.
+   */
+  buildPlan: (config: AgentSyncConfig) => ApplyPlan;
 }
 
 /** Ordered registry used by commands to iterate over every supported agent adapter. */
@@ -41,26 +48,31 @@ export const Agents: AgentDefinition[] = [
     name: "claude",
     snapshot: snapshotClaude,
     apply: applyClaudeVault,
+    buildPlan: buildClaudePlan,
   },
   {
     name: "cursor",
     snapshot: snapshotCursor,
     apply: applyCursorVault,
+    buildPlan: buildCursorPlan,
   },
   {
     name: "codex",
     snapshot: snapshotCodex,
     apply: applyCodexVault,
+    buildPlan: buildCodexPlan,
   },
   {
     name: "copilot",
     snapshot: snapshotCopilot,
     apply: applyCopilotVault,
+    buildPlan: buildCopilotPlan,
   },
   {
     name: "vscode",
     snapshot: snapshotVsCode,
     apply: applyVsCodeVault,
+    buildPlan: buildVsCodePlan,
   },
 ];
 

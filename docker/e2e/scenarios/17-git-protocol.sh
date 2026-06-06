@@ -100,7 +100,7 @@ chmod 600 "$MACHINE_B/.config/agentsync/key.txt"
 HOME="$MACHINE_B" bun run src/cli.ts init --remote "$GIT_REMOTE" --branch main
 
 step "Machine B: pull via git://"
-HOME="$MACHINE_B" bun run src/cli.ts pull
+copy_self "$MACHINE_B" claude/
 
 step "CRITICAL: CLAUDE.md round-trips byte-equal A → B over git://"
 assert_round_trip "$MACHINE_A" "$MACHINE_B" ".claude/CLAUDE.md"

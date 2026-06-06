@@ -63,7 +63,7 @@ chmod 600 "$MACHINE_B/.config/agentsync/key.txt"
 HOME="$MACHINE_B" bun run src/cli.ts init --remote "$VAULT_URL" --branch main
 # Mirror the syncMarketplace-style toggle: B's agentsync.toml is pulled from
 # vault HEAD on init, so vscode=true already, no edit needed.
-HOME="$MACHINE_B" bun run src/cli.ts pull
+copy_self "$MACHINE_B" vscode/
 
 step "CRITICAL: B has mcp.json, absent everything else"
 assert_file_exists "$MACHINE_B/$VSCODE_DIR/mcp.json"

@@ -73,7 +73,7 @@ cp "$A_KEY" "$B/.config/agentsync/key.txt"
 chmod 600 "$B/.config/agentsync/key.txt"
 
 with_machine "$B" bun run src/cli.ts init --remote "$VAULT_URL" --branch main
-with_machine "$B" bun run src/cli.ts pull
+copy_self "$B" codex/
 
 step "B17: both AGENTS.md and AGENTS.override.md materialize on B"
 assert_file_exists "$B/.codex/AGENTS.md"
@@ -113,7 +113,7 @@ assert_in_vault "$VAULT_PATH" "codex/skills/legacy-skill.tar.age"
 assert_in_vault "$VAULT_PATH" "codex/skills/sql-formatter.tar.age"
 
 step "B22: pulling on B writes BOTH skills to canonical \$HOME/.agents/skills"
-with_machine "$B" bun run src/cli.ts pull
+copy_self "$B" codex/
 assert_dir_exists  "$B/.agents/skills/sql-formatter"
 assert_dir_exists  "$B/.agents/skills/legacy-skill"
 # Apply target is canonical only — legacy directory must NOT be re-created on B.

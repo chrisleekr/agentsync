@@ -130,7 +130,7 @@ cp "$A_KEY" "$B/.config/agentsync/key.txt"
 chmod 600 "$B/.config/agentsync/key.txt"
 
 with_machine "$B" bun run src/cli.ts init --remote "$VAULT_URL" --branch main
-with_machine "$B" bun run src/cli.ts pull
+copy_self "$B" claude/
 
 # ─── ~/.claude.json mcpServers ───────────────────────────────────────────────
 step "B24: ~/.claude.json mcpServers rewritten to /tmp/beta"

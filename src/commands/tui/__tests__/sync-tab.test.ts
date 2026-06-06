@@ -398,7 +398,7 @@ describe("runSyncOp — lastOp persistence", () => {
       d.sync.phase = "ready";
       d.sync.keyPrompt = "skipped";
     });
-    runSyncOp(store, "push");
+    runSyncOp(store);
     const lastOp = store.getState().sync.lastOp;
     expect(lastOp?.kind).toBe("push");
     expect(lastOp?.status).toBe("error");
@@ -414,7 +414,7 @@ describe("runSyncOp — lastOp persistence", () => {
       d.sync.keyCache = "AGE-SECRET-KEY-1FAKE";
       d.selection.add("claude/CLAUDE.md.age");
     });
-    runSyncOp(store, "push");
+    runSyncOp(store);
     const lastOp = store.getState().sync.lastOp;
     expect(lastOp?.kind).toBe("push");
     // The op is in-flight (will likely fail asynchronously in this test
@@ -431,7 +431,7 @@ describe("runSyncOp — lastOp persistence", () => {
       d.sync.keyLoaded = true;
       d.sync.keyCache = "AGE-SECRET-KEY-1FAKE";
     });
-    runSyncOp(store, "push");
+    runSyncOp(store);
     const lastOp = store.getState().sync.lastOp;
     expect(lastOp?.kind).toBe("push");
     expect(lastOp?.status).toBe("error");
@@ -442,24 +442,6 @@ describe("runSyncOp — lastOp persistence", () => {
     // Lock in the actionable phrase "press space" — not just "space" —
     // so a future rewrite that drops the verb still fails this assertion.
     expect(lastOp?.message).toContain("press space");
-  });
-
-  test("pull is unaffected by empty selection — selection is push-only", () => {
-    const store = createStore(createInitialState());
-    store.dispatch((d) => {
-      d.sync.phase = "ready";
-      d.sync.keyPrompt = "idle";
-      d.sync.keyLoaded = true;
-      d.sync.keyCache = "AGE-SECRET-KEY-1FAKE";
-    });
-    runSyncOp(store, "pull");
-    const lastOp = store.getState().sync.lastOp;
-    expect(lastOp?.kind).toBe("pull");
-    // Pull must not land in the empty-selection error path we added for push.
-    expect(["running", "error"]).toContain(lastOp?.status ?? "");
-    if (lastOp?.status === "error") {
-      expect(lastOp.message).not.toContain("nothing selected");
-    }
   });
 });
 

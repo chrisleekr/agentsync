@@ -1,7 +1,6 @@
 import { access, unlink } from "node:fs/promises";
 import { dirname } from "node:path";
 import { log } from "@clack/prompts";
-import { performPull } from "../commands/pull";
 import { performPush } from "../commands/push";
 import { resolveRuntimeContext } from "../commands/shared";
 import {
@@ -34,7 +33,7 @@ function recordSuccess(): void {
  * The operation type is always included in `lastError` for diagnostics.
  * `lastError` MUST NOT include key file content — only paths and error codes.
  */
-function recordFailure(op: "push" | "pull", msg: string): void {
+function recordFailure(op: "push", msg: string): void {
   consecutiveFailures += 1;
   lastError = `[${op}] ${msg}`;
 }
@@ -135,27 +134,6 @@ export async function startDaemon(): Promise<void> {
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         recordFailure("push", msg);
-        throw err;
-      }
-    });
-  });
-
-  ipc.on("pull", async () => {
-    return queue.enqueue(async () => {
-      try {
-        const result = await withRetry(() => performPull());
-        if (result.fatal) {
-          for (const err of result.errors) {
-            log.error(`${ts()} ${err}`);
-          }
-          recordFailure("pull", result.errors.join("; "));
-        } else {
-          recordSuccess();
-        }
-        return result;
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        recordFailure("pull", msg);
         throw err;
       }
     });

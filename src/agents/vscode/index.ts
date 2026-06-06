@@ -41,14 +41,9 @@ export async function applyVsCodeMcp(mcpJsonContent: string): Promise<void> {
 
 // ─── Apply (pull side) ────────────────────────────────────────────────────────
 
-/** Decrypt and apply all VS Code vault artifacts to the local machine. */
-export async function applyVsCodeVault(
-  vaultDir: string,
-  key: string,
-  dryRun: boolean,
-  _config?: AgentSyncConfig,
-): Promise<void> {
-  const plan: ApplyPlan = {
+/** Build the VS Code apply plan. Exposed so `copy` can apply a single artifact. */
+export function buildVsCodePlan(_config?: AgentSyncConfig): ApplyPlan {
+  return {
     agent: "vscode",
     directives: [
       defineFileArtifact({
@@ -58,5 +53,14 @@ export async function applyVsCodeVault(
       }),
     ],
   };
-  await runApplyPlan(plan, vaultDir, key, dryRun);
+}
+
+/** Decrypt and apply all VS Code vault artifacts to the local machine. */
+export async function applyVsCodeVault(
+  vaultDir: string,
+  key: string,
+  dryRun: boolean,
+  config?: AgentSyncConfig,
+): Promise<void> {
+  await runApplyPlan(buildVsCodePlan(config), vaultDir, key, dryRun);
 }

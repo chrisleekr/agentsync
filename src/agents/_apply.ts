@@ -153,3 +153,95 @@ export async function runApplyPlan(
 export function defineFileArtifact(d: Omit<FileArtifact, "kind">): FileArtifact {
   return { kind: "file", ...d };
 }
+
+/** No plan directive owns the given vault path (the `copy` command's miss). */
+export class NoMatchingArtifactError extends Error {
+  constructor(
+    readonly vaultPath: string,
+    readonly reason: string,
+  ) {
+    super(`No copyable artifact at ${vaultPath}: ${reason}.`);
+    this.name = "NoMatchingArtifactError";
+  }
+}
+
+/**
+ * Apply ONE vault artifact identified by its machine-root-relative path (e.g.
+ * "claude/CLAUDE.md.age" or "claude/skills/foo.tar.age"). Locates the single
+ * plan directive that owns the path, decrypts that file under `machineRoot`,
+ * and runs just that directive's apply — reusing the same handlers, JSONC
+ * merge, validators, and dry-run behavior as runApplyPlan. This is the `copy`
+ * command's primitive; it never writes the local machine's vault. Throws
+ * NoMatchingArtifactError when no directive owns the path.
+ */
+export async function applySingleArtifact(
+  plan: ApplyPlan,
+  relativeVaultPath: string,
+  machineRoot: string,
+  key: string,
+  dryRun: boolean,
+  respectEnabled = false,
+): Promise<void> {
+  const agentVaultDir = join(machineRoot, plan.agent);
+  const prefix = `${plan.agent}/`;
+  if (!relativeVaultPath.startsWith(prefix)) {
+    throw new NoMatchingArtifactError(relativeVaultPath, `path is not under ${plan.agent}/`);
+  }
+  const rel = relativeVaultPath.slice(prefix.length);
+  const slash = rel.indexOf("/");
+
+  if (slash === -1) {
+    // Top-level file artifact: a FileArtifact whose vaultName is this basename.
+    const directive = plan.directives.find(
+      (d): d is FileArtifact => d.kind === "file" && d.vaultName === rel,
+    );
+    if (!directive) {
+      throw new NoMatchingArtifactError(relativeVaultPath, "no file artifact owns this name");
+    }
+    // Honour the `enabled` gate (e.g. claude marketplace) only on a directory
+    // sweep, where the user named a prefix, not this file — matching what a full
+    // apply would skip. An explicit single-file copy ignores it (respectEnabled
+    // false), so the user's named request still wins.
+    if (respectEnabled && directive.enabled && !directive.enabled()) {
+      throw new NoMatchingArtifactError(relativeVaultPath, "sync is disabled for this artifact");
+    }
+    if (dryRun) {
+      log.info(directive.dryRunLabel);
+      return;
+    }
+    const decrypted = await decryptString(await readFile(join(agentVaultDir, rel), "utf8"), key);
+    await directive.apply(decrypted);
+    return;
+  }
+
+  const subdir = rel.slice(0, slash);
+  const name = rel.slice(slash + 1);
+  if (name.includes("/")) {
+    // Deeper nesting (e.g. plugins/<name>/…) is not a simple dir directive.
+    throw new NoMatchingArtifactError(relativeVaultPath, "nested artifacts are not copyable");
+  }
+  const directive = plan.directives.find(
+    (d): d is DirArtifact =>
+      d.kind === "dir" &&
+      d.subdir === subdir &&
+      name.endsWith(d.suffix) &&
+      (!d.match || d.match(name)),
+  );
+  if (!directive) {
+    throw new NoMatchingArtifactError(relativeVaultPath, `no directory artifact owns ${subdir}/`);
+  }
+  const bareName = basename(name, directive.suffix === ".tar.age" ? ".tar.age" : ".age");
+  if (directive.filter) {
+    const skip = directive.filter(bareName);
+    if (skip) throw new NoMatchingArtifactError(relativeVaultPath, skip.reason);
+  }
+  if (dryRun) {
+    log.info(`[dry-run] [${plan.agent}] ${directive.dryRunVerb} ${bareName}`);
+    return;
+  }
+  const decrypted = await decryptString(
+    await readFile(join(agentVaultDir, subdir, name), "utf8"),
+    key,
+  );
+  await directive.apply(bareName, decrypted);
+}

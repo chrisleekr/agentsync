@@ -1,12 +1,12 @@
 #!/usr/bin/env bun
 import { defineCommand, runMain } from "citty";
+import { copyCommand } from "./commands/copy";
 import { daemonCommand } from "./commands/daemon";
 import { destroyCommand } from "./commands/destroy";
 import { doctorCommand } from "./commands/doctor";
 import { initCommand } from "./commands/init";
 import { keyCommand } from "./commands/key";
 import { migrateCommand } from "./commands/migrate";
-import { pullCommand } from "./commands/pull";
 import { pushCommand } from "./commands/push";
 import { skillCommand } from "./commands/skill";
 import { statusCommand } from "./commands/status";
@@ -24,7 +24,7 @@ const main = defineCommand({
   subCommands: {
     init: initCommand,
     push: pushCommand,
-    pull: pullCommand,
+    copy: copyCommand,
     status: statusCommand,
     doctor: doctorCommand,
     daemon: daemonCommand,

@@ -407,15 +407,10 @@ export async function applyClaudeMarketplace(content: string): Promise<void> {
 
 import { type ApplyPlan, defineFileArtifact, runApplyPlan } from "../_apply";
 
-/** Decrypt and apply all Claude vault artifacts to the local machine. */
-export async function applyClaudeVault(
-  vaultDir: string,
-  key: string,
-  dryRun: boolean,
-  config: AgentSyncConfig,
-): Promise<void> {
+/** Build the Claude apply plan. Exposed so `copy` can apply a single artifact. */
+export function buildClaudePlan(config: AgentSyncConfig): ApplyPlan {
   const syncMarketplace = config.claudePlugins?.syncMarketplace ?? false;
-  const plan: ApplyPlan = {
+  return {
     agent: "claude",
     directives: [
       defineFileArtifact({
@@ -489,5 +484,14 @@ export async function applyClaudeVault(
       },
     ],
   };
-  await runApplyPlan(plan, vaultDir, key, dryRun);
+}
+
+/** Decrypt and apply all Claude vault artifacts to the local machine. */
+export async function applyClaudeVault(
+  vaultDir: string,
+  key: string,
+  dryRun: boolean,
+  config: AgentSyncConfig,
+): Promise<void> {
+  await runApplyPlan(buildClaudePlan(config), vaultDir, key, dryRun);
 }

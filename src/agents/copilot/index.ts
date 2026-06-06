@@ -196,14 +196,9 @@ export async function applyCopilotAgent(fileName: string, content: string): Prom
 
 import { type ApplyPlan, defineFileArtifact, runApplyPlan } from "../_apply";
 
-/** Decrypt and apply all Copilot vault artifacts to the local machine. */
-export async function applyCopilotVault(
-  vaultDir: string,
-  key: string,
-  dryRun: boolean,
-  _config?: AgentSyncConfig,
-): Promise<void> {
-  const plan: ApplyPlan = {
+/** Build the Copilot apply plan. Exposed so `copy` can apply a single artifact. */
+export function buildCopilotPlan(_config?: AgentSyncConfig): ApplyPlan {
+  return {
     agent: "copilot",
     directives: [
       defineFileArtifact({
@@ -263,5 +258,14 @@ export async function applyCopilotVault(
       },
     ],
   };
-  await runApplyPlan(plan, vaultDir, key, dryRun);
+}
+
+/** Decrypt and apply all Copilot vault artifacts to the local machine. */
+export async function applyCopilotVault(
+  vaultDir: string,
+  key: string,
+  dryRun: boolean,
+  config?: AgentSyncConfig,
+): Promise<void> {
+  await runApplyPlan(buildCopilotPlan(config), vaultDir, key, dryRun);
 }

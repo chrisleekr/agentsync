@@ -49,7 +49,7 @@ mkdir -p "$MACHINE_B/.config/agentsync"
 cp "$KEY_A" "$MACHINE_B/.config/agentsync/key.txt"
 chmod 600 "$MACHINE_B/.config/agentsync/key.txt"
 with_machine "$MACHINE_B" bun run src/cli.ts init --remote "$VAULT_URL_K" --branch main
-with_machine "$MACHINE_B" bun run src/cli.ts pull
+copy_self "$MACHINE_B" claude/
 assert_dir_exists  "$MACHINE_B/.claude/skills/postgres-helper"
 assert_file_exists "$MACHINE_B/.claude/skills/postgres-helper/SKILL.md"
 

@@ -70,12 +70,10 @@ const fakeArtifacts: SnapshotArtifact[] = [];
 const fakeApplyCalls: string[] = [];
 
 type PushMod = typeof import("../../commands/push");
-type PullMod = typeof import("../../commands/pull");
 type InitMod = typeof import("../../commands/init");
 type KeyMod = typeof import("../../commands/key");
 
 let pushMod: PushMod;
-let pullMod: PullMod;
 let initMod: InitMod;
 let keyMod: KeyMod;
 
@@ -151,7 +149,6 @@ async function createDivergentMachinePair(rootDir: string): Promise<{
 
 beforeAll(async () => {
   pushMod = await import("../../commands/push");
-  pullMod = await import("../../commands/pull");
   initMod = await import("../../commands/init");
   keyMod = await import("../../commands/key");
 
@@ -162,11 +159,11 @@ beforeAll(async () => {
       apply: async (vaultDir: string) => {
         fakeApplyCalls.push(vaultDir);
       },
+      buildPlan: () => ({ agent: "claude", directives: [] }),
     },
   ];
 
   pushMod.__setPushAgentsForTesting(testAgents);
-  pullMod.__setPullAgentsForTesting(testAgents);
 });
 
 describe("integration", () => {
@@ -207,7 +204,6 @@ describe("integration", () => {
       }
     }
     pushMod.__setPushAgentsForTesting(null);
-    pullMod.__setPullAgentsForTesting(null);
     await rm(tmpDir, { recursive: true, force: true });
     mock.restore();
   });
@@ -330,15 +326,16 @@ describe("integration", () => {
       } as never);
     });
 
-    // The init flow should warn the new joiner that they cannot pull until an
-    // existing recipient runs `key add` for them. The message must include
-    // both the local machine name and its pubkey so it is copy-pasteable.
+    // The init flow should warn the new joiner that they cannot decrypt other
+    // machines' artifacts until an existing recipient runs `key add` for them.
+    // The message must include both the local machine name and its pubkey so it
+    // is copy-pasteable.
     const hint = fakeLogs.warn.find((message) =>
       message.includes("agentsync key add machine-beta"),
     );
     expect(hint).toBeDefined();
     expect(hint).toContain(machineB.recipient);
-    expect(hint).toContain("`agentsync pull` on this machine will fail");
+    expect(hint).toContain("cannot decrypt other machines' artifacts");
   });
 
   test("recipient handoff: init + key add (idempotent on same pubkey) re-encrypts vault for new machine", async () => {
@@ -697,16 +694,6 @@ describe("integration", () => {
     expect(content).toContain("BEGIN AGE ENCRYPTED FILE");
   });
 
-  test("performPull calls agent.apply for each enabled agent", async () => {
-    const result = await pullMod.performPull({ agent: "claude" });
-
-    expect(result.fatal).toBe(false);
-    expect(result.errors).toHaveLength(0);
-    expect(result.applied).toBe(1);
-    // v2: pull applies from this machine's namespace, not the flat vault root.
-    expect(fakeApplyCalls).toContain(machineRoot);
-  });
-
   test("performPush aborts when an artifact warning contains 'Detected literal secret'", async () => {
     fakeArtifacts.push({
       vaultPath: "claude/settings.age",
@@ -750,6 +737,7 @@ describe("integration", () => {
           warnings: [duplicatedWarning],
         }),
         apply: async () => {},
+        buildPlan: () => ({ agent: "claude", directives: [] }),
       },
     ];
 
@@ -773,6 +761,7 @@ describe("integration", () => {
           apply: async (vaultDir: string) => {
             fakeApplyCalls.push(vaultDir);
           },
+          buildPlan: () => ({ agent: "claude", directives: [] }),
         },
       ]);
     }
@@ -1109,31 +1098,6 @@ describe("integration", () => {
     expect(result.fatal).toBe(false);
   });
 
-  test("pull reports a controlled divergence error and suppresses the success footer", async () => {
-    const { machineB } = await createDivergentMachinePair(join(tmpDir, "pull-divergence"));
-    fakeLogs.success.length = 0;
-    fakeLogs.info.length = 0;
-    fakeLogs.warn.length = 0;
-    fakeLogs.error.length = 0;
-
-    await withMachineEnv(machineB, async () => {
-      await pullMod.pullCommand.run?.({
-        args: { agent: undefined, dryRun: false, force: false },
-        rawArgs: [],
-        cmd: {} as never,
-      } as never);
-    });
-
-    expect(process.exitCode).toBe(1);
-    expect(
-      fakeLogs.error.some((message) =>
-        message.includes("AgentSync only supports fast-forward sync"),
-      ),
-    ).toBe(true);
-    expect(fakeLogs.success.some((message) => message.includes("Pull completed"))).toBe(false);
-    expect(fakeApplyCalls).toHaveLength(0);
-  }, 20000);
-
   test("performPush inherits the shared divergence policy before writing vault artifacts", async () => {
     const { machineB } = await createDivergentMachinePair(join(tmpDir, "push-divergence"));
 
@@ -1409,5 +1373,20 @@ describe("skills sync integration guarantees", () => {
         expect(file.content).not.toContain("THIS_MUST_NOT_LEAK");
       }
     }
+  });
+});
+
+describe("down-sync removal (#157)", () => {
+  test("the pull command module no longer exists", () => {
+    // The vault is push-only backup in v2; there is no pull/restore.
+    expect(existsSync(join(import.meta.dir, "..", "pull.ts"))).toBe(false);
+  });
+
+  test("the apply layer is kept intact for the copy command (#158)", async () => {
+    const applyMod = await import("../../agents/_apply");
+    expect(typeof applyMod.runApplyPlan).toBe("function");
+    const registry = await import("../../agents/registry");
+    expect(registry.Agents.length).toBeGreaterThan(0);
+    expect(registry.Agents.every((a) => typeof a.apply === "function")).toBe(true);
   });
 });

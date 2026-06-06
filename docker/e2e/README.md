@@ -109,20 +109,15 @@ back to the local `homedir()` on pull (B24).
 | # | File | Purpose |
 |---|---|---|
 | 1 | `smoke.sh` | init+push proves the full fixture survives one round; every adapter contributed ≥1 artifact; no canary leaked |
-| 2 | `02-multi-machine.sh` | A→B round-trip byte-equality on every wholesale file + field-eq on every subset-field file |
 | 3 | `03-diverged-history.sh` | Force-divergence via direct git surgery → `Vault history diverged from 'origin/main'`, vault HEAD intact |
 | 4 | `04-sanitizer-aborts.sh` | Table-driven: every literal-secret canary aborts push; every never-sync canary stays out of the vault (incl. `*.bak`, `*~`); `cli-config.json` absent (B1) |
 | 5 | `05-key-rotate.sh` | Full-fixture rotate; old key rejected, new key decrypts every blob, plaintext byte-equal pre vs post |
 | 6 | `06-skill-additive.sh` | Disk removal of a skill leaves vault copy intact; explicit `skill remove` drops it |
-| 7 | `07-skill-mcp-fidelity.sh` | Wipe-and-pull on every skill bundle and every MCP file → `diff -r` byte-equal |
-| 8 | `08-agent-filter.sh` | `--agent X` on push/pull scopes correctly; `pull --dry-run` writes nothing |
 | 9 | `09-key-add.sh` | Add a second recipient; every blob decrypts under either key; idempotent re-run |
 | 10 | `10-migrate.sh` | Every supported `(--from, --to, --type)` combo; `--dry-run` no-op; idempotent |
 | 11 | `11-daemon-ipc.sh` | Daemon `status`, `push`, `pull` verbs work; clean shutdown |
-| 12 | `12-pull-force.sh` | `pull` vs `pull --force` semantics on diverged vault history; `--dry-run` writes nothing |
 | 13 | `13-doctor.sh` | Every `agentsync doctor` check fires; negative breaks surface the correct failure line |
 | 14 | `14-dry-run.sh` | `push --dry-run` lists intended changes but produces no commit |
-| 15 | `15-plugin-marketplace.sh` | Plugin subpath round-trip (`.claude-plugin/plugin.json`, `commands/`, `agents/`, `skills/`, `hooks/`, `.mcp.json`) + `syncMarketplace` toggle (B4, B5) |
 | 16 | `16-vscode-non-mcp.sh` | Pin (B6): VS Code adapter syncs **only** `mcp.json.mcpServers`; settings/keybindings/snippets stay local |
 | 17 | `17-git-protocol.sh` | `git://` transport via an in-container `git daemon` on 127.0.0.1:9418 (B7) |
 | 18 | `18-copilot.sh` | Pin/verify canonical `copilot-instructions.md` filename (B16) + single-file `.agent.md` shape (B15); pin not-synced state of `lsp-config.json`, `settings.json`, `mcp-config.json` (B13, B14, B23) |
@@ -182,7 +177,6 @@ bun run e2e:all
 
 ```bash
 bun run e2e:all                            # full sweep (20 scenarios)
-SCENARIOS="smoke.sh 02-multi-machine.sh" bun run e2e:all
 SCENARIO=18-copilot.sh bun run e2e:scenario  # one scenario
 bun run e2e:smoke                          # legacy single-up smoke
 bun run e2e:audit                          # decrypted-blob leak audit
@@ -214,20 +208,15 @@ docker/e2e/
 └── scenarios/
     ├── _lib.sh                step/assert/with_machine/daemon_ipc/tar_age_extract helpers
     ├── smoke.sh
-    ├── 02-multi-machine.sh
     ├── 03-diverged-history.sh
     ├── 04-sanitizer-aborts.sh
     ├── 05-key-rotate.sh
     ├── 06-skill-additive.sh
-    ├── 07-skill-mcp-fidelity.sh
-    ├── 08-agent-filter.sh
     ├── 09-key-add.sh
     ├── 10-migrate.sh
     ├── 11-daemon-ipc.sh
-    ├── 12-pull-force.sh
     ├── 13-doctor.sh
     ├── 14-dry-run.sh
-    ├── 15-plugin-marketplace.sh
     ├── 16-vscode-non-mcp.sh
     ├── 17-git-protocol.sh
     ├── 18-copilot.sh
