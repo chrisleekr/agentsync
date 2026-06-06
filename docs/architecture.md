@@ -1,5 +1,5 @@
 ---
-description: How AgentSync works: the encrypted vault format, push and pull pipelines, the background daemon, and fail-closed reconciliation.
+description: How AgentSync works: the encrypted vault format, push and copy pipelines, the background daemon, and fail-closed reconciliation.
 ---
 
 # Architecture
@@ -8,7 +8,7 @@ How AgentSync moves bytes from your machine to a Git remote and back, encrypted 
 
 ## What this page owns
 
-This page owns the system model, the push and pull pipelines, the daemon model, the vault layout, the security boundaries, and the reconciliation rule. Command flags live in [Commands](commands.md); day-2 operational concerns live in [Operations](operations.md).
+This page owns the system model, the push and copy pipelines, the daemon model, the vault layout, the security boundaries, and the reconciliation rule. Command flags live in [Commands](commands.md); day-2 operational concerns live in [Operations](operations.md).
 
 ## System context
 
@@ -88,9 +88,11 @@ Gate-by-gate:
 - **Encryptor**: every artefact is encrypted to the current recipient set using age. Plaintext exists only in process memory and is never serialised to disk after this point.
 - **Reconciliation**: fast-forward only. If the local vault has diverged from the remote branch, the push stops and prints a recovery path. AgentSync never merges silently.
 
-## The pull pipeline
+## The copy pipeline
 
-Pull is **additive by construction**. It can add files and update existing ones; it never deletes a local file the vault does not contain. Skill removal is explicit (`agentsync skill remove`) precisely so a misconfigured pull on a fresh machine cannot wipe local work.
+There is no automatic down-sync. `push` only ever writes this machine's own `machines/<name>/` namespace; the **only** way to bring vault content onto local disk is an explicit `agentsync copy <machine> <path>`. You name the source machine and the artefact (or a directory prefix), and AgentSync decrypts just that and applies it to local disk through the same per-agent apply plan a snapshot uses.
+
+Copy is **additive by construction**. It can add files and update existing ones; it never deletes a local file the vault does not contain. Skill removal is explicit (`agentsync skill remove`) precisely so a misconfigured copy on a fresh machine cannot wipe local work. Copy writes only local disk — it never touches the vault, so the next `push` captures the result normally.
 
 <div class="agentsync-darknodes" markdown>
 
@@ -98,14 +100,16 @@ Pull is **additive by construction**. It can add files and update existing ones;
 flowchart LR
     Fetch["git fetch<br/>vault"]:::step
     FF["Fast-forward<br/>or abort"]:::gate
+    Pick["Resolve machine<br/>+ artefact path"]:::step
     Decrypt["Decryptor<br/>age identity"]:::step
-    Apply["Apply additively"]:::step
+    Apply["Apply additively<br/>to local disk"]:::step
     Local[("Local agent<br/>configs")]:::remote
-    Abort["pull fails<br/>guidance printed"]:::abort
+    Abort["copy fails<br/>guidance printed"]:::abort
 
     Fetch --> FF
     FF -->|diverged| Abort
-    FF --> Decrypt
+    FF --> Pick
+    Pick --> Decrypt
     Decrypt --> Apply
     Apply --> Local
 
@@ -121,11 +125,11 @@ flowchart LR
 
 ## Reconciliation rule
 
-Reconciliation is fast-forward only and is the **same rule** used by `init`, `push`, `pull`, `key add`, `key rotate`, and the daemon. The contract:
+Reconciliation is fast-forward only and is the **same rule** used by `init`, `push`, `copy`, `key add`, `key rotate`, and the daemon. The contract:
 
 - If the local branch is identical to the remote branch, the operation continues.
 - If the local branch is behind the remote, the operation fast-forwards the local before continuing.
-- If the local branch is ahead of the remote, `push` fast-forwards the remote; `pull` continues without writing (pull never pushes).
+- If the local branch is ahead of the remote, `push` fast-forwards the remote; `copy` continues reading without writing the remote (copy never pushes).
 - If the local branch has diverged from the remote, the operation stops with a printed recovery path. AgentSync never merges or rebases automatically.
 
 The reasoning: a configuration vault is a flat record of intent. Three-way merge on encrypted blobs would either produce nonsense or require trust in a merge driver that has no way to inspect the plaintext. Failing closed forces the human to decide which branch is canonical.
@@ -179,7 +183,7 @@ Once admitted, each artefact is sanitised through the relevant rule set, encrypt
 
 ## Daemon model
 
-The daemon is a long-running process under platform supervision (launchd on macOS, systemd-user on Linux, Task Scheduler on Windows). It exposes `status`, `push`, and `pull` over a newline-delimited IPC protocol on a per-user socket.
+The daemon is a long-running process under platform supervision (launchd on macOS, systemd-user on Linux, Task Scheduler on Windows). It is **push-only**: it exposes `status` and `push` over a newline-delimited IPC protocol on a per-user socket. There is no pull IPC command and no periodic pull timer — the vault is a backup, and bringing content down is always an explicit, interactive `copy`.
 
 <div class="agentsync-darknodes" markdown>
 
@@ -189,19 +193,15 @@ flowchart LR
     Debounce["Debounce<br/>quiet window"]:::step
     Queue["Sync queue<br/>serialised"]:::gate
     Push["push"]:::step
-    Pull["pull"]:::step
-    Timer["Periodic pull timer"]:::step
     Ipc["IPC server"]:::step
     Cli["agentsync CLI"]:::local
     Tui["agentsync TUI"]:::local
 
     Watcher --> Debounce --> Queue
-    Timer --> Queue
-    Cli -->|status / push / pull| Ipc
-    Tui -->|status poll 1.5s, push, pull| Ipc
+    Cli -->|status / push| Ipc
+    Tui -->|status poll 1.5s, push| Ipc
     Ipc --> Queue
     Queue --> Push
-    Queue --> Pull
 
     classDef local fill:#2c3e50,color:#ffffff,stroke:#1a252f
     classDef step fill:#2c3e50,color:#ffffff,stroke:#1a252f
@@ -217,7 +217,7 @@ because every request goes through the same sync queue.
 Key invariants:
 
 - **Only one daemon per user.** Second-instance detection runs at startup and exits cleanly if a daemon is already up. A stale socket from an ungraceful prior exit is unlinked automatically.
-- **One sync at a time.** Every push and pull, whether file-watcher-driven, timer-driven, or IPC-driven, passes through the sync queue. Two operations can never race.
+- **One sync at a time.** Every push, whether file-watcher-driven or IPC-driven, passes through the sync queue. Two operations can never race.
 - **One automatic retry.** A transient sync failure triggers one retry. If both attempts fail, the error is recorded and the daemon stays alive so the next change can trigger a fresh push. The daemon never silently gives up.
 - **Hard shutdown timeout.** On shutdown the queue is drained with a ten-second hard timeout. The IPC socket and watchers are released cleanly.
 

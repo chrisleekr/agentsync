@@ -10,6 +10,11 @@ Translate configuration from one AI agent's format to another. The migrator read
 
 No vault initialisation is required — migration operates on local files only.
 
+> **Not the vault-format migration.** `agentsync migrate` translates config
+> between *agents* (Claude → Cursor, etc.). Upgrading an older vault to the
+> current per-machine *format* is a separate command, [`agentsync vault
+> upgrade`](commands.md#vault). The two never overlap.
+
 ## Two ways to run a migration
 
 - **Interactive (TUI)**: run `agentsync`, press `4` for the Migrate tab,

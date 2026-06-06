@@ -1,5 +1,5 @@
 ---
-description: Complete AgentSync CLI reference: every command, flag, default, and caveat for init, push, pull, status, daemon, key, skill, and the TUI.
+description: Complete AgentSync CLI reference: every command, flag, default, and caveat for init, push, copy, status, daemon, key, skill, plugin, vault, and the TUI.
 ---
 
 # Commands
@@ -41,14 +41,15 @@ When developing from source, replace the binary call with `bun run src/cli.ts`. 
 |---|---|
 | [*(bare)* / `tui`](#tui) | Open the interactive tab-based TUI. |
 | [`init`](#init) | Bootstrap the vault, machine key, and config. |
-| [`push`](#push) | Snapshot, sanitise, encrypt, and fast-forward to the vault. |
-| [`pull`](#pull) | Fetch the vault, decrypt, and apply locally. |
+| [`push`](#push) | Snapshot, sanitise, encrypt, and fast-forward this machine's namespace to the vault. |
+| [`copy`](#copy) | Apply an artefact (or subdir) from a machine's vault namespace to local disk (`copy self …` for your own). |
 | [`status`](#status) | Compare local snapshot to decrypted vault state. |
 | [`doctor`](#doctor) | Check the local environment before blaming sync logic. |
 | [`daemon`](#daemon) | Install, start, stop, and inspect the background daemon. |
 | [`key`](#key) | Add a recipient or rotate the current machine key. |
 | [`skill`](#skill) | Remove a skill from the vault. |
 | [`plugin`](#plugin) | List or reinstall a machine's Claude plugins from its vault manifest. |
+| [`vault`](#vault) | Migrate an older vault to the current format (`vault upgrade`). |
 | [`migrate`](#migrate) | Translate configuration between agent formats. |
 | [`destroy`](#destroy) | Wipe the local vault clone or the remote vault contents (via commit). |
 | [`upgrade`](#upgrade) | Check GitHub for a newer release and install it when possible. |
@@ -56,7 +57,8 @@ When developing from source, replace the binary call with `bun run src/cli.ts`. 
 ## tui
 
 **Why**: Browse the vault, inspect what each local agent has on disk, trigger
-push / pull, and run cross-agent migrations from a single interactive screen.
+a push, browse other machines and copy their config to this one, and run
+cross-agent migrations from a single interactive screen.
 
 **Usage**:
 
@@ -71,26 +73,27 @@ agentsync tui       # explicit alias, same behaviour
 |---|---|
 | 1 Dashboard | Daemon health (pid, uptime, last error), vault state, agent summary, init / key-rotate launchers. |
 | 2 Sync | Per-artifact rows grouped by sync status (`local-changed`, `local-only`, `vault-only`, `unknown`, `synced`). Multi-select with `space`; push selected with `p`; bulk-remove skills with `x` (y/n confirm). Enter on a skill drills into its files with per-file diff. |
-| 3 Migrate | From / To / Type form (To and Type are multi-select with sub-cursor). Preview is mandatory before Apply enables. |
-| 4 Activity | Session-only ring buffer of TUI actions. |
+| 3 Machines | The vault's `machines/<name>/` namespaces. Move with `↑`/`↓`; `enter` copies the selected machine's config to this machine (the same `performCopy` core as the CLI; never touches the vault). |
+| 4 Migrate | From / To / Type form (To and Type are multi-select with sub-cursor). Preview is mandatory before Apply enables. |
+| 5 Activity | Session-only ring buffer of TUI actions. |
 
 **Global keys** (any tab):
 
 | Key | Action |
 |---|---|
-| `1` – `4` | Jump to tab |
+| `1` – `5` | Jump to tab |
 | `Tab` / `Shift-Tab` | Cycle tabs |
 | `p` | Push vault (honours selection in the Sync tab as a per-file allowlist) |
-| `l` | Pull vault |
 | `r` | Refresh current tab |
 | `?` | Toggle the keymap overlay |
 | `q` / `Ctrl-C` | Quit, restoring the terminal |
 
 **Outcome**: every state change is additive on the same data the CLI
-subcommands operate on. Push / pull go through the same daemon IPC the
-`status` and `daemon` subcommands use; migrate calls the same planner as
-`agentsync migrate`; bulk skill removal calls the same `performSkillRemove`
-that `agentsync skill remove` does, once per selected skill.
+subcommands operate on. Push goes through the same daemon IPC the `status` and
+`daemon` subcommands use; the Machines tab calls the same `performCopy` core as
+`agentsync copy`; migrate calls the same planner as `agentsync migrate`; bulk
+skill removal calls the same `performSkillRemove` that `agentsync skill remove`
+does, once per selected skill.
 
 **Caveats**:
 
@@ -98,9 +101,10 @@ that `agentsync skill remove` does, once per selected skill.
   `nohup`, CI runners) bare `agentsync` deliberately falls back to text
   `status` output so existing scripts continue to work.
 - The activity log is session-scoped — closing the TUI discards history.
-- Push / pull require the daemon to be running. If the daemon is offline,
-  the footer shows `daemon ● offline` and `p` / `l` surface an inline
-  notice rather than queueing a request that cannot be served.
+- Push requires the daemon to be running. If the daemon is offline, the footer
+  shows `daemon ● offline` and `p` surfaces an inline notice rather than
+  queueing a request that cannot be served. (Copy runs in-process and does not
+  need the daemon.)
 
 ## Conventions
 
@@ -213,9 +217,9 @@ agentsync status --verbose
 **Outcome**: a per-agent report covering every enabled agent. Each row carries one of the following status strings, printed verbatim:
 
 - `synced` — local content matches the vault.
-- `local-changed` — both sides have the file but the content differs. Run `push` to publish the local copy, or `pull` after backing up the local copy.
+- `local-changed` — both sides have the file but the content differs. Run `push` to publish the local copy, or `copy self <path>` to restore the vault copy after backing up the local one.
 - `local-only` — the machine has content the vault does not. Run `push`.
-- `vault-only` — the vault has content this machine does not. Run `pull`.
+- `vault-only` — this machine's namespace has content the local disk does not. Run `copy self <path>` to bring it down.
 - `error` — snapshot or decryption failed for that row. The error detail is printed in the same row; address it before trusting the rest of the report.
 
 **Caveats**:
@@ -323,15 +327,22 @@ agentsync key rotate
 
 ```bash
 agentsync skill remove <agent> <name>
+agentsync skill remove <agent> <name> --machine <namespace>
 ```
+
+**Flags**:
+
+| Flag | Default | Description |
+|---|---|---|
+| `--machine` | this machine | Remove from another machine's `machines/<name>/` namespace. Validated against the same path-traversal rules as the resolved machine name. |
 
 **Outcome**: the vault artefact for that skill is deleted, the change is committed and pushed under the fast-forward reconciliation rule. The local skill directory on the current machine is left untouched.
 
 **Caveats**:
 
 - `skill remove` is the **only** non-additive operation in AgentSync. It deletes the vault artefact but does not remove the local skill directory on the current or other machines.
-- After `skill remove`, every machine that pulled the skill previously still has the local directory until you delete it manually there. See [A skill I deleted reappears after pull on another machine](operations.md#a-skill-i-deleted-reappears-after-pull-on-another-machine).
-- To snapshot or apply a single skill, use the bulk `push` and `pull` commands with `--agent`. There is no targeted `skill push` or `skill pull`; the snapshot for an agent always includes every skill that survives the walker contract.
+- After `skill remove`, every machine that copied the skill previously still has the local directory until you delete it manually there. See [A skill I deleted reappears after copy on another machine](operations.md#a-skill-i-deleted-reappears-after-copy-on-another-machine).
+- To snapshot a single agent's skills, use `push --agent <agent>`; to bring one machine's skills onto this one, use `copy <machine> <agent>/skills/`. There is no targeted `skill push`/`skill copy`; the snapshot for an agent always includes every skill that survives the walker contract.
 
 ## plugin
 
@@ -353,6 +364,23 @@ Use `self` as `<machine>` to act on this machine's own manifest.
 - Requires the `claude` CLI on `PATH`; a missing binary fails loudly rather than skipping silently.
 - Reinstall fetches the **latest** version — there is no version pin.
 - Local edits to plugin files are not preserved; only the manifest (marketplace + name + scope + enabled) round-trips.
+
+## vault
+
+**Why**: Migrate an older flat (v1) vault to the per-machine layout (v2), where every artefact lives under `machines/<name>/`. This is the vault-**format** migration — distinct from [`migrate`](#migrate), which translates config between agents, and from [`upgrade`](#upgrade), which updates the AgentSync binary.
+
+**Usage**:
+
+```bash
+agentsync vault upgrade
+```
+
+**Outcome**: the existing flat content is assumed to belong to this machine and is `git mv`'d under `machines/<this-machine>/`, the config `version` is bumped to the integer `2`, and the change is committed and fast-forwarded to the remote. It reconciles first, so a vault another machine already upgraded is detected and the command is a no-op. Idempotent — running it on a v2 vault prints "already at format v2".
+
+**Caveats**:
+
+- If the vault format is **newer** than this binary understands, the upgrade refuses and tells you to run `agentsync upgrade` to update AgentSync first.
+- Old (v1) binaries cannot read a v2 vault at all: `version` is an integer literal, and their string-typed schema rejects it. This is deliberate — it stops an old binary writing flat directories beside `machines/`.
 
 ## migrate
 
@@ -434,8 +462,8 @@ agentsync destroy --scope=all           # both
 **Caveats**:
 
 - Other recipients are affected by `--scope=remote` / `--scope=all`. Their
-  next `agentsync pull` will see an empty vault and lose their
-  `agentsync.toml` config — they will need to re-init.
+  next `agentsync push` or `copy` will reconcile against an empty vault and
+  they lose their `agentsync.toml` config — they will need to re-init.
 - The daemon stays running after a local destroy. Its next sync attempt
   will fail until re-init. Run `agentsync daemon stop` if you want it
   quiet in the meantime.

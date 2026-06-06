@@ -76,7 +76,7 @@ the canary path so the never-sync contract is exercised, not bypassed:
 For every JSON/TOML file the **synced fields** column travels through the
 encrypted vault. Every other key remains local. The HOME-rewrite column flags
 the values that pass through `${AGENTSYNC_HOME}` normalization on push and
-back to the local `homedir()` on pull (B24).
+back to the local `homedir()` on `copy` (B24).
 
 | Adapter | File | Synced fields | HOME-rewrite | Ignored (stays local) |
 | --- | --- | --- | --- | --- |
@@ -113,7 +113,7 @@ back to the local `homedir()` on pull (B24).
 | 6 | `06-skill-additive.sh` | Disk removal of a skill leaves vault copy intact; explicit `skill remove` drops it |
 | 9 | `09-key-add.sh` | Add a second recipient; every blob decrypts under either key; idempotent re-run |
 | 10 | `10-migrate.sh` | Every supported `(--from, --to, --type)` combo; `--dry-run` no-op; idempotent |
-| 11 | `11-daemon-ipc.sh` | Daemon `status`, `push`, `pull` verbs work; clean shutdown |
+| 11 | `11-daemon-ipc.sh` | Daemon `status` and `push` verbs work; `pull` is rejected (push-only daemon); clean shutdown |
 | 13 | `13-doctor.sh` | Every `agentsync doctor` check fires; negative breaks surface the correct failure line |
 | 14 | `14-dry-run.sh` | `push --dry-run` lists intended changes but produces no commit |
 | 16 | `16-vscode-non-mcp.sh` | Pin (B6): VS Code adapter syncs **only** `mcp.json.mcpServers`; settings/keybindings/snippets stay local |
@@ -140,7 +140,7 @@ affected line if a critical regression strikes.
 
 JSON and TOML values whose strings start with the current machine's
 `homedir()` + path-separator are rewritten to `${AGENTSYNC_HOME}` on push.
-On pull, the placeholder is rewritten back to the destination machine's
+On `copy`, the placeholder is rewritten back to the destination machine's
 `homedir()`.
 
 - Markdown bodies are **not** rewritten — they are user content. Sanitizer
@@ -148,7 +148,8 @@ On pull, the placeholder is rewritten back to the destination machine's
 - Strings that don't match `homedir() + sep` (e.g. `/etc/hosts`, `/opt/foo`)
   pass through unchanged.
 
-Scenario 20 verifies both directions plus the negative-control cases.
+Unit tests verify both directions plus the negative-control cases (the former
+home-portability e2e scenario was retired with the down-sync removal).
 
 ## Hermetic isolation contract
 

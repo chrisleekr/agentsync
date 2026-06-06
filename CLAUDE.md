@@ -27,7 +27,7 @@ system model.
 src/
   cli.ts                  CLI entry — wires citty commands; bare invocation opens the TUI
   agents/                 Per-agent adapters (claude, cursor, codex, copilot, vscode)
-  commands/               User-facing commands (init, push, pull, status, daemon, key, skill, …)
+  commands/               User-facing commands (init, push, copy, status, daemon, key, skill, plugin, vault, upgrade, …)
     destroy.ts            CLI vault teardown — local rm, remote commit, or both
     tui/                  Interactive TUI: app loop, tab modules, IPC client, render panes
   config/                 Path resolution + agentsync.toml schema
@@ -63,21 +63,44 @@ bun run check:act     # run CI workflow locally via nektos/act
   go through `src/core/encryptor.ts`. `src/core/sanitizer.ts` enforces
   hard never-sync patterns and aborts the push when literal secrets are
   detected — do not loosen these without a documented reason.
+- **Per-machine vault layout (v2)**: every artifact lives under
+  `machines/<name>/<agent>/…`, composed only through `machineVaultRoot` in
+  `src/config/paths.ts` (never hardcode the `machines/` segment). Each machine
+  backs up into its own namespace and never overwrites another's. The machine
+  name is pinned at `init` (sibling of the key) so a later hostname change
+  cannot orphan the namespace.
+- **Backup is push-only; `copy` is the only vault→local path**: there is no
+  `pull`. `push` snapshots this machine into its namespace; `agentsync copy
+  <machine> <path>` is the sole way to apply vault content to local disk (it
+  reuses each agent's apply plan via `applySingleArtifact`, writing only local
+  disk, never the vault). The daemon is push-only — no pull IPC, no pull timer.
 - **Reconciliation is fast-forward-only**: `src/core/git.ts` defines the
-  shared rule used by `init`, `pull`, `push`, `key add`, `key rotate`, and
-  the daemon. Diverged history must stop the operation with recovery
-  guidance — never silently merge or print success.
+  shared rule used by `init`, `push`, `copy`, `key add`, `key rotate`, and the
+  daemon. Diverged history must stop the operation with recovery guidance —
+  never silently merge or print success.
+- **Integer version is the old-binary block**: `agentsync.toml` carries
+  `version` as an INTEGER literal (`z.literal(2)`). A v1 binary's
+  `version: z.string()` schema throws on it, so an old binary can never load a
+  v2 vault and write flat dirs beside `machines/`. `peekVaultVersion` reads the
+  raw version before Zod to route v1→`vault upgrade`, v2→load, >2→upgrade the
+  binary.
+- **Claude plugins are a manifest, not a tree**: `push` (when
+  `claudePlugins.syncPlugins = true`) distils `~/.claude/plugins/{installed_plugins,known_marketplaces}.json`
+  into one `claude/plugins.manifest.json.age` (name@marketplace, scope,
+  enabled; absolute paths dropped). It has no apply directive — never restored
+  on pull/copy — and `agentsync plugin install <machine>` reinstalls by
+  shelling to the `claude` CLI.
 - **Skill removal is explicit**: vault skills are only removed via
-  `agentsync skill remove <agent> <name>`. Snapshot, pull, and status are
+  `agentsync skill remove <agent> <name>`. Snapshot, copy, and status are
   additive by construction.
 - **Path resolution**: always resolve agent paths through `AgentPaths` in
   `src/config/paths.ts` rather than hardcoding `~/.claude`, `~/.cursor`,
   etc. — this keeps the test harness and platform overrides working.
-- **TUI reuses command logic, never duplicates it**: the TUI wizards and
-  the Migrate tab call `performInit`, `performKeyAdd`, `performKeyRotate`,
-  `performMigrate`, and `performSkillRemove` directly. Adding new TUI
-  features must not fork business logic — encryption, reconciliation,
-  sanitiser, and migration invariants live in one place.
+- **TUI reuses command logic, never duplicates it**: the TUI wizards, the
+  Machines tab, and the Migrate tab call `performInit`, `performKeyAdd`,
+  `performKeyRotate`, `performMigrate`, `performSkillRemove`, and `performCopy`
+  directly. Adding new TUI features must not fork business logic — encryption,
+  reconciliation, sanitiser, and migration invariants live in one place.
 - **`destroy` never imports `AgentPaths`**: the agent-files-never-touched
   invariant for `agentsync destroy` is enforced by construction (no
   `AgentPaths.*` reference anywhere in `src/commands/destroy.ts`) and by

@@ -19,9 +19,9 @@
 	<img src="./docs/demo/tui.gif" alt="AgentSync TUI walkthrough" width="800"/>
 </div>
 
-AgentSync is a Bun-based CLI and background daemon that snapshots AI agent configuration from your machine, encrypts it with [age](https://age-encryption.org/) recipients, and stores it in a Git-backed vault so you can pull the same setup onto another machine.
+AgentSync is a Bun-based CLI and background daemon that snapshots AI agent configuration from your machine, encrypts it with [age](https://age-encryption.org/) recipients, and backs it up into a Git-backed vault under a per-machine namespace, so you can copy any machine's setup onto another.
 
-It is for people who keep global agent configuration in tools like Claude, Cursor, Codex, Copilot, and VS Code and want one encrypted source of truth instead of manually copying files between laptops.
+It is for people who keep global agent configuration in tools like Claude, Cursor, Codex, Copilot, and VS Code and want one encrypted backup per machine instead of manually copying files between laptops. Each machine pushes into its own `machines/<name>/` namespace; bringing config to a new machine is an explicit `copy`, never a silent overwrite.
 
 ## Install
 
@@ -42,8 +42,8 @@ bunx --package @chrisleekr/agentsync agentsync --version
 
 The fastest way in is the interactive TUI. Running `agentsync` with no
 arguments opens a tabbed dashboard that lets you browse the vault, inspect
-local agent content per agent, trigger push/pull, and migrate configuration
-between agents:
+local agent content per agent, trigger a push, browse other machines and copy
+from them, and migrate configuration between agents:
 
 ```bash
 # Open the TUI (or use the explicit alias `agentsync tui`)
@@ -73,7 +73,7 @@ The full quickstart, command reference, and architecture model live at the docum
 
 | Command | Why you run it |
 |---|---|
-| *(bare)* / `tui` | Open the interactive TUI: vault browser, per-agent local view, push/pull, and migrate. |
+| *(bare)* / `tui` | Open the interactive TUI: vault browser, per-agent local view, push, browse machines and copy, and migrate. |
 | `init` | Create the local vault workspace, machine key, config, and initial remote state. |
 | `push` | Snapshot local agent configs, sanitise secrets, encrypt artefacts, and push to Git. |
 | `copy` | Restore an artefact (or subdir) from a machine's vault namespace to local disk (`copy self …` for your own). |
@@ -91,7 +91,7 @@ Full flag tables and caveats: [Commands](https://chrisleekr.github.io/agentsync/
 
 The full documentation is hosted at <https://chrisleekr.github.io/agentsync/> and lives in [`docs/`](./docs):
 
-- **[Architecture](./docs/architecture.md)** — system model, push and pull pipelines, daemon model, security boundaries.
+- **[Architecture](./docs/architecture.md)** — system model, push and copy pipelines, daemon model, security boundaries.
 - **[Commands](./docs/commands.md)** — every subcommand, flag, outcome, and caveat.
 - **[Migrate](./docs/migrate.md)** — translate config between Claude, Cursor, Codex, Copilot, and VS Code.
 - **[Operations](./docs/operations.md)** — daemon install per OS, key rotation, troubleshooting catalogue.
