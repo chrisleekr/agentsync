@@ -17,6 +17,7 @@ import {
 import { createStore, type Store } from "./store";
 import { renderActivity } from "./tabs/activity";
 import { renderDashboard } from "./tabs/dashboard";
+import { ensureMachinesLoaded, onMachinesKey, renderMachines } from "./tabs/machines";
 import { onMigrateKey, renderMigrate } from "./tabs/migrate";
 import { ensureSyncLoaded, onSyncKey, renderSync, runSyncOp } from "./tabs/sync";
 
@@ -25,6 +26,7 @@ const POLL_INTERVAL_MS = 1500;
 const TAB_LABELS: Record<TabId, string> = {
   dashboard: "Dashboard",
   sync: "Sync",
+  machines: "Machines",
   migrate: "Migrate",
   activity: "Activity",
 };
@@ -256,7 +258,7 @@ function handleKey(key: KeyEvent, ctx: AppContext, quit: () => void): void {
     });
   }
 
-  if (key.name >= "1" && key.name <= "4") {
+  if (key.name >= "1" && key.name <= "9") {
     const idx = Number(key.name) - 1;
     if (idx >= 0 && idx < TAB_IDS.length) {
       ctx.store.dispatch((d) => {
@@ -381,6 +383,9 @@ function delegateTabKey(key: KeyEvent, ctx: AppContext): void {
     case "sync":
       onSyncKey(key, ctx.store);
       break;
+    case "machines":
+      onMachinesKey(key, ctx.store);
+      break;
     case "migrate":
       onMigrateKey(key, ctx.store);
       break;
@@ -492,7 +497,7 @@ function activeKeyHint(state: AppState): string | null {
 function actionLabelFor(key: KeyEvent, state: AppState): { key: string; label: string } | null {
   if (state.helpOpen) return null;
   const name = key.name;
-  if (name >= "1" && name <= "4") {
+  if (name >= "1" && name <= "9") {
     const idx = Number(name) - 1;
     if (idx < TAB_IDS.length) return { key: name, label: TAB_LABELS[TAB_IDS[idx]] };
   }
@@ -567,6 +572,10 @@ function renderActiveTab(
         ensureSyncLoaded(store);
         renderSync(renderer, host, state);
         break;
+      case "machines":
+        ensureMachinesLoaded(store);
+        renderMachines(renderer, host, state);
+        break;
       case "migrate":
         renderMigrate(renderer, host, state);
         break;
@@ -581,7 +590,7 @@ function renderHelp(renderer: CliRenderer, host: BoxRenderable, state: AppState)
   const help = [
     "",
     "  Global keys",
-    "    1 – 4         Jump to tab",
+    "    1 – 5         Jump to tab",
     "    Tab / Sh+Tab  Cycle tabs",
     "    p             Push vault (direct)",
     "    r             Refresh current tab",
@@ -607,6 +616,10 @@ function renderHelp(renderer: CliRenderer, host: BoxRenderable, state: AppState)
     "    x             Remove selected skills — opens y/n confirm modal",
     "    s             Toggle synced section (collapsed by default)",
     "    k             Load private key for accurate status",
+    "",
+    "  Machines",
+    "    ↑ / ↓         Move cursor through machine namespaces",
+    "    enter         Copy the selected machine's config to this machine",
     "",
     "  Sync — skill drill-in",
     "    ↑ / ↓         Move cursor through files in bundle",
@@ -667,6 +680,13 @@ function contextActionsForTab(state: AppState): ContextAction[] {
       ];
       if (state.selection.size > 0) base.push({ key: "x", label: "remove" });
       if (!state.sync.keyLoaded) base.push({ key: "k", label: "load key" });
+      return base;
+    }
+    case "machines": {
+      const base: ContextAction[] = [{ key: "↑↓", label: "move" }];
+      if (state.machines.phase === "ready" && state.machines.list.length > 0) {
+        base.push({ key: "enter", label: "copy here" });
+      }
       return base;
     }
     case "migrate":
