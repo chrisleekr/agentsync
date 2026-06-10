@@ -638,17 +638,6 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#speckit-workflow" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Speckit workflow
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
   <a href="#release-discipline" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -771,17 +760,6 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#speckit-workflow" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Speckit workflow
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
   <a href="#release-discipline" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -864,12 +842,11 @@
 <h1 id="contributing">Contributing<a class="headerlink" href="#contributing" title="Permanent link">&para;</a></h1>
 <p>Develop AgentSync from a clone, run the verification loop, follow the release discipline, and keep the docs from drifting.</p>
 <h2 id="what-this-page-owns">What this page owns<a class="headerlink" href="#what-this-page-owns" title="Permanent link">&para;</a></h2>
-<p>This page owns four things: the contributor setup loop, the speckit workflow, the release rules, and the doc-ownership table that drives the docs drift check in CI. If a contributor-facing rule exists, it lives here.</p>
+<p>This page owns three things: the contributor setup loop, the release rules, and the doc-ownership table that drives the docs drift check in CI. If a contributor-facing rule exists, it lives here.</p>
 <h2 id="when-to-read-this">When to read this<a class="headerlink" href="#when-to-read-this" title="Permanent link">&para;</a></h2>
 <p>Read this page if you are:</p>
 <ul>
 <li>developing AgentSync from a local clone instead of using the published CLI,</li>
-<li>proposing a feature through the spec-kit workflow,</li>
 <li>shipping a release through release-please,</li>
 <li>changing anything under <code>docs/</code> or anything the docs describe.</li>
 </ul>
@@ -881,7 +858,7 @@
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>bun<span class="w"> </span>install
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>bun<span class="w"> </span>run<span class="w"> </span>check
 </span></code></pre></div>
-<p><code>bun run check</code> runs typecheck, Biome lint, the docs-mirror check, the spec-tracker ID leak guard, and the test suite (in that order). A clean run is the precondition for opening a pull request.</p>
+<p><code>bun run check</code> runs typecheck, Biome lint, the docs-mirror check, and the test suite (in that order). A clean run is the precondition for opening a pull request.</p>
 <p>While developing, run the CLI directly from source rather than the global install so your changes take effect immediately:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>bun<span class="w"> </span>run<span class="w"> </span>src/cli.ts<span class="w"> </span>&lt;command&gt;
 </span></code></pre></div>
@@ -896,19 +873,6 @@
 </span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>bun<span class="w"> </span>run<span class="w"> </span>docs:build<span class="w">                                    </span><span class="c1"># mkdocs build --strict</span>
 </span></code></pre></div>
 <p>The Lefthook hooks run on commit and push. They invoke the same checks <code>bun run check</code> does, so a passing local check is also a passing pre-push hook.</p>
-<h2 id="speckit-workflow">Speckit workflow<a class="headerlink" href="#speckit-workflow" title="Permanent link">&para;</a></h2>
-<p>Feature work is scaffolded under <code>specs/&lt;timestamp&gt;-&lt;slug&gt;/</code> using the <code>speckit-*</code> skills bundled with the repo's Claude configuration. Each spec directory holds at least a <code>plan.md</code>; larger features add <code>spec.md</code>, <code>research.md</code>, <code>data-model.md</code>, <code>tasks.md</code>, and a <code>checklists/</code> directory.</p>
-<p>The flow is:</p>
-<ol>
-<li><code>speckit-specify</code> — write the user-facing spec.</li>
-<li><code>speckit-clarify</code> — interrogate the spec for underspecified areas.</li>
-<li><code>speckit-plan</code> — produce the design artefacts and execution plan.</li>
-<li><code>speckit-tasks</code> — emit a dependency-ordered task list.</li>
-<li><code>speckit-implement</code> — execute the tasks.</li>
-<li><code>speckit-analyze</code> — non-destructive cross-artefact consistency check before merging.</li>
-</ol>
-<p>The most recent spec directory contains the active feature's terminology, constraints, and acceptance criteria. Read it before making changes adjacent to that work.</p>
-<p>Spec IDs (<code>FR-###</code>, <code>SC-###</code>, <code>US#</code>, <code>T###</code>, <code>NC-#</code>, <code>(research R#)</code>-style references) belong in commit messages and PR descriptions only. They must not appear in source code, comments, test names, JSDoc, or string literals. Future readers will not have the spec context.</p>
 <h2 id="release-discipline">Release discipline<a class="headerlink" href="#release-discipline" title="Permanent link">&para;</a></h2>
 <p>Releases are cut by <a href="https://github.com/googleapis/release-please">release-please</a> from Conventional Commit messages on <code>main</code>. The release-please PR collects every change since the previous release, bumps the version, and updates the CHANGELOG. Merging that PR publishes the GitHub Release and triggers the npm publish workflow.</p>
 <p>Rules:</p>
@@ -1003,13 +967,12 @@ time.</p>
 <li>Every row in this table corresponds to an existing file.</li>
 <li>Every <code>docs/&lt;file&gt;.md</code> link in <code>README.md</code> and <code>CLAUDE.md</code> points at a file that exists.</li>
 </ol>
-<p>The third rule is what would have caught the historical dead links to <code>docs/speckit.md</code> and <code>docs/speckit-local-development.md</code>.</p>
+<p>The third rule is what catches dead links from <code>README.md</code> or <code>CLAUDE.md</code> to a <code>docs/*.md</code> page that does not exist — strict mkdocs builds only validate links inside the nav, so those slip through otherwise.</p>
 <h2 id="doc-conventions">Doc conventions<a class="headerlink" href="#doc-conventions" title="Permanent link">&para;</a></h2>
 <ul>
 <li><strong>Anchors are stable.</strong> Prefer <code>## Install</code>, <code>## Push</code>, <code>## Recover from divergence</code> over restructured headings. External links from blog posts and Slack survive only if anchors do.</li>
 <li><strong>Diagrams use Mermaid</strong> with the existing dark-fill <code>classDef</code> palette and the <code>.agentsync-darknodes</code> wrapper so labels stay readable in both colour schemes.</li>
 <li><strong>Code samples are commands and config</strong>, not implementation. The docs describe what a command does and how to use it; the source is the source of truth for <em>how</em> it does it.</li>
-<li><strong>No spec-ID references</strong> in any doc, source, or test. See the speckit section above.</li>
 <li><strong>Each page opens with "What this page owns"</strong> so a reader can tell within a paragraph whether they are in the right place.</li>
 </ul>
 <h2 id="pr-checklist">PR checklist<a class="headerlink" href="#pr-checklist" title="Permanent link">&para;</a></h2>
@@ -1019,7 +982,6 @@ time.</p>
 <li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> Every changed CLI surface is reflected in <code>docs/commands.md</code> (or <code>docs/migrate.md</code> for migrate-only changes).</li>
 <li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> Every new daemon installer target is reflected in <code>docs/operations.md</code>.</li>
 <li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> Every change that crosses a security or reconciliation boundary is reflected in <code>docs/architecture.md</code>.</li>
-<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> No spec IDs leaked into source.</li>
 <li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> If a doc file moved or was deleted, every internal link to it still resolves; <code>mkdocs build --strict</code> proves this in CI.</li>
 </ul>
 <p>The maintainer reviewing the PR uses the doc-ownership table to decide whether the docs change is necessary, sufficient, and in the right file.</p>
