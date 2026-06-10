@@ -108,7 +108,7 @@ bun install
 bun run check
 ```
 
-The contributor workflow, the speckit feature flow, release discipline, and doc ownership all live in [Contributing](./docs/contributing.md).
+The contributor workflow, release discipline, and doc ownership all live in [Contributing](./docs/contributing.md).
 
 ## License
 

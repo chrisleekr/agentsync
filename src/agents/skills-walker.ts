@@ -154,8 +154,7 @@ export async function applySkillArchive(
  * Walk an agent's local skills root and collect encrypted-ready tar artifacts
  * for every directory that qualifies as a user-created skill.
  *
- * Gates are applied in the order documented in
- * `specs/20260411-002222-agent-skills-sync/contracts/walker-interface.md`.
+ * Gates are applied in a fixed order, encoded in the walk below.
  *
  * @param agent      Vault namespace this walker writes under (`claude`, `cursor`, `codex`, `copilot`).
  * @param skillsDir  Absolute path to the agent's skills root on disk. A
