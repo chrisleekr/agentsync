@@ -20,7 +20,7 @@ const main = defineCommand({
   meta: {
     name: "agentsync",
     description: "Sync agent configurations through an encrypted vault",
-    version: "0.1.12", // x-release-please-version
+    version: "0.1.13", // x-release-please-version
   },
   subCommands: {
     init: initCommand,
