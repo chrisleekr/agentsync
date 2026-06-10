@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.1.13](https://github.com/chrisleekr/agentsync/compare/v0.1.12...v0.1.13) (2026-06-10)
+
+
+### Features
+
+* **config:** pin machine identity to stable local state ([#162](https://github.com/chrisleekr/agentsync/issues/162)) ([0535676](https://github.com/chrisleekr/agentsync/commit/05356767d7ac67522f01962a0fa44398865c2b56))
+* **copy:** replace down-sync with a per-machine `copy` command ([#165](https://github.com/chrisleekr/agentsync/issues/165)) ([63e9fb5](https://github.com/chrisleekr/agentsync/commit/63e9fb50e5e136cf3dac55e30c63d8e491610134))
+* **plugins:** replace tree encryption with a reinstall manifest + plugin install/list ([#167](https://github.com/chrisleekr/agentsync/issues/167)) ([f7a677f](https://github.com/chrisleekr/agentsync/commit/f7a677f3efdbcaf8317d183cfd815f3a40df451a))
+* **tui:** add Machines tab to browse namespaces and copy ([#166](https://github.com/chrisleekr/agentsync/issues/166)) ([4818edc](https://github.com/chrisleekr/agentsync/commit/4818edcc2ef69a90b845d20330a8f9d014dbf25e))
+* **vault:** per-machine layout, integer version guard, and `vault upgrade` migration ([#164](https://github.com/chrisleekr/agentsync/issues/164)) ([082cac4](https://github.com/chrisleekr/agentsync/commit/082cac44ce89c3b7fda1a3e55de71bd03e281968))
+
 ## [0.1.12](https://github.com/chrisleekr/agentsync/compare/v0.1.11...v0.1.12) (2026-05-29)
 
 
