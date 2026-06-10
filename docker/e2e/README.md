@@ -127,7 +127,7 @@ Every upstream toolchain that materially affects E2E behaviour is pulled at
 its **latest** version on every image build:
 
 - `node:24-bookworm-slim` (Node 22 EOL was 2026-03-24; Node 24 LTS through April 2028)
-- Bun via `https://bun.sh/install` (unpinned)
+- Bun via `https://bun.sh/install`, pinned to 1.3.12 (1.3.14 regressed node:fs/promises interop; keep in lockstep with ci.yml)
 - `@anthropic-ai/claude-code@latest`
 - `@openai/codex@latest`
 - `cursor-agent` via the upstream installer (unpinned by the vendor)
