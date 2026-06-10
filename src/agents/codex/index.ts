@@ -1,12 +1,17 @@
-import { mkdir, readdir, readFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { join } from "node:path";
 import * as TOML from "@iarna/toml";
 import { AgentPaths } from "../../config/paths";
 import type { AgentSyncConfig } from "../../config/schema";
 import { denormalizeFromVault, normalizeForVault } from "../../core/path-portability";
-import { type RedactionResult, redactSecretLiterals, shouldNeverSync } from "../../core/sanitizer";
-import { extractArchive } from "../../core/tar";
+import { type RedactionResult, redactSecretLiterals } from "../../core/sanitizer";
+import {
+  type ApplyPlan,
+  defineFileArtifact,
+  dirWriteApplier,
+  makeApplyVault,
+  skillNameFilter,
+} from "../_apply";
+import { collectMarkdownDir, collectSingleFile, collectSkillScopes } from "../_snapshot";
 import {
   atomicWrite,
   collect,
@@ -14,7 +19,7 @@ import {
   type SnapshotArtifact,
   type SnapshotResult,
 } from "../_utils";
-import { collectSkillArtifacts, InvalidSkillNameError, validateSkillName } from "../skills-walker";
+import { applySkillArchive } from "../skills-walker";
 
 /** Snapshot payload for the Codex adapter. */
 export type CodexSnapshotResult = SnapshotResult;
@@ -49,27 +54,18 @@ export async function snapshotCodex(_config?: AgentSyncConfig): Promise<Snapshot
   const artifacts: SnapshotArtifact[] = [];
   const warnings: string[] = [];
 
-  const agentsMd = await readIfExists(AgentPaths.codex.agentsMd);
-  if (agentsMd !== null) {
-    artifacts.push({
-      vaultPath: "codex/AGENTS.md.age",
+  artifacts.push(
+    ...(await collectSingleFile({
       sourcePath: AgentPaths.codex.agentsMd,
-      plaintext: agentsMd,
-      warnings: [],
-    });
-  }
-
-  // AGENTS.override.md wins over AGENTS.md when codex reads the pair; sync
-  // both so the override semantics are preserved on the destination machine.
-  const agentsOverrideMd = await readIfExists(AgentPaths.codex.agentsOverrideMd);
-  if (agentsOverrideMd !== null) {
-    artifacts.push({
-      vaultPath: "codex/AGENTS.override.md.age",
+      vaultPath: "codex/AGENTS.md.age",
+    })),
+    // AGENTS.override.md wins over AGENTS.md when codex reads the pair; sync
+    // both so the override semantics are preserved on the destination machine.
+    ...(await collectSingleFile({
       sourcePath: AgentPaths.codex.agentsOverrideMd,
-      plaintext: agentsOverrideMd,
-      warnings: [],
-    });
-  }
+      vaultPath: "codex/AGENTS.override.md.age",
+    })),
+  );
 
   const configToml = await readIfExists(AgentPaths.codex.configToml);
   if (configToml !== null) {
@@ -78,60 +74,30 @@ export async function snapshotCodex(_config?: AgentSyncConfig): Promise<Snapshot
     warnings.push(...sanitized.warnings);
   }
 
-  try {
-    const names = await readdir(AgentPaths.codex.rulesDir);
-    for (const name of names) {
-      if (!name.endsWith(".md")) continue;
-      const sourcePath = join(AgentPaths.codex.rulesDir, name);
-      if (shouldNeverSync(sourcePath)) continue;
-      let content: string;
-      try {
-        content = await readFile(sourcePath, "utf8");
-      } catch {
-        continue; // skip directories or unreadable entries
-      }
-      artifacts.push({
-        vaultPath: `codex/rules/${name}.age`,
-        sourcePath,
-        plaintext: content,
-        warnings: [],
-      });
-    }
-  } catch {
-    // rules dir may not exist yet
-  }
+  artifacts.push(
+    ...(await collectMarkdownDir({
+      dir: AgentPaths.codex.rulesDir,
+      vaultPath: (name) => `codex/rules/${name}.age`,
+    })),
+  );
 
   // Skills — canonical USER scope is $HOME/.agents/skills per the Codex Skills
   // docs; the legacy $CODEX_HOME/.codex/skills path stays readable so prior
-  // installs migrate forward on the next pull. Deduplication keys come from
-  // the canonical directory listing rather than emitted artifacts so a skill
-  // the walker REJECTED at the canonical location (never-sync hit, literal
-  // secret) still blocks the legacy copy from leaking through.
-  let canonicalNames: string[] = [];
-  try {
-    canonicalNames = await readdir(AgentPaths.codex.userSkillsDir);
-  } catch {
-    // canonical dir may not exist yet
-  }
-  const seen = new Set(canonicalNames.filter((n) => !n.startsWith(".")));
-
-  const userSkills = await collectSkillArtifacts("codex", AgentPaths.codex.userSkillsDir);
-  const legacySkills = await collectSkillArtifacts("codex", AgentPaths.codex.skillsDir);
-  artifacts.push(...userSkills.artifacts);
-  for (const artifact of legacySkills.artifacts) {
-    // vaultPath is `codex/skills/<name>.tar.age` — extract `<name>` and skip
-    // when the canonical directory already carries the name (regardless of
-    // whether the canonical scan emitted an artifact).
-    const legacyName = artifact.vaultPath
-      .replace(/^codex\/skills\//, "")
-      .replace(/\.tar\.age$/, "");
-    if (seen.has(legacyName)) continue;
-    artifacts.push(artifact);
-  }
-  warnings.push(...userSkills.warnings, ...legacySkills.warnings);
+  // installs migrate forward on the next pull. collectSkillScopes dedups the
+  // legacy scope against the canonical directory listing, so a skill the walker
+  // REJECTED at the canonical location (never-sync hit, literal secret) still
+  // blocks the legacy copy from leaking through.
+  const skills = await collectSkillScopes("codex", [
+    AgentPaths.codex.userSkillsDir,
+    AgentPaths.codex.skillsDir,
+  ]);
+  artifacts.push(...skills.artifacts);
+  warnings.push(...skills.warnings);
 
   return { artifacts, warnings };
 }
+
+// ─── Apply (pull side) ────────────────────────────────────────────────────────
 
 /** Restore the top-level Codex AGENTS.md file from the vault. */
 export async function applyCodexAgentsMd(content: string): Promise<void> {
@@ -173,37 +139,19 @@ export async function applyCodexConfig(content: string): Promise<void> {
 }
 
 /** Restore one Codex rule markdown file from the vault. */
-export async function applyCodexRule(ruleName: string, content: string): Promise<void> {
-  const target = join(AgentPaths.codex.rulesDir, ruleName);
-  await mkdir(AgentPaths.codex.rulesDir, { recursive: true });
-  await atomicWrite(target, content);
+export function applyCodexRule(ruleName: string, content: string): Promise<void> {
+  return dirWriteApplier({ dir: AgentPaths.codex.rulesDir })(ruleName, content);
 }
 
 /**
- * Restore one Codex skill directory from the vault by extracting its
- * encrypted tar archive into `~/.codex/skills/<name>/`.
- *
- * Mirrors {@link applyClaudeSkill}: parents are created on demand and the
- * tar's interior layout is preserved bit-for-bit.
- *
- * @param skillName  Basename of the skill (no extension).
- * @param base64Tar  Base64-encoded `.tar.gz` payload that the walker
- *                   produced on the source machine.
+ * Restore one Codex skill directory from the vault. Always restores under
+ * $HOME/.agents/skills — the canonical Codex USER scope. Legacy
+ * $CODEX_HOME/.codex/skills remains readable on snapshot but is never a write
+ * target, so pulls migrate forward in place without leaving stragglers.
  */
 export async function applyCodexSkill(skillName: string, base64Tar: string): Promise<void> {
-  validateSkillName(skillName);
-  // Always restore under $HOME/.agents/skills — the canonical Codex USER scope.
-  // Legacy $CODEX_HOME/.codex/skills remains readable on snapshot but is never
-  // a write target, so pulls migrate forward in place without leaving stragglers.
-  const targetDir = join(AgentPaths.codex.userSkillsDir, skillName);
-  await mkdir(targetDir, { recursive: true });
-  const tarBuffer = Buffer.from(base64Tar, "base64");
-  await extractArchive(tarBuffer, targetDir);
+  await applySkillArchive(AgentPaths.codex.userSkillsDir, skillName, base64Tar);
 }
-
-// ─── Apply (pull side) ────────────────────────────────────────────────────────
-
-import { type ApplyPlan, defineFileArtifact, runApplyPlan } from "../_apply";
 
 /** Build the Codex apply plan. Exposed so `copy` can apply a single artifact. */
 export function buildCodexPlan(_config?: AgentSyncConfig): ApplyPlan {
@@ -238,28 +186,11 @@ export function buildCodexPlan(_config?: AgentSyncConfig): ApplyPlan {
         suffix: ".tar.age",
         dryRunVerb: "would extract skill:",
         apply: applyCodexSkill,
-        filter: (name) => {
-          try {
-            validateSkillName(name);
-            return null;
-          } catch (err) {
-            if (err instanceof InvalidSkillNameError) {
-              return { reason: `invalid skill name — ${err.reason}` };
-            }
-            throw err;
-          }
-        },
+        filter: skillNameFilter(),
       },
     ],
   };
 }
 
 /** Decrypt and apply all Codex vault artifacts to the local machine. */
-export async function applyCodexVault(
-  vaultDir: string,
-  key: string,
-  dryRun: boolean,
-  config?: AgentSyncConfig,
-): Promise<void> {
-  await runApplyPlan(buildCodexPlan(config), vaultDir, key, dryRun);
-}
+export const applyCodexVault = makeApplyVault(buildCodexPlan);

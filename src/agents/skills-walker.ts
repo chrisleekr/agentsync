@@ -25,10 +25,10 @@
  * travel back as warnings on the result so the caller decides how to surface.
  */
 
-import { lstat, readdir, readFile } from "node:fs/promises";
+import { lstat, mkdir, readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { scanForSecrets, shouldNeverSync } from "../core/sanitizer";
-import { archiveDirectory } from "../core/tar";
+import { archiveDirectory, extractArchive } from "../core/tar";
 import type { SnapshotArtifact, SnapshotResult } from "./_utils";
 
 /**
@@ -129,6 +129,25 @@ export function validateSkillName(name: string): void {
       throw new InvalidSkillNameError(name, "contains path separator");
     }
   }
+}
+
+/**
+ * Pull-side counterpart to the walker: extract one skill's base64 `.tar.gz`
+ * payload into `<skillsRoot>/<skillName>/`. `validateSkillName` guards the
+ * trust boundary before the join (see its docstring for the `..` tar-slip it
+ * closes), parents are created on demand, and the tar's interior layout is
+ * preserved bit-for-bit. Every adapter's `applyXxxSkill` is a one-line wrapper
+ * over this that supplies its own skills root.
+ */
+export async function applySkillArchive(
+  skillsRoot: string,
+  skillName: string,
+  base64Tar: string,
+): Promise<void> {
+  validateSkillName(skillName);
+  const targetDir = join(skillsRoot, skillName);
+  await mkdir(targetDir, { recursive: true });
+  await extractArchive(Buffer.from(base64Tar, "base64"), targetDir);
 }
 
 /**

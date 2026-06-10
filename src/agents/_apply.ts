@@ -1,7 +1,10 @@
-import { readdir, readFile } from "node:fs/promises";
+import { mkdir, readdir, readFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { log } from "@clack/prompts";
+import type { AgentSyncConfig } from "../config/schema";
 import { decryptString } from "../core/encryptor";
+import { atomicWrite, ensureCommandBackup } from "./_utils";
+import { InvalidSkillNameError, validateSkillName } from "./skills-walker";
 
 /** Read .age (or .tar.age) files from a vault subdirectory, ignoring missing dirs. */
 export async function readAgeFiles(
@@ -152,6 +155,60 @@ export async function runApplyPlan(
  */
 export function defineFileArtifact(d: Omit<FileArtifact, "kind">): FileArtifact {
   return { kind: "file", ...d };
+}
+
+/**
+ * Standard `DirArtifact.filter` for a skills directory: runs `validateSkillName`
+ * and maps `InvalidSkillNameError` to a `{ reason }` skip. Replaces the
+ * identical inline try/catch every skill-bearing adapter used to carry.
+ * Re-throws any non-`InvalidSkillNameError` so genuine bugs are not swallowed.
+ */
+export function skillNameFilter(): NonNullable<DirArtifact["filter"]> {
+  return (name) => {
+    try {
+      validateSkillName(name);
+      return null;
+    } catch (err) {
+      if (err instanceof InvalidSkillNameError) {
+        return { reason: `invalid skill name — ${err.reason}` };
+      }
+      throw err;
+    }
+  };
+}
+
+/**
+ * Build a `DirArtifact.apply` handler that writes one decrypted file into
+ * `dir`: optional name validation, `mkdir -p`, optional `.bak` backup before
+ * overwrite, then `atomicWrite`. `backup` defaults to false; only Claude's
+ * command/agent/rule writes opt in. `validate` runs before any filesystem
+ * touch (Cursor rule names, Copilot agent filenames); it is the pre-write
+ * defence-in-depth guard, independent of the build-plan `filter`, which
+ * rejects bad names earlier, before decryption.
+ */
+export function dirWriteApplier(opts: {
+  dir: string;
+  backup?: boolean;
+  validate?: (name: string) => void;
+}): (name: string, decrypted: string) => Promise<void> {
+  return async (name, decrypted) => {
+    opts.validate?.(name);
+    await mkdir(opts.dir, { recursive: true });
+    const target = join(opts.dir, name);
+    if (opts.backup) await ensureCommandBackup(target);
+    await atomicWrite(target, decrypted);
+  };
+}
+
+/**
+ * The `apply` half of an adapter: decrypt every vault artifact this agent owns
+ * and write it to disk by running its plan. Replaces the one-line
+ * `runApplyPlan(buildXPlan(config), …)` each adapter used to redeclare.
+ */
+export function makeApplyVault(
+  buildPlan: (config?: AgentSyncConfig) => ApplyPlan,
+): (vaultDir: string, key: string, dryRun: boolean, config?: AgentSyncConfig) => Promise<void> {
+  return (vaultDir, key, dryRun, config) => runApplyPlan(buildPlan(config), vaultDir, key, dryRun);
 }
 
 /** No plan directive owns the given vault path (the `copy` command's miss). */

@@ -1,12 +1,18 @@
-import { mkdir, readdir, readFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { basename, join } from "node:path";
+import { basename } from "node:path";
 import { type ParseError, parse as parseJsonc } from "jsonc-parser";
 import { AgentPaths } from "../../config/paths";
 import type { AgentSyncConfig } from "../../config/schema";
 import { denormalizeStringFromVault, normalizeStringForVault } from "../../core/path-portability";
-import { sanitizeAndNormalizeJson, shouldNeverSync } from "../../core/sanitizer";
-import { extractArchive } from "../../core/tar";
+import { sanitizeAndNormalizeJson } from "../../core/sanitizer";
+import {
+  type ApplyPlan,
+  defineFileArtifact,
+  dirWriteApplier,
+  makeApplyVault,
+  skillNameFilter,
+} from "../_apply";
+import { collectMarkdownDir } from "../_snapshot";
 import {
   atomicWrite,
   collect,
@@ -15,7 +21,7 @@ import {
   type SnapshotResult,
   setJsoncTopLevelKey,
 } from "../_utils";
-import { collectSkillArtifacts, InvalidSkillNameError, validateSkillName } from "../skills-walker";
+import { applySkillArchive, collectSkillArtifacts } from "../skills-walker";
 
 /** Snapshot payload for the Cursor adapter. */
 export type CursorSnapshotResult = SnapshotResult;
@@ -47,6 +53,22 @@ async function readCursorRules(): Promise<string | null> {
   }
 }
 
+/**
+ * Reject Cursor rule filenames that could escape `rulesDir`, smuggle in vendor
+ * dotfiles, or carry NUL bytes. Used as the apply-side `validate` guard for the
+ * cross-agent `rules` passthrough.
+ */
+function validateCursorRuleName(ruleName: string): void {
+  if (
+    ruleName.length === 0 ||
+    ruleName !== basename(ruleName) ||
+    ruleName.startsWith(".") ||
+    ruleName.includes("\0")
+  ) {
+    throw new Error(`Invalid Cursor rule filename: ${ruleName}`);
+  }
+}
+
 /** Collect Cursor rules, MCP config, and commands that are safe to sync. */
 export async function snapshotCursor(_config?: AgentSyncConfig): Promise<SnapshotResult> {
   const artifacts: SnapshotArtifact[] = [];
@@ -65,46 +87,28 @@ export async function snapshotCursor(_config?: AgentSyncConfig): Promise<Snapsho
   const mcpRaw = await readIfExists(AgentPaths.cursor.mcpGlobal);
   if (mcpRaw !== null) {
     const sanitized = sanitizeAndNormalizeJson(mcpRaw, "cursor_mcp");
-    const artifact = collect(sanitized, AgentPaths.cursor.mcpGlobal, "cursor/mcp.json.age");
-    artifacts.push(artifact);
+    artifacts.push(collect(sanitized, AgentPaths.cursor.mcpGlobal, "cursor/mcp.json.age"));
     warnings.push(...sanitized.warnings);
   }
 
-  try {
-    const names = await readdir(AgentPaths.cursor.commandsDir);
-    for (const name of names) {
-      if (!name.endsWith(".md")) continue;
-      const sourcePath = join(AgentPaths.cursor.commandsDir, name);
-      if (shouldNeverSync(sourcePath)) continue;
-      let content: string;
-      try {
-        content = await readFile(sourcePath, "utf8");
-      } catch {
-        continue; // skip directories or unreadable entries
-      }
-      artifacts.push({
-        vaultPath: `cursor/commands/${name}.age`,
-        sourcePath,
-        plaintext: content,
-        warnings: [],
-      });
-    }
-  } catch {
-    // commands dir may not exist yet.
-  }
+  artifacts.push(
+    ...(await collectMarkdownDir({
+      dir: AgentPaths.cursor.commandsDir,
+      vaultPath: (name) => `cursor/commands/${name}.age`,
+    })),
+  );
 
-  // Skills — delegated to the shared walker. The walker is pointed at
-  // `AgentPaths.cursor.skillsDir` which resolves to `~/.cursor/skills/` —
-  // the canonical user-skills path. The bundled `~/.cursor/skills-cursor/`
-  // directory is NEVER read because `paths.ts` does not expose it and the
-  // walker is not given a pointer to it, so there is no code path through
-  // which vendor bundles can leak into the vault.
+  // Skills — delegated to the shared walker, pointed at `~/.cursor/skills/`. The
+  // bundled `~/.cursor/skills-cursor/` directory is never read (paths.ts does
+  // not expose it), so vendor bundles cannot leak into the vault.
   const cursorSkills = await collectSkillArtifacts("cursor", AgentPaths.cursor.skillsDir);
   artifacts.push(...cursorSkills.artifacts);
   warnings.push(...cursorSkills.warnings);
 
   return { artifacts, warnings };
 }
+
+// ─── Apply (pull side) ────────────────────────────────────────────────────────
 
 /**
  * Apply the synced `rules` value back into Cursor's settings.json.
@@ -132,54 +136,30 @@ export async function applyCursorMcp(mcpJsonContent: string): Promise<void> {
   );
 }
 
-/** Restore one Cursor command markdown file from the vault. */
 /**
  * Write one Cursor rules-folder file to ~/.cursor/rules/<name>.
  * The migrate `rules` ConfigType uses this for cross-agent passthrough.
  */
-export async function applyCursorRule(ruleName: string, content: string): Promise<void> {
-  if (
-    ruleName.length === 0 ||
-    ruleName !== basename(ruleName) ||
-    ruleName.startsWith(".") ||
-    ruleName.includes("\0")
-  ) {
-    throw new Error(`Invalid Cursor rule filename: ${ruleName}`);
-  }
-  const target = join(AgentPaths.cursor.rulesDir, ruleName);
-  await mkdir(AgentPaths.cursor.rulesDir, { recursive: true });
-  await atomicWrite(target, content);
+export function applyCursorRule(ruleName: string, content: string): Promise<void> {
+  return dirWriteApplier({ dir: AgentPaths.cursor.rulesDir, validate: validateCursorRuleName })(
+    ruleName,
+    content,
+  );
 }
 
-export async function applyCursorCommand(commandName: string, content: string): Promise<void> {
-  const target = join(AgentPaths.cursor.commandsDir, commandName);
-  await mkdir(AgentPaths.cursor.commandsDir, { recursive: true });
-  await atomicWrite(target, content);
+/** Restore one Cursor command markdown file from the vault. */
+export function applyCursorCommand(commandName: string, content: string): Promise<void> {
+  return dirWriteApplier({ dir: AgentPaths.cursor.commandsDir })(commandName, content);
 }
 
 /**
- * Restore one Cursor skill directory from the vault by extracting its
- * encrypted tar archive into `~/.cursor/skills/<name>/` — NEVER into the
- * bundled `~/.cursor/skills-cursor/` path.
- *
- * Mirrors {@link applyClaudeSkill}: parents are created on demand and the
- * tar's interior layout is preserved bit-for-bit.
- *
- * @param skillName  Basename of the skill (no extension).
- * @param base64Tar  Base64-encoded `.tar.gz` payload that the walker
- *                   produced on the source machine.
+ * Restore one Cursor skill directory from the vault by extracting its encrypted
+ * tar archive into `~/.cursor/skills/<name>/` — NEVER into the bundled
+ * `~/.cursor/skills-cursor/` path. Thin wrapper over {@link applySkillArchive}.
  */
 export async function applyCursorSkill(skillName: string, base64Tar: string): Promise<void> {
-  validateSkillName(skillName);
-  const targetDir = join(AgentPaths.cursor.skillsDir, skillName);
-  await mkdir(targetDir, { recursive: true });
-  const tarBuffer = Buffer.from(base64Tar, "base64");
-  await extractArchive(tarBuffer, targetDir);
+  await applySkillArchive(AgentPaths.cursor.skillsDir, skillName, base64Tar);
 }
-
-// ─── Apply (pull side) ────────────────────────────────────────────────────────
-
-import { type ApplyPlan, defineFileArtifact, runApplyPlan } from "../_apply";
 
 /** Build the Cursor apply plan. Exposed so `copy` can apply a single artifact. */
 export function buildCursorPlan(_config?: AgentSyncConfig): ApplyPlan {
@@ -210,28 +190,11 @@ export function buildCursorPlan(_config?: AgentSyncConfig): ApplyPlan {
         suffix: ".tar.age",
         dryRunVerb: "would extract skill:",
         apply: applyCursorSkill,
-        filter: (name) => {
-          try {
-            validateSkillName(name);
-            return null;
-          } catch (err) {
-            if (err instanceof InvalidSkillNameError) {
-              return { reason: `invalid skill name — ${err.reason}` };
-            }
-            throw err;
-          }
-        },
+        filter: skillNameFilter(),
       },
     ],
   };
 }
 
 /** Decrypt and apply all Cursor vault artifacts to the local machine. */
-export async function applyCursorVault(
-  vaultDir: string,
-  key: string,
-  dryRun: boolean,
-  config?: AgentSyncConfig,
-): Promise<void> {
-  await runApplyPlan(buildCursorPlan(config), vaultDir, key, dryRun);
-}
+export const applyCursorVault = makeApplyVault(buildCursorPlan);

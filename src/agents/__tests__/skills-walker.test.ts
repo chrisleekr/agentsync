@@ -6,11 +6,11 @@
  * collectSkillArtifacts, and asserts on the returned shape.
  */
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdir, readdir, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { extractArchive } from "../../core/tar";
 import { createTmpDir } from "../../test-helpers/fixtures";
-import { collectSkillArtifacts } from "../skills-walker";
+import { applySkillArchive, collectSkillArtifacts, InvalidSkillNameError } from "../skills-walker";
 
 describe("collectSkillArtifacts", () => {
   let tmpDir: string;
@@ -297,5 +297,39 @@ describe("collectSkillArtifacts", () => {
     const result = await collectSkillArtifacts("claude", linkedRoot);
     expect(result.artifacts).toHaveLength(0);
     expect(result.warnings).toHaveLength(0);
+  });
+});
+
+describe("applySkillArchive", () => {
+  let tmpDir: string;
+
+  beforeEach(async () => {
+    tmpDir = await createTmpDir();
+  });
+
+  afterEach(async () => {
+    await rm(tmpDir, { recursive: true, force: true });
+  });
+
+  test("extracts a skill's base64 tar into <root>/<name>/ preserving interior layout", async () => {
+    // Round-trip: build a real skill, snapshot it to a base64 artifact, then
+    // restore it through applySkillArchive into a fresh root.
+    const src = join(tmpDir, "src");
+    const skill = join(src, "my-skill");
+    await mkdir(skill, { recursive: true });
+    await writeFile(join(skill, "SKILL.md"), "# my skill\n");
+    await writeFile(join(skill, "body.md"), "interior\n");
+    const [artifact] = (await collectSkillArtifacts("claude", src)).artifacts;
+
+    const dest = join(tmpDir, "dest");
+    await applySkillArchive(dest, "my-skill", artifact.plaintext);
+    expect(await readFile(join(dest, "my-skill", "SKILL.md"), "utf8")).toBe("# my skill\n");
+    expect(await readFile(join(dest, "my-skill", "body.md"), "utf8")).toBe("interior\n");
+  });
+
+  test("rejects a traversal skill name before touching the filesystem", async () => {
+    await expect(applySkillArchive(join(tmpDir, "dest"), "..", "")).rejects.toBeInstanceOf(
+      InvalidSkillNameError,
+    );
   });
 });

@@ -1,11 +1,17 @@
-import { mkdir, readdir } from "node:fs/promises";
-import { basename, dirname, join } from "node:path";
+import { mkdir } from "node:fs/promises";
+import { basename, dirname } from "node:path";
 import { AgentPaths } from "../../config/paths";
 import type { AgentSyncConfig } from "../../config/schema";
-import { shouldNeverSync } from "../../core/sanitizer";
-import { extractArchive } from "../../core/tar";
+import {
+  type ApplyPlan,
+  defineFileArtifact,
+  dirWriteApplier,
+  makeApplyVault,
+  skillNameFilter,
+} from "../_apply";
+import { collectMarkdownDir, collectSingleFile } from "../_snapshot";
 import { atomicWrite, readIfExists, type SnapshotArtifact, type SnapshotResult } from "../_utils";
-import { collectSkillArtifacts, InvalidSkillNameError, validateSkillName } from "../skills-walker";
+import { applySkillArchive, collectSkillArtifacts } from "../skills-walker";
 
 /**
  * Reject Copilot agent filenames that could escape `agentsDir`, smuggle in
@@ -34,102 +40,53 @@ export async function snapshotCopilot(_config?: AgentSyncConfig): Promise<Snapsh
   const artifacts: SnapshotArtifact[] = [];
   const warnings: string[] = [];
 
-  // Single instructions file (may or may not have extension)
-  const instructionsFile = await readIfExists(AgentPaths.copilot.instructionsFile);
-  if (instructionsFile !== null) {
-    artifacts.push({
-      vaultPath: "copilot/instructions.md.age",
+  artifacts.push(
+    // Single instructions entry point.
+    ...(await collectSingleFile({
       sourcePath: AgentPaths.copilot.instructionsFile,
-      plaintext: instructionsFile,
-      warnings: [],
-    });
-  }
+      vaultPath: "copilot/instructions.md.age",
+    })),
+    // Instructions directory *.instructions.md
+    ...(await collectMarkdownDir({
+      dir: AgentPaths.copilot.instructionsDir,
+      vaultPath: (name) => `copilot/instructions/${name}.age`,
+      match: (name) => name.endsWith(".instructions.md"),
+    })),
+    // Prompts *.prompt.md
+    ...(await collectMarkdownDir({
+      dir: AgentPaths.copilot.promptsDir,
+      vaultPath: (name) => `copilot/prompts/${name}.age`,
+      match: (name) => name.endsWith(".prompt.md"),
+    })),
+    // Copilot agents live as single `<name>.agent.md` files per the GitHub docs.
+    // collectMarkdownDir rejects dotfiles, non-files, and symlinked entries
+    // (readFile follows symlinks, so a `foo.agent.md -> /etc/passwd` link would
+    // otherwise smuggle content into the vault); the match predicate enforces
+    // the `.agent.md` suffix and the traversal/NUL rules.
+    ...(await collectMarkdownDir({
+      dir: AgentPaths.copilot.agentsDir,
+      vaultPath: (name) => `copilot/agents/${name}.age`,
+      match: (name) => {
+        try {
+          validateCopilotAgentFileName(name);
+          return true;
+        } catch {
+          return false;
+        }
+      },
+    })),
+  );
 
-  // Instructions directory *.instructions.md
-  try {
-    const names = await readdir(AgentPaths.copilot.instructionsDir);
-    for (const name of names) {
-      if (!name.endsWith(".instructions.md")) continue;
-      const sourcePath = join(AgentPaths.copilot.instructionsDir, name);
-      if (shouldNeverSync(sourcePath)) continue;
-      const content = await readIfExists(sourcePath);
-      if (content !== null) {
-        artifacts.push({
-          vaultPath: `copilot/instructions/${name}.age`,
-          sourcePath,
-          plaintext: content,
-          warnings: [],
-        });
-      }
-    }
-  } catch {
-    // directory may not exist
-  }
-
-  // Prompts *.prompt.md
-  try {
-    const names = await readdir(AgentPaths.copilot.promptsDir);
-    for (const name of names) {
-      if (!name.endsWith(".prompt.md")) continue;
-      const sourcePath = join(AgentPaths.copilot.promptsDir, name);
-      if (shouldNeverSync(sourcePath)) continue;
-      const content = await readIfExists(sourcePath);
-      if (content !== null) {
-        artifacts.push({
-          vaultPath: `copilot/prompts/${name}.age`,
-          sourcePath,
-          plaintext: content,
-          warnings: [],
-        });
-      }
-    }
-  } catch {
-    // directory may not exist
-  }
-
-  // Skills — delegated to the shared walker so dot-skip, symlink rejection,
-  // sentinel verification, never-sync interior scan, and symlink-filtered
-  // archival stay identical across every skill-bearing agent. The walker
-  // uses lstat throughout, so symlinked roots and symlinked SKILL.md
-  // sentinels (the vendored-pool pattern seen on real machines) are skipped.
+  // Skills — delegated to the shared walker (dot-skip, symlink rejection,
+  // sentinel verification, never-sync interior scan, symlink-filtered archival).
   const copilotSkills = await collectSkillArtifacts("copilot", AgentPaths.copilot.skillsDir);
   artifacts.push(...copilotSkills.artifacts);
   warnings.push(...copilotSkills.warnings);
 
-  // Copilot agents live as single `<name>.agent.md` files per the GitHub docs.
-  // The walker rejects dotfiles, traversal segments, and symlinked entries
-  // (readFile follows symlinks, so a `foo.agent.md → /etc/passwd` symlink
-  // would otherwise smuggle arbitrary content into the encrypted vault).
-  // Markdown bodies are scanned for embedded literal secrets by the central
-  // walker in `commands/push.ts`.
-  try {
-    const entries = await readdir(AgentPaths.copilot.agentsDir, { withFileTypes: true });
-    for (const entry of entries) {
-      if (!entry.isFile() || entry.isSymbolicLink()) continue;
-      const name = entry.name;
-      try {
-        validateCopilotAgentFileName(name);
-      } catch {
-        continue;
-      }
-      const sourcePath = join(AgentPaths.copilot.agentsDir, name);
-      if (shouldNeverSync(sourcePath)) continue;
-      const content = await readIfExists(sourcePath);
-      if (content !== null) {
-        artifacts.push({
-          vaultPath: `copilot/agents/${name}.age`,
-          sourcePath,
-          plaintext: content,
-          warnings: [],
-        });
-      }
-    }
-  } catch {
-    // agents dir may not exist
-  }
-
   return { artifacts, warnings };
 }
+
+// ─── Apply (pull side) ────────────────────────────────────────────────────────
 
 /** Restore the legacy single-file Copilot instructions entry point. */
 export async function applyCopilotInstructions(content: string): Promise<void> {
@@ -137,20 +94,13 @@ export async function applyCopilotInstructions(content: string): Promise<void> {
 }
 
 /** Restore one Copilot instruction file from the vault. */
-export async function applyCopilotInstructionFile(
-  fileName: string,
-  content: string,
-): Promise<void> {
-  const target = join(AgentPaths.copilot.instructionsDir, fileName);
-  await mkdir(AgentPaths.copilot.instructionsDir, { recursive: true });
-  await atomicWrite(target, content);
+export function applyCopilotInstructionFile(fileName: string, content: string): Promise<void> {
+  return dirWriteApplier({ dir: AgentPaths.copilot.instructionsDir })(fileName, content);
 }
 
 /** Restore one Copilot prompt file from the vault. */
-export async function applyCopilotPrompt(fileName: string, content: string): Promise<void> {
-  const target = join(AgentPaths.copilot.promptsDir, fileName);
-  await mkdir(AgentPaths.copilot.promptsDir, { recursive: true });
-  await atomicWrite(target, content);
+export function applyCopilotPrompt(fileName: string, content: string): Promise<void> {
+  return dirWriteApplier({ dir: AgentPaths.copilot.promptsDir })(fileName, content);
 }
 
 /**
@@ -177,24 +127,16 @@ export async function applyCopilotMcp(mcpJsonContent: string): Promise<void> {
 
 /** Extract one archived Copilot skill directory into the local skills folder. */
 export async function applyCopilotSkill(skillName: string, base64Tar: string): Promise<void> {
-  validateSkillName(skillName);
-  const targetDir = join(AgentPaths.copilot.skillsDir, skillName);
-  await mkdir(targetDir, { recursive: true });
-  const tarBuffer = Buffer.from(base64Tar, "base64");
-  await extractArchive(tarBuffer, targetDir);
+  await applySkillArchive(AgentPaths.copilot.skillsDir, skillName, base64Tar);
 }
 
 /** Restore one Copilot `<name>.agent.md` single-file agent from the vault. */
-export async function applyCopilotAgent(fileName: string, content: string): Promise<void> {
-  validateCopilotAgentFileName(fileName);
-  const target = join(AgentPaths.copilot.agentsDir, fileName);
-  await mkdir(AgentPaths.copilot.agentsDir, { recursive: true });
-  await atomicWrite(target, content);
+export function applyCopilotAgent(fileName: string, content: string): Promise<void> {
+  return dirWriteApplier({
+    dir: AgentPaths.copilot.agentsDir,
+    validate: validateCopilotAgentFileName,
+  })(fileName, content);
 }
-
-// ─── Apply (pull side) ────────────────────────────────────────────────────────
-
-import { type ApplyPlan, defineFileArtifact, runApplyPlan } from "../_apply";
 
 /** Build the Copilot apply plan. Exposed so `copy` can apply a single artifact. */
 export function buildCopilotPlan(_config?: AgentSyncConfig): ApplyPlan {
@@ -228,17 +170,7 @@ export function buildCopilotPlan(_config?: AgentSyncConfig): ApplyPlan {
         suffix: ".tar.age",
         dryRunVerb: "would extract skill:",
         apply: applyCopilotSkill,
-        filter: (name) => {
-          try {
-            validateSkillName(name);
-            return null;
-          } catch (err) {
-            if (err instanceof InvalidSkillNameError) {
-              return { reason: `invalid skill name — ${err.reason}` };
-            }
-            throw err;
-          }
-        },
+        filter: skillNameFilter(),
       },
       {
         kind: "dir",
@@ -247,6 +179,9 @@ export function buildCopilotPlan(_config?: AgentSyncConfig): ApplyPlan {
         match: (name) => name.endsWith(".agent.md.age"),
         dryRunVerb: "would write agent:",
         apply: applyCopilotAgent,
+        // NOT skillNameFilter(): copilot agent filenames have their own rule
+        // (.agent.md suffix) and validateCopilotAgentFileName throws a plain
+        // Error, so map any failure to a fixed reason rather than re-throwing.
         filter: (name) => {
           try {
             validateCopilotAgentFileName(name);
@@ -261,11 +196,4 @@ export function buildCopilotPlan(_config?: AgentSyncConfig): ApplyPlan {
 }
 
 /** Decrypt and apply all Copilot vault artifacts to the local machine. */
-export async function applyCopilotVault(
-  vaultDir: string,
-  key: string,
-  dryRun: boolean,
-  config?: AgentSyncConfig,
-): Promise<void> {
-  await runApplyPlan(buildCopilotPlan(config), vaultDir, key, dryRun);
-}
+export const applyCopilotVault = makeApplyVault(buildCopilotPlan);
