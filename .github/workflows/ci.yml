@@ -88,6 +88,18 @@ jobs:
       - name: Upgrade npm
         run: npm install --global npm@11.5.1
 
+      - name: Diagnose runtime (temporary — node:fs/promises investigation)
+        run: |
+          echo "== uname ==" && uname -a
+          echo "== os-release ==" && head -3 /etc/os-release
+          echo "== bun revision ==" && bun --revision
+          echo "== node ==" && node --version
+          echo "== minimal default import of node:fs/promises =="
+          printf 'import fs from "node:fs/promises"; console.log("readFile typeof:", typeof fs.readFile);\n' > /tmp/probe.mjs
+          bun /tmp/probe.mjs && echo "PROBE: default import OK" || echo "PROBE: default import FAILED"
+          echo "== single test file (focused) =="
+          bun test src/commands/__tests__/plugin.test.ts 2>&1 | head -20 || true
+
       - name: Unit tests
         # Bun's runner on Linux intermittently exits 1 after the suite
         # completes — no `(fail)` lines, no error output, the last visible
