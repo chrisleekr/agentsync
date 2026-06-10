@@ -340,6 +340,23 @@ describe("dirWriteApplier", () => {
     expect(existsSync(join(noBackupDir, "d.md.bak"))).toBe(false);
   });
 
+  test("rejects names that would traverse out of the target dir, before any write", async () => {
+    const dir = join(workDir, "guard");
+    const applier = dirWriteApplier({ dir });
+    // `\` is a separator on Windows; `/` on POSIX; `..`/`.`/empty are traversal
+    // primitives; control chars are filesystem-hostile.
+    for (const bad of ["..", ".", "", "a/b.md", "a\\b.md", "\u0000x.md"]) {
+      await expect(applier(bad, "x")).rejects.toThrow(/Unsafe vault entry name/);
+    }
+    expect(existsSync(dir)).toBe(false); // guard runs before mkdir/write
+  });
+
+  test("allows a leading-dot name so dotfile .md entries still round-trip", async () => {
+    const dir = join(workDir, "dotok");
+    await dirWriteApplier({ dir })(".hidden.md", "x");
+    expect(readFileSync(join(dir, ".hidden.md"), "utf8")).toBe("x");
+  });
+
   test("runs validate before any write and aborts on failure", async () => {
     const dir = join(workDir, "validated");
     const applier = dirWriteApplier({

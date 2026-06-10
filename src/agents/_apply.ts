@@ -1,4 +1,4 @@
-import { mkdir, readdir, readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { log } from "@clack/prompts";
 import type { AgentSyncConfig } from "../config/schema";
@@ -178,13 +178,39 @@ export function skillNameFilter(): NonNullable<DirArtifact["filter"]> {
 }
 
 /**
+ * Reject a vault-derived dir-entry name that could escape the target directory
+ * once joined: empty, `.`/`..`, or any name carrying a path separator (`/`, or
+ * `\` which is a separator on Windows) or control character. This is the
+ * baseline traversal guard every `dirWriteApplier` runs before it writes, so a
+ * crafted vault entry like `..\\..\\evil.md.age` cannot place a file outside the
+ * agent's directory. Leading dots are deliberately allowed: the snapshot walk
+ * round-trips dotfile `.md` entries (`collectMarkdownDir` does not dot-skip), so
+ * rejecting them here would break a legitimate round-trip.
+ */
+function assertSafeDirEntryName(name: string): void {
+  if (name === "" || name === "." || name === "..") {
+    throw new Error(`Unsafe vault entry name: ${JSON.stringify(name)}`);
+  }
+  for (let i = 0; i < name.length; i++) {
+    const code = name.charCodeAt(i);
+    if (code < 0x20 || code === 0x2f || code === 0x5c) {
+      throw new Error(`Unsafe vault entry name: ${JSON.stringify(name)}`);
+    }
+  }
+}
+
+/**
  * Build a `DirArtifact.apply` handler that writes one decrypted file into
- * `dir`: optional name validation, `mkdir -p`, optional `.bak` backup before
- * overwrite, then `atomicWrite`. `backup` defaults to false; only Claude's
- * command/agent/rule writes opt in. `validate` runs before any filesystem
- * touch (Cursor rule names, Copilot agent filenames); it is the pre-write
- * defence-in-depth guard, independent of the build-plan `filter`, which
- * rejects bad names earlier, before decryption.
+ * `dir`: optional per-adapter name validation, then the baseline traversal
+ * guard, optional `.bak` backup before overwrite, then `atomicWrite` (which
+ * creates `dir` on demand). `backup` defaults to false; only Claude's
+ * command/agent/rule writes opt in. The stricter per-adapter `validate` (Cursor
+ * rule names, Copilot agent filenames) runs first so its message wins, but
+ * `assertSafeDirEntryName` always runs as the universal backstop — it catches
+ * what a per-adapter check misses, e.g. a Windows `\` separator that POSIX
+ * `basename` treats as a literal character. Both run before any filesystem
+ * touch, and both are independent of the build-plan `filter`, which rejects bad
+ * names even earlier, before decryption.
  */
 export function dirWriteApplier(opts: {
   dir: string;
@@ -193,7 +219,7 @@ export function dirWriteApplier(opts: {
 }): (name: string, decrypted: string) => Promise<void> {
   return async (name, decrypted) => {
     opts.validate?.(name);
-    await mkdir(opts.dir, { recursive: true });
+    assertSafeDirEntryName(name);
     const target = join(opts.dir, name);
     if (opts.backup) await ensureCommandBackup(target);
     await atomicWrite(target, decrypted);
