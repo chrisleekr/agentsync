@@ -4,8 +4,8 @@
  * These tests exercise the testable core `performSkillRemove` directly — they
  * do not mock git because `performSkillRemove` uses a real `GitClient` against
  * a tmp bare-repo + working-repo pair built by `createBareRepo` +
- * `seedVaultRepo`. The goal is to prove every row in
- * `specs/.../contracts/skill-remove-cli.md` end-to-end.
+ * `seedVaultRepo`. The goal is to prove every documented `skill remove`
+ * outcome end-to-end.
  */
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, mock, test } from "bun:test";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";

@@ -2,10 +2,10 @@
 /**
  * Fails CI when docs/ drifts from its declared ownership table.
  *
- * Why: the speckit dead-link incident (README pointed at
- * docs/speckit.md which never existed) showed that strict mkdocs
- * builds only validate links inside the nav. Links from README and
- * CLAUDE.md to docs/*.md slip through. This check fills that gap by
+ * Why: a past dead link (README pointed at a docs/*.md page that
+ * never existed) showed that strict mkdocs builds only validate links
+ * inside the nav. Links from README and CLAUDE.md to docs/*.md slip
+ * through. This check fills that gap by
  * pinning the docs/ page set to a single source of truth: the
  * ownership table in docs/contributing.md.
  */

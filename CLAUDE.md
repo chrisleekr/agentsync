@@ -37,7 +37,6 @@ src/
   migrate/                Vault format migrations
   test-helpers/           Shared test fixtures
 docs/                     Architecture, commands, migrate, operations, contributing
-specs/                    speckit feature specs and plans
 scripts/                  Build / packaging scripts (build.ts, build-package.ts)
 ```
 
@@ -114,30 +113,3 @@ bun run check:act     # run CI workflow locally via nektos/act
 - **Imports**: ES modules only (`"type": "module"`). Use Node-style
   imports with explicit `.ts` paths where Bun requires them; let Biome
   organise import order.
-- **No spec-tracker refs in code or user-facing docs**: never embed
-  `FR-###`, `SC-###`, `US#`, `T###`, `NC-#`, or `(research R#)`-style
-  references in comments, test names, JSDoc, string literals,
-  `docs/**`, `README.md`, or this file. Future readers — both
-  source-reading contributors and public docs visitors — will not have
-  spec context. Write the WHY directly: name the rule, name the failure
-  mode the check prevents, or describe the invariant. Spec IDs belong
-  in commit messages and PR descriptions, not in anything that ships.
-  The `bun run check:spec-refs` script (`scripts/check-spec-tracker-refs.ts`)
-  enforces this on every `bun run check` and fails CI on any leak.
-
-## Speckit
-
-Feature work is scaffolded under `specs/<timestamp>-<slug>/` via the
-speckit skills. The current plan, if any, is in the most recent spec
-directory — read it for the active feature's terminology, constraints,
-and acceptance criteria before making changes adjacent to that work.
-
-<!-- MANUAL ADDITIONS START -->
-<!-- MANUAL ADDITIONS END -->
-
-<!-- SPECKIT START -->
-
-For additional context about technologies to be used, project structure,
-shell commands, and other important information, read the current plan.
-
-<!-- SPECKIT END -->
