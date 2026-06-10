@@ -1,21 +1,24 @@
-import { mkdir, readdir, readFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { join } from "node:path";
 import { AgentPaths } from "../../config/paths";
 import type { AgentSyncConfig } from "../../config/schema";
 import { denormalizeFromVault } from "../../core/path-portability";
-import { shouldNeverSync } from "../../core/sanitizer";
-import { extractArchive } from "../../core/tar";
+import {
+  type ApplyPlan,
+  defineFileArtifact,
+  dirWriteApplier,
+  makeApplyVault,
+  skillNameFilter,
+} from "../_apply";
+import { collectMarkdownDir, collectSingleFile } from "../_snapshot";
 import {
   atomicWrite,
   collect,
-  ensureCommandBackup,
   readIfExists,
   type SnapshotArtifact,
   type SnapshotResult,
   setJsoncTopLevelKey,
 } from "../_utils";
-import { collectSkillArtifacts, InvalidSkillNameError, validateSkillName } from "../skills-walker";
+import { applySkillArchive, collectSkillArtifacts } from "../skills-walker";
 import { buildPluginManifest, serializeManifest } from "./plugin-manifest";
 import { sanitizeClaudeHooks, sanitizeClaudeMcp } from "./sanitize";
 
@@ -28,15 +31,12 @@ export async function snapshotClaude(config: AgentSyncConfig): Promise<SnapshotR
   const artifacts: SnapshotArtifact[] = [];
   const warnings: string[] = [];
 
-  const claudeMd = await readIfExists(AgentPaths.claude.claudeMd);
-  if (claudeMd !== null) {
-    artifacts.push({
-      vaultPath: "claude/CLAUDE.md.age",
+  artifacts.push(
+    ...(await collectSingleFile({
       sourcePath: AgentPaths.claude.claudeMd,
-      plaintext: claudeMd,
-      warnings: [],
-    });
-  }
+      vaultPath: "claude/CLAUDE.md.age",
+    })),
+  );
 
   const settingsJson = await readIfExists(AgentPaths.claude.settingsJson);
   if (settingsJson !== null) {
@@ -54,87 +54,30 @@ export async function snapshotClaude(config: AgentSyncConfig): Promise<SnapshotR
     warnings.push(...mcp.warnings);
   }
 
-  try {
-    const names = await readdir(AgentPaths.claude.commandsDir);
-    for (const name of names) {
-      if (!name.endsWith(".md")) continue;
-      const sourcePath = join(AgentPaths.claude.commandsDir, name);
-      if (shouldNeverSync(sourcePath)) continue;
-      let content: string;
-      try {
-        content = await readFile(sourcePath, "utf8");
-      } catch {
-        continue; // skip directories or unreadable entries
-      }
-      artifacts.push({
-        vaultPath: `claude/commands/${name}.age`,
-        sourcePath,
-        plaintext: content,
-        warnings: [],
-      });
-    }
-  } catch {
-    // commands dir may not exist yet.
-  }
+  artifacts.push(
+    ...(await collectMarkdownDir({
+      dir: AgentPaths.claude.commandsDir,
+      vaultPath: (name) => `claude/commands/${name}.age`,
+    })),
+    ...(await collectMarkdownDir({
+      dir: AgentPaths.claude.agentsDir,
+      vaultPath: (name) => `claude/agents/${name}.age`,
+    })),
+    // Rules at ~/.claude/rules/*.md are referenced from CLAUDE.md via include
+    // directives, so they must travel with the config or the includes break on
+    // the destination machine. collectMarkdownDir rejects symlinked entries so a
+    // `rules/secret.md -> /etc/passwd` link cannot smuggle content past
+    // shouldNeverSync (readFile would follow the link; the gate only sees it).
+    ...(await collectMarkdownDir({
+      dir: AgentPaths.claude.rulesDir,
+      vaultPath: (name) => `claude/rules/${name}.age`,
+    })),
+  );
 
-  try {
-    const names = await readdir(AgentPaths.claude.agentsDir);
-    for (const name of names) {
-      if (!name.endsWith(".md")) continue;
-      const sourcePath = join(AgentPaths.claude.agentsDir, name);
-      if (shouldNeverSync(sourcePath)) continue;
-      let content: string;
-      try {
-        content = await readFile(sourcePath, "utf8");
-      } catch {
-        continue; // skip directories or unreadable entries
-      }
-      artifacts.push({
-        vaultPath: `claude/agents/${name}.age`,
-        sourcePath,
-        plaintext: content,
-        warnings: [],
-      });
-    }
-  } catch {
-    // agents dir may not exist yet.
-  }
-
-  // Rules markdown at ~/.claude/rules/*.md is referenced from CLAUDE.md via
-  // include directives, so the files must travel with the agent config or the
-  // includes break on the destination machine. Use withFileTypes + symlink
-  // rejection so a `rules/secret.md → /etc/passwd` symlink can't smuggle
-  // arbitrary file content into the encrypted vault — readFile would follow
-  // it and shouldNeverSync only sees the symlink path.
-  try {
-    const entries = await readdir(AgentPaths.claude.rulesDir, { withFileTypes: true });
-    for (const entry of entries) {
-      if (!entry.isFile() || entry.isSymbolicLink()) continue;
-      const name = entry.name;
-      if (!name.endsWith(".md")) continue;
-      const sourcePath = join(AgentPaths.claude.rulesDir, name);
-      if (shouldNeverSync(sourcePath)) continue;
-      let content: string;
-      try {
-        content = await readFile(sourcePath, "utf8");
-      } catch {
-        continue;
-      }
-      artifacts.push({
-        vaultPath: `claude/rules/${name}.age`,
-        sourcePath,
-        plaintext: content,
-        warnings: [],
-      });
-    }
-  } catch {
-    // rules dir may not exist yet.
-  }
-
-  // Skills — delegated to the shared walker.
-  // The walker handles dot-skip, symlink rejection, sentinel verification, the
-  // never-sync interior scan, and the symlink-filtered tar archival in one
-  // place so every skill-bearing agent inherits identical rules.
+  // Skills — delegated to the shared walker. The walker handles dot-skip,
+  // symlink rejection, sentinel verification, the never-sync interior scan, and
+  // the symlink-filtered tar archival in one place so every skill-bearing agent
+  // inherits identical rules.
   const claudeSkills = await collectSkillArtifacts("claude", AgentPaths.claude.skillsDir);
   artifacts.push(...claudeSkills.artifacts);
   warnings.push(...claudeSkills.warnings);
@@ -168,23 +111,16 @@ export async function snapshotClaude(config: AgentSyncConfig): Promise<SnapshotR
   return { artifacts, warnings };
 }
 
+// ─── Apply (pull side) ────────────────────────────────────────────────────────
+
 /**
- * Restore one Claude skill directory from the vault by extracting its
- * encrypted tar archive into `~/.claude/skills/<name>/`.
- *
- * Mirrors {@link applyCopilotSkill}: parents are created on demand and the
- * tar's interior layout is preserved bit-for-bit.
- *
- * @param skillName  Basename of the skill (no extension).
- * @param base64Tar  Base64-encoded `.tar.gz` payload that the walker
- *                   produced on the source machine.
+ * Restore one Claude skill directory from the vault by extracting its encrypted
+ * tar archive into `~/.claude/skills/<name>/`. Thin wrapper over
+ * {@link applySkillArchive}, which validates the name and preserves the tar's
+ * interior layout bit-for-bit.
  */
 export async function applyClaudeSkill(skillName: string, base64Tar: string): Promise<void> {
-  validateSkillName(skillName);
-  const targetDir = join(AgentPaths.claude.skillsDir, skillName);
-  await mkdir(targetDir, { recursive: true });
-  const tarBuffer = Buffer.from(base64Tar, "base64");
-  await extractArchive(tarBuffer, targetDir);
+  await applySkillArchive(AgentPaths.claude.skillsDir, skillName, base64Tar);
 }
 
 /** Restore the shared CLAUDE.md prompt file from the vault. */
@@ -225,40 +161,31 @@ export async function applyClaudeMcp(claudeJsonContent: string): Promise<void> {
 }
 
 /** Restore one Claude command markdown file from the vault. */
-export async function applyClaudeCommand(commandName: string, content: string): Promise<void> {
-  const target = join(AgentPaths.claude.commandsDir, commandName);
-  await mkdir(AgentPaths.claude.commandsDir, { recursive: true });
-  await ensureCommandBackup(target);
-  await atomicWrite(target, content);
+export function applyClaudeCommand(commandName: string, content: string): Promise<void> {
+  return dirWriteApplier({ dir: AgentPaths.claude.commandsDir, backup: true })(
+    commandName,
+    content,
+  );
 }
 
 /** Restore one Claude agent definition markdown file from the vault. */
-export async function applyClaudeAgent(agentName: string, content: string): Promise<void> {
-  const target = join(AgentPaths.claude.agentsDir, agentName);
-  await mkdir(AgentPaths.claude.agentsDir, { recursive: true });
-  await ensureCommandBackup(target);
-  await atomicWrite(target, content);
+export function applyClaudeAgent(agentName: string, content: string): Promise<void> {
+  return dirWriteApplier({ dir: AgentPaths.claude.agentsDir, backup: true })(agentName, content);
 }
 
 /** Restore one Claude rule markdown file from the vault. */
-export async function applyClaudeRule(ruleName: string, content: string): Promise<void> {
-  const target = join(AgentPaths.claude.rulesDir, ruleName);
-  await mkdir(AgentPaths.claude.rulesDir, { recursive: true });
-  await ensureCommandBackup(target);
-  await atomicWrite(target, content);
+export function applyClaudeRule(ruleName: string, content: string): Promise<void> {
+  return dirWriteApplier({ dir: AgentPaths.claude.rulesDir, backup: true })(ruleName, content);
 }
-
-// ─── Apply (pull side) ────────────────────────────────────────────────────────
-
-import { type ApplyPlan, defineFileArtifact, runApplyPlan } from "../_apply";
 
 /**
  * Build the Claude apply plan. Exposed so `copy` can apply a single artifact.
  * Note: `claude/plugins.manifest.json.age` is deliberately NOT a directive —
  * the manifest drives `agentsync plugin install`, it is never written to disk
- * on pull. `_config` is unused now that nothing in the plan gates on it.
+ * on pull. `_config` is unused now that nothing in the plan gates on it; the
+ * param is kept to satisfy the shared `AgentDefinition.buildPlan` contract.
  */
-export function buildClaudePlan(_config: AgentSyncConfig): ApplyPlan {
+export function buildClaudePlan(_config?: AgentSyncConfig): ApplyPlan {
   return {
     agent: "claude",
     directives: [
@@ -304,28 +231,11 @@ export function buildClaudePlan(_config: AgentSyncConfig): ApplyPlan {
         suffix: ".tar.age",
         dryRunVerb: "would extract skill:",
         apply: applyClaudeSkill,
-        filter: (name) => {
-          try {
-            validateSkillName(name);
-            return null;
-          } catch (err) {
-            if (err instanceof InvalidSkillNameError) {
-              return { reason: `invalid skill name — ${err.reason}` };
-            }
-            throw err;
-          }
-        },
+        filter: skillNameFilter(),
       },
     ],
   };
 }
 
 /** Decrypt and apply all Claude vault artifacts to the local machine. */
-export async function applyClaudeVault(
-  vaultDir: string,
-  key: string,
-  dryRun: boolean,
-  config: AgentSyncConfig,
-): Promise<void> {
-  await runApplyPlan(buildClaudePlan(config), vaultDir, key, dryRun);
-}
+export const applyClaudeVault = makeApplyVault(buildClaudePlan);

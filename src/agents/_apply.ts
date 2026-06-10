@@ -1,7 +1,10 @@
 import { readdir, readFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { log } from "@clack/prompts";
+import type { AgentSyncConfig } from "../config/schema";
 import { decryptString } from "../core/encryptor";
+import { atomicWrite, ensureCommandBackup } from "./_utils";
+import { InvalidSkillNameError, validateSkillName } from "./skills-walker";
 
 /** Read .age (or .tar.age) files from a vault subdirectory, ignoring missing dirs. */
 export async function readAgeFiles(
@@ -152,6 +155,86 @@ export async function runApplyPlan(
  */
 export function defineFileArtifact(d: Omit<FileArtifact, "kind">): FileArtifact {
   return { kind: "file", ...d };
+}
+
+/**
+ * Standard `DirArtifact.filter` for a skills directory: runs `validateSkillName`
+ * and maps `InvalidSkillNameError` to a `{ reason }` skip. Replaces the
+ * identical inline try/catch every skill-bearing adapter used to carry.
+ * Re-throws any non-`InvalidSkillNameError` so genuine bugs are not swallowed.
+ */
+export function skillNameFilter(): NonNullable<DirArtifact["filter"]> {
+  return (name) => {
+    try {
+      validateSkillName(name);
+      return null;
+    } catch (err) {
+      if (err instanceof InvalidSkillNameError) {
+        return { reason: `invalid skill name — ${err.reason}` };
+      }
+      throw err;
+    }
+  };
+}
+
+/**
+ * Reject a vault-derived dir-entry name that could escape the target directory
+ * once joined: empty, `.`/`..`, or any name carrying a path separator (`/`, or
+ * `\` which is a separator on Windows) or control character. This is the
+ * baseline traversal guard every `dirWriteApplier` runs before it writes, so a
+ * crafted vault entry like `..\\..\\evil.md.age` cannot place a file outside the
+ * agent's directory. Leading dots are deliberately allowed: the snapshot walk
+ * round-trips dotfile `.md` entries (`collectMarkdownDir` does not dot-skip), so
+ * rejecting them here would break a legitimate round-trip.
+ */
+function assertSafeDirEntryName(name: string): void {
+  if (name === "" || name === "." || name === "..") {
+    throw new Error(`Unsafe vault entry name: ${JSON.stringify(name)}`);
+  }
+  for (let i = 0; i < name.length; i++) {
+    const code = name.charCodeAt(i);
+    if (code < 0x20 || code === 0x2f || code === 0x5c) {
+      throw new Error(`Unsafe vault entry name: ${JSON.stringify(name)}`);
+    }
+  }
+}
+
+/**
+ * Build a `DirArtifact.apply` handler that writes one decrypted file into
+ * `dir`: optional per-adapter name validation, then the baseline traversal
+ * guard, optional `.bak` backup before overwrite, then `atomicWrite` (which
+ * creates `dir` on demand). `backup` defaults to false; only Claude's
+ * command/agent/rule writes opt in. The stricter per-adapter `validate` (Cursor
+ * rule names, Copilot agent filenames) runs first so its message wins, but
+ * `assertSafeDirEntryName` always runs as the universal backstop — it catches
+ * what a per-adapter check misses, e.g. a Windows `\` separator that POSIX
+ * `basename` treats as a literal character. Both run before any filesystem
+ * touch, and both are independent of the build-plan `filter`, which rejects bad
+ * names even earlier, before decryption.
+ */
+export function dirWriteApplier(opts: {
+  dir: string;
+  backup?: boolean;
+  validate?: (name: string) => void;
+}): (name: string, decrypted: string) => Promise<void> {
+  return async (name, decrypted) => {
+    opts.validate?.(name);
+    assertSafeDirEntryName(name);
+    const target = join(opts.dir, name);
+    if (opts.backup) await ensureCommandBackup(target);
+    await atomicWrite(target, decrypted);
+  };
+}
+
+/**
+ * The `apply` half of an adapter: decrypt every vault artifact this agent owns
+ * and write it to disk by running its plan. Replaces the one-line
+ * `runApplyPlan(buildXPlan(config), …)` each adapter used to redeclare.
+ */
+export function makeApplyVault(
+  buildPlan: (config?: AgentSyncConfig) => ApplyPlan,
+): (vaultDir: string, key: string, dryRun: boolean, config?: AgentSyncConfig) => Promise<void> {
+  return (vaultDir, key, dryRun, config) => runApplyPlan(buildPlan(config), vaultDir, key, dryRun);
 }
 
 /** No plan directive owns the given vault path (the `copy` command's miss). */

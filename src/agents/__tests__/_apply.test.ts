@@ -1,9 +1,17 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { encryptString, generateIdentity, identityToRecipient } from "../../core/encryptor";
-import { type ApplyPlan, defineFileArtifact, readAgeFiles, runApplyPlan } from "../_apply";
+import {
+  type ApplyPlan,
+  defineFileArtifact,
+  dirWriteApplier,
+  makeApplyVault,
+  readAgeFiles,
+  runApplyPlan,
+  skillNameFilter,
+} from "../_apply";
 
 let workDir = "";
 let identity = "";
@@ -293,5 +301,120 @@ describe("runApplyPlan warnOnUnknownTopLevel", () => {
     // sanity: vault still contains both files (we didn't accidentally write or remove)
     const remaining = readdirSync(join(vaultDir, "demo"));
     expect(remaining.sort()).toEqual(["known.age", "unknown.age"]);
+  });
+});
+
+describe("skillNameFilter", () => {
+  const filter = skillNameFilter();
+
+  test("returns null for a valid skill name", () => {
+    expect(filter("my-skill")).toBeNull();
+  });
+
+  test("maps an invalid skill name to a skip reason", () => {
+    const result = filter("..");
+    expect(result).not.toBeNull();
+    expect(result?.reason).toContain("invalid skill name");
+  });
+});
+
+describe("dirWriteApplier", () => {
+  test("writes the file and creates parent directories", async () => {
+    const dir = join(workDir, "a", "b");
+    await dirWriteApplier({ dir })("note.md", "hello");
+    expect(readFileSync(join(dir, "note.md"), "utf8")).toBe("hello");
+  });
+
+  test("backs up an existing target only when backup is true", async () => {
+    const dir = join(workDir, "cmds");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, "c.md"), "old");
+    await dirWriteApplier({ dir, backup: true })("c.md", "new");
+    expect(readFileSync(join(dir, "c.md"), "utf8")).toBe("new");
+    expect(readFileSync(join(dir, "c.md.bak"), "utf8")).toBe("old");
+
+    const noBackupDir = join(workDir, "nobak");
+    mkdirSync(noBackupDir, { recursive: true });
+    writeFileSync(join(noBackupDir, "d.md"), "old");
+    await dirWriteApplier({ dir: noBackupDir })("d.md", "new");
+    expect(existsSync(join(noBackupDir, "d.md.bak"))).toBe(false);
+  });
+
+  test("rejects names that would traverse out of the target dir, before any write", async () => {
+    const dir = join(workDir, "guard");
+    const applier = dirWriteApplier({ dir });
+    // `\` is a separator on Windows; `/` on POSIX; `..`/`.`/empty are traversal
+    // primitives; control chars are filesystem-hostile.
+    for (const bad of ["..", ".", "", "a/b.md", "a\\b.md", "\u0000x.md"]) {
+      await expect(applier(bad, "x")).rejects.toThrow(/Unsafe vault entry name/);
+    }
+    expect(existsSync(dir)).toBe(false); // guard runs before mkdir/write
+  });
+
+  test("allows a leading-dot name so dotfile .md entries still round-trip", async () => {
+    const dir = join(workDir, "dotok");
+    await dirWriteApplier({ dir })(".hidden.md", "x");
+    expect(readFileSync(join(dir, ".hidden.md"), "utf8")).toBe("x");
+  });
+
+  test("runs validate before any write and aborts on failure", async () => {
+    const dir = join(workDir, "validated");
+    const applier = dirWriteApplier({
+      dir,
+      validate: (name) => {
+        if (name.startsWith(".")) throw new Error("dotfile rejected");
+      },
+    });
+    await expect(applier(".secret.md", "x")).rejects.toThrow("dotfile rejected");
+    expect(existsSync(join(dir, ".secret.md"))).toBe(false);
+  });
+});
+
+describe("makeApplyVault", () => {
+  test("threads config into buildPlan and runs the plan", async () => {
+    const vaultDir = workDir;
+    await writeEncrypted(join(vaultDir, "demo", "thing.age"), "payload");
+    const seen: { config: unknown; applied: string[] } = { config: undefined, applied: [] };
+    const buildPlan = (config?: unknown): ApplyPlan => {
+      seen.config = config;
+      return {
+        agent: "demo",
+        directives: [
+          defineFileArtifact({
+            vaultName: "thing.age",
+            dryRunLabel: "[dry-run] [demo] would apply thing",
+            apply: async (decrypted) => {
+              seen.applied.push(decrypted);
+            },
+          }),
+        ],
+      };
+    };
+    const applyVault = makeApplyVault(buildPlan);
+    const sentinel = { marker: true };
+    await applyVault(vaultDir, identity, false, sentinel as never);
+    expect(seen.config).toBe(sentinel);
+    expect(seen.applied).toEqual(["payload"]);
+  });
+
+  test("threads the dryRun flag through to the plan", async () => {
+    const vaultDir = workDir;
+    await writeEncrypted(join(vaultDir, "demo", "thing.age"), "payload");
+    const applied: string[] = [];
+    const buildPlan = (): ApplyPlan => ({
+      agent: "demo",
+      directives: [
+        defineFileArtifact({
+          vaultName: "thing.age",
+          dryRunLabel: "[dry-run] [demo] would apply thing",
+          apply: async (decrypted) => {
+            applied.push(decrypted);
+          },
+        }),
+      ],
+    });
+    await makeApplyVault(buildPlan)(vaultDir, identity, true, undefined);
+    // dryRun=true must reach runApplyPlan, which skips the apply callback.
+    expect(applied).toEqual([]);
   });
 });

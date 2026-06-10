@@ -3,7 +3,7 @@ import { AgentPaths } from "../../config/paths";
 import type { AgentSyncConfig } from "../../config/schema";
 import { denormalizeStringFromVault } from "../../core/path-portability";
 import { sanitizeAndNormalizeJson } from "../../core/sanitizer";
-import { type ApplyPlan, defineFileArtifact, runApplyPlan } from "../_apply";
+import { type ApplyPlan, defineFileArtifact, makeApplyVault } from "../_apply";
 import {
   atomicWrite,
   collect,
@@ -56,11 +56,4 @@ export function buildVsCodePlan(_config?: AgentSyncConfig): ApplyPlan {
 }
 
 /** Decrypt and apply all VS Code vault artifacts to the local machine. */
-export async function applyVsCodeVault(
-  vaultDir: string,
-  key: string,
-  dryRun: boolean,
-  config?: AgentSyncConfig,
-): Promise<void> {
-  await runApplyPlan(buildVsCodePlan(config), vaultDir, key, dryRun);
-}
+export const applyVsCodeVault = makeApplyVault(buildVsCodePlan);
