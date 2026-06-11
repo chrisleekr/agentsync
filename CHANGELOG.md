@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.14](https://github.com/chrisleekr/agentsync/compare/v0.1.13...v0.1.14) (2026-06-11)
+
+
+### Bug Fixes
+
+* **ci:** pin Bun 1.3.14 and install all OpenTUI native variants for cross-compile ([#177](https://github.com/chrisleekr/agentsync/issues/177)) ([fc1c4ea](https://github.com/chrisleekr/agentsync/commit/fc1c4ea4c7384425d6a27ea351cbf4838c90a677))
+* **ci:** repair Linux Unit Tests — fs/promises mock default + Bun pin ([#179](https://github.com/chrisleekr/agentsync/issues/179)) ([efaac15](https://github.com/chrisleekr/agentsync/commit/efaac154a043e2f7d7965e46dc1ea442f21d67c4))
+
 ## [0.1.13](https://github.com/chrisleekr/agentsync/compare/v0.1.12...v0.1.13) (2026-06-10)
 
 
