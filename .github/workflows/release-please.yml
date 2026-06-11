@@ -119,45 +119,27 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      # Cross-compiling embeds the target's @opentui/core-<os>-<cpu> native
-      # module. bun install only fetches the host's optional dep, so we
-      # explicitly install the target's variant. --force bypasses os/cpu
-      # skip filtering; --no-save keeps bun.lock untouched.
-      - name: Install target-platform OpenTUI native module
+      # Cross-compiling embeds the target's native @opentui/core module. bun's
+      # --compile resolves EVERY platform branch in OpenTUI's loader, and on
+      # Linux that means both the glibc and musl siblings (e.g.
+      # @opentui/core-linux-arm64 AND -linux-arm64-musl) since OPENTUI_LIBC is
+      # unknown at build time. Installing one variant per target left the musl
+      # sibling unresolved and failed the linux-arm64 leg (#172). Mirror
+      # scripts/build.ts: fetch every platform's native lib so no import branch
+      # is missing. Pin to the hoisted core's exact version so the native libs
+      # match the bundled core.
+      - name: Install all OpenTUI native modules for cross-compile
         if: matrix.bun_target
-        env:
-          BUN_TARGET: ${{ matrix.bun_target }}
         run: |
           set -euo pipefail
-          case "$BUN_TARGET" in
-            bun-windows-x64)    PKG=@opentui/core-win32-x64;    OS=win32;  CPU=x64 ;;
-            bun-windows-arm64)  PKG=@opentui/core-win32-arm64;  OS=win32;  CPU=arm64 ;;
-            bun-linux-x64)      PKG=@opentui/core-linux-x64;    OS=linux;  CPU=x64 ;;
-            bun-linux-arm64)    PKG=@opentui/core-linux-arm64;  OS=linux;  CPU=arm64 ;;
-            bun-darwin-x64)     PKG=@opentui/core-darwin-x64;   OS=darwin; CPU=x64 ;;
-            bun-darwin-arm64)   PKG=@opentui/core-darwin-arm64; OS=darwin; CPU=arm64 ;;
-            *) echo "Unknown bun_target: $BUN_TARGET" >&2; exit 1 ;;
-          esac
           CORE_PKG=node_modules/@opentui/core/package.json
           if [ ! -f "$CORE_PKG" ]; then
             echo "Expected @opentui/core hoisted at $CORE_PKG; install layout changed" >&2
             exit 1
           fi
           VERSION=$(jq -r .version "$CORE_PKG")
-          echo "Installing $PKG@$VERSION for $OS/$CPU"
-          npm install --no-save --force --os="$OS" --cpu="$CPU" "${PKG}@${VERSION}"
-          # Loud failure if the registry returned a different version, instead of
-          # the later "Could not resolve" error from bun build at compile time.
-          INSTALLED="node_modules/${PKG}/package.json"
-          if [ ! -f "$INSTALLED" ]; then
-            echo "Expected $INSTALLED after install; native package missing" >&2
-            exit 1
-          fi
-          INSTALLED_VERSION=$(jq -r .version "$INSTALLED")
-          if [ "$INSTALLED_VERSION" != "$VERSION" ]; then
-            echo "Version mismatch: host @opentui/core=$VERSION, target $PKG=$INSTALLED_VERSION" >&2
-            exit 1
-          fi
+          echo "Installing all @opentui/core native variants @ $VERSION"
+          bun install --os="*" --cpu="*" "@opentui/core@${VERSION}"
 
       - name: Build binary
         run: bun build --compile ${{ matrix.bun_target && format('--target {0}', matrix.bun_target) || '' }} src/cli.ts --outfile dist/${{ matrix.target }}
