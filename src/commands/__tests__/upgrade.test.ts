@@ -14,6 +14,9 @@ const realFsPromises = createRequire(import.meta.url)(
 let cacheJson: string | null = null;
 mock.module("node:fs/promises", () => ({
   ...realFsPromises,
+  // require() omits the synthesized default export; Linux Bun links named
+  // imports through CJS-interop default, so it must be present.
+  default: realFsPromises,
   readFile: async () => {
     if (cacheJson === null) throw new Error("ENOENT");
     return cacheJson;
@@ -33,7 +36,9 @@ afterEach(() => {
   cacheJson = null;
   process.exitCode = 0;
 });
-afterAll(() => mock.module("node:fs/promises", () => realFsPromises));
+afterAll(() =>
+  mock.module("node:fs/promises", () => ({ ...realFsPromises, default: realFsPromises })),
+);
 
 function fetchReturning(tag: string): void {
   globalThis.fetch = mock(
