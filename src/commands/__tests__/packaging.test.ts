@@ -8,7 +8,7 @@ import { z } from "zod";
   const require = createRequire(import.meta.url);
   // biome-ignore lint/style/useNodejsImportProtocol: The fs/promises alias bypasses Bun's shared node:fs/promises mock cache between test files.
   const realFsPromises = require("fs/promises") as typeof import("node:fs/promises");
-  mock.module("node:fs/promises", () => realFsPromises);
+  mock.module("node:fs/promises", () => ({ ...realFsPromises, default: realFsPromises }));
 }
 
 const { readFile } = createRequire(import.meta.url)(

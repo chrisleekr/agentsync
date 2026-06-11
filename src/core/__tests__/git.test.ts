@@ -15,7 +15,7 @@ import { GitClient, type GitReconciliationError } from "../git";
 {
   const require = createRequire(import.meta.url);
   const realFsPromises = require("node:fs/promises") as typeof import("node:fs/promises");
-  mock.module("node:fs/promises", () => realFsPromises);
+  mock.module("node:fs/promises", () => ({ ...realFsPromises, default: realFsPromises }));
 }
 
 // GitClient clone, init, commit, push, pull, currentBranch

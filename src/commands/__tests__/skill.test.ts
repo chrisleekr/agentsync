@@ -26,7 +26,7 @@ import {
   const require = createRequire(import.meta.url);
   // biome-ignore lint/style/useNodejsImportProtocol: deliberate alias to bypass mock cache
   const realFsPromises = require("fs/promises") as typeof import("node:fs/promises");
-  mock.module("node:fs/promises", () => realFsPromises);
+  mock.module("node:fs/promises", () => ({ ...realFsPromises, default: realFsPromises }));
 }
 
 // Mute @clack/prompts so log output doesn't pollute the test runner.
