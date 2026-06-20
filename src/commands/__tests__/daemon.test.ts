@@ -4,11 +4,14 @@
  * Covers getExecutableArgs() and the daemon subcommands (install, start, stop, status, uninstall).
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, mock, spyOn, test } from "bun:test";
+import { rm } from "node:fs/promises";
 import { log } from "@clack/prompts";
 import { IpcClient } from "../../core/ipc";
 import { __setInstallerLinuxOverridesForTests } from "../../daemon/installer-linux";
 import { __setInstallerMacOsOverridesForTests } from "../../daemon/installer-macos";
 import { __setInstallerWindowsOverridesForTests } from "../../daemon/installer-windows";
+import { writeDaemonState } from "../../daemon/state";
+import { createTmpDir } from "../../test-helpers/fixtures";
 
 // ── getExecutableArgs tests ────────────────────────────────────────────────────
 
@@ -112,10 +115,12 @@ __setInstallerWindowsOverridesForTests({
 const successLogs: string[] = [];
 const errorLogs: string[] = [];
 const warnLogs: string[] = [];
+const infoLogs: string[] = [];
 
 let successSpy: ReturnType<typeof spyOn>;
 let errorSpy: ReturnType<typeof spyOn>;
 let warnSpy: ReturnType<typeof spyOn>;
+let infoSpy: ReturnType<typeof spyOn>;
 let ipcClientSendSpy: ReturnType<typeof spyOn>;
 
 beforeAll(() => {
@@ -128,6 +133,9 @@ beforeAll(() => {
   warnSpy = spyOn(log, "warn").mockImplementation((msg: string) => {
     warnLogs.push(msg);
   });
+  infoSpy = spyOn(log, "info").mockImplementation((msg: string) => {
+    infoLogs.push(msg);
+  });
   ipcClientSendSpy = spyOn(IpcClient.prototype, "send");
 });
 
@@ -135,6 +143,7 @@ afterAll(() => {
   successSpy.mockRestore();
   errorSpy.mockRestore();
   warnSpy.mockRestore();
+  infoSpy.mockRestore();
   ipcClientSendSpy.mockRestore();
   // Clear the globalThis-backed override slots so any later test file that
   // exercises the real installer functions sees clean defaults.
@@ -147,6 +156,7 @@ afterAll(() => {
 beforeEach(() => {
   successLogs.length = 0;
   errorLogs.length = 0;
+  infoLogs.length = 0;
   warnLogs.length = 0;
   mockInstall.mockClear();
   mockUninstall.mockClear();
@@ -244,6 +254,73 @@ describe("daemonCommand subcommands", () => {
 
     expect(errorLogs.some((m) => m.includes("not running"))).toBe(true);
     expect(process.exitCode).toBe(1);
+  });
+
+  test("status falls back to the durable state file when the daemon is down", async () => {
+    const tmp = await createTmpDir();
+    const saved = process.env.AGENTSYNC_DIR;
+    process.env.AGENTSYNC_DIR = tmp;
+    try {
+      await writeDaemonState({
+        pid: null,
+        startedAt: null,
+        lastSuccessAt: new Date().toISOString(),
+        lastErrorAt: new Date().toISOString(),
+        lastError: "[push] Vault history diverged",
+        consecutiveFailures: 3,
+        stuck: true,
+      });
+      ipcClientSendSpy.mockRejectedValueOnce(new Error("ENOENT"));
+      const cmd = await getSubCmd("status");
+      await cmd.run();
+
+      expect(errorLogs.some((m) => m.includes("not running"))).toBe(true);
+      expect(errorLogs.some((m) => m.includes("STUCK"))).toBe(true);
+      expect(process.exitCode).toBe(1);
+    } finally {
+      if (saved === undefined) delete process.env.AGENTSYNC_DIR;
+      else process.env.AGENTSYNC_DIR = saved;
+      await rm(tmp, { recursive: true, force: true });
+    }
+  });
+
+  test("status subcommand escalates a stuck daemon and exits 1", async () => {
+    ipcClientSendSpy.mockResolvedValueOnce({
+      id: "test",
+      ok: true,
+      data: {
+        pid: 12345,
+        consecutiveFailures: 7,
+        lastError: "[push] Vault history diverged",
+        lastSuccessAt: null,
+        startedAt: new Date().toISOString(),
+        stuck: true,
+      },
+    });
+    const cmd = await getSubCmd("status");
+    await cmd.run();
+
+    expect(errorLogs.some((m) => m.includes("STUCK"))).toBe(true);
+    expect(process.exitCode).toBe(1);
+  });
+
+  test("status subcommand reports the last successful sync age", async () => {
+    ipcClientSendSpy.mockResolvedValueOnce({
+      id: "test",
+      ok: true,
+      data: {
+        pid: 12345,
+        consecutiveFailures: 0,
+        lastError: null,
+        lastSuccessAt: new Date(Date.now() - 5 * 60_000).toISOString(),
+        startedAt: new Date().toISOString(),
+        stuck: false,
+      },
+    });
+    const cmd = await getSubCmd("status");
+    await cmd.run();
+
+    expect(infoLogs.some((m) => m.includes("Last successful sync"))).toBe(true);
   });
 
   test("status subcommand handles error response from daemon", async () => {

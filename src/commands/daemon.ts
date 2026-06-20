@@ -5,6 +5,13 @@ import { defineCommand } from "citty";
 import { resolveDaemonSocketPath } from "../config/paths";
 import { DaemonStatusSchema } from "../config/schema";
 import { IpcClient } from "../core/ipc";
+import { type DaemonState, formatAge, readDaemonState } from "../daemon/state";
+
+/** Render the "last successful sync" line shared by the live and offline paths. */
+function lastSyncLine(lastSuccessAt: string | null): string {
+  if (!lastSuccessAt) return "Last successful sync: never";
+  return `Last successful sync: ${formatAge(Date.now() - Date.parse(lastSuccessAt))} ago`;
+}
 
 /**
  * Detect whether a file path resolves into a session-scoped temporary directory
@@ -144,26 +151,50 @@ export const daemonCommand = defineCommand({
     }),
 
     status: defineCommand({
-      meta: { description: "Show daemon status via IPC" },
+      meta: { description: "Show daemon status and last-sync health" },
       async run() {
         const client = new IpcClient();
         try {
           const response = await client.send("status", {}, resolveDaemonSocketPath());
-          if (response.ok) {
-            const parsed = DaemonStatusSchema.safeParse(response.data);
-            const pid = parsed.success ? parsed.data.pid : (response.data as { pid: number }).pid;
-            const failures = parsed.success ? parsed.data.consecutiveFailures : 0;
-            const lastErr = parsed.success ? parsed.data.lastError : null;
-            log.success(`Daemon is running (pid: ${pid})`);
-            if (failures > 0) {
-              log.warn(`Consecutive failures: ${failures}. Last error: ${lastErr ?? "unknown"}`);
-            }
-          } else {
+          if (!response.ok) {
             log.error(`Daemon error: ${response.error}`);
             process.exitCode = 1;
+            return;
+          }
+          const parsed = DaemonStatusSchema.safeParse(response.data);
+          if (!parsed.success) {
+            const pid = (response.data as { pid?: number }).pid ?? "unknown";
+            log.success(`Daemon is running (pid: ${pid}).`);
+            return;
+          }
+          const s = parsed.data;
+          log.success(`Daemon is running (pid: ${s.pid}).`);
+          log.info(lastSyncLine(s.lastSuccessAt));
+          if (s.stuck) {
+            log.error(
+              "STUCK: vault history diverged — auto-sync is paused until you reset the vault. See `agentsync doctor`.",
+            );
+            process.exitCode = 1;
+          } else if (s.consecutiveFailures > 0) {
+            log.warn(
+              `Consecutive failures: ${s.consecutiveFailures}. Last error: ${s.lastError ?? "unknown"}`,
+            );
           }
         } catch {
+          // Daemon is down — fall back to the durable state file so the user
+          // still sees when sync last succeeded and whether it died stuck.
+          const s: DaemonState = await readDaemonState();
           log.error("Daemon is not running.");
+          if (s.lastSuccessAt || s.lastErrorAt) {
+            log.info(lastSyncLine(s.lastSuccessAt));
+            if (s.stuck) {
+              log.error(
+                "Last run was STUCK (vault diverged). Reset the vault, then start the daemon.",
+              );
+            } else if (s.lastError) {
+              log.warn(`Last error: ${s.lastError}`);
+            }
+          }
           process.exitCode = 1;
         }
       },

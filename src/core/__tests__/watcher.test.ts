@@ -116,4 +116,38 @@ describe("Watcher", () => {
 
     expect(fireCount).toBe(beforeClose);
   });
+
+  // shouldSkip filters events at the watch layer (daemon passes shouldNeverSync)
+  test("shouldSkip prevents filtered paths from firing the callback", async () => {
+    const watcher = new Watcher();
+    const fired: string[] = [];
+    // Skip anything ending in `.skip`; everything else fires.
+    watcher.add(
+      tmpDir,
+      50,
+      (p) => void fired.push(p),
+      (path) => path.endsWith(".skip"),
+    );
+
+    // Re-write the kept file until the watcher delivers an event — fs.watch
+    // subscription latency under full-suite I/O contention can drop a single
+    // write, so retry rather than racing one event (matches this file's
+    // event-driven tolerance for FSEvents batching).
+    const keepPath = join(tmpDir, "keep.txt");
+    const start = Date.now();
+    while (fired.length < 1 && Date.now() - start < 6000) {
+      await writeFile(keepPath, String(Date.now()), "utf8");
+      await Bun.sleep(120);
+    }
+    expect(fired.length).toBeGreaterThanOrEqual(1);
+    const afterKeep = fired.length;
+
+    // A skipped file must not add a callback.
+    await writeFile(join(tmpDir, "noisy.skip"), "y", "utf8");
+    await Bun.sleep(300);
+    watcher.close();
+
+    expect(fired.length).toBe(afterKeep);
+    expect(fired.every((p) => !p.endsWith(".skip"))).toBe(true);
+  });
 });

@@ -8,6 +8,7 @@ import { log } from "@clack/prompts";
 import { defineCommand } from "citty";
 import { formatConfigError, loadConfig, resolveConfigPath } from "../config/loader";
 import { AgentPaths } from "../config/paths";
+import { type DaemonState, formatAge, readDaemonState } from "../daemon/state";
 import { resolveRuntimeContext } from "./shared";
 
 /** Single diagnostic check row rendered by the doctor command. */
@@ -15,6 +16,50 @@ export interface Check {
   name: string;
   status: "pass" | "warn" | "fail";
   detail: string;
+}
+
+/** A successful sync older than this is reported as stale by `doctor`. */
+const STALE_SYNC_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Build the daemon sync-health row from the durable state file. A divergence
+ * (`stuck`) fails; a stale or never-succeeded last-sync warns ONLY when the
+ * daemon is installed (otherwise the user is not relying on auto-sync); a
+ * recent success passes. Extracted so the rule is unit-testable.
+ */
+export async function buildDaemonHealthCheck(daemonInstalled: boolean): Promise<Check> {
+  const state: DaemonState = await readDaemonState();
+  const name = "Daemon sync health";
+
+  if (state.stuck) {
+    return {
+      name,
+      status: "fail",
+      detail: `Auto-sync STUCK (vault diverged). Reset the vault, then it resumes. Last error: ${state.lastError ?? "unknown"}`,
+    };
+  }
+
+  if (state.lastSuccessAt === null) {
+    if (!daemonInstalled) {
+      return { name, status: "pass", detail: "Daemon not installed; no auto-sync expected." };
+    }
+    return {
+      name,
+      status: "warn",
+      detail:
+        "Daemon installed but has never recorded a successful sync. Check: agentsync daemon status",
+    };
+  }
+
+  const ageMs = Date.now() - Date.parse(state.lastSuccessAt);
+  if (daemonInstalled && ageMs > STALE_SYNC_MS) {
+    return {
+      name,
+      status: "warn",
+      detail: `Last successful sync was ${formatAge(ageMs)} ago (stale). Check: agentsync daemon status`,
+    };
+  }
+  return { name, status: "pass", detail: `Last successful sync ${formatAge(ageMs)} ago.` };
 }
 
 /**
@@ -241,9 +286,11 @@ export const doctorCommand = defineCommand({
       daemonServicePath = join(homedir(), ".config", "systemd", "user", "agentsync.service");
     }
 
+    let daemonInstalled = false;
     if (daemonServicePath) {
       try {
         await access(daemonServicePath, constants.R_OK);
+        daemonInstalled = true;
         checks.push({
           name: "Daemon service file",
           status: "pass",
@@ -257,6 +304,11 @@ export const doctorCommand = defineCommand({
         });
       }
     }
+
+    // 8. Daemon sync health from the durable state file. A backup daemon that
+    // fails silently is the worst failure mode, so surface a stale or stuck
+    // last-sync loudly here rather than only on an explicit `daemon status`.
+    checks.push(await buildDaemonHealthCheck(daemonInstalled));
 
     // Print results
     // biome-ignore lint/suspicious/noConsole: intentional CLI tabular output

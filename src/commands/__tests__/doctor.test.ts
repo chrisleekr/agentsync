@@ -10,8 +10,9 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { rm, symlink } from "node:fs/promises";
 import { join } from "node:path";
 import { AgentPaths } from "../../config/paths";
+import { type DaemonState, writeDaemonState } from "../../daemon/state";
 import { createTmpDir } from "../../test-helpers/fixtures";
-import { buildSkillsDirChecks } from "../doctor";
+import { buildDaemonHealthCheck, buildSkillsDirChecks } from "../doctor";
 
 type MutablePaths = {
   claude: { skillsDir: string };
@@ -127,5 +128,65 @@ describe("buildSkillsDirChecks", () => {
     const claudeRow = rows.find((r) => r.name === "Claude skills directory");
     expect(claudeRow?.status).toBe("warn");
     expect(claudeRow?.detail).toContain("Symlinked skills root");
+  });
+});
+
+describe("buildDaemonHealthCheck", () => {
+  let tmpDir: string;
+  let savedDir: string | undefined;
+
+  const base: DaemonState = {
+    pid: null,
+    startedAt: null,
+    lastSuccessAt: null,
+    lastErrorAt: null,
+    lastError: null,
+    consecutiveFailures: 0,
+    stuck: false,
+  };
+
+  beforeEach(async () => {
+    tmpDir = await createTmpDir();
+    savedDir = process.env.AGENTSYNC_DIR;
+    process.env.AGENTSYNC_DIR = tmpDir;
+  });
+
+  afterEach(async () => {
+    if (savedDir === undefined) delete process.env.AGENTSYNC_DIR;
+    else process.env.AGENTSYNC_DIR = savedDir;
+    await rm(tmpDir, { recursive: true, force: true });
+  });
+
+  test("fails when the daemon is stuck on a divergence", async () => {
+    await writeDaemonState({ ...base, stuck: true, lastError: "[push] diverged" });
+    const row = await buildDaemonHealthCheck(true);
+    expect(row.status).toBe("fail");
+    expect(row.detail).toContain("STUCK");
+  });
+
+  test("warns when installed but no sync has ever succeeded", async () => {
+    await writeDaemonState(base);
+    const row = await buildDaemonHealthCheck(true);
+    expect(row.status).toBe("warn");
+  });
+
+  test("passes when not installed and no sync has run", async () => {
+    await writeDaemonState(base);
+    const row = await buildDaemonHealthCheck(false);
+    expect(row.status).toBe("pass");
+  });
+
+  test("warns when the last success is stale", async () => {
+    const old = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+    await writeDaemonState({ ...base, lastSuccessAt: old });
+    const row = await buildDaemonHealthCheck(true);
+    expect(row.status).toBe("warn");
+    expect(row.detail).toContain("stale");
+  });
+
+  test("passes on a recent successful sync", async () => {
+    await writeDaemonState({ ...base, lastSuccessAt: new Date().toISOString() });
+    const row = await buildDaemonHealthCheck(true);
+    expect(row.status).toBe("pass");
   });
 });

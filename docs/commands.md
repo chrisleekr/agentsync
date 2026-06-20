@@ -314,7 +314,7 @@ agentsync upgrade --check  # report only, install nothing
 ```bash
 agentsync daemon install     # write the OS service descriptor
 agentsync daemon start       # idempotent
-agentsync daemon status      # IPC ping
+agentsync daemon status      # last-sync health (last success, failures, stuck)
 agentsync daemon stop
 agentsync daemon uninstall
 ```
@@ -325,7 +325,8 @@ agentsync daemon uninstall
 
 - Only one daemon runs per user. A second-instance check exits cleanly if a daemon is already up.
 - A transient sync failure triggers one automatic retry. If the retry also fails, the error is recorded but the daemon stays alive so the next change can trigger a fresh push.
-- See [Daemon](operations.md#daemon) for install paths per OS, lifecycle, and log locations.
+- `daemon status` reports the last successful sync time, consecutive failures, and a **stuck** flag (vault diverged). When the daemon is **not** running it falls back to the durable `daemon-state.json`, so you still see when sync last succeeded. `doctor` surfaces a stale or stuck last-sync as a dedicated health row — a silent backup failure is loud, not invisible.
+- See [Daemon](operations.md#daemon) for install paths per OS, lifecycle, health/durable-state, and log locations.
 
 ## key
 

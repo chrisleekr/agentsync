@@ -121,6 +121,11 @@ export const DaemonStatusSchema = z.object({
   pid: z.number().int().positive(),
   consecutiveFailures: z.number().int().min(0),
   lastError: z.string().nullable(),
+  // Health fields. Optional with defaults so an older daemon's IPC response
+  // (which omits them) still validates against a newer client.
+  lastSuccessAt: z.string().nullable().default(null),
+  startedAt: z.string().nullable().default(null),
+  stuck: z.boolean().default(false),
 });
 
 /** Normalized status shape for the daemon IPC status response. */
