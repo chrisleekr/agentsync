@@ -1268,7 +1268,7 @@ cross-agent migrations from a single interactive screen.</p>
 </tr>
 <tr>
 <td>2 Sync</td>
-<td>Per-artifact rows grouped by sync status (<code>local-changed</code>, <code>local-only</code>, <code>vault-only</code>, <code>unknown</code>, <code>synced</code>). Multi-select with <code>space</code>; push selected with <code>p</code>; bulk-remove skills with <code>x</code> (y/n confirm). Enter on a skill drills into its files with per-file diff.</td>
+<td>Per-artifact rows grouped by sync status (<code>local-changed</code>, <code>local-only</code>, <code>vault-only</code>, <code>unknown</code>, <code>synced</code>). Multi-select with <code>space</code>; push selected with <code>p</code>; bulk-remove any selected vault artifacts with <code>x</code> (y/n confirm) — rows with no vault copy (<code>local-only</code>) are ignored. Enter on a skill drills into its files with per-file diff.</td>
 </tr>
 <tr>
 <td>3 Machines</td>
@@ -1323,8 +1323,8 @@ cross-agent migrations from a single interactive screen.</p>
 subcommands operate on. Push goes through the same daemon IPC the <code>status</code> and
 <code>daemon</code> subcommands use; the Machines tab calls the same <code>performCopy</code> core as
 <code>agentsync copy</code>; migrate calls the same planner as <code>agentsync migrate</code>; bulk
-skill removal calls the same <code>performSkillRemove</code> that <code>agentsync skill remove</code>
-does, once per selected skill.</p>
+removal calls the same <code>performVaultRemove</code> core that <code>agentsync skill remove</code>
+delegates to, once per selected vault artifact.</p>
 <p><strong>Caveats</strong>:</p>
 <ul>
 <li>The TUI is interactive-only. In a non-TTY context (piped stdin/stdout,

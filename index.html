@@ -860,7 +860,7 @@ push, browsing other machines and copying from them, and migrate. See
 <li><strong>Plaintext never crosses the network.</strong> Every artefact in the vault is encrypted to one or more age recipients before any Git operation runs.</li>
 <li><strong>Fast-forward only.</strong> Reconciliation never merges silently. If two machines diverge, AgentSync stops and prints a recovery path.</li>
 <li><strong>Sanitiser is a hard gate.</strong> Literal secrets and never-sync paths abort the push before any bytes leave the machine.</li>
-<li><strong>Skill removal is explicit.</strong> <code>copy</code> is additive by design so an in-progress local edit cannot be wiped by a remote that omits it. <code>agentsync skill remove</code> is the only command that deletes vault entries.</li>
+<li><strong>Vault removal is explicit.</strong> <code>copy</code> is additive by design so an in-progress local edit cannot be wiped by a remote that omits it. Deletion is never silent: the CLI <code>agentsync skill remove</code> deletes a skill, and the TUI Sync tab removes any selected vault artifact after a <code>y</code>/<code>n</code> confirm — both routed through one <code>performVaultRemove</code> core.</li>
 <li><strong>Interactive TUI.</strong> Running <code>agentsync</code> with no subcommand opens a tabbed UI to browse the vault, inspect per-agent local content, trigger a push, browse machines and copy from them, and migrate config — without memorising flags.</li>
 </ul>
 <h2 id="where-to-go-next">Where to go next<a class="headerlink" href="#where-to-go-next" title="Permanent link">&para;</a></h2>
