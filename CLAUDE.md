@@ -101,8 +101,9 @@ bun run check:act     # run CI workflow locally via nektos/act
   `src/config/paths.ts` rather than hardcoding `~/.claude`, `~/.cursor`,
   etc. — this keeps the test harness and platform overrides working.
 - **TUI reuses command logic, never duplicates it**: the TUI wizards, the
-  Machines tab, and the Migrate tab call `performInit`, `performKeyAdd`,
-  `performKeyRotate`, `performMigrate`, `performVaultRemove`, and `performCopy`
+  Machines tab, the Migrate tab, and the Config tab call `performInit`,
+  `performKeyAdd`, `performKeyRotate`, `performMigrate`, `performVaultRemove`,
+  `performCopy`, and `performConfigSet`/`performConfigList`/`performKeyList`
   directly. Adding new TUI features must not fork business logic — encryption,
   reconciliation, sanitiser, and migration invariants live in one place.
 - **`destroy` never imports `AgentPaths`**: the agent-files-never-touched

@@ -122,9 +122,11 @@ export const DaemonStatusSchema = z.object({
   consecutiveFailures: z.number().int().min(0),
   lastError: z.string().nullable(),
   // Health fields. Optional with defaults so an older daemon's IPC response
-  // (which omits them) still validates against a newer client.
-  lastSuccessAt: z.string().nullable().default(null),
-  startedAt: z.string().nullable().default(null),
+  // (which omits them) still validates against a newer client. Timestamps are
+  // validated as ISO datetimes so a malformed value fails safeParse (degrading
+  // to null) rather than reaching Date.parse as NaN in the dashboard/status.
+  lastSuccessAt: z.string().datetime().nullable().default(null),
+  startedAt: z.string().datetime().nullable().default(null),
   stuck: z.boolean().default(false),
 });
 

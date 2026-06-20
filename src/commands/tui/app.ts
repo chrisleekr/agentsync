@@ -16,6 +16,7 @@ import {
 } from "./state";
 import { createStore, type Store } from "./store";
 import { renderActivity } from "./tabs/activity";
+import { ensureConfigLoaded, onConfigKey, renderConfig } from "./tabs/config";
 import { renderDashboard } from "./tabs/dashboard";
 import { ensureMachinesLoaded, onMachinesKey, renderMachines } from "./tabs/machines";
 import { onMigrateKey, renderMigrate } from "./tabs/migrate";
@@ -29,6 +30,7 @@ const TAB_LABELS: Record<TabId, string> = {
   machines: "Machines",
   migrate: "Migrate",
   activity: "Activity",
+  config: "Config",
 };
 
 const PALETTE = {
@@ -386,6 +388,9 @@ function delegateTabKey(key: KeyEvent, ctx: AppContext): void {
     case "machines":
       onMachinesKey(key, ctx.store);
       break;
+    case "config":
+      onConfigKey(key, ctx.store);
+      break;
     case "migrate":
       onMigrateKey(key, ctx.store);
       break;
@@ -533,6 +538,10 @@ function actionLabelFor(key: KeyEvent, state: AppState): { key: string; label: s
     case "activity":
       if (name === "c") return { key: "c", label: "clear" };
       break;
+    case "config":
+      if (name === "space") return { key: "space", label: "toggle" };
+      if (name === "left" || name === "right") return { key: "← →", label: "change" };
+      break;
   }
   return null;
 }
@@ -582,6 +591,10 @@ function renderActiveTab(
       case "activity":
         renderActivity(renderer, host, state);
         break;
+      case "config":
+        ensureConfigLoaded(store);
+        renderConfig(renderer, host, state);
+        break;
     }
   }
 }
@@ -590,7 +603,7 @@ function renderHelp(renderer: CliRenderer, host: BoxRenderable, state: AppState)
   const help = [
     "",
     "  Global keys",
-    "    1 – 5         Jump to tab",
+    "    1 – 6         Jump to tab",
     "    Tab / Sh+Tab  Cycle tabs",
     "    p             Push vault (direct)",
     "    r             Refresh current tab",
@@ -647,6 +660,12 @@ function renderHelp(renderer: CliRenderer, host: BoxRenderable, state: AppState)
     "    Shift-P       Run preview",
     "    Shift-A       Apply (after a matching preview)",
     "",
+    "  Config",
+    "    ↑ / ↓         Move between settings",
+    "    space         Toggle a boolean setting",
+    "    ← / →         Cycle an enum / adjust a number",
+    "                  (changes reconcile + push to the vault)",
+    "",
     "  Activity",
     "    c             Clear log",
     "",
@@ -697,5 +716,11 @@ function contextActionsForTab(state: AppState): ContextAction[] {
       ];
     case "activity":
       return [{ key: "c", label: "clear" }];
+    case "config":
+      return [
+        { key: "↑↓", label: "move" },
+        { key: "space", label: "toggle" },
+        { key: "← →", label: "change" },
+      ];
   }
 }
