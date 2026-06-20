@@ -1180,7 +1180,7 @@ because every request goes through the same sync queue.</p>
 <p>Three places own the security contract:</p>
 <ul>
 <li><strong>Encryptor</strong>: the only path that generates age identities, derives recipients, and encrypts content. Plaintext never leaves this layer for any artefact going to disk or to the network.</li>
-<li><strong>Sanitiser</strong>: the only place that decides what is safe to encrypt. Never-sync paths and literal-secret detection are hard-coded rules, not opt-in policy. Loosening either requires a documented reason.</li>
+<li><strong>Sanitiser</strong>: the only place that decides what is safe to encrypt. Never-sync paths are hard-coded rules. Literal-secret detection is a <strong>known-credential-format</strong> guard (vendor key prefixes, AWS/GitHub/GitLab/Slack/Google tokens, age identities, PEM private keys, and JWTs in strict mode) — not a general secret scanner: a plain password or bespoke token with no recognised shape is not caught, so encryption, not the scan, is the real protection. The scan's job is to keep well-known credentials out of git history. Its breadth and the base64 redactor are tuned through the <code>[security]</code> config, resolved by <code>securityToPolicy</code>; the never-sync rules are not configurable.</li>
 <li><strong>Tar bundler</strong>: exists because some agent assets are directory-shaped. The tar is built in memory before encryption so an intermediate plaintext archive never lands on disk.</li>
 </ul>
 <p>Private keys stay on disk in the local runtime directory (<code>~/.config/agentsync/key.txt</code> by default on Unix, with restrictive permissions). They are never committed and never logged.</p>

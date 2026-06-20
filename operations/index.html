@@ -896,6 +896,34 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Push aborts because secrets were detected">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-the-scan-actually-covers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What the scan actually covers
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tuning-the-scan" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tuning the scan
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
         
           <li class="md-nav__item">
@@ -1376,6 +1404,34 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Push aborts because secrets were detected">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-the-scan-actually-covers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What the scan actually covers
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tuning-the-scan" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tuning the scan
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
         
           <li class="md-nav__item">
@@ -1799,7 +1855,7 @@ and behaviour reference.</p>
 <li><code>vault-only</code> means this machine's namespace has artefacts the local disk does not. Run <code>copy self &lt;path&gt;</code> if the content should exist on this machine.</li>
 </ul>
 <h3 id="push-aborts-because-secrets-were-detected">Push aborts because secrets were detected<a class="headerlink" href="#push-aborts-because-secrets-were-detected" title="Permanent link">&para;</a></h3>
-<p>The sanitiser found literal tokens or credentials in content that would otherwise be encrypted and committed. Sanitiser hits are intentionally a hard stop — they prevent the agent from leaking a secret into the vault, where it would persist even after subsequent pushes.</p>
+<p>The sanitiser found a literal token or credential in content that would otherwise be encrypted and committed. Sanitiser hits are intentionally a hard stop — a secret in git history persists even after later pushes and is one key-compromise away from retroactive exposure.</p>
 <p>Fix:</p>
 <ol>
 <li>Remove the literal secret from the local config.</li>
@@ -1807,6 +1863,23 @@ and behaviour reference.</p>
 <li>Run <code>push</code> again.</li>
 </ol>
 <p>Do not bypass this by editing the vault manually.</p>
+<h4 id="what-the-scan-actually-covers">What the scan actually covers<a class="headerlink" href="#what-the-scan-actually-covers" title="Permanent link">&para;</a></h4>
+<p>Be precise about the guarantee. The scan is a <strong>known-credential-format</strong> detector, not a general secret scanner. It matches a fixed set of high-precision patterns:</p>
+<ul>
+<li>vendor API-key prefixes (<code>sk-ant-…</code>, <code>sk-proj-…</code>), GitHub (<code>ghp_…</code>, <code>github_pat_…</code>), GitLab (<code>glpat-…</code>), AWS access keys (<code>AKIA…</code>), Google (<code>AIza…</code>), Slack (<code>xox[abprs]-…</code>);</li>
+<li>AgentSync's own age identity (<code>AGE-SECRET-KEY-1…</code>);</li>
+<li>PEM private-key headers (<code>-----BEGIN … PRIVATE KEY-----</code>);</li>
+<li>JWTs (<code>eyJ….eyJ….…</code>) — only when <code>security.secretScan = "strict"</code>.</li>
+</ul>
+<p>What it does <strong>not</strong> catch: a plain password, a bespoke or internal API token, a database connection string, or any credential with no recognised shape. Those flow into the (encrypted) vault unflagged. <strong>Encryption is the real protection</strong> — the scan exists only to keep well-known credentials out of git history. Treat a clean push as "no recognised credential format found", not "no secrets present".</p>
+<h4 id="tuning-the-scan">Tuning the scan<a class="headerlink" href="#tuning-the-scan" title="Permanent link">&para;</a></h4>
+<p><code>agentsync config set security.secretScan &lt;mode&gt;</code>:</p>
+<ul>
+<li><code>standard</code> (default) — the built-in credential patterns above, minus JWTs.</li>
+<li><code>strict</code> — adds JWT detection. Use when no legitimate JWT appears in your config.</li>
+<li><code>off</code> — disables the artefact-body scan. <strong>Skill-bundle interiors are still scanned at <code>standard</code></strong> as a fail-safe, and encryption still applies.</li>
+</ul>
+<p><code>agentsync config set security.allowSecretValues '["&lt;literal&gt;"]'</code> exempts a specific value the scanner false-positives on (and exempts it from base64 redaction). <code>agentsync config set security.redactBase64Values false</code> stops AgentSync replacing long base64-looking JSON values with a placeholder, for configs that legitimately store such values. See <a href="../commands/#config">config</a>.</p>
 <h3 id="daemon-is-not-running">Daemon is not running<a class="headerlink" href="#daemon-is-not-running" title="Permanent link">&para;</a></h3>
 <p>Check, in order:</p>
 <ol>
