@@ -2,7 +2,14 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { createTmpDir } from "../../test-helpers/fixtures";
-import { atomicWrite, collect, readIfExists, setJsoncTopLevelKey } from "../_utils";
+import {
+  atomicWrite,
+  collect,
+  getJsoncTopLevelKey,
+  parseJsoncObject,
+  readIfExists,
+  setJsoncTopLevelKey,
+} from "../_utils";
 
 // _utils helpers
 
@@ -142,5 +149,18 @@ describe("agents/_utils", () => {
   test("setJsoncTopLevelKey replaces a malformed document instead of corrupting it", () => {
     const out = setJsoncTopLevelKey("{not valid json", "rules", "x");
     expect(JSON.parse(out)).toEqual({ rules: "x" });
+  });
+
+  test("parseJsoncObject reads a valid object but rejects malformed input", () => {
+    expect(parseJsoncObject('{"a": 1, /* c */ "b": 2,}')).toEqual({ a: 1, b: 2 });
+    // jsonc-parser would partially recover this; we reject it so a corrupt local
+    // file is never used as a merge base.
+    expect(parseJsoncObject("{not valid json")).toBeUndefined();
+    expect(parseJsoncObject("[1,2,3]")).toBeUndefined(); // non-object root
+  });
+
+  test("getJsoncTopLevelKey reads a key but rejects malformed input", () => {
+    expect(getJsoncTopLevelKey('{"mcpServers": {"x": 1}}', "mcpServers")).toEqual({ x: 1 });
+    expect(getJsoncTopLevelKey("{not valid json", "mcpServers")).toBeUndefined();
   });
 });
