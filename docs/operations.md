@@ -127,6 +127,32 @@ agentsync key add my-laptop age1...
 
 The vault is reconciled against the remote, every existing artefact is re-encrypted for the updated recipient set, and the change is pushed. The new machine can then `copy` the artefacts it needs from any machine's namespace.
 
+### List recipients
+
+To audit who can decrypt the vault:
+
+```bash
+agentsync key list
+```
+
+It prints every recipient alias and its `age1…` public key from `agentsync.toml`, marking the entry that belongs to the machine you run it on with `*`. Read-only — it never reconciles or pushes.
+
+### Deauthorize a lost machine
+
+When a machine is lost or retired, remove its recipient from **another** machine that can still decrypt the vault:
+
+```bash
+agentsync key list             # find the alias to remove
+agentsync key remove old-laptop
+```
+
+The vault is reconciled, every artefact is re-encrypted for the remaining recipients, and the change is pushed. From that commit on, the removed key cannot decrypt new pushes.
+
+Two limits to understand:
+
+- **History is not purged.** The removed key still decrypts the vault state already in the remote's git history. `key remove` is forward revocation, not a retroactive wipe. If the lost machine could read real secrets, rotate those secrets at their source — the vault cannot un-leak what was already committed.
+- **You cannot remove yourself.** `key remove` refuses the alias whose key matches the machine you run it on (it would lock that machine out of future pushes) and refuses to remove the last remaining recipient. Run it from a different, trusted machine to deauthorize a lost one.
+
 ### Rotate the current machine key
 
 Rotation re-encrypts every artefact under a fresh keypair on the current machine:
@@ -211,7 +237,7 @@ SmartScreen reputation is per-binary-hash and accrues with downloads; every new 
 
 ### Recover from divergence
 
-Reconciliation is fast-forward only. Any command that touches the vault (`init`, `push`, `copy`, `key add`, `key rotate`) fails closed when local history has diverged from `origin/<branch>`.
+Reconciliation is fast-forward only. Any command that touches the vault (`init`, `push`, `copy`, `key add`, `key remove`, `key rotate`) fails closed when local history has diverged from `origin/<branch>`.
 
 Symptoms:
 
