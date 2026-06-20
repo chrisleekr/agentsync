@@ -1217,7 +1217,7 @@
 </tr>
 <tr>
 <td><a href="#key"><code>key</code></a></td>
-<td>Add a recipient or rotate the current machine key.</td>
+<td>Add, list, or remove recipients, or rotate the current machine key.</td>
 </tr>
 <tr>
 <td><a href="#skill"><code>skill</code></a></td>
@@ -1566,17 +1566,21 @@ delegates to, once per selected vault artifact.</p>
 <li>See <a href="../operations/#daemon">Daemon</a> for install paths per OS, lifecycle, and log locations.</li>
 </ul>
 <h2 id="key">key<a class="headerlink" href="#key" title="Permanent link">&para;</a></h2>
-<p><strong>Why</strong>: Add a new recipient or rotate the current machine's keypair without changing vault semantics.</p>
+<p><strong>Why</strong>: Manage who can decrypt the vault — add a recipient, list recipients, deauthorize (remove) one, or rotate the current machine's keypair.</p>
 <p><strong>Usage</strong>:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>agentsync<span class="w"> </span>key<span class="w"> </span>add<span class="w"> </span>&lt;name&gt;<span class="w"> </span>&lt;age-public-key&gt;
-</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>agentsync<span class="w"> </span>key<span class="w"> </span>rotate
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>agentsync<span class="w"> </span>key<span class="w"> </span>add<span class="w"> </span>&lt;name&gt;<span class="w"> </span>&lt;age-public-key&gt;<span class="w">   </span><span class="c1"># authorize a recipient</span>
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>agentsync<span class="w"> </span>key<span class="w"> </span>list<span class="w">                           </span><span class="c1"># audit who can decrypt the vault</span>
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>agentsync<span class="w"> </span>key<span class="w"> </span>remove<span class="w"> </span>&lt;name&gt;<span class="w">                  </span><span class="c1"># deauthorize a recipient</span>
+</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a>agentsync<span class="w"> </span>key<span class="w"> </span>rotate<span class="w">                         </span><span class="c1"># new local identity, re-encrypt</span>
 </span></code></pre></div>
-<p><strong>Outcome</strong>: every existing vault artefact is decrypted under the current key and re-encrypted under the updated recipient set, then the change is committed and pushed.</p>
+<p><strong>Outcome</strong>: <code>add</code>, <code>remove</code>, and <code>rotate</code> decrypt every existing vault artefact under the current key and re-encrypt it under the updated recipient set, then commit and push. <code>list</code> is read-only — it prints each recipient alias and public key from <code>agentsync.toml</code>, marking the entry that belongs to this machine with <code>*</code>.</p>
 <p><strong>Caveats</strong>:</p>
 <ul>
-<li><code>key add</code> and <code>key rotate</code> reconcile against the latest remote state before they rewrite encrypted vault content.</li>
+<li><code>key add</code>, <code>key remove</code>, and <code>key rotate</code> reconcile against the latest remote state before they rewrite encrypted vault content.</li>
 <li>If the vault history has diverged, key-management commands stop until the vault is reset or recloned. See <a href="../operations/#recover-from-divergence">Recover from divergence</a>.</li>
-<li>Rotation depends on the <strong>old</strong> private key still being available so existing vault files can be decrypted. Back up the old key before rotation if you intend to retire that identity entirely.</li>
+<li>Rotation depends on the <strong>old</strong> private key still being available so existing vault files can be decrypted. Back up the old key before rotation if you intend to retire that identity entirely. Rotation is crash-safe: it re-encrypts to both the old and new key, swaps the key file atomically, then drops the old recipient, so an interrupted rotation never leaves a vault no on-disk key can read.</li>
+<li><code>key remove</code> re-encrypts forward for the remaining recipients, so the removed key can no longer read <strong>future</strong> pushes. It <strong>cannot</strong> retro-purge git history: a removed key still decrypts the vault state already on the remote. For true revocation of a lost machine, also rotate any secrets it could read. See <a href="../operations/#deauthorize-a-lost-machine">Deauthorize a lost machine</a>.</li>
+<li><code>key remove</code> refuses to remove the only remaining recipient (a vault must stay decryptable) and refuses to remove the key of the machine you run it on (you cannot deauthorize yourself — run it from another machine to remove a lost one).</li>
 <li>Recipient names are stable config keys and are visible in the vault repository. Use names that describe the machine clearly without leaking sensitive context.</li>
 </ul>
 <h2 id="skill">skill<a class="headerlink" href="#skill" title="Permanent link">&para;</a></h2>

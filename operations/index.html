@@ -705,6 +705,28 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#list-recipients" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        List recipients
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#deauthorize-a-lost-machine" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Deauthorize a lost machine
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#rotate-the-current-machine-key" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1156,6 +1178,28 @@
     <span class="md-ellipsis">
       
         Add a recipient
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#list-recipients" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        List recipients
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#deauthorize-a-lost-machine" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Deauthorize a lost machine
       
     </span>
   </a>
@@ -1628,9 +1672,25 @@ live state without you re-running <code>agentsync status</code>.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>agentsync<span class="w"> </span>key<span class="w"> </span>add<span class="w"> </span>my-laptop<span class="w"> </span>age1...
 </span></code></pre></div>
 <p>The vault is reconciled against the remote, every existing artefact is re-encrypted for the updated recipient set, and the change is pushed. The new machine can then <code>copy</code> the artefacts it needs from any machine's namespace.</p>
+<h3 id="list-recipients">List recipients<a class="headerlink" href="#list-recipients" title="Permanent link">&para;</a></h3>
+<p>To audit who can decrypt the vault:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>agentsync<span class="w"> </span>key<span class="w"> </span>list
+</span></code></pre></div>
+<p>It prints every recipient alias and its <code>age1…</code> public key from <code>agentsync.toml</code>, marking the entry that belongs to the machine you run it on with <code>*</code>. Read-only — it never reconciles or pushes.</p>
+<h3 id="deauthorize-a-lost-machine">Deauthorize a lost machine<a class="headerlink" href="#deauthorize-a-lost-machine" title="Permanent link">&para;</a></h3>
+<p>When a machine is lost or retired, remove its recipient from <strong>another</strong> machine that can still decrypt the vault:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>agentsync<span class="w"> </span>key<span class="w"> </span>list<span class="w">             </span><span class="c1"># find the alias to remove</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>agentsync<span class="w"> </span>key<span class="w"> </span>remove<span class="w"> </span>old-laptop
+</span></code></pre></div>
+<p>The vault is reconciled, every artefact is re-encrypted for the remaining recipients, and the change is pushed. From that commit on, the removed key cannot decrypt new pushes.</p>
+<p>Two limits to understand:</p>
+<ul>
+<li><strong>History is not purged.</strong> The removed key still decrypts the vault state already in the remote's git history. <code>key remove</code> is forward revocation, not a retroactive wipe. If the lost machine could read real secrets, rotate those secrets at their source — the vault cannot un-leak what was already committed.</li>
+<li><strong>You cannot remove yourself.</strong> <code>key remove</code> refuses the alias whose key matches the machine you run it on (it would lock that machine out of future pushes) and refuses to remove the last remaining recipient. Run it from a different, trusted machine to deauthorize a lost one.</li>
+</ul>
 <h3 id="rotate-the-current-machine-key">Rotate the current machine key<a class="headerlink" href="#rotate-the-current-machine-key" title="Permanent link">&para;</a></h3>
 <p>Rotation re-encrypts every artefact under a fresh keypair on the current machine:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>agentsync<span class="w"> </span>key<span class="w"> </span>rotate
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>agentsync<span class="w"> </span>key<span class="w"> </span>rotate
 </span></code></pre></div>
 <p>Rotation requires the existing private key to still be readable, because every vault artefact must be decrypted before it can be re-encrypted under the new recipient. Back up the old key before rotation if you intend to retire the previous identity entirely.</p>
 <h3 id="recipient-naming">Recipient naming<a class="headerlink" href="#recipient-naming" title="Permanent link">&para;</a></h3>
@@ -1644,30 +1704,30 @@ live state without you re-running <code>agentsync status</code>.</p>
 </ul>
 <h3 id="check-the-checksum">Check the checksum<a class="headerlink" href="#check-the-checksum" title="Permanent link">&para;</a></h3>
 <p>Download the binary and its <code>.sha256</code> sibling, then run <code>shasum -a 256 -c</code>:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>curl<span class="w"> </span>-L<span class="w"> </span>-o<span class="w"> </span>agentsync-linux-x64<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span>https://github.com/chrisleekr/agentsync/releases/latest/download/agentsync-linux-x64
-</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>curl<span class="w"> </span>-L<span class="w"> </span>-o<span class="w"> </span>agentsync-linux-x64.sha256<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">  </span>https://github.com/chrisleekr/agentsync/releases/latest/download/agentsync-linux-x64.sha256
-</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>shasum<span class="w"> </span>-a<span class="w"> </span><span class="m">256</span><span class="w"> </span>-c<span class="w"> </span>agentsync-linux-x64.sha256
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>curl<span class="w"> </span>-L<span class="w"> </span>-o<span class="w"> </span>agentsync-linux-x64<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="w">  </span>https://github.com/chrisleekr/agentsync/releases/latest/download/agentsync-linux-x64
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>curl<span class="w"> </span>-L<span class="w"> </span>-o<span class="w"> </span>agentsync-linux-x64.sha256<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="w">  </span>https://github.com/chrisleekr/agentsync/releases/latest/download/agentsync-linux-x64.sha256
+</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>shasum<span class="w"> </span>-a<span class="w"> </span><span class="m">256</span><span class="w"> </span>-c<span class="w"> </span>agentsync-linux-x64.sha256
 </span></code></pre></div>
 <p>A line ending in <code>OK</code> means the bytes you downloaded match the bytes the release job hashed. Anything else aborts the install. The <code>.sha256</code> file lists the binary by its release filename, so keep the downloaded filename unchanged (or update the first column of the <code>.sha256</code> to whatever you renamed it to) before running <code>-c</code>.</p>
 <p>Windows ships neither <code>shasum</code> nor <code>sha256sum</code> by default. Use PowerShell's <code>Get-FileHash</code> and compare against the first column of the downloaded <code>.sha256</code> file:</p>
-<div class="language-powershell highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nv">$expected</span> <span class="p">=</span> <span class="p">(</span><span class="nb">Get-Content</span> <span class="n">agentsync-windows-x64</span><span class="p">.</span><span class="n">exe</span><span class="p">.</span><span class="n">sha256</span><span class="p">).</span><span class="n">Split</span><span class="p">(</span><span class="s1">&#39; &#39;</span><span class="p">)[</span><span class="n">0</span><span class="p">]</span>
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="nv">$actual</span>   <span class="p">=</span> <span class="p">(</span><span class="nb">Get-FileHash</span> <span class="n">agentsync-windows-x64</span><span class="p">.</span><span class="n">exe</span> <span class="n">-Algorithm</span> <span class="n">SHA256</span><span class="p">).</span><span class="n">Hash</span><span class="p">.</span><span class="n">ToLower</span><span class="p">()</span>
-</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="k">if</span> <span class="p">(</span><span class="nv">$expected</span> <span class="o">-eq</span> <span class="nv">$actual</span><span class="p">)</span> <span class="p">{</span> <span class="s2">&quot;OK&quot;</span> <span class="p">}</span> <span class="k">else</span> <span class="p">{</span> <span class="k">throw</span> <span class="s2">&quot;checksum mismatch&quot;</span> <span class="p">}</span>
+<div class="language-powershell highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="nv">$expected</span> <span class="p">=</span> <span class="p">(</span><span class="nb">Get-Content</span> <span class="n">agentsync-windows-x64</span><span class="p">.</span><span class="n">exe</span><span class="p">.</span><span class="n">sha256</span><span class="p">).</span><span class="n">Split</span><span class="p">(</span><span class="s1">&#39; &#39;</span><span class="p">)[</span><span class="n">0</span><span class="p">]</span>
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="nv">$actual</span>   <span class="p">=</span> <span class="p">(</span><span class="nb">Get-FileHash</span> <span class="n">agentsync-windows-x64</span><span class="p">.</span><span class="n">exe</span> <span class="n">-Algorithm</span> <span class="n">SHA256</span><span class="p">).</span><span class="n">Hash</span><span class="p">.</span><span class="n">ToLower</span><span class="p">()</span>
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="k">if</span> <span class="p">(</span><span class="nv">$expected</span> <span class="o">-eq</span> <span class="nv">$actual</span><span class="p">)</span> <span class="p">{</span> <span class="s2">&quot;OK&quot;</span> <span class="p">}</span> <span class="k">else</span> <span class="p">{</span> <span class="k">throw</span> <span class="s2">&quot;checksum mismatch&quot;</span> <span class="p">}</span>
 </span></code></pre></div>
 <p>In a CI script that needs a non-zero exit on mismatch, replace <code>throw</code> with <code>Write-Error 'checksum mismatch'; exit 1</code> so the host shell sees the failure regardless of <code>$ErrorActionPreference</code>.</p>
 <h3 id="bulk-verify-with-the-aggregate-sha256sums">Bulk-verify with the aggregate SHA256SUMS<a class="headerlink" href="#bulk-verify-with-the-aggregate-sha256sums" title="Permanent link">&para;</a></h3>
 <p>Downstream packagers (Scoop, Chocolatey, Homebrew, Ansible roles) that pin a single URL per release prefer the aggregate <code>SHA256SUMS</code> manifest, which lists one <code>&lt;hash&gt;  &lt;binary&gt;</code> line per arch:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>curl<span class="w"> </span>-L<span class="w"> </span>-o<span class="w"> </span>SHA256SUMS<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="w">  </span>https://github.com/chrisleekr/agentsync/releases/latest/download/SHA256SUMS
-</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>shasum<span class="w"> </span>-a<span class="w"> </span><span class="m">256</span><span class="w"> </span>-c<span class="w"> </span>--ignore-missing<span class="w"> </span>SHA256SUMS
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>curl<span class="w"> </span>-L<span class="w"> </span>-o<span class="w"> </span>SHA256SUMS<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="w">  </span>https://github.com/chrisleekr/agentsync/releases/latest/download/SHA256SUMS
+</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>shasum<span class="w"> </span>-a<span class="w"> </span><span class="m">256</span><span class="w"> </span>-c<span class="w"> </span>--ignore-missing<span class="w"> </span>SHA256SUMS
 </span></code></pre></div>
 <p><code>--ignore-missing</code> skips lines whose binary is absent from the current working directory, so the same manifest works whether you downloaded one arch or all five. Per-binary <code>.sha256</code> siblings remain the recommended path for end-user one-off installs; the aggregate manifest exists for tooling.</p>
 <p>The bulk recipe is POSIX-shell only — Windows packagers (Scoop, Chocolatey) run their verify step on Linux/macOS CI in practice. A Windows end user who downloads the aggregate manifest can either run it under WSL or Git-Bash, or fall back to the per-binary <code>Get-FileHash</code> recipe above.</p>
 <h3 id="verify-build-provenance">Verify build provenance<a class="headerlink" href="#verify-build-provenance" title="Permanent link">&para;</a></h3>
 <p>The attestation proves the binary was produced by this repository's <code>release-please</code> workflow at the tagged commit. Verify it with the GitHub CLI:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>gh<span class="w"> </span>attestation<span class="w"> </span>verify<span class="w"> </span>agentsync-linux-x64<span class="w"> </span>--repo<span class="w"> </span>chrisleekr/agentsync
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>gh<span class="w"> </span>attestation<span class="w"> </span>verify<span class="w"> </span>agentsync-linux-x64<span class="w"> </span>--repo<span class="w"> </span>chrisleekr/agentsync
 </span></code></pre></div>
 <p>A passing verification reports the workflow path, commit SHA, and Sigstore transparency log entry. Failure means the binary was not produced by this repository's release pipeline; do not run it. Pin the verification to <code>--repo</code> (not <code>--owner</code>) so an attestation minted by any other repository under the same owner is rejected.</p>
 <p>Both checks are independent. The checksum protects against transport corruption and mirror tampering; the attestation protects against a substituted binary that happens to carry a forged checksum. Run both on first install of every release, and repeat the pair for each platform binary you download — every job in the release matrix mints its own attestation.</p>
@@ -1677,7 +1737,7 @@ live state without you re-running <code>agentsync status</code>.</p>
 <p>SmartScreen reputation is per-binary-hash and accrues with downloads; every new release starts from zero, so the warning recurs on each update.</p>
 <h2 id="recovery-runbooks">Recovery runbooks<a class="headerlink" href="#recovery-runbooks" title="Permanent link">&para;</a></h2>
 <h3 id="recover-from-divergence">Recover from divergence<a class="headerlink" href="#recover-from-divergence" title="Permanent link">&para;</a></h3>
-<p>Reconciliation is fast-forward only. Any command that touches the vault (<code>init</code>, <code>push</code>, <code>copy</code>, <code>key add</code>, <code>key rotate</code>) fails closed when local history has diverged from <code>origin/&lt;branch&gt;</code>.</p>
+<p>Reconciliation is fast-forward only. Any command that touches the vault (<code>init</code>, <code>push</code>, <code>copy</code>, <code>key add</code>, <code>key remove</code>, <code>key rotate</code>) fails closed when local history has diverged from <code>origin/&lt;branch&gt;</code>.</p>
 <p>Symptoms:</p>
 <ul>
 <li>The command reports that AgentSync only supports fast-forward sync.</li>
@@ -1725,7 +1785,7 @@ directory and the configured remote.</p>
   the remote.</li>
 </ul>
 <p>Before running, back the vault up if you might still want it:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>cp<span class="w"> </span>-r<span class="w"> </span>~/.config/agentsync/vault<span class="w"> </span>~/.config/agentsync/vault.bak.<span class="k">$(</span>date<span class="w"> </span>+%s<span class="k">)</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>cp<span class="w"> </span>-r<span class="w"> </span>~/.config/agentsync/vault<span class="w"> </span>~/.config/agentsync/vault.bak.<span class="k">$(</span>date<span class="w"> </span>+%s<span class="k">)</span>
 </span></code></pre></div>
 <p>Three confirmation gates must pass: preview prompt → typed phrase
 (<code>DESTROY</code> for local, <code>DESTROY &lt;branch&gt;@&lt;remote-fragment&gt;</code> for remote /
@@ -1761,7 +1821,7 @@ and behaviour reference.</p>
 <ul>
 <li>
 <p><strong>Whole-skill removal</strong>: run <code>agentsync skill remove &lt;agent&gt; &lt;name&gt;</code> on one machine to remove the vault entry, then delete the local directory on every other machine manually:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>rm<span class="w"> </span>-rf<span class="w"> </span>~/.claude/skills/&lt;name&gt;<span class="w">     </span><span class="c1"># or ~/.cursor/skills, ~/.codex/skills, ~/.copilot/skills</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>rm<span class="w"> </span>-rf<span class="w"> </span>~/.claude/skills/&lt;name&gt;<span class="w">     </span><span class="c1"># or ~/.cursor/skills, ~/.codex/skills, ~/.copilot/skills</span>
 </span></code></pre></div>
 </li>
 <li>
@@ -1799,9 +1859,9 @@ fallback exists specifically to protect scripts that depend on text output.</p>
 <p>The TUI installs SIGINT / SIGTERM / exit handlers that restore the terminal
 on shutdown. A hard kill (<code>kill -9</code> on the bun process) can bypass that and
 leave the terminal in raw mode. Recover with:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>reset
-</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="c1"># or, if `reset` is unavailable:</span>
-</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>tput<span class="w"> </span>reset
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>reset
+</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="c1"># or, if `reset` is unavailable:</span>
+</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a>tput<span class="w"> </span>reset
 </span></code></pre></div>
 <h3 id="distagentsync-exits-137-on-macos"><code>dist/agentsync</code> exits 137 on macOS<a class="headerlink" href="#distagentsync-exits-137-on-macos" title="Permanent link">&para;</a></h3>
 <p>This is the macOS Gatekeeper killing the unsigned compiled binary on first
