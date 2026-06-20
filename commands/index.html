@@ -1316,7 +1316,7 @@ cross-agent migrations from a single interactive screen.</p>
 <tbody>
 <tr>
 <td>1 Dashboard</td>
-<td>Daemon health (pid, uptime, last error), vault state, agent summary, init / key-rotate launchers.</td>
+<td>Daemon health (pid, uptime, <strong>last successful sync</strong>, last error, and a loud <strong>stuck</strong> warning when the vault diverged), vault state, agent summary, init / key-rotate launchers.</td>
 </tr>
 <tr>
 <td>2 Sync</td>
@@ -1334,6 +1334,10 @@ cross-agent migrations from a single interactive screen.</p>
 <td>5 Activity</td>
 <td>Session-only ring buffer of TUI actions.</td>
 </tr>
+<tr>
+<td>6 Config</td>
+<td>View and change vault config (agents enabled, <code>sync.*</code>, <code>claudePlugins.*</code>, <code>security.*</code>) with <code>↑</code>/<code>↓</code> to move, <code>space</code> to toggle a boolean, <code>←</code>/<code>→</code> to cycle an enum or adjust a number. Writes go through the same <a href="#config"><code>config</code></a> core (reconcile + commit + push). Also lists the recipients who can decrypt the vault, read-only.</td>
+</tr>
 </tbody>
 </table>
 <p><strong>Global keys</strong> (any tab):</p>
@@ -1346,7 +1350,7 @@ cross-agent migrations from a single interactive screen.</p>
 </thead>
 <tbody>
 <tr>
-<td><code>1</code> – <code>5</code></td>
+<td><code>1</code> – <code>6</code></td>
 <td>Jump to tab</td>
 </tr>
 <tr>
@@ -1376,7 +1380,8 @@ subcommands operate on. Push goes through the same daemon IPC the <code>status</
 <code>daemon</code> subcommands use; the Machines tab calls the same <code>performCopy</code> core as
 <code>agentsync copy</code>; migrate calls the same planner as <code>agentsync migrate</code>; bulk
 removal calls the same <code>performVaultRemove</code> core that <code>agentsync skill remove</code>
-delegates to, once per selected vault artifact.</p>
+delegates to, once per selected vault artifact; the Config tab writes through
+the same <code>performConfigSet</code> core as <code>agentsync config set</code>.</p>
 <p><strong>Caveats</strong>:</p>
 <ul>
 <li>The TUI is interactive-only. In a non-TTY context (piped stdin/stdout,
