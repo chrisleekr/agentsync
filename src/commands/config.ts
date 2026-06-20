@@ -3,6 +3,7 @@ import { defineCommand } from "citty";
 import { formatConfigError, loadConfig, resolveConfigPath, writeConfig } from "../config/loader";
 import { AgentSyncConfigSchema } from "../config/schema";
 import { GitClient } from "../core/git";
+import { scanForSecrets } from "../core/sanitizer";
 import { loadVaultConfigOrExit, resolveRuntimeContext } from "./shared";
 
 // Sections a user may change through `config set`. `version`, `recipients`, and
@@ -11,12 +12,12 @@ import { loadVaultConfigOrExit, resolveRuntimeContext } from "./shared";
 // job. Everything settable lives under one of these object sections.
 const SETTABLE_PREFIXES = ["agents.", "sync.", "claudePlugins.", "security."] as const;
 
-type Json = Record<string, unknown>;
+// The one settable key whose values are deliberately secret-shaped: it is the
+// allowlist of literals to exempt from the secret scan, so scanning it would
+// defeat its purpose.
+const SECRET_EXEMPT_KEY = "security.allowSecretValues";
 
-// Segments that must never be walked or written through a user-supplied dotted
-// key: assigning through `__proto__`/`constructor`/`prototype` reaches
-// `Object.prototype` and pollutes every object in the process (CWE-1321).
-const FORBIDDEN_KEYS = new Set(["__proto__", "constructor", "prototype"]);
+type Json = Record<string, unknown>;
 
 /**
  * Read a dotted path (`a.b.c`) from a nested object; undefined when any segment
@@ -34,25 +35,30 @@ function getByPath(obj: Json, path: string): unknown {
   }, obj);
 }
 
-/** Set a dotted path on a nested object, creating intermediate objects as needed. */
+/**
+ * Set a dotted path on a nested object, creating intermediate objects as needed.
+ * Every assignment is preceded by an inline literal guard against the three
+ * prototype-polluting segment names — assigning through `__proto__`,
+ * `constructor`, or `prototype` would reach `Object.prototype` and corrupt
+ * every object in the process (CWE-1321).
+ */
 function setByPath(obj: Json, path: string, value: unknown): void {
   const keys = path.split(".");
-  // Defense-in-depth: refuse to walk or write a prototype-polluting segment,
-  // independent of the caller's guards.
-  for (const key of keys) {
-    if (FORBIDDEN_KEYS.has(key)) {
+  let cursor = obj;
+  for (let i = 0; i < keys.length; i++) {
+    const key = keys[i] as string;
+    if (key === "__proto__" || key === "constructor" || key === "prototype") {
       throw new Error(`Refusing to set unsafe config key segment '${key}'`);
     }
-  }
-  let cursor = obj;
-  for (let i = 0; i < keys.length - 1; i++) {
-    const key = keys[i] as string;
+    if (i === keys.length - 1) {
+      cursor[key] = value;
+      return;
+    }
     if (!Object.hasOwn(cursor, key) || typeof cursor[key] !== "object" || cursor[key] === null) {
       cursor[key] = {};
     }
     cursor = cursor[key] as Json;
   }
-  cursor[keys[keys.length - 1] as string] = value;
 }
 
 /** Flatten a config object to dotted `key`→`value` leaf pairs (arrays kept whole). */
@@ -154,6 +160,20 @@ export async function performConfigSet(key: string, rawValue: string): Promise<C
     const oldValue = getByPath(refreshed as unknown as Json, key);
     if (oldValue === undefined) {
       return { status: "unknown-key", key };
+    }
+
+    // agentsync.toml is committed in PLAINTEXT (only artifacts are encrypted),
+    // so refuse to write a literal credential into it — e.g. a token pasted
+    // into the wrong field. The allowlist key is exempt by construction.
+    if (key !== SECRET_EXEMPT_KEY) {
+      const leaks = scanForSecrets(rawValue, key);
+      if (leaks.length > 0) {
+        return {
+          status: "invalid-value",
+          key,
+          error: `Refusing to store a literal secret in plaintext config (${leaks.join("; ")}).`,
+        };
+      }
     }
 
     const next = structuredClone(refreshed);

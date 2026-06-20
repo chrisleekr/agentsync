@@ -354,7 +354,10 @@ agentsync config set security.allowSecretValues '["AKIA-not-a-real-key"]'
 > policy in `agentsync.toml`; the push-time secret scanner starts honouring
 > `secretScan`, `allowSecretValues`, and `redactBase64Values` in a follow-up
 > change. Until then the scan runs with its built-in defaults regardless of
-> these values.
+> these values. Note `agentsync.toml` is committed in **plaintext** (only
+> artefacts are encrypted), so `allowSecretValues` is for exempting legitimate
+> high-entropy *non-secret* values — never paste a real credential there.
+> `config set` refuses a recognised credential in any other value.
 
 **Outcome**: `list` and `get` are read-only. `set` validates the new value against the full config schema (so an out-of-range debounce or an invalid enum is rejected before anything is written), then — because `agentsync.toml` is shared across machines — reconciles fast-forward, commits, and pushes the change, exactly like `key add`.
 

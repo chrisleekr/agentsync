@@ -4,7 +4,7 @@
  * guard, unknown-key rejection, schema-backed value validation, and scalar
  * type coercion.
  */
-import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterAll, afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import { writeFileSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { createRequire } from "node:module";
@@ -71,6 +71,10 @@ describe("config command", () => {
     return rm(tmpDir, { recursive: true, force: true });
   }
 
+  // afterEach guarantees env + tmpdir cleanup even when an assertion throws
+  // mid-test, so a failing test cannot leak dirty state into the next one.
+  afterEach(restore);
+
   test("performConfigList returns settable keys and excludes version + recipients", async () => {
     const entries = await configMod.performConfigList();
     const keys = entries.map((e) => e.key);
@@ -79,7 +83,6 @@ describe("config command", () => {
     expect(keys).toContain("security.secretScan");
     expect(keys.some((k) => k === "version")).toBe(false);
     expect(keys.some((k) => k.startsWith("recipients"))).toBe(false);
-    await restore();
   });
 
   test("performConfigGet reads a value and reports unknown keys", async () => {
@@ -87,7 +90,6 @@ describe("config command", () => {
     expect(found).toEqual({ status: "found", key: "security.secretScan", value: "standard" });
     const missing = await configMod.performConfigGet("agents.nope");
     expect(missing.status).toBe("unknown-key");
-    await restore();
   });
 
   test("performConfigSet changes a boolean and persists it to the vault config", async () => {
@@ -95,7 +97,6 @@ describe("config command", () => {
     expect(result.status).toBe("success");
     const config = await loadConfig(resolveConfigPath(machine.vaultDir));
     expect(config.agents.vscode).toBe(true);
-    await restore();
   });
 
   test("performConfigSet coerces a numeric string and an enum word", async () => {
@@ -109,7 +110,6 @@ describe("config command", () => {
     const config = await loadConfig(resolveConfigPath(machine.vaultDir));
     expect(config.sync.debounceMs).toBe(500);
     expect(config.security.secretScan).toBe("strict");
-    await restore();
   });
 
   test("performConfigSet sets an array value from JSON", async () => {
@@ -120,7 +120,6 @@ describe("config command", () => {
     expect(result.status).toBe("success");
     const config = await loadConfig(resolveConfigPath(machine.vaultDir));
     expect(config.security.allowSecretValues).toEqual(["AKIAEXAMPLE", "ghp_example"]);
-    await restore();
   });
 
   test("performConfigSet refuses protected sections", async () => {
@@ -128,13 +127,11 @@ describe("config command", () => {
       const result = await configMod.performConfigSet(key, "x");
       expect(result.status).toBe("not-settable");
     }
-    await restore();
   });
 
   test("performConfigSet rejects an unknown key under a settable section", async () => {
     const result = await configMod.performConfigSet("agents.cluade", "true");
     expect(result.status).toBe("unknown-key");
-    await restore();
   });
 
   test("performConfigSet rejects a value the schema forbids", async () => {
@@ -148,7 +145,6 @@ describe("config command", () => {
     const config = await loadConfig(resolveConfigPath(machine.vaultDir));
     expect(config.sync.debounceMs).toBe(300);
     expect(config.security.secretScan).toBe("standard");
-    await restore();
   });
 
   test("performConfigSet coerces a false boolean", async () => {
@@ -157,7 +153,6 @@ describe("config command", () => {
     if (result.status === "success") expect(result.newValue).toBe(false);
     const config = await loadConfig(resolveConfigPath(machine.vaultDir));
     expect(config.sync.autoPush).toBe(false);
-    await restore();
   });
 
   test("performConfigSet refuses a prototype-pollution key and leaves Object.prototype intact", async () => {
@@ -170,7 +165,6 @@ describe("config command", () => {
     // The global prototype is untouched.
     expect(({} as Record<string, unknown>).polluted).toBeUndefined();
     expect(Object.prototype.toLocaleString).toBeInstanceOf(Function);
-    await restore();
   });
 
   test("performConfigSet pushes the change to the remote vault", async () => {
@@ -180,7 +174,6 @@ describe("config command", () => {
     // in the local working copy, because agentsync.toml is shared across machines.
     const onRemote = runGit(["show", "HEAD:agentsync.toml"], bare);
     expect(onRemote).toContain("debounceMs = 750");
-    await restore();
   });
 
   test("performConfigSet fails closed on diverged history", async () => {
@@ -201,6 +194,22 @@ describe("config command", () => {
 
     const result = await configMod.performConfigSet("agents.vscode", "true");
     expect(result.status).toBe("failed");
-    await restore();
+  });
+
+  test("performConfigSet refuses a literal secret pasted into a config value", async () => {
+    // A GitHub classic PAT shape pasted into the wrong field. agentsync.toml is
+    // committed in plaintext, so this must be rejected before any write.
+    const token = `ghp_${"a".repeat(36)}`;
+    const result = await configMod.performConfigSet("agents.vscode", token);
+    expect(result.status).toBe("invalid-value");
+    if (result.status === "invalid-value") expect(result.error).toMatch(/secret/i);
+  });
+
+  test("performConfigSet allows secret-shaped values in the allowlist (its purpose)", async () => {
+    const token = `ghp_${"b".repeat(36)}`;
+    const result = await configMod.performConfigSet("security.allowSecretValues", `["${token}"]`);
+    expect(result.status).toBe("success");
+    const config = await loadConfig(resolveConfigPath(machine.vaultDir));
+    expect(config.security.allowSecretValues).toEqual([token]);
   });
 });
