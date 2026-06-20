@@ -275,4 +275,57 @@ describe("status surfaces skill drift", () => {
     );
     expect(skillRow).toBeDefined();
   });
+
+  test("--machine compares local config against another machine's namespace", async () => {
+    const skillDir = join(mutableCopilotPaths.skillsDir, "peer-skill");
+    mkdirSync(skillDir, { recursive: true });
+    writeFileSync(join(skillDir, "SKILL.md"), "# peer fixture", "utf8");
+
+    const walker = await import("../../agents/skills-walker");
+    const snap = await walker.collectSkillArtifacts("copilot", mutableCopilotPaths.skillsDir);
+    const { encryptString } = await import("../../core/encryptor");
+    const peerArtifact = snap.artifacts.find((a) =>
+      a.vaultPath.endsWith("skills/peer-skill.tar.age"),
+    );
+    if (!peerArtifact) throw new Error("Expected peer-skill artifact in snapshot");
+    const encrypted = await encryptString(peerArtifact.plaintext, [machine.recipient]);
+
+    // Write the artifact under a PEER machine's namespace, not this machine's.
+    const vaultArtPath = join(
+      machineVaultRoot(machine.vaultDir, "peer-machine"),
+      "copilot",
+      "skills",
+      "peer-skill.tar.age",
+    );
+    await mkdir(dirname(vaultArtPath), { recursive: true });
+    writeFileSync(vaultArtPath, encrypted, "utf8");
+
+    fakeLogs.info.length = 0;
+    process.exitCode = 0;
+    const statusMod = await import("../status");
+    await statusMod.statusCommand.run?.({
+      args: { verbose: false, machine: "peer-machine" },
+      rawArgs: [],
+      cmd: {} as never,
+    } as never);
+
+    expect(fakeLogs.info.some((l) => l.includes("Source: peer-machine"))).toBe(true);
+    const skillRow = fakeLogs.info.find(
+      (line) => line.includes("peer-skill") && line.includes("synced"),
+    );
+    expect(skillRow).toBeDefined();
+  });
+
+  test("--machine errors on an unknown machine namespace", async () => {
+    fakeLogs.error.length = 0;
+    process.exitCode = 0;
+    const statusMod = await import("../status");
+    await statusMod.statusCommand.run?.({
+      args: { verbose: false, machine: "does-not-exist" },
+      rawArgs: [],
+      cmd: {} as never,
+    } as never);
+    expect(process.exitCode).toBe(1);
+    expect(fakeLogs.error.some((l) => l.includes("Unknown machine: does-not-exist"))).toBe(true);
+  });
 });

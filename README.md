@@ -77,7 +77,8 @@ The full quickstart, command reference, and architecture model live at the docum
 | `init` | Create the local vault workspace, machine key, config, and initial remote state. |
 | `push` | Snapshot local agent configs, sanitise secrets, encrypt artefacts, and push to Git. |
 | `copy` | Restore an artefact (or subdir) from a machine's vault namespace to local disk (`copy self …` for your own). |
-| `status` | Compare local files with the vault and surface drift. |
+| `ls` | List machine namespaces, or the copyable artifact paths in one (key-free discovery). |
+| `status` | Compare local files with the vault and surface drift (any machine via `--machine`). |
 | `doctor` | Run environment, key, vault, and daemon diagnostics. |
 | `daemon` | Install and manage the background auto-sync daemon. |
 | `key` | Add, list, or remove recipients (revocation), or rotate the local machine key. |

@@ -1,5 +1,5 @@
 import { readdir, stat } from "node:fs/promises";
-import { join } from "node:path";
+import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { log } from "@clack/prompts";
 import { defineCommand } from "citty";
 import { applySingleArtifact, NoMatchingArtifactError } from "../agents/_apply";
@@ -33,9 +33,24 @@ export async function listMachines(vaultDir: string): Promise<string[]> {
 
 /**
  * Enumerate every `.age` artifact beneath `<machineRoot>/<relDir>`, returned as
- * machine-root-relative logical paths (e.g. "claude/skills/foo.tar.age").
+ * machine-root-relative logical paths (e.g. "claude/skills/foo.tar.age"). An
+ * empty `relDir` enumerates the whole machine namespace.
  */
-async function enumerateArtifacts(machineRoot: string, relDir: string): Promise<string[]> {
+export async function enumerateArtifacts(machineRoot: string, relDir: string): Promise<string[]> {
+  // Path-traversal guard: a relDir with `..` segments would otherwise let
+  // `join(machineRoot, relDir)` climb out of the namespace and enumerate `.age`
+  // files elsewhere on disk (info disclosure via `ls`). Reject any relDir whose
+  // resolved target is not contained within machineRoot. Only the entry relDir
+  // is user-controlled — the recursive childRel values are always interior.
+  // A `..` first segment means the resolved target escaped machineRoot. Match
+  // the segment exactly (`..` alone or `..${sep}…`), not a bare `startsWith("..")`
+  // which would also reject a legitimate in-namespace dir literally named `..foo`.
+  const root = resolve(machineRoot);
+  const containment = relative(root, resolve(root, relDir));
+  if (containment === ".." || containment.startsWith(`..${sep}`) || isAbsolute(containment)) {
+    return [];
+  }
+
   const out: string[] = [];
   async function walk(rel: string): Promise<void> {
     let entries: import("node:fs").Dirent[];
@@ -45,7 +60,8 @@ async function enumerateArtifacts(machineRoot: string, relDir: string): Promise<
       return;
     }
     for (const e of entries) {
-      const childRel = `${rel}/${e.name}`;
+      // Avoid a leading slash when rel is empty (whole-namespace enumeration).
+      const childRel = rel ? `${rel}/${e.name}` : e.name;
       if (e.isDirectory()) await walk(childRel);
       else if (e.isFile() && e.name.endsWith(".age")) out.push(childRel);
     }
