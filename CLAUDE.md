@@ -89,15 +89,20 @@ bun run check:act     # run CI workflow locally via nektos/act
   enabled; absolute paths dropped). It has no apply directive — never restored
   on pull/copy — and `agentsync plugin install <machine>` reinstalls by
   shelling to the `claude` CLI.
-- **Skill removal is explicit**: vault skills are only removed via
-  `agentsync skill remove <agent> <name>`. Snapshot, copy, and status are
-  additive by construction.
+- **Vault removal is explicit and never silent**: the CLI removes a skill via
+  `agentsync skill remove <agent> <name>`; the TUI Sync tab's `x` removes any
+  selected vault artifact (skills, commands, configs, rules) after a `y`/`n`
+  confirm. Both routes go through the single `performVaultRemove` core in
+  `src/commands/vault-remove.ts` (fast-forward reconcile → `git rm` → commit →
+  push); `performSkillRemove` is a thin agent-validating wrapper over it.
+  Snapshot, copy, and status remain additive by construction — only `x` and
+  `skill remove` delete.
 - **Path resolution**: always resolve agent paths through `AgentPaths` in
   `src/config/paths.ts` rather than hardcoding `~/.claude`, `~/.cursor`,
   etc. — this keeps the test harness and platform overrides working.
 - **TUI reuses command logic, never duplicates it**: the TUI wizards, the
   Machines tab, and the Migrate tab call `performInit`, `performKeyAdd`,
-  `performKeyRotate`, `performMigrate`, `performSkillRemove`, and `performCopy`
+  `performKeyRotate`, `performMigrate`, `performVaultRemove`, and `performCopy`
   directly. Adding new TUI features must not fork business logic — encryption,
   reconciliation, sanitiser, and migration invariants live in one place.
 - **`destroy` never imports `AgentPaths`**: the agent-files-never-touched

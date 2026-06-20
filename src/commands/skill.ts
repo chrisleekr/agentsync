@@ -1,15 +1,7 @@
-import { stat, unlink } from "node:fs/promises";
 import { join } from "node:path";
 import { log } from "@clack/prompts";
 import { defineCommand } from "citty";
-import { machineVaultRoot } from "../config/paths";
-import { GitClient } from "../core/git";
-import {
-  InvalidMachineNameError,
-  loadVaultConfigOrExit,
-  resolveRuntimeContext,
-  validateMachineName,
-} from "./shared";
+import { performVaultRemove } from "./vault-remove";
 
 /**
  * Agents that participate in the skill sync feature. `vscode` is intentionally
@@ -59,103 +51,22 @@ export async function performSkillRemove(options: {
     };
   }
 
-  // A user-supplied --machine becomes a vault directory segment, so it must
-  // pass the same path-traversal gate as the resolved machine name; otherwise
-  // `--machine ..` would escape the namespace and delete (and push) arbitrary
-  // vault paths. The resolved machineName is already validated upstream.
-  if (options.machine !== undefined) {
-    try {
-      validateMachineName(options.machine);
-    } catch (err) {
-      if (err instanceof InvalidMachineNameError) {
-        return { status: "invalid-machine", provided: err.provided, reason: err.reason };
-      }
-      throw err;
-    }
+  // A skill is just a vault artifact at `<agent>/skills/<name>.tar.age`.
+  // Delegate the git removal dance (reconcile, re-stat, unlink, commit, push)
+  // and the --machine path-traversal gate to the shared core; this wrapper
+  // only adds the skill-specific agent check and vault-path construction.
+  const result = await performVaultRemove({
+    vaultRelPath: join(options.agent, "skills", `${options.name}.tar.age`),
+    machine: options.machine,
+    commitMessage: `skill remove(${options.agent}): ${options.name}`,
+  });
+
+  // A constructed skill path can never be a traversal, but map the variant
+  // defensively so the SkillRemoveResult union stays exhaustive for callers.
+  if (result.status === "invalid-path") {
+    return { status: "git-error", path: options.name, error: result.reason };
   }
-
-  const runtime = await resolveRuntimeContext();
-  const config = await loadVaultConfigOrExit(runtime.vaultDir);
-  // Default to this machine's namespace; --machine targets another machine's.
-  const targetMachine = options.machine ?? runtime.machineName;
-  const targetPath = join(
-    machineVaultRoot(runtime.vaultDir, targetMachine),
-    options.agent,
-    "skills",
-    `${options.name}.tar.age`,
-  );
-
-  try {
-    await stat(targetPath);
-  } catch {
-    return { status: "not-found", path: targetPath };
-  }
-
-  const git = new GitClient(runtime.vaultDir);
-
-  try {
-    await git.reconcileWithRemote({
-      remote: "origin",
-      branch: config.remote.branch,
-      allowMissingRemote: true,
-    });
-  } catch (err) {
-    return {
-      status: "reconcile-error",
-      error: err instanceof Error ? err.message : String(err),
-    };
-  }
-
-  // Re-stat after the reconcile — the remote may have already removed the file
-  // as part of an earlier `skill remove` from another machine. If the file is
-  // gone post-reconcile, the removal has already happened upstream and there
-  // is nothing to do locally except report success without a new commit.
-  try {
-    await stat(targetPath);
-  } catch {
-    return { status: "success", path: targetPath, commitSha: null };
-  }
-
-  try {
-    await unlink(targetPath);
-    const committed = await git.commit({
-      message: `skill remove(${options.agent}): ${options.name}`,
-    });
-    if (committed) {
-      try {
-        await git.push("origin", config.remote.branch);
-      } catch (err) {
-        return {
-          status: "git-error",
-          path: targetPath,
-          error: err instanceof Error ? err.message : String(err),
-        };
-      }
-    }
-    return {
-      status: "success",
-      path: targetPath,
-      commitSha: committed ? await readHeadShortSha(runtime.vaultDir) : null,
-    };
-  } catch (err) {
-    return {
-      status: "git-error",
-      path: targetPath,
-      error: err instanceof Error ? err.message : String(err),
-    };
-  }
-}
-
-/**
- * Read the 7-character short SHA of the current HEAD in a repo. Returns null
- * if git cannot be invoked for any reason — the failure is non-fatal because
- * the SHA is only used for the success log line.
- */
-async function readHeadShortSha(repoDir: string): Promise<string | null> {
-  const result = Bun.spawnSync(["git", "-C", repoDir, "rev-parse", "--short=7", "HEAD"]);
-  if (result.exitCode !== 0) return null;
-  const out = new TextDecoder().decode(result.stdout).trim();
-  return out.length > 0 ? out : null;
+  return result;
 }
 
 /**

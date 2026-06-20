@@ -15,7 +15,7 @@ export type MigrateField = "from" | "to" | "type" | "preview" | "apply";
 
 export interface ActivityEntry {
   ts: Date;
-  kind: "push" | "pull" | "copy" | "skill-rm" | "migrate" | "preview" | "error" | "info";
+  kind: "push" | "pull" | "copy" | "vault-rm" | "migrate" | "preview" | "error" | "info";
   status: "ok" | "fail" | "running" | "info";
   message: string;
 }
@@ -33,7 +33,7 @@ export type OpKind =
   | "copy"
   | "migrate"
   | "migrate-preview"
-  | "skill-rm"
+  | "vault-rm"
   | "sync-load"
   | "machines-load"
   | "upgrade";
@@ -81,12 +81,12 @@ export interface LastOpResult {
   ts: number;
 }
 
-/** Pending skill-remove confirmation. The modal lists exactly which skill
- *  vault entries are about to be removed and how many non-skill selections
- *  are being ignored, so the user can't `x` and lose data without seeing
- *  what's at stake first. */
+/** Pending vault-remove confirmation. The modal lists exactly which vault
+ *  artifacts are about to be removed and how many selections are being
+ *  ignored (rows with no vault copy), so the user can't `x` and lose data
+ *  without seeing what's at stake first. */
 export interface ConfirmRemove {
-  items: { agent: string; name: string; vaultPath: string }[];
+  items: { vaultPath: string }[];
   ignoredCount: number;
   /** How many items are currently in `navigableRows` (i.e. visible on the
    *  screen at stage time). The difference between `items.length` and this
