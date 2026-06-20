@@ -655,6 +655,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#health-and-durable-state" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Health and durable state
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#configuration" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1163,6 +1174,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#health-and-durable-state" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Health and durable state
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#configuration" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1638,7 +1660,7 @@ live state without you re-running <code>agentsync status</code>.</p>
 </tr>
 <tr>
 <td>Running</td>
-<td>IPC server is listening and file watchers are active (push-only; no pull timer). <code>status</code> returns the current pid, consecutive-failure counter, and last error.</td>
+<td>IPC server is listening and file watchers are active (push-only; no pull timer). <code>status</code> returns pid, last successful sync time, consecutive-failure counter, last error, and whether the daemon is stuck.</td>
 </tr>
 <tr>
 <td>Syncing</td>
@@ -1649,11 +1671,22 @@ live state without you re-running <code>agentsync status</code>.</p>
 <td>Automatic single retry after a transient failure. If both attempts fail, the error is recorded but the daemon stays alive so the next change can still trigger a push.</td>
 </tr>
 <tr>
+<td>Stuck</td>
+<td>The vault diverged (<code>DIVERGED_HISTORY</code>). A divergence cannot heal on its own, so the daemon latches a <code>stuck</code> flag, fires one desktop notification, and backs off watcher-driven retries to once every 5 minutes instead of hammering a doomed push. A manual <code>agentsync push</code> is never throttled. The next success (after you reset the vault) clears it.</td>
+</tr>
+<tr>
 <td>Shutting down</td>
 <td>Drains the sync queue with a hard ten-second timeout, closes IPC, stops watchers, unlinks the socket, exits cleanly.</td>
 </tr>
 </tbody>
 </table>
+<h3 id="health-and-durable-state">Health and durable state<a class="headerlink" href="#health-and-durable-state" title="Permanent link">&para;</a></h3>
+<p>The daemon persists its health to <code>&lt;AGENTSYNC_DIR&gt;/daemon-state.json</code> (last successful sync, last error, consecutive failures, and the stuck flag) and updates it on every success and failure. Because it is on disk, the state survives a crash or restart:</p>
+<ul>
+<li><code>agentsync daemon status</code> reports the live state when the daemon is up, and <strong>falls back to the durable file when it is down</strong> — so you can still see when sync last succeeded and whether it died stuck.</li>
+<li><code>agentsync doctor</code> reads the same file and adds a <strong>Daemon sync health</strong> row: it <strong>fails</strong> when stuck, <strong>warns</strong> when the daemon is installed but the last success is older than 24 hours (or has never succeeded), and <strong>passes</strong> on a recent success. This is the loud signal that a <em>silent</em> backup failure has been happening — the worst failure mode for a backup tool. (The installed-but-stale/never warning is derived from the service file, which doctor only detects on macOS and Linux today; on Windows the row still <strong>fails</strong> on a stuck vault but does not yet warn on staleness.)</li>
+</ul>
+<p>The file watcher pre-filters never-sync paths (<code>sessions/</code>, <code>history.jsonl</code>, <code>*.local.md</code>, …) at the watch layer, so a high-churn agent directory no longer wakes a push that would snapshot nothing.</p>
 <h3 id="configuration">Configuration<a class="headerlink" href="#configuration" title="Permanent link">&para;</a></h3>
 <p>Daemon behaviour is driven by the <code>[sync]</code> table in <code>agentsync.toml</code>:</p>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">[sync]</span>

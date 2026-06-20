@@ -1642,7 +1642,7 @@ delegates to, once per selected vault artifact.</p>
 <p><strong>Usage</strong>:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>agentsync<span class="w"> </span>daemon<span class="w"> </span>install<span class="w">     </span><span class="c1"># write the OS service descriptor</span>
 </span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>agentsync<span class="w"> </span>daemon<span class="w"> </span>start<span class="w">       </span><span class="c1"># idempotent</span>
-</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>agentsync<span class="w"> </span>daemon<span class="w"> </span>status<span class="w">      </span><span class="c1"># IPC ping</span>
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>agentsync<span class="w"> </span>daemon<span class="w"> </span>status<span class="w">      </span><span class="c1"># last-sync health (last success, failures, stuck)</span>
 </span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a>agentsync<span class="w"> </span>daemon<span class="w"> </span>stop
 </span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a>agentsync<span class="w"> </span>daemon<span class="w"> </span>uninstall
 </span></code></pre></div>
@@ -1651,7 +1651,8 @@ delegates to, once per selected vault artifact.</p>
 <ul>
 <li>Only one daemon runs per user. A second-instance check exits cleanly if a daemon is already up.</li>
 <li>A transient sync failure triggers one automatic retry. If the retry also fails, the error is recorded but the daemon stays alive so the next change can trigger a fresh push.</li>
-<li>See <a href="../operations/#daemon">Daemon</a> for install paths per OS, lifecycle, and log locations.</li>
+<li><code>daemon status</code> reports the last successful sync time, consecutive failures, and a <strong>stuck</strong> flag (vault diverged). When the daemon is <strong>not</strong> running it falls back to the durable <code>daemon-state.json</code>, so you still see when sync last succeeded. <code>doctor</code> surfaces a stale or stuck last-sync as a dedicated health row — a silent backup failure is loud, not invisible.</li>
+<li>See <a href="../operations/#daemon">Daemon</a> for install paths per OS, lifecycle, health/durable-state, and log locations.</li>
 </ul>
 <h2 id="key">key<a class="headerlink" href="#key" title="Permanent link">&para;</a></h2>
 <p><strong>Why</strong>: Manage who can decrypt the vault — add a recipient, list recipients, deauthorize (remove) one, or rotate the current machine's keypair.</p>
