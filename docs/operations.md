@@ -347,7 +347,7 @@ What it does **not** catch: a plain password, a bespoke or internal API token, a
 
 - `standard` (default) — the built-in credential patterns above, minus JWTs.
 - `strict` — adds JWT detection. Use when no legitimate JWT appears in your config.
-- `off` — disables the artefact-body scan. **Skill-bundle interiors are still scanned at `standard`** as a fail-safe, and encryption still applies.
+- `off` — waives the ordinary API-token patterns; those values ride into the (encrypted) vault unflagged. The **catastrophic tier still blocks in every mode, `off` included**: the vault's own age key (`AGE-SECRET-KEY-1…`) and PEM private keys can never be pushed — no encryption makes it safe to commit the key that decrypts the vault itself. **Skill-bundle interiors are still scanned at `standard`** as a fail-safe.
 
 `agentsync config set security.allowSecretValues '["<literal>"]'` exempts a specific value the scanner false-positives on (and exempts it from base64 redaction). `agentsync config set security.redactBase64Values false` stops AgentSync replacing long base64-looking JSON values with a placeholder, for configs that legitimately store such values. See [config](commands.md#config).
 

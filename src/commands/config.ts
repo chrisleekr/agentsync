@@ -164,16 +164,22 @@ export async function performConfigSet(key: string, rawValue: string): Promise<C
 
     // agentsync.toml is committed in PLAINTEXT (only artifacts are encrypted),
     // so refuse to write a literal credential into it — e.g. a token pasted
-    // into the wrong field. The allowlist key is exempt by construction.
-    if (key !== SECRET_EXEMPT_KEY) {
-      const leaks = scanForSecrets(rawValue, key);
-      if (leaks.length > 0) {
-        return {
-          status: "invalid-value",
-          key,
-          error: `Refusing to store a literal secret in plaintext config (${leaks.join("; ")}).`,
-        };
-      }
+    // into the wrong field. The allowlist key is exempt from ordinary-token
+    // detection by construction (it exists to hold high-entropy false
+    // positives), but NEVER from the catastrophic tier: an age secret key or
+    // PEM private key must not land in plaintext config even as an "allowed"
+    // value, or it would sail past the always-block guarantee at push time.
+    // `off` mode scans exactly the catastrophic tier.
+    const leaks =
+      key === SECRET_EXEMPT_KEY
+        ? scanForSecrets(rawValue, key, { mode: "off", allow: [], redactBase64: true })
+        : scanForSecrets(rawValue, key);
+    if (leaks.length > 0) {
+      return {
+        status: "invalid-value",
+        key,
+        error: `Refusing to store a literal secret in plaintext config (${leaks.join("; ")}).`,
+      };
     }
 
     const next = structuredClone(refreshed);

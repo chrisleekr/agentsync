@@ -374,6 +374,12 @@ export async function collectInteriorViolations(rootDir: string): Promise<Interi
         // above is already best-effort for non-readable files. Skip silently.
         continue;
       }
+      // No policy argument on purpose: bundle interiors are always scanned at
+      // the default `standard` policy, independent of the vault's `secretScan`
+      // setting. This is the documented fail-safe — do NOT thread the user
+      // policy through here, or an `off` vault would stop scanning skill bodies.
+      // (The catastrophic tier blocks in every mode regardless, but ordinary
+      // tokens inside bundles rely on this hardcoded `standard`.)
       secretWarnings.push(...scanForSecrets(body, childPath));
     }
   }

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { AGENTSYNC_HOME_PLACEHOLDER } from "../path-portability";
 import {
+  ALWAYS_BLOCK_PATTERNS,
   EMBEDDED_SECRET_PATTERNS,
   NEVER_SYNC_PATTERNS,
   redactionEnvNameForPath,
@@ -253,9 +254,46 @@ describe("secret policy", () => {
     ).toEqual({ mode: "strict", allow: ["x"], redactBase64: false });
   });
 
-  test("scanForSecrets detects a PEM private-key header in every mode", () => {
+  test("ALWAYS_BLOCK_PATTERNS is exactly the catastrophic tier", () => {
+    expect(ALWAYS_BLOCK_PATTERNS.map((p) => p.name).sort()).toEqual([
+      "age-secret-key",
+      "private-key-pem",
+    ]);
+  });
+
+  test("scanForSecrets detects a PEM private-key header in every mode, off included", () => {
     const body = "key:\n-----BEGIN OPENSSH PRIVATE KEY-----\nabc\n";
-    expect(scanForSecrets(body, "/tmp/x").some((w) => w.includes("private-key-pem"))).toBe(true);
+    const hit = (p?: SecretPolicy) =>
+      scanForSecrets(body, "/tmp/x", p).some((w) => w.includes("private-key-pem"));
+    expect(hit()).toBe(true); // standard (default)
+    expect(hit(strict)).toBe(true);
+    expect(hit(off)).toBe(true); // catastrophic tier survives `off`
+  });
+
+  test("the vault's own age key blocks the push in every mode", () => {
+    const ageKey = `AGE-SECRET-KEY-1${"A".repeat(58)}`;
+    const blocks = (p?: SecretPolicy) =>
+      scanForSecrets(`identity: ${ageKey}`, "/tmp/x", p).some((w) =>
+        w.includes("age-secret-key"),
+      );
+    expect(blocks()).toBe(true); // standard
+    expect(blocks(strict)).toBe(true);
+    expect(blocks(off)).toBe(true); // catastrophic tier survives `off`
+  });
+
+  test("allowSecretValues can NOT exempt a catastrophic-tier value", () => {
+    // Regression guard for the central guarantee: the allow-list silences
+    // ordinary tokens, never the age key / PEM that decrypt the vault.
+    const ageKey = `AGE-SECRET-KEY-1${"A".repeat(58)}`;
+    const exempt: SecretPolicy = { mode: "off", allow: [ageKey], redactBase64: true };
+    expect(scanForSecrets(ageKey, "/tmp/x", exempt)).toEqual([
+      "Detected literal secret (age-secret-key) in /tmp/x",
+    ]);
+    const pem = "-----BEGIN OPENSSH PRIVATE KEY-----";
+    const exemptPem: SecretPolicy = { mode: "standard", allow: [pem], redactBase64: true };
+    expect(scanForSecrets(pem, "/tmp/x", exemptPem).some((w) => w.includes("private-key-pem"))).toBe(
+      true,
+    );
   });
 
   test("scanForSecrets flags a JWT only in strict mode", () => {
@@ -265,7 +303,7 @@ describe("secret policy", () => {
     expect(scanForSecrets(body, "/tmp/x", strict).some((w) => w.includes("jwt"))).toBe(true);
   });
 
-  test("mode 'off' disables scanning and redaction", () => {
+  test("mode 'off' waives ordinary API-token patterns and redaction", () => {
     const secret = `ghp_${"a".repeat(36)}`;
     expect(scanForSecrets(`x ${secret}`, "/tmp/x", off)).toEqual([]);
     const redacted = redactSecretLiterals({ token: secret }, "root", off);
