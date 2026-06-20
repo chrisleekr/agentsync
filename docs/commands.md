@@ -47,6 +47,7 @@ When developing from source, replace the binary call with `bun run src/cli.ts`. 
 | [`doctor`](#doctor) | Check the local environment before blaming sync logic. |
 | [`daemon`](#daemon) | Install, start, stop, and inspect the background daemon. |
 | [`key`](#key) | Add, list, or remove recipients, or rotate the current machine key. |
+| [`config`](#config) | View or change vault config (agents, sync, security policy). |
 | [`skill`](#skill) | Remove a skill from the vault. |
 | [`plugin`](#plugin) | List or reinstall a machine's Claude plugins from its vault manifest. |
 | [`vault`](#vault) | Migrate an older vault to the current format (`vault upgrade`). |
@@ -322,6 +323,49 @@ agentsync key rotate                         # new local identity, re-encrypt
 - `key remove` re-encrypts forward for the remaining recipients, so the removed key can no longer read **future** pushes. It **cannot** retro-purge git history: a removed key still decrypts the vault state already on the remote. For true revocation of a lost machine, also rotate any secrets it could read. See [Deauthorize a lost machine](operations.md#deauthorize-a-lost-machine).
 - `key remove` refuses to remove the only remaining recipient (a vault must stay decryptable) and refuses to remove the key of the machine you run it on (you cannot deauthorize yourself — run it from another machine to remove a lost one).
 - Recipient names are stable config keys and are visible in the vault repository. Use names that describe the machine clearly without leaking sensitive context.
+
+## config
+
+**Why**: View or change the vault configuration in `agentsync.toml` without hand-editing it — which agents are enabled, daemon sync behaviour, and the secret-handling policy.
+
+**Usage**:
+
+```bash
+agentsync config list                              # print every configurable key
+agentsync config get sync.debounceMs               # read one value
+agentsync config set agents.vscode true            # enable VS Code sync
+agentsync config set security.secretScan strict    # widen secret detection
+agentsync config set security.allowSecretValues '["AKIA-not-a-real-key"]'
+```
+
+**Settable keys** (dotted paths under these sections):
+
+| Key | Type | Meaning |
+|---|---|---|
+| `agents.<claude\|cursor\|codex\|copilot\|vscode>` | boolean | Whether that agent is snapshotted on push. |
+| `sync.debounceMs` | integer 50–10000 | Daemon quiet-window before an auto-push. |
+| `sync.autoPush` | boolean | Whether the daemon auto-pushes on change. |
+| `claudePlugins.syncPlugins` | boolean | Record the Claude plugin reinstall manifest on push. |
+| `security.secretScan` | `standard`\|`strict`\|`off` | Push-time secret-scan mode (see note). |
+| `security.allowSecretValues` | string[] (JSON) | Literal values exempt from secret detection and base64 redaction (see note). |
+| `security.redactBase64Values` | boolean | Replace long base64-looking JSON values with a redaction placeholder (see note). |
+
+> **`security.*` are recorded but not yet enforced.** This release stores the
+> policy in `agentsync.toml`; the push-time secret scanner starts honouring
+> `secretScan`, `allowSecretValues`, and `redactBase64Values` in a follow-up
+> change. Until then the scan runs with its built-in defaults regardless of
+> these values. Note `agentsync.toml` is committed in **plaintext** (only
+> artefacts are encrypted), so `allowSecretValues` is for exempting legitimate
+> high-entropy *non-secret* values — never paste a real credential there.
+> `config set` refuses a recognised credential in any other value.
+
+**Outcome**: `list` and `get` are read-only. `set` validates the new value against the full config schema (so an out-of-range debounce or an invalid enum is rejected before anything is written), then — because `agentsync.toml` is shared across machines — reconciles fast-forward, commits, and pushes the change, exactly like `key add`.
+
+**Caveats**:
+
+- `version`, `recipients`, and `remote` are **not** settable here. Recipients are managed by [`key`](#key); the remote is fixed at [`init`](#init); the format version is the old-binary guard.
+- A value is parsed as JSON first (`true`, `500`, `["x"]`), falling back to a plain string for bare words (`strict`). Quote a JSON array in your shell.
+- `set` reconciles against the remote first, so it fails closed on diverged history like every other vault-writing command.
 
 ## skill
 

@@ -28,6 +28,7 @@ export function createTestAgentSyncConfig(
     remote: { url: "test://vault", branch: "main" },
     sync: { debounceMs: 300, autoPush: true },
     claudePlugins: { syncPlugins: false },
+    security: { secretScan: "standard", allowSecretValues: [], redactBase64Values: true },
     ...overrides,
   };
 }

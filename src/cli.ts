@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
 import { defineCommand, runMain } from "citty";
+import { configCommand } from "./commands/config";
 import { copyCommand } from "./commands/copy";
 import { daemonCommand } from "./commands/daemon";
 import { destroyCommand } from "./commands/destroy";
@@ -30,6 +31,7 @@ const main = defineCommand({
     doctor: doctorCommand,
     daemon: daemonCommand,
     key: keyCommand,
+    config: configCommand,
     migrate: migrateCommand,
     skill: skillCommand,
     plugin: pluginCommand,

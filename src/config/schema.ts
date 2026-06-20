@@ -86,6 +86,31 @@ export const AgentSyncConfigSchema = z.object({
       })
       .default({ syncPlugins: false }),
   ),
+  // Secret-handling policy. Optional with safe defaults so existing
+  // agentsync.toml files validate unchanged. The schema is not `.strict()`, so
+  // an older binary that predates this section ignores it on load rather than
+  // failing — adding the section needs no vault version bump.
+  //
+  // NOTE: this section is the configuration surface only. The push-time secret
+  // scanner reads these fields in a follow-up change; until then the values are
+  // recorded but not yet enforced (the scan runs with its built-in defaults).
+  security: z
+    .object({
+      // How the push-time secret scan behaves:
+      //   standard — the built-in high-precision credential patterns (default)
+      //   strict   — standard plus generic PEM private-key and JWT detection
+      //   off      — disable the embedded-secret scan (encryption still applies)
+      secretScan: z.enum(["standard", "strict", "off"]).default("standard"),
+      // Literal values to exempt from secret detection AND base64 redaction.
+      // The escape hatch for a legitimate high-entropy config value that the
+      // scanner/redactor would otherwise flag or silently replace.
+      allowSecretValues: z.array(z.string()).default([]),
+      // When true (default), a whole JSON string value that looks like base64
+      // (40+ chars) is replaced with a redaction placeholder. Set false when a
+      // config legitimately stores long base64 values that must round-trip.
+      redactBase64Values: z.boolean().default(true),
+    })
+    .default({ secretScan: "standard", allowSecretValues: [], redactBase64Values: true }),
 });
 
 /** Normalized runtime shape derived from the validated config schema. */

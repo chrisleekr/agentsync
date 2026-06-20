@@ -42,6 +42,35 @@ describe("AgentSyncConfigSchema", () => {
     expect(parsed.claudePlugins.syncPlugins).toBe(false);
   });
 
+  test("defaults the whole security section when absent — back-compat without a version bump", () => {
+    // VALID_BASE has no [security], mirroring an agentsync.toml written before
+    // the section existed. It must still load, with safe defaults applied.
+    const parsed = AgentSyncConfigSchema.parse(VALID_BASE);
+    expect(parsed.security).toEqual({
+      secretScan: "standard",
+      allowSecretValues: [],
+      redactBase64Values: true,
+    });
+  });
+
+  test("fills inner security defaults when the section is partial", () => {
+    const parsed = AgentSyncConfigSchema.parse({
+      ...VALID_BASE,
+      security: { secretScan: "strict" },
+    });
+    expect(parsed.security.secretScan).toBe("strict");
+    expect(parsed.security.allowSecretValues).toEqual([]);
+    expect(parsed.security.redactBase64Values).toBe(true);
+  });
+
+  test("rejects an invalid security.secretScan value", () => {
+    const result = AgentSyncConfigSchema.safeParse({
+      ...VALID_BASE,
+      security: { secretScan: "loud" },
+    });
+    expect(result.success).toBe(false);
+  });
+
   test("maps a legacy claudePlugins.syncMarketplace key to syncPlugins", () => {
     // Back-compat: existing v2 agentsync.toml files predate the rename and must
     // keep loading without a manual edit.
