@@ -1,5 +1,5 @@
 import { readdir, stat } from "node:fs/promises";
-import { isAbsolute, join, relative, resolve } from "node:path";
+import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { log } from "@clack/prompts";
 import { defineCommand } from "citty";
 import { applySingleArtifact, NoMatchingArtifactError } from "../agents/_apply";
@@ -42,8 +42,12 @@ export async function enumerateArtifacts(machineRoot: string, relDir: string): P
   // files elsewhere on disk (info disclosure via `ls`). Reject any relDir whose
   // resolved target is not contained within machineRoot. Only the entry relDir
   // is user-controlled — the recursive childRel values are always interior.
-  const containment = relative(machineRoot, resolve(machineRoot, relDir));
-  if (containment.startsWith("..") || isAbsolute(containment)) {
+  // A `..` first segment means the resolved target escaped machineRoot. Match
+  // the segment exactly (`..` alone or `..${sep}…`), not a bare `startsWith("..")`
+  // which would also reject a legitimate in-namespace dir literally named `..foo`.
+  const root = resolve(machineRoot);
+  const containment = relative(root, resolve(root, relDir));
+  if (containment === ".." || containment.startsWith(`..${sep}`) || isAbsolute(containment)) {
     return [];
   }
 

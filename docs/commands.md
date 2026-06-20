@@ -245,7 +245,7 @@ agentsync status --machine work-laptop   # diff local config against another mac
 - `synced` — local content matches the vault.
 - `local-changed` — both sides have the file but the content differs. Run `push` to publish the local copy, or `copy self <path>` to restore the vault copy after backing up the local one.
 - `local-only` — the machine has content the vault does not. Run `push`.
-- `vault-only` — the source namespace has content the local disk does not. Run `copy self <path>` to bring it down.
+- `vault-only` — the source namespace has content the local disk does not. Run `copy <machine> <path>` (or `copy self <path>` when comparing against `self`) to bring it down.
 - `unknown` — the private key was unavailable, so the vault row could not be decrypted and the comparison is inconclusive. Restore the key and re-run.
 - `error` — snapshot or decryption failed for that row. The error detail is printed in the same row; address it before trusting the rest of the report.
 

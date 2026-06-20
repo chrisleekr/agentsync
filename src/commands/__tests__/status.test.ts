@@ -284,7 +284,11 @@ describe("status surfaces skill drift", () => {
     const walker = await import("../../agents/skills-walker");
     const snap = await walker.collectSkillArtifacts("copilot", mutableCopilotPaths.skillsDir);
     const { encryptString } = await import("../../core/encryptor");
-    const encrypted = await encryptString(snap.artifacts[0]?.plaintext ?? "", [machine.recipient]);
+    const peerArtifact = snap.artifacts.find((a) =>
+      a.vaultPath.endsWith("skills/peer-skill.tar.age"),
+    );
+    if (!peerArtifact) throw new Error("Expected peer-skill artifact in snapshot");
+    const encrypted = await encryptString(peerArtifact.plaintext, [machine.recipient]);
 
     // Write the artifact under a PEER machine's namespace, not this machine's.
     const vaultArtPath = join(
