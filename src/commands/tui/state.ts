@@ -173,7 +173,7 @@ export interface SyncSlice {
   /** First visible line index in the rendered output. Updated explicitly by
    *  PageUp/PageDown/Home/End; cursor up/down lets render auto-follow. */
   scrollOffset: number;
-  /** Open confirmation modal for `x` (skill remove). Null when no remove
+  /** Open confirmation modal for `x` (vault remove). Null when no remove
    *  is pending. y proceeds, n/esc cancels. */
   confirmRemove: ConfirmRemove | null;
 }

@@ -613,7 +613,7 @@ function renderHelp(renderer: CliRenderer, host: BoxRenderable, state: AppState)
     "    A             Select all visible rows (toggle)",
     "    esc           Clear selection",
     "    c             Copy selected paths (or cursor path) to clipboard",
-    "    x             Remove selected skills — opens y/n confirm modal",
+    "    x             Remove selected vault artifacts — opens y/n confirm modal",
     "    s             Toggle synced section (collapsed by default)",
     "    k             Load private key for accurate status",
     "",
