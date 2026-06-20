@@ -5,8 +5,10 @@ import {
   NEVER_SYNC_PATTERNS,
   redactionEnvNameForPath,
   redactSecretLiterals,
+  type SecretPolicy,
   sanitizeAndNormalizeJson,
   scanForSecrets,
+  securityToPolicy,
   shouldNeverSync,
 } from "../sanitizer";
 
@@ -233,5 +235,71 @@ describe("sanitizer", () => {
   test("sanitizeAndNormalizeJson appends trailing newline for diff stability", () => {
     const out = sanitizeAndNormalizeJson(JSON.stringify({ a: 1 }), "test", "/home/x");
     expect(out.value.endsWith("\n")).toBe(true);
+  });
+});
+
+describe("secret policy", () => {
+  const strict: SecretPolicy = { mode: "strict", allow: [], redactBase64: true };
+  const off: SecretPolicy = { mode: "off", allow: [], redactBase64: true };
+
+  test("securityToPolicy maps the [security] config and defaults to standard", () => {
+    expect(securityToPolicy(undefined).mode).toBe("standard");
+    expect(
+      securityToPolicy({
+        secretScan: "strict",
+        allowSecretValues: ["x"],
+        redactBase64Values: false,
+      }),
+    ).toEqual({ mode: "strict", allow: ["x"], redactBase64: false });
+  });
+
+  test("scanForSecrets detects a PEM private-key header in every mode", () => {
+    const body = "key:\n-----BEGIN OPENSSH PRIVATE KEY-----\nabc\n";
+    expect(scanForSecrets(body, "/tmp/x").some((w) => w.includes("private-key-pem"))).toBe(true);
+  });
+
+  test("scanForSecrets flags a JWT only in strict mode", () => {
+    const jwt = `eyJ${"a".repeat(12)}.eyJ${"b".repeat(12)}.${"c".repeat(12)}`;
+    const body = `token: ${jwt}`;
+    expect(scanForSecrets(body, "/tmp/x")).toEqual([]); // standard: not flagged
+    expect(scanForSecrets(body, "/tmp/x", strict).some((w) => w.includes("jwt"))).toBe(true);
+  });
+
+  test("mode 'off' disables scanning and redaction", () => {
+    const secret = `ghp_${"a".repeat(36)}`;
+    expect(scanForSecrets(`x ${secret}`, "/tmp/x", off)).toEqual([]);
+    const redacted = redactSecretLiterals({ token: secret }, "root", off);
+    expect((redacted.value as { token: string }).token).toBe(secret);
+    expect(redacted.warnings).toHaveLength(0);
+  });
+
+  test("an allow-listed decoy does not mask a real secret of the same shape later", () => {
+    // Regression: a non-global match would only check the FIRST occurrence, so
+    // an allow-listed value earlier in the text could hide a real secret later.
+    const decoy = `ghp_${"a".repeat(36)}`;
+    const real = `ghp_${"b".repeat(36)}`;
+    const policy: SecretPolicy = { mode: "standard", allow: [decoy], redactBase64: true };
+    const warnings = scanForSecrets(`example: ${decoy}\nreal key: ${real}`, "/tmp/x", policy);
+    expect(warnings.some((w) => w.includes("github-classic-pat"))).toBe(true);
+  });
+
+  test("allowSecretValues exempts a value from both the scan and the redactor", () => {
+    const secret = `ghp_${"a".repeat(36)}`;
+    const policy: SecretPolicy = { mode: "standard", allow: [secret], redactBase64: true };
+    expect(scanForSecrets(secret, "/tmp/x", policy)).toEqual([]);
+    const redacted = redactSecretLiterals({ token: secret }, "root", policy);
+    expect((redacted.value as { token: string }).token).toBe(secret);
+  });
+
+  test("redactBase64 false keeps a long base64 value while still redacting real keys", () => {
+    const base64 = "QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVowMTIzNDU2Nzg5"; // 48 base64 chars
+    const realKey = `ghp_${"a".repeat(36)}`;
+    const keep: SecretPolicy = { mode: "standard", allow: [], redactBase64: false };
+    const out = redactSecretLiterals({ blob: base64, tok: realKey }, "root", keep).value as {
+      blob: string;
+      tok: string;
+    };
+    expect(out.blob).toBe(base64); // base64 catch-all disabled
+    expect(out.tok).toContain("REDACTED"); // a real key prefix still redacts
   });
 });

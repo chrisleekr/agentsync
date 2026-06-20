@@ -2,7 +2,7 @@ import { homedir } from "node:os";
 import { AgentPaths } from "../../config/paths";
 import type { AgentSyncConfig } from "../../config/schema";
 import { denormalizeStringFromVault } from "../../core/path-portability";
-import { sanitizeAndNormalizeJson } from "../../core/sanitizer";
+import { sanitizeAndNormalizeJson, securityToPolicy } from "../../core/sanitizer";
 import { type ApplyPlan, defineFileArtifact, makeApplyVault } from "../_apply";
 import {
   atomicWrite,
@@ -16,13 +16,14 @@ import {
 export type VsCodeSnapshotResult = SnapshotResult;
 
 /** Collect the VS Code MCP configuration that AgentSync manages. */
-export async function snapshotVsCode(_config?: AgentSyncConfig): Promise<SnapshotResult> {
+export async function snapshotVsCode(config?: AgentSyncConfig): Promise<SnapshotResult> {
+  const policy = securityToPolicy(config?.security);
   const artifacts: SnapshotArtifact[] = [];
   const warnings: string[] = [];
 
   const mcpRaw = await readIfExists(AgentPaths.vscode.mcpJson);
   if (mcpRaw !== null) {
-    const sanitized = sanitizeAndNormalizeJson(mcpRaw, "vscode_mcp");
+    const sanitized = sanitizeAndNormalizeJson(mcpRaw, "vscode_mcp", homedir(), policy);
     const artifact = collect(sanitized, AgentPaths.vscode.mcpJson, "vscode/mcp.json.age");
     artifacts.push(artifact);
     warnings.push(...sanitized.warnings);

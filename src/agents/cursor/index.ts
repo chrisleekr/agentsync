@@ -4,7 +4,7 @@ import { type ParseError, parse as parseJsonc } from "jsonc-parser";
 import { AgentPaths } from "../../config/paths";
 import type { AgentSyncConfig } from "../../config/schema";
 import { denormalizeStringFromVault, normalizeStringForVault } from "../../core/path-portability";
-import { sanitizeAndNormalizeJson } from "../../core/sanitizer";
+import { sanitizeAndNormalizeJson, securityToPolicy } from "../../core/sanitizer";
 import {
   type ApplyPlan,
   defineFileArtifact,
@@ -70,7 +70,8 @@ function validateCursorRuleName(ruleName: string): void {
 }
 
 /** Collect Cursor rules, MCP config, and commands that are safe to sync. */
-export async function snapshotCursor(_config?: AgentSyncConfig): Promise<SnapshotResult> {
+export async function snapshotCursor(config?: AgentSyncConfig): Promise<SnapshotResult> {
+  const policy = securityToPolicy(config?.security);
   const artifacts: SnapshotArtifact[] = [];
   const warnings: string[] = [];
 
@@ -86,7 +87,7 @@ export async function snapshotCursor(_config?: AgentSyncConfig): Promise<Snapsho
 
   const mcpRaw = await readIfExists(AgentPaths.cursor.mcpGlobal);
   if (mcpRaw !== null) {
-    const sanitized = sanitizeAndNormalizeJson(mcpRaw, "cursor_mcp");
+    const sanitized = sanitizeAndNormalizeJson(mcpRaw, "cursor_mcp", homedir(), policy);
     artifacts.push(collect(sanitized, AgentPaths.cursor.mcpGlobal, "cursor/mcp.json.age"));
     warnings.push(...sanitized.warnings);
   }

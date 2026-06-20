@@ -310,7 +310,7 @@ and behaviour reference.
 
 ### Push aborts because secrets were detected
 
-The sanitiser found literal tokens or credentials in content that would otherwise be encrypted and committed. Sanitiser hits are intentionally a hard stop — they prevent the agent from leaking a secret into the vault, where it would persist even after subsequent pushes.
+The sanitiser found a literal token or credential in content that would otherwise be encrypted and committed. Sanitiser hits are intentionally a hard stop — a secret in git history persists even after later pushes and is one key-compromise away from retroactive exposure.
 
 Fix:
 
@@ -319,6 +319,27 @@ Fix:
 3. Run `push` again.
 
 Do not bypass this by editing the vault manually.
+
+#### What the scan actually covers
+
+Be precise about the guarantee. The scan is a **known-credential-format** detector, not a general secret scanner. It matches a fixed set of high-precision patterns:
+
+- vendor API-key prefixes (`sk-ant-…`, `sk-proj-…`), GitHub (`ghp_…`, `github_pat_…`), GitLab (`glpat-…`), AWS access keys (`AKIA…`), Google (`AIza…`), Slack (`xox[abprs]-…`);
+- AgentSync's own age identity (`AGE-SECRET-KEY-1…`);
+- PEM private-key headers (`-----BEGIN … PRIVATE KEY-----`);
+- JWTs (`eyJ….eyJ….…`) — only when `security.secretScan = "strict"`.
+
+What it does **not** catch: a plain password, a bespoke or internal API token, a database connection string, or any credential with no recognised shape. Those flow into the (encrypted) vault unflagged. **Encryption is the real protection** — the scan exists only to keep well-known credentials out of git history. Treat a clean push as "no recognised credential format found", not "no secrets present".
+
+#### Tuning the scan
+
+`agentsync config set security.secretScan <mode>`:
+
+- `standard` (default) — the built-in credential patterns above, minus JWTs.
+- `strict` — adds JWT detection. Use when no legitimate JWT appears in your config.
+- `off` — disables the artefact-body scan. **Skill-bundle interiors are still scanned at `standard`** as a fail-safe, and encryption still applies.
+
+`agentsync config set security.allowSecretValues '["<literal>"]'` exempts a specific value the scanner false-positives on (and exempts it from base64 redaction). `agentsync config set security.redactBase64Values false` stops AgentSync replacing long base64-looking JSON values with a placeholder, for configs that legitimately store such values. See [config](commands.md#config).
 
 ### Daemon is not running
 
