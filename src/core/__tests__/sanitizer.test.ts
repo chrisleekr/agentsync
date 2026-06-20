@@ -273,9 +273,7 @@ describe("secret policy", () => {
   test("the vault's own age key blocks the push in every mode", () => {
     const ageKey = `AGE-SECRET-KEY-1${"A".repeat(58)}`;
     const blocks = (p?: SecretPolicy) =>
-      scanForSecrets(`identity: ${ageKey}`, "/tmp/x", p).some((w) =>
-        w.includes("age-secret-key"),
-      );
+      scanForSecrets(`identity: ${ageKey}`, "/tmp/x", p).some((w) => w.includes("age-secret-key"));
     expect(blocks()).toBe(true); // standard
     expect(blocks(strict)).toBe(true);
     expect(blocks(off)).toBe(true); // catastrophic tier survives `off`
@@ -291,9 +289,9 @@ describe("secret policy", () => {
     ]);
     const pem = "-----BEGIN OPENSSH PRIVATE KEY-----";
     const exemptPem: SecretPolicy = { mode: "standard", allow: [pem], redactBase64: true };
-    expect(scanForSecrets(pem, "/tmp/x", exemptPem).some((w) => w.includes("private-key-pem"))).toBe(
-      true,
-    );
+    expect(
+      scanForSecrets(pem, "/tmp/x", exemptPem).some((w) => w.includes("private-key-pem")),
+    ).toBe(true);
   });
 
   test("scanForSecrets flags a JWT only in strict mode", () => {
