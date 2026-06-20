@@ -27,6 +27,12 @@ const DEFAULT_SYNC = {
   autoPush: true,
 };
 
+const DEFAULT_SECURITY = {
+  secretScan: "standard" as const,
+  allowSecretValues: [] as string[],
+  redactBase64Values: true,
+};
+
 /** Discriminated result of a `performInit` invocation — lets non-CLI callers
  * (e.g. the TUI init wizard) react to outcomes without parsing log output. */
 export type InitResult =
@@ -189,6 +195,7 @@ export async function performInit(options: InitOptions): Promise<InitResult> {
       },
       sync: existing?.sync ?? DEFAULT_SYNC,
       claudePlugins: existing?.claudePlugins ?? { syncPlugins: false },
+      security: existing?.security ?? DEFAULT_SECURITY,
     });
 
     // Pin the machine name to local state so a later hostname change cannot

@@ -1,0 +1,206 @@
+/**
+ * Tests for the `agentsync config` verbs against real git fixtures (no git
+ * mocking), mirroring key.test.ts. Exercises list/get/set, the settable-prefix
+ * guard, unknown-key rejection, schema-backed value validation, and scalar
+ * type coercion.
+ */
+import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
+import { writeFileSync } from "node:fs";
+import { rm } from "node:fs/promises";
+import { createRequire } from "node:module";
+import { join } from "node:path";
+import { loadConfig, resolveConfigPath } from "../../config/loader";
+import {
+  createBareRepo,
+  createMachineFixture,
+  createTmpDir,
+  runGit,
+  seedVaultRepo,
+  type TestMachineFixture,
+} from "../../test-helpers/fixtures";
+
+{
+  const require = createRequire(import.meta.url);
+  // biome-ignore lint/style/useNodejsImportProtocol: deliberate alias to bypass mock cache
+  const realFsPromises = require("fs/promises") as typeof import("node:fs/promises");
+  mock.module("node:fs/promises", () => ({ ...realFsPromises, default: realFsPromises }));
+}
+
+mock.module("@clack/prompts", () => ({
+  intro: () => {},
+  outro: () => {},
+  log: { success: () => {}, info: () => {}, warn: () => {}, error: () => {} },
+  note: () => {},
+  spinner: () => ({ start: () => {}, stop: () => {}, message: () => {} }),
+}));
+
+type ConfigMod = typeof import("../config");
+let configMod: ConfigMod;
+
+const RUNTIME_ENV_KEYS = ["AGENTSYNC_VAULT_DIR", "AGENTSYNC_KEY_PATH", "AGENTSYNC_MACHINE"];
+
+afterAll(() => {
+  mock.restore();
+});
+
+describe("config command", () => {
+  let tmpDir: string;
+  let machine: TestMachineFixture;
+  let bare: string;
+  const savedEnv: Record<string, string | undefined> = {};
+
+  beforeEach(async () => {
+    configMod = await import("../config");
+    tmpDir = await createTmpDir();
+    machine = await createMachineFixture(tmpDir, "config-test");
+    bare = await createBareRepo(tmpDir);
+    seedVaultRepo({ machine, bareRepoPath: bare });
+    for (const key of RUNTIME_ENV_KEYS) savedEnv[key] = process.env[key];
+    process.env.AGENTSYNC_VAULT_DIR = machine.vaultDir;
+    process.env.AGENTSYNC_KEY_PATH = machine.keyPath;
+    process.env.AGENTSYNC_MACHINE = machine.machineName;
+    process.exitCode = 0;
+  });
+
+  function restore(): Promise<void> {
+    for (const key of RUNTIME_ENV_KEYS) {
+      const value = savedEnv[key];
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+    return rm(tmpDir, { recursive: true, force: true });
+  }
+
+  test("performConfigList returns settable keys and excludes version + recipients", async () => {
+    const entries = await configMod.performConfigList();
+    const keys = entries.map((e) => e.key);
+    expect(keys).toContain("agents.claude");
+    expect(keys).toContain("sync.debounceMs");
+    expect(keys).toContain("security.secretScan");
+    expect(keys.some((k) => k === "version")).toBe(false);
+    expect(keys.some((k) => k.startsWith("recipients"))).toBe(false);
+    await restore();
+  });
+
+  test("performConfigGet reads a value and reports unknown keys", async () => {
+    const found = await configMod.performConfigGet("security.secretScan");
+    expect(found).toEqual({ status: "found", key: "security.secretScan", value: "standard" });
+    const missing = await configMod.performConfigGet("agents.nope");
+    expect(missing.status).toBe("unknown-key");
+    await restore();
+  });
+
+  test("performConfigSet changes a boolean and persists it to the vault config", async () => {
+    const result = await configMod.performConfigSet("agents.vscode", "true");
+    expect(result.status).toBe("success");
+    const config = await loadConfig(resolveConfigPath(machine.vaultDir));
+    expect(config.agents.vscode).toBe(true);
+    await restore();
+  });
+
+  test("performConfigSet coerces a numeric string and an enum word", async () => {
+    const num = await configMod.performConfigSet("sync.debounceMs", "500");
+    expect(num.status).toBe("success");
+    if (num.status === "success") expect(num.newValue).toBe(500);
+
+    const enumSet = await configMod.performConfigSet("security.secretScan", "strict");
+    expect(enumSet.status).toBe("success");
+
+    const config = await loadConfig(resolveConfigPath(machine.vaultDir));
+    expect(config.sync.debounceMs).toBe(500);
+    expect(config.security.secretScan).toBe("strict");
+    await restore();
+  });
+
+  test("performConfigSet sets an array value from JSON", async () => {
+    const result = await configMod.performConfigSet(
+      "security.allowSecretValues",
+      '["AKIAEXAMPLE","ghp_example"]',
+    );
+    expect(result.status).toBe("success");
+    const config = await loadConfig(resolveConfigPath(machine.vaultDir));
+    expect(config.security.allowSecretValues).toEqual(["AKIAEXAMPLE", "ghp_example"]);
+    await restore();
+  });
+
+  test("performConfigSet refuses protected sections", async () => {
+    for (const key of ["version", "recipients.config-test", "remote.url"]) {
+      const result = await configMod.performConfigSet(key, "x");
+      expect(result.status).toBe("not-settable");
+    }
+    await restore();
+  });
+
+  test("performConfigSet rejects an unknown key under a settable section", async () => {
+    const result = await configMod.performConfigSet("agents.cluade", "true");
+    expect(result.status).toBe("unknown-key");
+    await restore();
+  });
+
+  test("performConfigSet rejects a value the schema forbids", async () => {
+    const tooSmall = await configMod.performConfigSet("sync.debounceMs", "5");
+    expect(tooSmall.status).toBe("invalid-value");
+
+    const badEnum = await configMod.performConfigSet("security.secretScan", "loud");
+    expect(badEnum.status).toBe("invalid-value");
+
+    // The vault config is unchanged after rejected sets.
+    const config = await loadConfig(resolveConfigPath(machine.vaultDir));
+    expect(config.sync.debounceMs).toBe(300);
+    expect(config.security.secretScan).toBe("standard");
+    await restore();
+  });
+
+  test("performConfigSet coerces a false boolean", async () => {
+    const result = await configMod.performConfigSet("sync.autoPush", "false");
+    expect(result.status).toBe("success");
+    if (result.status === "success") expect(result.newValue).toBe(false);
+    const config = await loadConfig(resolveConfigPath(machine.vaultDir));
+    expect(config.sync.autoPush).toBe(false);
+    await restore();
+  });
+
+  test("performConfigSet refuses a prototype-pollution key and leaves Object.prototype intact", async () => {
+    const result = await configMod.performConfigSet(
+      "security.__proto__.toLocaleString",
+      '"polluted"',
+    );
+    // Rejected before any write: the prototype-walk segment is not an own key.
+    expect(result.status).toBe("unknown-key");
+    // The global prototype is untouched.
+    expect(({} as Record<string, unknown>).polluted).toBeUndefined();
+    expect(Object.prototype.toLocaleString).toBeInstanceOf(Function);
+    await restore();
+  });
+
+  test("performConfigSet pushes the change to the remote vault", async () => {
+    const result = await configMod.performConfigSet("sync.debounceMs", "750");
+    expect(result.status).toBe("success");
+    // Inspect the bare remote directly — the change must land there, not just
+    // in the local working copy, because agentsync.toml is shared across machines.
+    const onRemote = runGit(["show", "HEAD:agentsync.toml"], bare);
+    expect(onRemote).toContain("debounceMs = 750");
+    await restore();
+  });
+
+  test("performConfigSet fails closed on diverged history", async () => {
+    // Advance the remote independently from a second clone.
+    const otherClone = join(tmpDir, "other-clone");
+    runGit(["clone", bare, otherClone]);
+    runGit(["config", "user.email", "t@t.local"], otherClone);
+    runGit(["config", "user.name", "t"], otherClone);
+    writeFileSync(join(otherClone, "remote-extra.txt"), "remote\n", "utf8");
+    runGit(["add", "."], otherClone);
+    runGit(["commit", "-m", "remote advance"], otherClone);
+    runGit(["push", "origin", "main"], otherClone);
+
+    // Advance the local vault on a divergent commit.
+    writeFileSync(join(machine.vaultDir, "local-extra.txt"), "local\n", "utf8");
+    runGit(["add", "."], machine.vaultDir);
+    runGit(["commit", "-m", "local advance"], machine.vaultDir);
+
+    const result = await configMod.performConfigSet("agents.vscode", "true");
+    expect(result.status).toBe("failed");
+    await restore();
+  });
+});

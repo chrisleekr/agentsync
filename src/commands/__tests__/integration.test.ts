@@ -457,6 +457,7 @@ describe("integration", () => {
         autoPush: true,
       },
       claudePlugins: { syncPlugins: false },
+      security: { secretScan: "standard", allowSecretValues: [], redactBase64Values: true },
     });
     writeFileSync(join(machineB.vaultDir, ".gitignore"), "*.tmp\n", "utf8");
     runGit(["init"], machineB.vaultDir);
@@ -643,6 +644,7 @@ describe("integration", () => {
         autoPush: true,
       },
       claudePlugins: { syncPlugins: false },
+      security: { secretScan: "standard", allowSecretValues: [], redactBase64Values: true },
     });
     writeFileSync(join(machineB.vaultDir, ".gitignore"), "*.tmp\n", "utf8");
     runGit(["init"], machineB.vaultDir);

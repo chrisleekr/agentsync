@@ -81,6 +81,7 @@ The full quickstart, command reference, and architecture model live at the docum
 | `doctor` | Run environment, key, vault, and daemon diagnostics. |
 | `daemon` | Install and manage the background auto-sync daemon. |
 | `key` | Add, list, or remove recipients (revocation), or rotate the local machine key. |
+| `config` | View or change vault config: agents enabled, sync behaviour, secret-handling policy. |
 | `skill` | Remove a skill from the vault explicitly. |
 | `migrate` | Translate configuration between agent formats locally. |
 | `destroy` | Wipe the local vault clone (default) or the remote vault contents via a normal commit. **Local agent files (`~/.claude`, `~/.cursor`, …) are never touched.** |
