@@ -7,6 +7,7 @@ import { destroyCommand } from "./commands/destroy";
 import { doctorCommand } from "./commands/doctor";
 import { initCommand } from "./commands/init";
 import { keyCommand } from "./commands/key";
+import { lsCommand } from "./commands/ls";
 import { migrateCommand } from "./commands/migrate";
 import { pluginCommand } from "./commands/plugin";
 import { pushCommand } from "./commands/push";
@@ -27,6 +28,7 @@ const main = defineCommand({
     init: initCommand,
     push: pushCommand,
     copy: copyCommand,
+    ls: lsCommand,
     status: statusCommand,
     doctor: doctorCommand,
     daemon: daemonCommand,

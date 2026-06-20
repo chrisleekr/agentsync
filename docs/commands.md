@@ -43,7 +43,8 @@ When developing from source, replace the binary call with `bun run src/cli.ts`. 
 | [`init`](#init) | Bootstrap the vault, machine key, and config. |
 | [`push`](#push) | Snapshot, sanitise, encrypt, and fast-forward this machine's namespace to the vault. |
 | [`copy`](#copy) | Apply an artefact (or subdir) from a machine's vault namespace to local disk (`copy self …` for your own). |
-| [`status`](#status) | Compare local snapshot to decrypted vault state. |
+| [`ls`](#ls) | List machine namespaces, or the copyable artifact paths in one. |
+| [`status`](#status) | Compare local snapshot to decrypted vault state (any machine via `--machine`). |
 | [`doctor`](#doctor) | Check the local environment before blaming sync logic. |
 | [`daemon`](#daemon) | Install, start, stop, and inspect the background daemon. |
 | [`key`](#key) | Add, list, or remove recipients, or rotate the current machine key. |
@@ -198,15 +199,38 @@ agentsync copy work-laptop claude/ --dry-run      # preview the whole claude nam
 - Reconciliation is fast-forward only.
 - Plugins are not copyable via `copy` — they are reinstalled from the recorded manifest by `plugin install`.
 
+## ls
+
+**Why**: Discover what is in the vault before you `copy`. `copy` needs an exact logical path (e.g. `claude/CLAUDE.md.age`); `ls` is how you find those paths — especially on a fresh machine where you do not yet know another machine's layout.
+
+**Usage**:
+
+```bash
+agentsync ls                       # list every machine namespace in the vault
+agentsync ls work-laptop           # list the copyable artifacts in that namespace
+agentsync ls work-laptop claude/   # narrow to a path prefix
+agentsync ls self                  # browse this machine's own backup
+```
+
+**Arguments**:
+
+| Argument | Description |
+|---|---|
+| `<machine>` | Machine namespace to browse, or `self`. Omit to list all machines. |
+| `<path>` | Optional path prefix to narrow the listing. |
+
+**Outcome**: with no argument, the machine namespaces under `machines/`. With a machine, the logical `.age` paths you can hand to `copy <machine> <path>`. **Read-only and key-free** — it lists which encrypted files exist without decrypting them, so a machine that is not yet a recipient can still discover what is copyable. It reconciles fast-forward first so the listing reflects the latest backup.
+
 ## status
 
-**Why**: Compare the local snapshot to the decrypted vault state for the enabled agents.
+**Why**: Compare the local snapshot to the decrypted vault state for the enabled agents — this machine's own backup by default, or another machine's via `--machine` to preview a `copy`.
 
 **Usage**:
 
 ```bash
 agentsync status
 agentsync status --verbose
+agentsync status --machine work-laptop   # diff local config against another machine's backup
 ```
 
 **Flags**:
@@ -214,19 +238,22 @@ agentsync status --verbose
 | Flag | Default | Description |
 |---|---|---|
 | `--verbose` | `false` | Show per-file hashes alongside each row. |
+| `--machine` | this machine | Compare against another machine's namespace (or `self`). Needs the private key to decrypt; an unknown name lists the available machines. |
 
 **Outcome**: a per-agent report covering every enabled agent. Each row carries one of the following status strings, printed verbatim:
 
 - `synced` — local content matches the vault.
 - `local-changed` — both sides have the file but the content differs. Run `push` to publish the local copy, or `copy self <path>` to restore the vault copy after backing up the local one.
 - `local-only` — the machine has content the vault does not. Run `push`.
-- `vault-only` — this machine's namespace has content the local disk does not. Run `copy self <path>` to bring it down.
+- `vault-only` — the source namespace has content the local disk does not. Run `copy self <path>` to bring it down.
+- `unknown` — the private key was unavailable, so the vault row could not be decrypted and the comparison is inconclusive. Restore the key and re-run.
 - `error` — snapshot or decryption failed for that row. The error detail is printed in the same row; address it before trusting the rest of the report.
 
 **Caveats**:
 
 - `status` is read-only. It never mutates the vault or local files.
 - Vault-only entries marked "not on this machine" are normal when another machine snapshots an agent this machine does not enable.
+- `--machine` compares only the agents **this** machine has enabled. To browse another machine's full namespace (including agents you have disabled), use [`ls`](#ls).
 
 ## doctor
 

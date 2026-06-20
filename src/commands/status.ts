@@ -10,6 +10,7 @@ import { Agents } from "../agents/registry";
 import { machineVaultRoot } from "../config/paths";
 import type { AgentSyncConfig } from "../config/schema";
 import { decryptString } from "../core/encryptor";
+import { listMachines } from "./copy";
 import {
   loadPrivateKey,
   loadVaultConfigOrExit,
@@ -88,6 +89,12 @@ async function collectAgeFiles(dir: string, base: string): Promise<string[]> {
 export interface ComputeSyncStatusOptions {
   /** Test/DI hook: override the agent registry without touching the module-level setter. */
   agentsOverride?: AgentDefinition[];
+  /**
+   * Compare the local snapshot against another machine's namespace instead of
+   * this machine's own. Used by `status --machine` for a pre-copy diff; defaults
+   * to `runtime.machineName`.
+   */
+  sourceMachine?: string;
 }
 
 /**
@@ -110,8 +117,9 @@ export async function computeSyncStatus(
   const registry = opts.agentsOverride ?? agentDefinitionsForStatus;
   const enabledAgents = registry.filter((a) => config.agents[a.name as keyof typeof config.agents]);
   const rows: SyncRow[] = [];
-  // v2: status compares local state against THIS machine's namespace only.
-  const machineRoot = machineVaultRoot(runtime.vaultDir, runtime.machineName);
+  // Compare local state against the source machine's namespace — this machine's
+  // own by default, or another machine's for a `status --machine` pre-copy diff.
+  const machineRoot = machineVaultRoot(runtime.vaultDir, opts.sourceMachine ?? runtime.machineName);
 
   for (const agent of enabledAgents) {
     let artifacts: SnapshotArtifact[] = [];
@@ -221,14 +229,36 @@ export const statusCommand = defineCommand({
       description: "Show file hashes",
       default: false,
     },
+    machine: {
+      type: "string",
+      description: "Compare local config against another machine's namespace (or `self`)",
+    },
   },
   async run({ args }) {
     const runtime = await resolveRuntimeContext();
     const config = await loadVaultConfigOrExit(runtime.vaultDir);
 
+    // Resolve the comparison source: this machine by default, or another for a
+    // pre-copy cross-machine diff. Validate against the known namespaces so a
+    // typo reports the available machines instead of an empty all-local-only table.
+    const requested = args.machine ? String(args.machine) : undefined;
+    const sourceMachine =
+      requested === undefined || requested === "self" ? runtime.machineName : requested;
+    if (requested !== undefined && requested !== "self") {
+      const machines = await listMachines(runtime.vaultDir);
+      if (!machines.includes(sourceMachine)) {
+        log.error(`Unknown machine: ${requested}. Available: ${machines.join(", ") || "(none)"}`);
+        process.exitCode = 1;
+        return;
+      }
+    }
+
     log.info("AgentSync Status");
     log.info(`Vault : ${runtime.vaultDir}`);
     log.info(`Remote: ${config.remote.url} (${config.remote.branch})`);
+    if (sourceMachine !== runtime.machineName) {
+      log.info(`Source: ${sourceMachine} (comparing local config against this machine's backup)`);
+    }
     log.info(``);
 
     let key: string | null = null;
@@ -238,7 +268,7 @@ export const statusCommand = defineCommand({
       log.warn("Warning: private key not found — cannot compare vault content.");
     }
 
-    const rows = await computeSyncStatus(runtime, config, key);
+    const rows = await computeSyncStatus(runtime, config, key, { sourceMachine });
 
     const tableRows = rows.map((r) => ({
       agent: r.agent,
