@@ -3,7 +3,13 @@ import * as TOML from "@iarna/toml";
 import { AgentPaths } from "../../config/paths";
 import type { AgentSyncConfig } from "../../config/schema";
 import { denormalizeFromVault, normalizeForVault } from "../../core/path-portability";
-import { type RedactionResult, redactSecretLiterals } from "../../core/sanitizer";
+import {
+  DEFAULT_SECRET_POLICY,
+  type RedactionResult,
+  redactSecretLiterals,
+  type SecretPolicy,
+  securityToPolicy,
+} from "../../core/sanitizer";
 import {
   type ApplyPlan,
   defineFileArtifact,
@@ -30,7 +36,11 @@ export type CodexSnapshotResult = SnapshotResult;
  * Using TOML parse → redact → stringify avoids the line-level regex approach which
  * misses multi-line values and nested tables.
  */
-function sanitizeCodexConfig(raw: string, home: string = homedir()): RedactionResult<string> {
+function sanitizeCodexConfig(
+  raw: string,
+  home: string = homedir(),
+  policy: SecretPolicy = DEFAULT_SECRET_POLICY,
+): RedactionResult<string> {
   const warnings: string[] = [];
   let parsed: TOML.JsonMap;
   try {
@@ -41,7 +51,7 @@ function sanitizeCodexConfig(raw: string, home: string = homedir()): RedactionRe
   }
 
   const normalized = normalizeForVault(parsed as unknown, home);
-  const redacted = redactSecretLiterals(normalized, "codex_config");
+  const redacted = redactSecretLiterals(normalized, "codex_config", policy);
   warnings.push(...redacted.warnings);
   return {
     value: TOML.stringify(redacted.value as TOML.JsonMap),
@@ -50,7 +60,8 @@ function sanitizeCodexConfig(raw: string, home: string = homedir()): RedactionRe
 }
 
 /** Collect Codex instructions, rules, and config that are safe to sync. */
-export async function snapshotCodex(_config?: AgentSyncConfig): Promise<SnapshotResult> {
+export async function snapshotCodex(config?: AgentSyncConfig): Promise<SnapshotResult> {
+  const policy = securityToPolicy(config?.security);
   const artifacts: SnapshotArtifact[] = [];
   const warnings: string[] = [];
 
@@ -69,7 +80,7 @@ export async function snapshotCodex(_config?: AgentSyncConfig): Promise<Snapshot
 
   const configToml = await readIfExists(AgentPaths.codex.configToml);
   if (configToml !== null) {
-    const sanitized = sanitizeCodexConfig(configToml, homedir());
+    const sanitized = sanitizeCodexConfig(configToml, homedir(), policy);
     artifacts.push(collect(sanitized, AgentPaths.codex.configToml, "codex/config.toml.age"));
     warnings.push(...sanitized.warnings);
   }

@@ -7,7 +7,7 @@ import { NEVER_SYNC_WARNING_PREFIX, WALKER_SECRET_WARNING_PREFIX } from "../agen
 import { machineVaultRoot } from "../config/paths";
 import { encryptString } from "../core/encryptor";
 import { GitClient } from "../core/git";
-import { scanForSecrets, shouldNeverSync } from "../core/sanitizer";
+import { scanForSecrets, securityToPolicy, shouldNeverSync } from "../core/sanitizer";
 import { loadVaultConfigOrExit, resolveRuntimeContext } from "./shared";
 
 let agentDefinitions: AgentDefinition[] = Agents;
@@ -85,6 +85,9 @@ export async function performPush(
   // v2: every artifact lands under this machine's namespace, never the flat root.
   const machineRoot = machineVaultRoot(runtime.vaultDir, runtime.machineName);
   const recipients = Object.values(config.recipients);
+  // Secret-scan policy from [security]: honours mode (standard/strict/off) and
+  // the allow-list for the central artifact-body scan below.
+  const secretPolicy = securityToPolicy(config.security);
 
   if (recipients.length === 0) {
     errors.push("No recipients found in agentsync.toml. Run `agentsync init` first.");
@@ -173,7 +176,7 @@ export async function performPush(
       if (artifact.vaultPath.endsWith(".tar.age")) {
         continue;
       }
-      for (const w of scanForSecrets(artifact.plaintext, artifact.sourcePath)) {
+      for (const w of scanForSecrets(artifact.plaintext, artifact.sourcePath, secretPolicy)) {
         secretErrors.push(`[${agent.name}] ${w}`);
       }
     }

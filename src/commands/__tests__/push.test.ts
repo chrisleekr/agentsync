@@ -12,11 +12,13 @@ import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { readFile, rm } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { join } from "node:path";
+import { loadConfig, resolveConfigPath, writeConfig } from "../../config/loader";
 import { AgentPaths, machineVaultRoot } from "../../config/paths";
 import {
   createBareRepo,
   createMachineFixture,
   createTmpDir,
+  runGit,
   seedVaultRepo,
   type TestMachineFixture,
 } from "../../test-helpers/fixtures";
@@ -402,6 +404,67 @@ describe("performPush — literal secret embedded in markdown body", () => {
         ),
       ),
     ).toBe(false);
+  });
+
+  test("honours config.security.secretScan = off — the secret is no longer scanned", async () => {
+    // Proves performPush threads the [security] policy into the scan gate: with
+    // the scan turned off in vault config, the same leaky body now pushes.
+    mkdirSync(mutableCopilotPaths.promptsDir, { recursive: true });
+    const promptPath = join(mutableCopilotPaths.promptsDir, "leaky.prompt.md");
+    const fakeKey = `sk-ant-api03-${"A".repeat(48)}`;
+    writeFileSync(promptPath, `# Demo prompt\n\nMy API key is ${fakeKey}\n`, "utf8");
+
+    const configPath = resolveConfigPath(machine.vaultDir);
+    const config = await loadConfig(configPath);
+    config.security.secretScan = "off";
+    await writeConfig(configPath, config);
+    runGit(["commit", "-am", "config: scan off"], machine.vaultDir);
+    runGit(["push", "origin", "main"], machine.vaultDir);
+
+    const result = await pushMod.performPush({ agent: "copilot" });
+    expect(result.fatal).toBe(false);
+    expect(result.pushed).toBeGreaterThan(0);
+  });
+
+  test("strict mode flags a JWT that standard mode lets through", async () => {
+    mkdirSync(mutableCopilotPaths.promptsDir, { recursive: true });
+    const promptPath = join(mutableCopilotPaths.promptsDir, "jwt.prompt.md");
+    const jwt = `eyJ${"a".repeat(20)}.eyJ${"b".repeat(20)}.${"c".repeat(20)}`;
+    writeFileSync(promptPath, `# Demo\n\ntoken ${jwt}\n`, "utf8");
+
+    // standard: a JWT is not a flagged pattern → push succeeds.
+    const standard = await pushMod.performPush({ agent: "copilot" });
+    expect(standard.fatal).toBe(false);
+
+    // strict: JWT detection turns on → the same body now aborts the push.
+    const configPath = resolveConfigPath(machine.vaultDir);
+    const config = await loadConfig(configPath);
+    config.security.secretScan = "strict";
+    await writeConfig(configPath, config);
+    runGit(["commit", "-am", "config: strict"], machine.vaultDir);
+    runGit(["push", "origin", "main"], machine.vaultDir);
+
+    const strict = await pushMod.performPush({ agent: "copilot" });
+    expect(strict.fatal).toBe(true);
+    expect(strict.errors.some((e) => e.includes("jwt"))).toBe(true);
+  });
+
+  test("allowSecretValues lets an embedded, exempted credential through the gate", async () => {
+    mkdirSync(mutableCopilotPaths.promptsDir, { recursive: true });
+    const promptPath = join(mutableCopilotPaths.promptsDir, "allow.prompt.md");
+    const key = `sk-ant-api03-${"A".repeat(48)}`;
+    writeFileSync(promptPath, `# Demo\n\nMy key is ${key} in a sentence.\n`, "utf8");
+
+    const configPath = resolveConfigPath(machine.vaultDir);
+    const config = await loadConfig(configPath);
+    config.security.allowSecretValues = [key];
+    await writeConfig(configPath, config);
+    runGit(["commit", "-am", "config: allow key"], machine.vaultDir);
+    runGit(["push", "origin", "main"], machine.vaultDir);
+
+    const result = await pushMod.performPush({ agent: "copilot" });
+    expect(result.fatal).toBe(false);
+    expect(result.pushed).toBeGreaterThan(0);
   });
 
   test("vaultPaths allowlist skips the secret scan for unselected files", async () => {

@@ -86,14 +86,11 @@ export const AgentSyncConfigSchema = z.object({
       })
       .default({ syncPlugins: false }),
   ),
-  // Secret-handling policy. Optional with safe defaults so existing
-  // agentsync.toml files validate unchanged. The schema is not `.strict()`, so
-  // an older binary that predates this section ignores it on load rather than
-  // failing — adding the section needs no vault version bump.
-  //
-  // NOTE: this section is the configuration surface only. The push-time secret
-  // scanner reads these fields in a follow-up change; until then the values are
-  // recorded but not yet enforced (the scan runs with its built-in defaults).
+  // Secret-handling policy honoured by the push-time secret scanner and the
+  // JSON redactor (`src/core/sanitizer.ts`, resolved via `securityToPolicy`).
+  // Optional with safe defaults so existing agentsync.toml files validate
+  // unchanged. The schema is not `.strict()`, so an older binary that predates
+  // this section ignores it on load rather than failing — no version bump.
   security: z
     .object({
       // How the push-time secret scan behaves:

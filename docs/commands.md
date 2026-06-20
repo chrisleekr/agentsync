@@ -346,18 +346,23 @@ agentsync config set security.allowSecretValues '["AKIA-not-a-real-key"]'
 | `sync.debounceMs` | integer 50–10000 | Daemon quiet-window before an auto-push. |
 | `sync.autoPush` | boolean | Whether the daemon auto-pushes on change. |
 | `claudePlugins.syncPlugins` | boolean | Record the Claude plugin reinstall manifest on push. |
-| `security.secretScan` | `standard`\|`strict`\|`off` | Push-time secret-scan mode (see note). |
-| `security.allowSecretValues` | string[] (JSON) | Literal values exempt from secret detection and base64 redaction (see note). |
-| `security.redactBase64Values` | boolean | Replace long base64-looking JSON values with a redaction placeholder (see note). |
+| `security.secretScan` | `standard`\|`strict`\|`off` | Push-time secret-scan mode. `standard` = built-in credential patterns; `strict` also flags JWTs; `off` disables the artefact-body scan. |
+| `security.allowSecretValues` | string[] (JSON) | Literal values exempt from secret detection and base64 redaction. |
+| `security.redactBase64Values` | boolean | When `true` (default), redact long base64-looking JSON values; set `false` if a config legitimately stores base64 that must round-trip. |
 
-> **`security.*` are recorded but not yet enforced.** This release stores the
-> policy in `agentsync.toml`; the push-time secret scanner starts honouring
-> `secretScan`, `allowSecretValues`, and `redactBase64Values` in a follow-up
-> change. Until then the scan runs with its built-in defaults regardless of
-> these values. Note `agentsync.toml` is committed in **plaintext** (only
-> artefacts are encrypted), so `allowSecretValues` is for exempting legitimate
+> **What the secret scan is — and is not.** It matches a fixed set of
+> high-precision **credential formats** (vendor API-key prefixes, AWS/GitHub/GitLab/Slack/Google
+> tokens, age identities, PEM private-key headers; `strict` adds JWTs). It is
+> **not** a general secret scanner — a plain password, a bespoke token, or a
+> connection string with no recognised shape passes through. Encryption is the
+> real protection; the scan only stops well-known credentials from entering git
+> history. `off` disables the artefact-body scan, but **skill-bundle interiors
+> are always scanned at `standard`** as a fail-safe. `agentsync.toml` itself is
+> committed in **plaintext**, so `allowSecretValues` is for exempting legitimate
 > high-entropy *non-secret* values — never paste a real credential there.
-> `config set` refuses a recognised credential in any other value.
+> `config set` refuses to store a recognised credential in any key other than
+> `security.allowSecretValues`.
+> See [Push aborts because secrets were detected](operations.md#push-aborts-because-secrets-were-detected).
 
 **Outcome**: `list` and `get` are read-only. `set` validates the new value against the full config schema (so an out-of-range debounce or an invalid enum is rejected before anything is written), then — because `agentsync.toml` is shared across machines — reconciles fast-forward, commits, and pushes the change, exactly like `key add`.
 

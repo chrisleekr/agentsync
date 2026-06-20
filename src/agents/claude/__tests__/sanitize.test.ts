@@ -57,4 +57,25 @@ describe("claude-sanitize", () => {
     };
     expect(out.hooks.PreToolUse[0]?.command).toBe(`${home}/runner`);
   });
+
+  // ─── Secret policy threading ──────────────────────────────────────────────
+  // Proves the adapter honours the SecretPolicy it is handed, not just the
+  // default — guards against an adapter silently dropping the policy argument.
+
+  test("sanitizeClaudeMcp redacts a secret value under the default policy", () => {
+    const raw = JSON.stringify({ mcpServers: { x: { env: { TOKEN: `ghp_${"a".repeat(36)}` } } } });
+    const out = JSON.parse(sanitizeClaudeMcp(raw, "").value) as {
+      mcpServers: { x: { env: { TOKEN: string } } };
+    };
+    expect(out.mcpServers.x.env.TOKEN).toContain("REDACTED");
+  });
+
+  test("sanitizeClaudeMcp leaves the secret unredacted when policy mode is off", () => {
+    const token = `ghp_${"a".repeat(36)}`;
+    const raw = JSON.stringify({ mcpServers: { x: { env: { TOKEN: token } } } });
+    const out = JSON.parse(
+      sanitizeClaudeMcp(raw, "", { mode: "off", allow: [], redactBase64: true }).value,
+    ) as { mcpServers: { x: { env: { TOKEN: string } } } };
+    expect(out.mcpServers.x.env.TOKEN).toBe(token);
+  });
 });

@@ -58,6 +58,12 @@ function globToRegex(glob: string): RegExp {
 
 const NEVER_SYNC_REGEXPS: RegExp[] = NEVER_SYNC_PATTERNS.map((p) => globToRegex(p));
 
+// The generic base64 whole-value catch-all. Broad by nature, so it is the one
+// redaction pattern gated behind `redactBase64Values`: a config can disable it
+// when it legitimately stores long base64 values that must round-trip
+// unchanged. Pulled out as a named const so it can be filtered out by policy.
+const BASE64_VALUE_PATTERN = /^[A-Za-z0-9+/]{40,}={0,2}$/;
+
 // Anchored patterns: used by `redactSecretLiterals` to replace an entire JSON
 // string value with the redaction placeholder. The generic base64 catch-all
 // only belongs here, since unanchored it would false-positive on long
@@ -73,7 +79,7 @@ const WHOLE_VALUE_SECRET_PATTERNS = [
   // hyphens in the prefix mean the base64 catch-all below can never match it,
   // so this anchored entry is required to redact a key pasted as a JSON value.
   /^AGE-SECRET-KEY-1[A-Z0-9]{58}$/,
-  /^[A-Za-z0-9+/]{40,}={0,2}$/,
+  BASE64_VALUE_PATTERN,
 ];
 
 // Unanchored, high-precision credential prefixes. Used by `scanForSecrets`
@@ -99,7 +105,56 @@ export const EMBEDDED_SECRET_PATTERNS: ReadonlyArray<{ name: string; pattern: Re
   // native X25519 key bech32-encodes to a fixed 58-char body; the 16-char
   // prefix makes false positives on prose effectively impossible.
   { name: "age-secret-key", pattern: /AGE-SECRET-KEY-1[A-Z0-9]{58}/ },
+  // A PEM private-key header is never legitimate in synced agent config, and
+  // the fixed banner makes a false positive on prose impossible — so it is
+  // scanned in every mode, not gated behind `strict`.
+  { name: "private-key-pem", pattern: /-----BEGIN (?:[A-Z0-9]+ )?PRIVATE KEY-----/ },
 ];
+
+// Additional patterns scanned only in `strict` mode. A JWT legitimately appears
+// in API examples and docs, so its higher false-positive rate is opt-in rather
+// than aborting every push that mentions one.
+export const STRICT_SECRET_PATTERNS: ReadonlyArray<{ name: string; pattern: RegExp }> = [
+  {
+    name: "jwt",
+    pattern: /eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/,
+  },
+];
+
+/** Secret-handling policy resolved from the vault's [security] config section. */
+export interface SecretPolicy {
+  /** `standard` (built-in patterns), `strict` (+ JWT), or `off` (no scan/redact). */
+  mode: "standard" | "strict" | "off";
+  /** Literal values exempt from both detection and redaction. */
+  allow: readonly string[];
+  /** When false, the generic base64 whole-value redaction is skipped. */
+  redactBase64: boolean;
+}
+
+/**
+ * The behaviour when no [security] config is supplied: the historical default.
+ * Frozen so the shared instance can never be mutated (e.g. a stray push to
+ * `allow`) and contaminate every other caller in a long-lived daemon process.
+ */
+export const DEFAULT_SECRET_POLICY: SecretPolicy = Object.freeze({
+  mode: "standard",
+  allow: Object.freeze([]) as readonly string[],
+  redactBase64: true,
+});
+
+/** Resolve a {@link SecretPolicy} from the optional [security] config section. */
+export function securityToPolicy(security?: {
+  secretScan?: "standard" | "strict" | "off";
+  allowSecretValues?: readonly string[];
+  redactBase64Values?: boolean;
+}): SecretPolicy {
+  if (!security) return DEFAULT_SECRET_POLICY;
+  return {
+    mode: security.secretScan ?? "standard",
+    allow: security.allowSecretValues ?? [],
+    redactBase64: security.redactBase64Values ?? true,
+  };
+}
 
 export interface RedactionResult<T> {
   value: T;
@@ -116,8 +171,12 @@ export function shouldNeverSync(path: string): boolean {
   return NEVER_SYNC_REGEXPS.some((re) => re.test(normalized));
 }
 
-function looksLikeSecretLiteral(value: string): boolean {
-  return WHOLE_VALUE_SECRET_PATTERNS.some((pattern) => pattern.test(value));
+function looksLikeSecretLiteral(value: string, policy: SecretPolicy): boolean {
+  if (policy.allow.includes(value)) return false;
+  const patterns = policy.redactBase64
+    ? WHOLE_VALUE_SECRET_PATTERNS
+    : WHOLE_VALUE_SECRET_PATTERNS.filter((pattern) => pattern !== BASE64_VALUE_PATTERN);
+  return patterns.some((pattern) => pattern.test(value));
 }
 
 /**
@@ -133,11 +192,28 @@ function looksLikeSecretLiteral(value: string): boolean {
  * detects, the push aborts, the user removes the secret. Nothing is
  * actually redacted in this path.
  */
-export function scanForSecrets(text: string, sourcePath: string): string[] {
+export function scanForSecrets(
+  text: string,
+  sourcePath: string,
+  policy: SecretPolicy = DEFAULT_SECRET_POLICY,
+): string[] {
+  if (policy.mode === "off") return [];
+  const patterns =
+    policy.mode === "strict"
+      ? [...EMBEDDED_SECRET_PATTERNS, ...STRICT_SECRET_PATTERNS]
+      : EMBEDDED_SECRET_PATTERNS;
   const warnings: string[] = [];
-  for (const { name, pattern } of EMBEDDED_SECRET_PATTERNS) {
-    if (pattern.test(text)) {
-      warnings.push(`Detected literal secret (${name}) in ${sourcePath}`);
+  for (const { name, pattern } of patterns) {
+    // Iterate EVERY occurrence (a global clone of the pattern) and exempt only
+    // the exact allow-listed literals. A non-global `match` would return just
+    // the FIRST occurrence, so an allow-listed decoy earlier in the text could
+    // mask a real secret of the same shape later — a fail-open leak.
+    const global = pattern.global ? pattern : new RegExp(pattern.source, `${pattern.flags}g`);
+    for (const m of text.matchAll(global)) {
+      if (!policy.allow.includes(m[0])) {
+        warnings.push(`Detected literal secret (${name}) in ${sourcePath}`);
+        break; // one warning per pattern is enough to abort the push
+      }
     }
   }
   return warnings;
@@ -147,9 +223,17 @@ export function scanForSecrets(text: string, sourcePath: string): string[] {
 export function redactSecretLiterals(
   input: unknown,
   fieldName = "value",
+  policy: SecretPolicy = DEFAULT_SECRET_POLICY,
 ): RedactionResult<unknown> {
+  // `off` disables redaction entirely — the input is returned unchanged and BY
+  // REFERENCE (no clone). Every in-repo caller re-serialises the result, so the
+  // alias never escapes; a future caller that mutates `.value` must clone first.
+  if (policy.mode === "off") {
+    return { value: input, warnings: [] };
+  }
+
   if (typeof input === "string") {
-    if (looksLikeSecretLiteral(input)) {
+    if (looksLikeSecretLiteral(input, policy)) {
       return {
         value: `$AGENTSYNC_REDACTED_${fieldName.toUpperCase()}`,
         warnings: [`Detected literal secret for field ${fieldName}`],
@@ -161,7 +245,7 @@ export function redactSecretLiterals(
   if (Array.isArray(input)) {
     const warnings: string[] = [];
     const value = input.map((item, index) => {
-      const nested = redactSecretLiterals(item, `${fieldName}_${index}`);
+      const nested = redactSecretLiterals(item, `${fieldName}_${index}`, policy);
       warnings.push(...nested.warnings);
       return nested.value;
     });
@@ -173,7 +257,7 @@ export function redactSecretLiterals(
     const result: Record<string, unknown> = {};
 
     for (const [key, value] of Object.entries(input)) {
-      const nested = redactSecretLiterals(value, key);
+      const nested = redactSecretLiterals(value, key, policy);
       warnings.push(...nested.warnings);
       result[key] = nested.value;
     }
@@ -193,10 +277,11 @@ export function sanitizeAndNormalizeJson(
   raw: string,
   fieldName: string,
   home: string = homedir(),
+  policy: SecretPolicy = DEFAULT_SECRET_POLICY,
 ): RedactionResult<string> {
   const parsed: unknown = JSON.parse(raw);
   const normalized = normalizeForVault(parsed, home);
-  const redacted = redactSecretLiterals(normalized, fieldName);
+  const redacted = redactSecretLiterals(normalized, fieldName, policy);
   return {
     value: `${JSON.stringify(redacted.value, null, 2)}\n`,
     warnings: redacted.warnings,

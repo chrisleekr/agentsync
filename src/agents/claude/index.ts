@@ -2,6 +2,7 @@ import { homedir } from "node:os";
 import { AgentPaths } from "../../config/paths";
 import type { AgentSyncConfig } from "../../config/schema";
 import { denormalizeFromVault } from "../../core/path-portability";
+import { securityToPolicy } from "../../core/sanitizer";
 import {
   type ApplyPlan,
   defineFileArtifact,
@@ -28,6 +29,7 @@ export type ClaudeSnapshotResult = SnapshotResult;
 /** Collect Claude files that are safe to store in the encrypted vault. */
 export async function snapshotClaude(config: AgentSyncConfig): Promise<SnapshotResult> {
   const syncPlugins = config.claudePlugins?.syncPlugins ?? false;
+  const policy = securityToPolicy(config.security);
   const artifacts: SnapshotArtifact[] = [];
   const warnings: string[] = [];
 
@@ -40,7 +42,7 @@ export async function snapshotClaude(config: AgentSyncConfig): Promise<SnapshotR
 
   const settingsJson = await readIfExists(AgentPaths.claude.settingsJson);
   if (settingsJson !== null) {
-    const hooks = sanitizeClaudeHooks(settingsJson, homedir());
+    const hooks = sanitizeClaudeHooks(settingsJson, homedir(), policy);
     artifacts.push(
       collect(hooks, AgentPaths.claude.settingsJson, "claude/settings.hooks.json.age"),
     );
@@ -49,7 +51,7 @@ export async function snapshotClaude(config: AgentSyncConfig): Promise<SnapshotR
 
   const mcpJson = await readIfExists(AgentPaths.claude.mcpJson);
   if (mcpJson !== null) {
-    const mcp = sanitizeClaudeMcp(mcpJson, homedir());
+    const mcp = sanitizeClaudeMcp(mcpJson, homedir(), policy);
     artifacts.push(collect(mcp, AgentPaths.claude.mcpJson, "claude/claude.json.age"));
     warnings.push(...mcp.warnings);
   }

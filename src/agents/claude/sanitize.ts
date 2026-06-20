@@ -13,7 +13,12 @@
 
 import { homedir } from "node:os";
 import { normalizeForVault } from "../../core/path-portability";
-import { type RedactionResult, redactSecretLiterals } from "../../core/sanitizer";
+import {
+  DEFAULT_SECRET_POLICY,
+  type RedactionResult,
+  redactSecretLiterals,
+  type SecretPolicy,
+} from "../../core/sanitizer";
 
 /**
  * Keep only Claude hook settings and redact any embedded literal secrets.
@@ -24,11 +29,12 @@ import { type RedactionResult, redactSecretLiterals } from "../../core/sanitizer
 export function sanitizeClaudeHooks(
   rawSettingsJson: string,
   home: string = homedir(),
+  policy: SecretPolicy = DEFAULT_SECRET_POLICY,
 ): RedactionResult<string> {
   const parsed = JSON.parse(rawSettingsJson) as Record<string, unknown>;
   const hooksOnly = { hooks: parsed.hooks ?? {} };
   const normalized = normalizeForVault(hooksOnly, home);
-  const redacted = redactSecretLiterals(normalized, "hooks");
+  const redacted = redactSecretLiterals(normalized, "hooks", policy);
   return {
     value: `${JSON.stringify(redacted.value, null, 2)}\n`,
     warnings: redacted.warnings,
@@ -42,11 +48,12 @@ export function sanitizeClaudeHooks(
 export function sanitizeClaudeMcp(
   rawClaudeJson: string,
   home: string = homedir(),
+  policy: SecretPolicy = DEFAULT_SECRET_POLICY,
 ): RedactionResult<string> {
   const parsed = JSON.parse(rawClaudeJson) as Record<string, unknown>;
   const mcpOnly = { mcpServers: parsed.mcpServers ?? {} };
   const normalized = normalizeForVault(mcpOnly, home);
-  const redacted = redactSecretLiterals(normalized, "mcpServers");
+  const redacted = redactSecretLiterals(normalized, "mcpServers", policy);
   return {
     value: `${JSON.stringify(redacted.value, null, 2)}\n`,
     warnings: redacted.warnings,
