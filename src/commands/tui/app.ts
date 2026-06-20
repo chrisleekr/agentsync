@@ -603,7 +603,7 @@ function renderHelp(renderer: CliRenderer, host: BoxRenderable, state: AppState)
   const help = [
     "",
     "  Global keys",
-    "    1 – 5         Jump to tab",
+    "    1 – 6         Jump to tab",
     "    Tab / Sh+Tab  Cycle tabs",
     "    p             Push vault (direct)",
     "    r             Refresh current tab",
