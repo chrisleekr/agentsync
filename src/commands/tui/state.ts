@@ -2,7 +2,7 @@ import type { DaemonStatus } from "../../config/schema";
 import { detectInstallMethod, type InstallMethod } from "../../core/version-check";
 import type { SyncRow } from "../status";
 
-export const TAB_IDS = ["dashboard", "sync", "machines", "migrate", "activity"] as const;
+export const TAB_IDS = ["dashboard", "sync", "machines", "migrate", "activity", "config"] as const;
 export type TabId = (typeof TAB_IDS)[number];
 
 export const AGENTS = ["claude", "cursor", "codex", "copilot", "vscode"] as const;
@@ -36,6 +36,8 @@ export type OpKind =
   | "vault-rm"
   | "sync-load"
   | "machines-load"
+  | "config-load"
+  | "config-set"
   | "upgrade";
 
 /** Background update-check result. Populated once the TUI's startup check
@@ -212,6 +214,32 @@ export interface MachinesSlice {
   lastCopy: { machine: string; ok: boolean; message: string } | null;
 }
 
+/** How a config value is edited in the Config tab. */
+export type ConfigRowKind = "boolean" | "enum" | "number" | "readonly";
+
+/** One editable (or read-only) config row in the Config tab. */
+export interface ConfigRow {
+  /** Dotted config key (e.g. `agents.vscode`). */
+  key: string;
+  value: unknown;
+  kind: ConfigRowKind;
+  /** Allowed values for an enum row (e.g. secretScan modes). */
+  options?: readonly string[];
+}
+
+/** Config tab — view and change vault config through `performConfigSet`. */
+export interface ConfigSlice {
+  phase: LoadablePhase;
+  /** Settable rows, in display order. Read-only rows render but the cursor skips edits. */
+  rows: ConfigRow[];
+  /** Recipients who can decrypt the vault, surfaced read-only (`key list`). */
+  recipients: { name: string; recipient: string; isSelf: boolean }[];
+  cursor: number;
+  error: string | null;
+  /** Result of the most recent set, kept visible until the next one. */
+  lastResult: { ok: boolean; message: string } | null;
+}
+
 export interface AppState {
   activeTab: TabId;
   daemon: DaemonState;
@@ -224,6 +252,7 @@ export interface AppState {
   sync: SyncSlice;
   machines: MachinesSlice;
   migrate: MigrateSlice;
+  config: ConfigSlice;
   inFlight: Record<string, OperationStatus>;
   opSeq: number;
   update: UpdateInfo;
@@ -278,6 +307,14 @@ export function createInitialState(): AppState {
       preview: "",
       previewKey: null,
       appliedSignature: null,
+    },
+    config: {
+      phase: "idle",
+      rows: [],
+      recipients: [],
+      cursor: 0,
+      error: null,
+      lastResult: null,
     },
     inFlight: {},
     opSeq: 0,

@@ -73,7 +73,7 @@ The full quickstart, command reference, and architecture model live at the docum
 
 | Command | Why you run it |
 |---|---|
-| *(bare)* / `tui` | Open the interactive TUI: vault browser, per-agent local view, push, browse machines and copy, and migrate. |
+| *(bare)* / `tui` | Open the interactive TUI: vault browser, per-agent local view, push, browse machines and copy, migrate, and a Config tab to change settings. |
 | `init` | Create the local vault workspace, machine key, config, and initial remote state. |
 | `push` | Snapshot local agent configs, sanitise secrets, encrypt artefacts, and push to Git. |
 | `copy` | Restore an artefact (or subdir) from a machine's vault namespace to local disk (`copy self …` for your own). |
