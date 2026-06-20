@@ -170,10 +170,21 @@ export async function performConfigSet(key: string, rawValue: string): Promise<C
     // PEM private key must not land in plaintext config even as an "allowed"
     // value, or it would sail past the always-block guarantee at push time.
     // `off` mode scans exactly the catastrophic tier.
-    const leaks =
-      key === SECRET_EXEMPT_KEY
-        ? scanForSecrets(rawValue, key, { mode: "off", allow: [], redactBase64: true })
-        : scanForSecrets(rawValue, key);
+    //
+    // Scan the DECODED value, not the raw string: `parseScalar` is what gets
+    // persisted, so a JSON-escaped form (e.g. "AGE-SECRET-KEY-…") would
+    // pass a raw-string scan yet decode into a real secret on disk.
+    const parsedValue = parseScalar(rawValue);
+    const exemptKey = key === SECRET_EXEMPT_KEY;
+    const scanTargets =
+      exemptKey && Array.isArray(parsedValue)
+        ? parsedValue.filter((v): v is string => typeof v === "string")
+        : [typeof parsedValue === "string" ? parsedValue : rawValue];
+    const leaks = scanTargets.flatMap((value) =>
+      exemptKey
+        ? scanForSecrets(value, key, { mode: "off", allow: [], redactBase64: true })
+        : scanForSecrets(value, key),
+    );
     if (leaks.length > 0) {
       return {
         status: "invalid-value",
@@ -183,7 +194,7 @@ export async function performConfigSet(key: string, rawValue: string): Promise<C
     }
 
     const next = structuredClone(refreshed);
-    setByPath(next as unknown as Json, key, parseScalar(rawValue));
+    setByPath(next as unknown as Json, key, parsedValue);
 
     const validated = AgentSyncConfigSchema.safeParse(next);
     if (!validated.success) {

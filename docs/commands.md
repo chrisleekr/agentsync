@@ -377,7 +377,7 @@ agentsync config set security.allowSecretValues '["AKIA-not-a-real-key"]'
 | `sync.autoPush` | boolean | Whether the daemon auto-pushes on change. |
 | `claudePlugins.syncPlugins` | boolean | Record the Claude plugin reinstall manifest on push. |
 | `security.secretScan` | `standard`\|`strict`\|`off` | Push-time secret-scan mode. `standard` = built-in credential patterns; `strict` also flags JWTs; `off` waives the ordinary API-token patterns (the catastrophic tier — age key, PEM private keys — still blocks in every mode). |
-| `security.allowSecretValues` | string[] (JSON) | Literal values exempt from secret detection and base64 redaction. |
+| `security.allowSecretValues` | string[] (JSON) | Literal values exempt from ordinary-token detection and base64 redaction. Catastrophic-tier values (age key, PEM private keys) are never exemptible. |
 | `security.redactBase64Values` | boolean | When `true` (default), redact long base64-looking JSON values; set `false` if a config legitimately stores base64 that must round-trip. |
 
 > **What the secret scan is — and is not.** It matches a fixed set of
