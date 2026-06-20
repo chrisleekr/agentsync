@@ -318,6 +318,33 @@ describe("apply* functions", () => {
     expect((parsed.mcpServers as Record<string, unknown>).srv).toBeDefined();
   });
 
+  test("applyClaudeMcp keeps a local secret when the vault ships a placeholder", async () => {
+    await writeFile(
+      testClaudePaths.mcpJson,
+      JSON.stringify({
+        mcpServers: {
+          foo: { command: "x", env: { TOKEN: "sk-real-local" } },
+          localOnly: { command: "z" },
+        },
+      }),
+      "utf8",
+    );
+    // `redact` mode ships a $AGENTSYNC_REDACTED_ placeholder for foo.env.TOKEN.
+    await claudeModule.applyClaudeMcp(
+      JSON.stringify({
+        mcpServers: { foo: { command: "x", env: { TOKEN: "$AGENTSYNC_REDACTED_TOKEN" } } },
+      }),
+    );
+    const parsed = JSON.parse(await Bun.file(testClaudePaths.mcpJson).text()) as Record<
+      string,
+      { foo: { env: { TOKEN: string } }; localOnly?: unknown }
+    >;
+    const mcp = parsed.mcpServers;
+    expect(mcp.foo.env.TOKEN).toBe("sk-real-local"); // local secret preserved
+    expect(mcp.localOnly).toBeDefined(); // local-only server survives
+    expect(JSON.stringify(parsed)).not.toContain("AGENTSYNC_REDACTED");
+  });
+
   test("applyClaudeCommand writes a command file", async () => {
     await claudeModule.applyClaudeCommand("review.md", "# Code review command");
     const content = await Bun.file(join(testClaudePaths.commandsDir, "review.md")).text();

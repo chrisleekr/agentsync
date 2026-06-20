@@ -142,6 +142,20 @@ describe("applyVsCodeMcp", () => {
     await applyVsCodeMcp(content);
     expect(await Bun.file(testVsCodePaths.mcpJson).text()).toBe(content);
   });
+
+  test("keeps a local secret when the vault ships a placeholder", async () => {
+    const { applyVsCodeMcp } = vsCodeModule;
+    await Bun.write(
+      testVsCodePaths.mcpJson,
+      JSON.stringify({ servers: { foo: { env: { KEY: "sk-real-local" } } } }),
+    );
+    await applyVsCodeMcp(
+      `${JSON.stringify({ servers: { foo: { env: { KEY: "$AGENTSYNC_REDACTED_KEY" } } } }, null, 2)}\n`,
+    );
+    const written = await Bun.file(testVsCodePaths.mcpJson).text();
+    expect(written).toContain("sk-real-local"); // local secret preserved
+    expect(written).not.toContain("AGENTSYNC_REDACTED");
+  });
 });
 
 // ── dryRun vault apply ─────────────────────────────────────────────────

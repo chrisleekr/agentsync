@@ -58,10 +58,18 @@ bun run check:act     # run CI workflow locally via nektos/act
 
 ## Conventions and gotchas
 
-- **Encryption is non-negotiable**: every artifact written to the vault must
-  go through `src/core/encryptor.ts`. `src/core/sanitizer.ts` enforces
-  hard never-sync patterns and aborts the push when literal secrets are
-  detected — do not loosen these without a documented reason.
+- **Encryption is non-negotiable; the secret policy is tiered**: every
+  artifact written to the vault goes through `src/core/encryptor.ts`.
+  `src/core/sanitizer.ts` enforces hard never-sync patterns plus a
+  **catastrophic tier** (`ALWAYS_BLOCK_PATTERNS` — the vault's own age key and
+  PEM private keys) that aborts the push in EVERY `secretScan` mode (`off` and
+  `redact` included) and is never exemptible via `allowSecretValues`. Ordinary
+  API tokens follow the mode: `standard`/`strict` abort; `redact` replaces them
+  in structured config with a `$AGENTSYNC_REDACTED_<FIELD>` placeholder and
+  pushes (a secret in prose still aborts); `off` waives them. On the apply side,
+  redact placeholders are reconciled by `mergePreservingSecrets`
+  (`src/core/secret-merge.ts`) — a placeholder never overwrites a real local
+  value. Do not loosen these without a documented reason.
 - **Per-machine vault layout (v2)**: every artifact lives under
   `machines/<name>/<agent>/…`, composed only through `machineVaultRoot` in
   `src/config/paths.ts` (never hardcode the `machines/` segment). Each machine

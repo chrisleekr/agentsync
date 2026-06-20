@@ -10,7 +10,23 @@ import type { Store } from "../store";
 // Sections the Config tab lets you edit. Mirrors SETTABLE_PREFIXES in
 // commands/config.ts; remote/version/recipients are not editable here.
 const SETTABLE_PREFIXES = ["agents.", "sync.", "claudePlugins.", "security."];
-const SECRET_SCAN_OPTIONS = ["standard", "strict", "off"] as const;
+const SECRET_SCAN_OPTIONS = ["standard", "strict", "redact", "off"] as const;
+
+/** One-line consequence of each secretScan mode, shown in the explainer panel. */
+export function secretScanExplainer(value: unknown): string {
+  switch (String(value)) {
+    case "standard":
+      return "Built-in credential patterns. A literal key or token blocks the push — you remove it and retry. Nothing secret-shaped enters the vault.";
+    case "strict":
+      return "standard + JWT detection. Higher false-positive rate; blocks the push on any match.";
+    case "redact":
+      return "API keys in JSON/TOML config are replaced with a $AGENTSYNC_REDACTED_ placeholder and pushed. copy keeps each machine's own real value; a fresh machine shows the placeholder to fill in. Secrets in prose still block.";
+    case "off":
+      return "No redaction — API keys are encrypted and pushed as-is. Protection is encryption ALONE: every recipient and any lost device key can read them.";
+    default:
+      return "";
+  }
+}
 const DEBOUNCE_STEP = 50;
 const DEBOUNCE_MIN = 50;
 const DEBOUNCE_MAX = 10_000;
@@ -123,6 +139,23 @@ export function onConfigKey(key: KeyEvent, store: Store): boolean {
   const c = store.getState().config;
   if (c.phase !== "ready" || c.rows.length === 0) return false;
 
+  // The → off confirmation modal is blocking: it consumes every key until the
+  // user answers y (apply) or n/esc (cancel).
+  if (c.pendingSecretScan !== null) {
+    if (key.name === "y") {
+      const target = c.pendingSecretScan;
+      store.dispatch((d) => {
+        d.config.pendingSecretScan = null;
+      });
+      setConfig(store, "security.secretScan", target);
+    } else if (key.name === "n" || key.name === "escape") {
+      store.dispatch((d) => {
+        d.config.pendingSecretScan = null;
+      });
+    }
+    return true;
+  }
+
   if (key.name === "down") {
     store.dispatch((d) => {
       d.config.cursor = Math.min(d.config.cursor + 1, d.config.rows.length - 1);
@@ -150,7 +183,17 @@ export function onConfigKey(key: KeyEvent, store: Store): boolean {
     const found = row.options.indexOf(String(row.value));
     const idx = found === -1 ? (dir === 1 ? -1 : 0) : found;
     const next = row.options[(idx + dir + row.options.length) % row.options.length];
-    if (next !== undefined && next !== row.value) setConfig(store, row.key, next);
+    if (next !== undefined && next !== row.value) {
+      // The → off transition pushes live secrets into the vault, so it gates
+      // behind a y/n confirm. Every other value applies immediately.
+      if (row.key === "security.secretScan" && next === "off") {
+        store.dispatch((d) => {
+          d.config.pendingSecretScan = next;
+        });
+      } else {
+        setConfig(store, row.key, next);
+      }
+    }
     return true;
   }
   if ((key.name === "left" || key.name === "right") && row.kind === "number") {
@@ -226,6 +269,46 @@ export function renderConfig(renderer: CliRenderer, host: BoxRenderable, state: 
   listBox.add(new TextRenderable(renderer, { content: body, fg: "#d8dee9", bg: "#11151a" }));
   wrapper.add(listBox);
 
+  const cursorRow = c.phase === "ready" ? c.rows[c.cursor] : undefined;
+
+  // Context panel: the dangerous → off confirm, or a "what this means" line for
+  // the secretScan mode under the cursor. Nothing for ordinary rows.
+  if (c.pendingSecretScan !== null) {
+    const confirm = new BoxRenderable(renderer, {
+      width: "100%",
+      border: true,
+      borderColor: "#bf616a",
+      borderStyle: "single",
+      title: " Switch secretScan → off? ",
+      backgroundColor: "#11151a",
+    });
+    confirm.add(
+      new TextRenderable(renderer, {
+        content: `\n  ${secretScanExplainer("off")}\n  Age keys & PEM private keys are still refused.\n\n  [y] confirm    [n] cancel`,
+        fg: "#e5c07b",
+        bg: "#11151a",
+      }),
+    );
+    wrapper.add(confirm);
+  } else if (cursorRow?.key === "security.secretScan") {
+    const explain = new BoxRenderable(renderer, {
+      width: "100%",
+      border: true,
+      borderColor: "#3b4252",
+      borderStyle: "single",
+      title: " What this means ",
+      backgroundColor: "#11151a",
+    });
+    explain.add(
+      new TextRenderable(renderer, {
+        content: `\n  ${secretScanExplainer(cursorRow.value)}`,
+        fg: "#a9b3c0",
+        bg: "#11151a",
+      }),
+    );
+    wrapper.add(explain);
+  }
+
   // Recipients — who can decrypt the vault (read-only; `key list`).
   const recipientsBody =
     c.recipients.length > 0
@@ -247,10 +330,11 @@ export function renderConfig(renderer: CliRenderer, host: BoxRenderable, state: 
   );
   wrapper.add(recipientsBox);
 
-  const cursorRow = c.phase === "ready" ? c.rows[c.cursor] : undefined;
-  const hint = c.lastResult
-    ? `  last: ${c.lastResult.ok ? "✓" : "✗"} ${c.lastResult.message}`
-    : `  ↑↓ move • ${editHintFor(cursorRow)} • changes reconcile + push to the vault`;
+  const hint = c.pendingSecretScan
+    ? "  press y to confirm switching to off, or n to cancel"
+    : c.lastResult
+      ? `  last: ${c.lastResult.ok ? "✓" : "✗"} ${c.lastResult.message}`
+      : `  ↑↓ move • ${editHintFor(cursorRow)} • changes reconcile + push to the vault`;
   wrapper.add(
     new TextRenderable(renderer, {
       height: 2,

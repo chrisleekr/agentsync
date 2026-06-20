@@ -10,6 +10,7 @@ import {
   type SecretPolicy,
   securityToPolicy,
 } from "../../core/sanitizer";
+import { mergePreservingSecrets } from "../../core/secret-merge";
 import {
   type ApplyPlan,
   defineFileArtifact,
@@ -144,9 +145,10 @@ export async function applyCodexConfig(content: string): Promise<void> {
     return;
   }
 
-  // Shallow-merge at top level: incoming keys win, local-only keys survive.
-  const merged: TOML.JsonMap = { ...existing, ...incoming };
-  await atomicWrite(AgentPaths.codex.configToml, TOML.stringify(merged));
+  // Deep, placeholder-aware merge: a redacted placeholder (`redact` mode) must
+  // not overwrite a real local value, and nested local-only keys survive.
+  const { merged } = mergePreservingSecrets(existing, incoming);
+  await atomicWrite(AgentPaths.codex.configToml, TOML.stringify(merged as TOML.JsonMap));
 }
 
 /** Restore one Codex rule markdown file from the vault. */

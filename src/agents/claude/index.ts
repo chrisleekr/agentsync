@@ -3,6 +3,7 @@ import { AgentPaths } from "../../config/paths";
 import type { AgentSyncConfig } from "../../config/schema";
 import { denormalizeFromVault } from "../../core/path-portability";
 import { securityToPolicy } from "../../core/sanitizer";
+import { mergePreservingSecrets } from "../../core/secret-merge";
 import {
   type ApplyPlan,
   defineFileArtifact,
@@ -14,6 +15,7 @@ import { collectMarkdownDir, collectSingleFile } from "../_snapshot";
 import {
   atomicWrite,
   collect,
+  getJsoncTopLevelKey,
   readIfExists,
   type SnapshotArtifact,
   type SnapshotResult,
@@ -155,10 +157,15 @@ export async function applyClaudeMcp(claudeJsonContent: string): Promise<void> {
   const incoming = JSON.parse(claudeJsonContent) as Record<string, unknown>;
   // ~/.claude.json is large and JSONC-tolerant. Edit `mcpServers` in place so
   // the rest of Claude's config (and any trailing comma) is left untouched.
-  const mcpServers = denormalizeFromVault(incoming.mcpServers ?? {}, home);
+  const incomingMcp = denormalizeFromVault(incoming.mcpServers ?? {}, home);
+  // Merge onto the local mcpServers: a redacted placeholder (`redact` mode)
+  // must not overwrite a real local key, and local-only servers survive (copy
+  // is additive). With no local file this is just the incoming tree.
+  const existingMcp = existingRaw ? getJsoncTopLevelKey(existingRaw, "mcpServers") : undefined;
+  const { merged } = mergePreservingSecrets(existingMcp ?? {}, incomingMcp);
   await atomicWrite(
     AgentPaths.claude.mcpJson,
-    setJsoncTopLevelKey(existingRaw ?? "", "mcpServers", mcpServers),
+    setJsoncTopLevelKey(existingRaw ?? "", "mcpServers", merged),
   );
 }
 

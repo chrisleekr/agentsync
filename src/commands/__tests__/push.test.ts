@@ -426,6 +426,26 @@ describe("performPush — literal secret embedded in markdown body", () => {
     expect(result.pushed).toBeGreaterThan(0);
   });
 
+  test("redact mode still aborts on a secret in a prose body (nothing to redact)", async () => {
+    // redact only rewrites structured JSON/TOML values; a markdown body has no
+    // field to replace, so the secret-leak boundary must still abort the push.
+    mkdirSync(mutableCopilotPaths.promptsDir, { recursive: true });
+    const promptPath = join(mutableCopilotPaths.promptsDir, "leaky.prompt.md");
+    const fakeKey = `sk-ant-api03-${"A".repeat(48)}`;
+    writeFileSync(promptPath, `# Demo prompt\n\nMy API key is ${fakeKey}\n`, "utf8");
+
+    const configPath = resolveConfigPath(machine.vaultDir);
+    const config = await loadConfig(configPath);
+    config.security.secretScan = "redact";
+    await writeConfig(configPath, config);
+    runGit(["commit", "-am", "config: redact"], machine.vaultDir);
+    runGit(["push", "origin", "main"], machine.vaultDir);
+
+    const result = await pushMod.performPush({ agent: "copilot" });
+    expect(result.fatal).toBe(true);
+    expect(result.errors.some((e) => e.includes("Detected literal secret"))).toBe(true);
+  });
+
   test("strict mode flags a JWT that standard mode lets through", async () => {
     mkdirSync(mutableCopilotPaths.promptsDir, { recursive: true });
     const promptPath = join(mutableCopilotPaths.promptsDir, "jwt.prompt.md");

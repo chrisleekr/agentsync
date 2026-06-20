@@ -232,6 +232,23 @@ describe("apply* functions", () => {
     expect(content).toContain("local_only");
   });
 
+  test("applyCodexConfig keeps a local secret when the vault ships a placeholder", async () => {
+    await writeFile(
+      testCodexPaths.configToml,
+      'model = "gpt-4"\n\n[mcp.foo]\napi_key = "sk-real-local-secret"\n',
+      "utf8",
+    );
+    // `redact` mode ships a $AGENTSYNC_REDACTED_ placeholder instead of the key.
+    await codexModule.applyCodexConfig(
+      'model = "o3"\n\n[mcp.foo]\napi_key = "$AGENTSYNC_REDACTED_API_KEY"\n',
+    );
+
+    const content = await Bun.file(testCodexPaths.configToml).text();
+    expect(content).toContain("o3"); // incoming non-secret wins
+    expect(content).toContain("sk-real-local-secret"); // local secret preserved
+    expect(content).not.toContain("AGENTSYNC_REDACTED"); // placeholder not written
+  });
+
   test("applyCodexRule writes a rule file", async () => {
     await codexModule.applyCodexRule("testing.md", "## Testing rules");
     const content = await Bun.file(join(testCodexPaths.rulesDir, "testing.md")).text();
