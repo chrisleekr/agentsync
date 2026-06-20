@@ -78,7 +78,7 @@ agentsync tui       # explicit alias, same behaviour
 | 3 Machines | The vault's `machines/<name>/` namespaces. Move with `↑`/`↓`; `enter` copies the selected machine's config to this machine (the same `performCopy` core as the CLI; never touches the vault). |
 | 4 Migrate | From / To / Type form (To and Type are multi-select with sub-cursor). Preview is mandatory before Apply enables. |
 | 5 Activity | Session-only ring buffer of TUI actions. |
-| 6 Config | View and change vault config (agents enabled, `sync.*`, `claudePlugins.*`, `security.*`) with `↑`/`↓` to move, `space` to toggle a boolean, `←`/`→` to cycle an enum or adjust a number. Writes go through the same [`config`](#config) core (reconcile + commit + push). Also lists the recipients who can decrypt the vault, read-only. |
+| 6 Config | View and change vault config (agents enabled, `sync.*`, `claudePlugins.*`, `security.*`) with `↑`/`↓` to move, `space` to toggle a boolean, `←`/`→` to cycle an enum or adjust a number. Cycling `security.secretScan` shows a one-line explainer of the selected mode; choosing `off` first prompts a `y`/`n` confirm because it pushes live secrets. Writes go through the same [`config`](#config) core (reconcile + commit + push). Also lists the recipients who can decrypt the vault, read-only. |
 
 **Global keys** (any tab):
 
@@ -376,7 +376,7 @@ agentsync config set security.allowSecretValues '["AKIA-not-a-real-key"]'
 | `sync.debounceMs` | integer 50–10000 | Daemon quiet-window before an auto-push. |
 | `sync.autoPush` | boolean | Whether the daemon auto-pushes on change. |
 | `claudePlugins.syncPlugins` | boolean | Record the Claude plugin reinstall manifest on push. |
-| `security.secretScan` | `standard`\|`strict`\|`off` | Push-time secret-scan mode. `standard` = built-in credential patterns; `strict` also flags JWTs; `off` waives the ordinary API-token patterns (the catastrophic tier — age key, PEM private keys — still blocks in every mode). |
+| `security.secretScan` | `standard`\|`strict`\|`redact`\|`off` | Push-time secret-scan mode. `standard` = built-in credential patterns (abort on hit); `strict` also flags JWTs; `redact` replaces ordinary tokens in structured config with a `$AGENTSYNC_REDACTED_<FIELD>` placeholder and pushes (`copy` then preserves a real local value over the placeholder); `off` waives the ordinary patterns. The catastrophic tier (age key, PEM) still blocks in every mode. |
 | `security.allowSecretValues` | string[] (JSON) | Literal values exempt from ordinary-token detection and base64 redaction. Catastrophic-tier values (age key, PEM private keys) are never exemptible. |
 | `security.redactBase64Values` | boolean | When `true` (default), redact long base64-looking JSON values; set `false` if a config legitimately stores base64 that must round-trip. |
 

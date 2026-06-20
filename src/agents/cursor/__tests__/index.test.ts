@@ -274,6 +274,20 @@ describe("cursor apply functions", () => {
     expect(await Bun.file(testCursorPaths.mcpGlobal).text()).toBe(content);
   });
 
+  test("applyCursorMcp keeps a local secret when the vault ships a placeholder", async () => {
+    const { applyCursorMcp } = cursorModule;
+    await Bun.write(
+      testCursorPaths.mcpGlobal,
+      JSON.stringify({ mcpServers: { foo: { env: { KEY: "sk-real-local" } } } }),
+    );
+    await applyCursorMcp(
+      `${JSON.stringify({ mcpServers: { foo: { env: { KEY: "$AGENTSYNC_REDACTED_KEY" } } } }, null, 2)}\n`,
+    );
+    const written = await Bun.file(testCursorPaths.mcpGlobal).text();
+    expect(written).toContain("sk-real-local"); // local secret preserved
+    expect(written).not.toContain("AGENTSYNC_REDACTED");
+  });
+
   test("applyCursorCommand writes named command file under commandsDir", async () => {
     const { applyCursorCommand } = cursorModule;
     await applyCursorCommand("my-cmd.md", "# My Cmd\nDo things.");

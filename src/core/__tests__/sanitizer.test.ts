@@ -339,3 +339,47 @@ describe("secret policy", () => {
     expect(out.tok).toContain("REDACTED"); // a real key prefix still redacts
   });
 });
+
+describe("redact mode", () => {
+  const redact: SecretPolicy = { mode: "redact", allow: [], redactBase64: true };
+
+  test("replaces an ordinary token with a placeholder and a NON-fatal notice", () => {
+    const out = redactSecretLiterals({ env: { TOKEN: `ghp_${"a".repeat(36)}` } }, "mcp", redact);
+    const value = out.value as { env: { TOKEN: string } };
+    expect(value.env.TOKEN).toBe("$AGENTSYNC_REDACTED_TOKEN");
+    // "Redacted", not "Detected" — push.ts only aborts on the "Detected" prefix.
+    expect(out.warnings).toEqual(["Redacted literal secret for field TOKEN"]);
+    expect(out.warnings.some((w) => w.startsWith("Detected literal secret"))).toBe(false);
+  });
+
+  test("covers embedded-only shapes the whole-value redactor misses (Anthropic)", () => {
+    const antKey = `sk-ant-api03-${"A".repeat(50)}`;
+    const out = redactSecretLiterals({ env: { K: antKey } }, "mcp", redact);
+    expect((out.value as { env: { K: string } }).env.K).toBe("$AGENTSYNC_REDACTED_K");
+  });
+
+  test("leaves a catastrophic value untouched so the central scan still blocks it", () => {
+    const ageKey = `AGE-SECRET-KEY-1${"A".repeat(58)}`;
+    const out = redactSecretLiterals({ id: ageKey }, "mcp", redact);
+    expect((out.value as { id: string }).id).toBe(ageKey); // not redacted
+    expect(out.warnings).toHaveLength(0);
+    // The plaintext heading for encryption still carries the age key, so the
+    // central scanForSecrets aborts the push.
+    expect(scanForSecrets(JSON.stringify(out.value), "/tmp/x", redact)).toEqual([
+      "Detected literal secret (age-secret-key) in /tmp/x",
+    ]);
+  });
+
+  test("honours the allow-list for ordinary tokens but never for catastrophic", () => {
+    const tok = `ghp_${"a".repeat(36)}`;
+    const ageKey = `AGE-SECRET-KEY-1${"A".repeat(58)}`;
+    const policy: SecretPolicy = { mode: "redact", allow: [tok, ageKey], redactBase64: true };
+    const out = redactSecretLiterals({ a: tok, b: ageKey }, "root", policy);
+    const v = out.value as { a: string; b: string };
+    expect(v.a).toBe(tok); // allow-listed ordinary: left as-is
+    expect(v.b).toBe(ageKey); // catastrophic: redactor leaves it for the scan to block
+    expect(scanForSecrets(ageKey, "/tmp/x", policy).some((w) => w.includes("age-secret-key"))).toBe(
+      true,
+    );
+  });
+});

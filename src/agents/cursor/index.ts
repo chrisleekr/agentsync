@@ -5,6 +5,7 @@ import { AgentPaths } from "../../config/paths";
 import type { AgentSyncConfig } from "../../config/schema";
 import { denormalizeStringFromVault, normalizeStringForVault } from "../../core/path-portability";
 import { sanitizeAndNormalizeJson, securityToPolicy } from "../../core/sanitizer";
+import { mergePreservingSecrets } from "../../core/secret-merge";
 import {
   type ApplyPlan,
   defineFileArtifact,
@@ -16,6 +17,7 @@ import { collectMarkdownDir } from "../_snapshot";
 import {
   atomicWrite,
   collect,
+  parseJsoncObject,
   readIfExists,
   type SnapshotArtifact,
   type SnapshotResult,
@@ -131,10 +133,22 @@ export async function applyCursorRules(rulesContent: string): Promise<void> {
  * file is immediately usable by Cursor without a separate post-process.
  */
 export async function applyCursorMcp(mcpJsonContent: string): Promise<void> {
-  await atomicWrite(
-    AgentPaths.cursor.mcpGlobal,
-    denormalizeStringFromVault(mcpJsonContent, homedir()),
-  );
+  const restored = denormalizeStringFromVault(mcpJsonContent, homedir());
+  const existingRaw = await readIfExists(AgentPaths.cursor.mcpGlobal);
+  if (existingRaw === null) {
+    await atomicWrite(AgentPaths.cursor.mcpGlobal, restored);
+    return;
+  }
+  // Merge so a redacted placeholder (`redact` mode) never overwrites a real
+  // local key and local-only servers survive. On any parse failure, fall back
+  // to the restored content rather than lose the sync.
+  try {
+    const incoming = JSON.parse(restored);
+    const { merged } = mergePreservingSecrets(parseJsoncObject(existingRaw) ?? {}, incoming);
+    await atomicWrite(AgentPaths.cursor.mcpGlobal, `${JSON.stringify(merged, null, 2)}\n`);
+  } catch {
+    await atomicWrite(AgentPaths.cursor.mcpGlobal, restored);
+  }
 }
 
 /**

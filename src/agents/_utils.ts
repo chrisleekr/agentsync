@@ -103,6 +103,39 @@ export function setJsoncTopLevelKey(raw: string, key: string, value: unknown): s
 }
 
 /**
+ * Read a single top-level key from a JSONC document, tolerating comments and
+ * trailing commas. Returns undefined when the document is empty, malformed, a
+ * non-object root, or the key is absent — callers treat "no local value" the
+ * same as a missing file, so a best-effort parse is the right contract here.
+ */
+export function getJsoncTopLevelKey(raw: string, key: string): unknown {
+  // jsonc-parser is fault-tolerant: it returns a partially-recovered object on
+  // malformed input. Reject anything with parse errors (matching
+  // setJsoncTopLevelKey) so a corrupt local file is treated as "no value"
+  // rather than merged from a half-parsed tree.
+  const errors: ParseError[] = [];
+  const parsed = parse(raw, errors, { allowTrailingComma: true });
+  return errors.length === 0 && parsed && typeof parsed === "object" && !Array.isArray(parsed)
+    ? (parsed as Record<string, unknown>)[key]
+    : undefined;
+}
+
+/**
+ * Parse a whole JSONC document into a plain object, tolerating comments and
+ * trailing commas. Returns undefined for an empty, malformed, or non-object
+ * root — callers treat that as "no local value to merge against".
+ */
+export function parseJsoncObject(raw: string): Record<string, unknown> | undefined {
+  // Reject on parse errors (see getJsoncTopLevelKey): a half-parsed object must
+  // not become a merge base, or apply could drop or corrupt local config.
+  const errors: ParseError[] = [];
+  const parsed = parse(raw, errors, { allowTrailingComma: true });
+  return errors.length === 0 && parsed && typeof parsed === "object" && !Array.isArray(parsed)
+    ? (parsed as Record<string, unknown>)
+    : undefined;
+}
+
+/**
  * Build a `SnapshotArtifact` from a `RedactionResult<string>`.
  * Using this helper keeps the artifact shape consistent across agents.
  */

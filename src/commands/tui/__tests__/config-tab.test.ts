@@ -17,7 +17,7 @@ import {
 } from "../../../test-helpers/fixtures";
 import { type ConfigRow, createInitialState } from "../state";
 import { createStore, type Store } from "../store";
-import { ensureConfigLoaded, onConfigKey } from "../tabs/config";
+import { ensureConfigLoaded, onConfigKey, secretScanExplainer } from "../tabs/config";
 
 function key(name: string): KeyEvent {
   return { name, sequence: name, ctrl: false, meta: false, shift: false } as unknown as KeyEvent;
@@ -42,7 +42,7 @@ describe("onConfigKey — navigation", () => {
       key: "security.secretScan",
       value: "standard",
       kind: "enum",
-      options: ["standard", "strict", "off"],
+      options: ["standard", "strict", "redact", "off"],
     },
   ];
 
@@ -72,6 +72,25 @@ describe("onConfigKey — navigation", () => {
     const store = readyStore([{ key: "sync.debounceMs", value: 50, kind: "number" }]);
     expect(onConfigKey(key("left"), store)).toBe(true);
     expect(store.getState().config.lastResult).toBeNull();
+  });
+});
+
+describe("secretScanExplainer", () => {
+  test("returns a distinct non-empty line for each mode", () => {
+    const modes = ["standard", "strict", "redact", "off"];
+    const lines = modes.map((m) => secretScanExplainer(m));
+    for (const line of lines) expect(line.length).toBeGreaterThan(0);
+    expect(new Set(lines).size).toBe(modes.length); // all distinct
+  });
+
+  test("does not claim env-var auto-expansion for redact (placeholder is literal)", () => {
+    const redact = secretScanExplainer("redact").toLowerCase();
+    expect(redact).toContain("$agentsync_redacted_");
+    expect(redact).not.toContain("env var");
+  });
+
+  test("returns empty string for an unknown mode", () => {
+    expect(secretScanExplainer("nope")).toBe("");
   });
 });
 
@@ -167,14 +186,49 @@ describe("Config tab against a real vault", () => {
     expect(config.sync.debounceMs).toBe(350);
   });
 
-  test("left cycles an enum backwards and wraps to the last option", async () => {
+  test("left wraps to off but gates the apply behind a y/n confirm", async () => {
     const store = createStore(createInitialState());
     await loadAndFocus(store, "security.secretScan"); // standard (index 0)
+    // left wraps standard -> off, the dangerous transition: it opens the
+    // confirm modal instead of applying immediately.
     expect(onConfigKey(key("left"), store)).toBe(true);
+    expect(store.getState().config.pendingSecretScan).toBe("off");
+    expect(store.getState().config.lastResult).toBeNull(); // not applied yet
+
+    // y confirms and persists.
+    expect(onConfigKey(key("y"), store)).toBe(true);
     await waitFor(() => store.getState().config.lastResult !== null);
+    expect(store.getState().config.pendingSecretScan).toBeNull();
+    const config = await loadConfig(resolveConfigPath(machine.vaultDir));
+    expect(config.security.secretScan).toBe("off"); // wrapped to last, confirmed
+  });
+
+  test("n cancels the off confirm and leaves the value unchanged", async () => {
+    const store = createStore(createInitialState());
+    await loadAndFocus(store, "security.secretScan"); // standard
+    expect(onConfigKey(key("left"), store)).toBe(true); // -> off, modal opens
+    expect(store.getState().config.pendingSecretScan).toBe("off");
+    expect(onConfigKey(key("n"), store)).toBe(true); // cancel
+    expect(store.getState().config.pendingSecretScan).toBeNull();
 
     const config = await loadConfig(resolveConfigPath(machine.vaultDir));
-    expect(config.security.secretScan).toBe("off"); // wrapped to last
+    expect(config.security.secretScan).toBe("standard"); // untouched
+  });
+
+  test("cycling to redact applies immediately without a confirm", async () => {
+    const store = createStore(createInitialState());
+    await loadAndFocus(store, "security.secretScan"); // standard -> strict -> redact
+    onConfigKey(key("right"), store); // strict
+    await waitFor(() => store.getState().config.lastResult !== null);
+    onConfigKey(key("right"), store); // redact
+    await waitFor(
+      () =>
+        String(store.getState().config.rows.find((r) => r.key === "security.secretScan")?.value) ===
+        "redact",
+    );
+    expect(store.getState().config.pendingSecretScan).toBeNull();
+    const config = await loadConfig(resolveConfigPath(machine.vaultDir));
+    expect(config.security.secretScan).toBe("redact");
   });
 
   test("ensureConfigLoaded surfaces an error (not a crash) on an un-init vault", async () => {

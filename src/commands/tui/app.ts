@@ -249,6 +249,18 @@ function handleKey(key: KeyEvent, ctx: AppContext, quit: () => void): void {
     return;
   }
 
+  // The Config tab's "switch secretScan → off?" confirm is a blocking modal,
+  // like the help overlay: route every key to the tab so a global `p` (push),
+  // number, or tab key cannot fire behind it. The tab handler answers y/n/esc
+  // and swallows the rest.
+  if (
+    ctx.store.getState().activeTab === "config" &&
+    ctx.store.getState().config.pendingSecretScan !== null
+  ) {
+    delegateTabKey(key, ctx);
+    return;
+  }
+
   // Show the action before running it: flash the pressed key in the bars and
   // surface its label, so a keypress is visibly acknowledged even when the
   // handler that follows does slow work.

@@ -96,10 +96,14 @@ export const AgentSyncConfigSchema = z.object({
       // How the push-time secret scan behaves:
       //   standard — the built-in high-precision credential patterns (default)
       //   strict   — standard plus JWT detection
+      //   redact   — replace ordinary API tokens in structured config with a
+      //              $AGENTSYNC_REDACTED_<FIELD> placeholder and push, instead
+      //              of aborting. Secrets in prose (markdown) still abort.
       //   off      — waive the ordinary API-token patterns (values ride in
-      //              encrypted). The catastrophic tier (the vault's own age
-      //              key, PEM private keys) still blocks the push in EVERY mode.
-      secretScan: z.enum(["standard", "strict", "off"]).default("standard"),
+      //              encrypted).
+      // The catastrophic tier (the vault's own age key, PEM private keys) still
+      // blocks the push in EVERY mode, redact and off included.
+      secretScan: z.enum(["standard", "strict", "redact", "off"]).default("standard"),
       // Literal values to exempt from secret detection AND base64 redaction.
       // The escape hatch for a legitimate high-entropy config value that the
       // scanner/redactor would otherwise flag or silently replace.

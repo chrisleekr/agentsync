@@ -123,6 +123,12 @@ const ALWAYS_BLOCK_NAMES: ReadonlySet<string> = new Set(["age-secret-key", "priv
 export const ALWAYS_BLOCK_PATTERNS: ReadonlyArray<{ name: string; pattern: RegExp }> =
   EMBEDDED_SECRET_PATTERNS.filter((p) => ALWAYS_BLOCK_NAMES.has(p.name));
 
+// The ordinary (API-token) embedded patterns: everything EMBEDDED scans except
+// the catastrophic tier. `redact` mode replaces a structured-config value
+// matching one of these with a placeholder, rather than aborting the push.
+const ORDINARY_EMBEDDED_PATTERNS: ReadonlyArray<{ name: string; pattern: RegExp }> =
+  EMBEDDED_SECRET_PATTERNS.filter((p) => !ALWAYS_BLOCK_NAMES.has(p.name));
+
 // Additional patterns scanned only in `strict` mode. A JWT legitimately appears
 // in API examples and docs, so its higher false-positive rate is opt-in rather
 // than aborting every push that mentions one.
@@ -136,11 +142,12 @@ export const STRICT_SECRET_PATTERNS: ReadonlyArray<{ name: string; pattern: RegE
 /** Secret-handling policy resolved from the vault's [security] config section. */
 export interface SecretPolicy {
   /**
-   * `standard` (built-in patterns), `strict` (+ JWT), or `off` (waive the
-   * ordinary API-token patterns). The catastrophic tier (age key, PEM) blocks
-   * in every mode, `off` included.
+   * `standard` (built-in patterns, abort on hit), `strict` (+ JWT), `redact`
+   * (replace ordinary tokens in structured config with a placeholder and push),
+   * or `off` (waive the ordinary API-token patterns). The catastrophic tier
+   * (age key, PEM) blocks in every mode — `redact` and `off` included.
    */
-  mode: "standard" | "strict" | "off";
+  mode: "standard" | "strict" | "redact" | "off";
   /** Literal values exempt from both detection and redaction. */
   allow: readonly string[];
   /** When false, the generic base64 whole-value redaction is skipped. */
@@ -160,7 +167,7 @@ export const DEFAULT_SECRET_POLICY: SecretPolicy = Object.freeze({
 
 /** Resolve a {@link SecretPolicy} from the optional [security] config section. */
 export function securityToPolicy(security?: {
-  secretScan?: "standard" | "strict" | "off";
+  secretScan?: "standard" | "strict" | "redact" | "off";
   allowSecretValues?: readonly string[];
   redactBase64Values?: boolean;
 }): SecretPolicy {
@@ -178,6 +185,15 @@ export interface RedactionResult<T> {
 }
 
 /**
+ * Prefix of the placeholder that `redact` mode writes in place of a secret.
+ * Shaped like a shell env-var reference (`$NAME`) for readability, but AgentSync
+ * does NOT expand it — on a fresh machine the user replaces it with the real
+ * value. `mergePreservingSecrets` keys off this prefix to avoid overwriting a
+ * real local value with a placeholder on `copy`.
+ */
+export const REDACTION_PLACEHOLDER_PREFIX = "$AGENTSYNC_REDACTED_";
+
+/**
  * Returns true when a file path matches any entry in NEVER_SYNC_PATTERNS.
  * NEVER_SYNC_PATTERNS is the authoritative list — add new patterns there and
  * this function picks them up automatically.
@@ -193,6 +209,31 @@ function looksLikeSecretLiteral(value: string, policy: SecretPolicy): boolean {
     ? WHOLE_VALUE_SECRET_PATTERNS
     : WHOLE_VALUE_SECRET_PATTERNS.filter((pattern) => pattern !== BASE64_VALUE_PATTERN);
   return patterns.some((pattern) => pattern.test(value));
+}
+
+/**
+ * Classify a structured-config string value for `redact` mode.
+ *
+ * - `catastrophic` — an age key or PEM private key. Checked FIRST and never
+ *   exemptible: redact mode leaves it untouched so the central `scanForSecrets`
+ *   blocks the push (a placeholder would silently let the master key through).
+ * - `ordinary` — an API token (whole-value shape, or an embedded credential
+ *   prefix appearing in the value). These are replaced with a placeholder.
+ * - `none` — nothing to redact. Includes allow-listed ordinary values.
+ *
+ * Ordinary coverage is the union of `looksLikeSecretLiteral`'s whole-value
+ * shapes and the ordinary embedded prefixes, so every ordinary token the
+ * scanner would later flag is redacted first (no surprise abort post-redaction).
+ */
+function classifyForRedact(
+  value: string,
+  policy: SecretPolicy,
+): "catastrophic" | "ordinary" | "none" {
+  if (ALWAYS_BLOCK_PATTERNS.some(({ pattern }) => pattern.test(value))) return "catastrophic";
+  if (policy.allow.includes(value)) return "none";
+  if (looksLikeSecretLiteral(value, policy)) return "ordinary";
+  if (ORDINARY_EMBEDDED_PATTERNS.some(({ pattern }) => pattern.test(value))) return "ordinary";
+  return "none";
 }
 
 /**
@@ -260,9 +301,22 @@ export function redactSecretLiterals(
   }
 
   if (typeof input === "string") {
+    if (policy.mode === "redact") {
+      // Replace ordinary tokens with a placeholder and emit a NON-fatal notice
+      // (prefix "Redacted", not "Detected", so the Phase-1 abort in push.ts
+      // skips it and Phase-2 surfaces it as a warning). A catastrophic value is
+      // left untouched so the central scanForSecrets still blocks the push.
+      if (classifyForRedact(input, policy) === "ordinary") {
+        return {
+          value: `${REDACTION_PLACEHOLDER_PREFIX}${fieldName.toUpperCase()}`,
+          warnings: [`Redacted literal secret for field ${fieldName}`],
+        };
+      }
+      return { value: input, warnings: [] };
+    }
     if (looksLikeSecretLiteral(input, policy)) {
       return {
-        value: `$AGENTSYNC_REDACTED_${fieldName.toUpperCase()}`,
+        value: `${REDACTION_PLACEHOLDER_PREFIX}${fieldName.toUpperCase()}`,
         warnings: [`Detected literal secret for field ${fieldName}`],
       };
     }

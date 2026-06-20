@@ -238,6 +238,9 @@ export interface ConfigSlice {
   error: string | null;
   /** Result of the most recent set, kept visible until the next one. */
   lastResult: { ok: boolean; message: string } | null;
+  /** Pending `secretScan` value awaiting y/n confirmation (only the dangerous
+   *  → `off` transition gates here). Null when no confirmation is open. */
+  pendingSecretScan: string | null;
 }
 
 export interface AppState {
@@ -315,6 +318,7 @@ export function createInitialState(): AppState {
       cursor: 0,
       error: null,
       lastResult: null,
+      pendingSecretScan: null,
     },
     inFlight: {},
     opSeq: 0,

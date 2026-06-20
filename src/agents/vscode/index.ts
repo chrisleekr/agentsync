@@ -3,10 +3,12 @@ import { AgentPaths } from "../../config/paths";
 import type { AgentSyncConfig } from "../../config/schema";
 import { denormalizeStringFromVault } from "../../core/path-portability";
 import { sanitizeAndNormalizeJson, securityToPolicy } from "../../core/sanitizer";
+import { mergePreservingSecrets } from "../../core/secret-merge";
 import { type ApplyPlan, defineFileArtifact, makeApplyVault } from "../_apply";
 import {
   atomicWrite,
   collect,
+  parseJsoncObject,
   readIfExists,
   type SnapshotArtifact,
   type SnapshotResult,
@@ -34,10 +36,22 @@ export async function snapshotVsCode(config?: AgentSyncConfig): Promise<Snapshot
 
 /** Restore the synced VS Code MCP configuration file. */
 export async function applyVsCodeMcp(mcpJsonContent: string): Promise<void> {
-  await atomicWrite(
-    AgentPaths.vscode.mcpJson,
-    denormalizeStringFromVault(mcpJsonContent, homedir()),
-  );
+  const restored = denormalizeStringFromVault(mcpJsonContent, homedir());
+  const existingRaw = await readIfExists(AgentPaths.vscode.mcpJson);
+  if (existingRaw === null) {
+    await atomicWrite(AgentPaths.vscode.mcpJson, restored);
+    return;
+  }
+  // Merge so a redacted placeholder (`redact` mode) never overwrites a real
+  // local key and local-only servers survive. Fall back to the restored
+  // content on any parse failure rather than lose the sync.
+  try {
+    const incoming = JSON.parse(restored);
+    const { merged } = mergePreservingSecrets(parseJsoncObject(existingRaw) ?? {}, incoming);
+    await atomicWrite(AgentPaths.vscode.mcpJson, `${JSON.stringify(merged, null, 2)}\n`);
+  } catch {
+    await atomicWrite(AgentPaths.vscode.mcpJson, restored);
+  }
 }
 
 // ─── Apply (pull side) ────────────────────────────────────────────────────────
