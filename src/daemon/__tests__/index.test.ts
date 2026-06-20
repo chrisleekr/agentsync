@@ -16,6 +16,7 @@ import { AgentPaths, resolveDaemonSocketPath } from "../../config/paths";
 import { IpcClient, IpcServer } from "../../core/ipc";
 import { Watcher } from "../../core/watcher";
 import { createAgeIdentity, createTmpDir, runGit } from "../../test-helpers/fixtures";
+import { EMPTY_DAEMON_STATE, readDaemonState, writeDaemonState } from "../state";
 
 {
   const require = createRequire(import.meta.url);
@@ -52,6 +53,7 @@ const originalProcessExit = process.exit;
 const originalVaultDir = process.env.AGENTSYNC_VAULT_DIR;
 const originalKeyPath = process.env.AGENTSYNC_KEY_PATH;
 const originalMachine = process.env.AGENTSYNC_MACHINE;
+const originalAgentsyncDir = process.env.AGENTSYNC_DIR;
 
 let tmpDir = "";
 
@@ -157,6 +159,12 @@ afterAll(() => {
   } else {
     process.env.AGENTSYNC_MACHINE = originalMachine;
   }
+
+  if (originalAgentsyncDir === undefined) {
+    delete process.env.AGENTSYNC_DIR;
+  } else {
+    process.env.AGENTSYNC_DIR = originalAgentsyncDir;
+  }
 });
 
 beforeEach(async () => {
@@ -200,6 +208,9 @@ beforeEach(async () => {
   process.env.AGENTSYNC_VAULT_DIR = vaultDir;
   process.env.AGENTSYNC_KEY_PATH = keyPath;
   process.env.AGENTSYNC_MACHINE = "daemon-machine";
+  // Isolate the durable daemon-state.json (and any desktop notification it
+  // triggers) into the tmp dir so tests never touch the real ~/.config/agentsync.
+  process.env.AGENTSYNC_DIR = tmpDir;
 
   infoLogs.length = 0;
   errorLogs.length = 0;
@@ -335,8 +346,41 @@ describe("failure tracking", () => {
     expect(status).toHaveProperty("pid");
     expect(status).toHaveProperty("consecutiveFailures");
     expect(status).toHaveProperty("lastError");
+    expect(status).toHaveProperty("lastSuccessAt");
+    expect(status).toHaveProperty("stuck");
     expect(typeof status.pid).toBe("number");
     expect(typeof status.consecutiveFailures).toBe("number");
+  });
+
+  test("a failed push persists to the durable state file", async () => {
+    await daemonModule.startDaemon();
+    await ipcHandlers.get("push")?.();
+
+    // The on-disk state must reflect the failure so `daemon status`/`doctor`
+    // can report it even after the daemon exits. The daemon persists state
+    // fire-and-forget, so poll until the write lands rather than racing it.
+    let persisted = await readDaemonState();
+    for (let i = 0; i < 40 && persisted.consecutiveFailures < 1; i++) {
+      await Bun.sleep(25);
+      persisted = await readDaemonState();
+    }
+    expect(persisted.consecutiveFailures).toBeGreaterThanOrEqual(1);
+    expect(persisted.lastError).not.toBeNull();
+    expect(persisted.lastErrorAt).not.toBeNull();
+  });
+
+  test("startup preserves a prior stuck flag across restart", async () => {
+    // Simulate a previous run that died stuck on a divergence.
+    await writeDaemonState({
+      ...EMPTY_DAEMON_STATE,
+      stuck: true,
+      lastError: "[push] Vault history diverged",
+    });
+
+    await daemonModule.startDaemon();
+    const status = (await ipcHandlers.get("status")?.()) as { stuck: boolean };
+    // A restart does not resolve a divergence, so stuck stays latched.
+    expect(status.stuck).toBe(true);
   });
 });
 

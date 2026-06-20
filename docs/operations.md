@@ -65,10 +65,20 @@ The daemon moves through a small number of phases. Each phase has a well-defined
 |---|---|
 | Validating | Verifies the vault directory, the config file, and the encryption key are reachable. Exits immediately on failure. |
 | Second-instance check | Sends an IPC `status` ping. If a daemon is already running, exits. Unlinks a stale socket if the prior daemon died ungracefully. |
-| Running | IPC server is listening and file watchers are active (push-only; no pull timer). `status` returns the current pid, consecutive-failure counter, and last error. |
+| Running | IPC server is listening and file watchers are active (push-only; no pull timer). `status` returns pid, last successful sync time, consecutive-failure counter, last error, and whether the daemon is stuck. |
 | Syncing | A push is executing inside the sync queue. Only one sync runs at a time. |
 | Retry once | Automatic single retry after a transient failure. If both attempts fail, the error is recorded but the daemon stays alive so the next change can still trigger a push. |
+| Stuck | The vault diverged (`DIVERGED_HISTORY`). A divergence cannot heal on its own, so the daemon latches a `stuck` flag, fires one desktop notification, and backs off watcher-driven retries to once every 5 minutes instead of hammering a doomed push. A manual `agentsync push` is never throttled. The next success (after you reset the vault) clears it. |
 | Shutting down | Drains the sync queue with a hard ten-second timeout, closes IPC, stops watchers, unlinks the socket, exits cleanly. |
+
+### Health and durable state
+
+The daemon persists its health to `<AGENTSYNC_DIR>/daemon-state.json` (last successful sync, last error, consecutive failures, and the stuck flag) and updates it on every success and failure. Because it is on disk, the state survives a crash or restart:
+
+- `agentsync daemon status` reports the live state when the daemon is up, and **falls back to the durable file when it is down** — so you can still see when sync last succeeded and whether it died stuck.
+- `agentsync doctor` reads the same file and adds a **Daemon sync health** row: it **fails** when stuck, **warns** when the daemon is installed but the last success is older than 24 hours (or has never succeeded), and **passes** on a recent success. This is the loud signal that a *silent* backup failure has been happening — the worst failure mode for a backup tool. (The installed-but-stale/never warning is derived from the service file, which doctor only detects on macOS and Linux today; on Windows the row still **fails** on a stuck vault but does not yet warn on staleness.)
+
+The file watcher pre-filters never-sync paths (`sessions/`, `history.jsonl`, `*.local.md`, …) at the watch layer, so a high-churn agent directory no longer wakes a push that would snapshot nothing.
 
 ### Configuration
 
