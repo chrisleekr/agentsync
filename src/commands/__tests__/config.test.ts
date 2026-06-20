@@ -122,6 +122,32 @@ describe("config command", () => {
     expect(config.security.allowSecretValues).toEqual(["AKIAEXAMPLE", "ghp_example"]);
   });
 
+  test("performConfigSet refuses a catastrophic-tier value even in allowSecretValues", async () => {
+    // allowSecretValues is exempt from ordinary-token detection, but the age
+    // key that decrypts the vault must never land in plaintext agentsync.toml —
+    // otherwise it would bypass the always-block guarantee at push time.
+    const ageKey = `AGE-SECRET-KEY-1${"A".repeat(58)}`;
+    const result = await configMod.performConfigSet(
+      "security.allowSecretValues",
+      JSON.stringify([ageKey]),
+    );
+    expect(result.status).toBe("invalid-value");
+    const config = await loadConfig(resolveConfigPath(machine.vaultDir));
+    expect(config.security.allowSecretValues).toEqual([]);
+  });
+
+  test("performConfigSet rejects a JSON-escaped catastrophic value (decoded scan)", async () => {
+    // The persisted value is parseScalar(rawValue), so a unicode-escaped age
+    // key would pass a raw-string scan but decode to a real secret on disk.
+    // Scanning the decoded value closes that bypass.
+    const ageKey = `AGE-SECRET-KEY-1${"A".repeat(58)}`;
+    const escaped = `["\\u0041${ageKey.slice(1)}"]`; // A decodes to "A"
+    const result = await configMod.performConfigSet("security.allowSecretValues", escaped);
+    expect(result.status).toBe("invalid-value");
+    const config = await loadConfig(resolveConfigPath(machine.vaultDir));
+    expect(config.security.allowSecretValues).toEqual([]);
+  });
+
   test("performConfigSet refuses protected sections", async () => {
     for (const key of ["version", "recipients.config-test", "remote.url"]) {
       const result = await configMod.performConfigSet(key, "x");

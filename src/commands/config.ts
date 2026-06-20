@@ -164,20 +164,37 @@ export async function performConfigSet(key: string, rawValue: string): Promise<C
 
     // agentsync.toml is committed in PLAINTEXT (only artifacts are encrypted),
     // so refuse to write a literal credential into it — e.g. a token pasted
-    // into the wrong field. The allowlist key is exempt by construction.
-    if (key !== SECRET_EXEMPT_KEY) {
-      const leaks = scanForSecrets(rawValue, key);
-      if (leaks.length > 0) {
-        return {
-          status: "invalid-value",
-          key,
-          error: `Refusing to store a literal secret in plaintext config (${leaks.join("; ")}).`,
-        };
-      }
+    // into the wrong field. The allowlist key is exempt from ordinary-token
+    // detection by construction (it exists to hold high-entropy false
+    // positives), but NEVER from the catastrophic tier: an age secret key or
+    // PEM private key must not land in plaintext config even as an "allowed"
+    // value, or it would sail past the always-block guarantee at push time.
+    // `off` mode scans exactly the catastrophic tier.
+    //
+    // Scan the DECODED value, not the raw string: `parseScalar` is what gets
+    // persisted, so a JSON-escaped form (e.g. "AGE-SECRET-KEY-…") would
+    // pass a raw-string scan yet decode into a real secret on disk.
+    const parsedValue = parseScalar(rawValue);
+    const exemptKey = key === SECRET_EXEMPT_KEY;
+    const scanTargets =
+      exemptKey && Array.isArray(parsedValue)
+        ? parsedValue.filter((v): v is string => typeof v === "string")
+        : [typeof parsedValue === "string" ? parsedValue : rawValue];
+    const leaks = scanTargets.flatMap((value) =>
+      exemptKey
+        ? scanForSecrets(value, key, { mode: "off", allow: [], redactBase64: true })
+        : scanForSecrets(value, key),
+    );
+    if (leaks.length > 0) {
+      return {
+        status: "invalid-value",
+        key,
+        error: `Refusing to store a literal secret in plaintext config (${leaks.join("; ")}).`,
+      };
     }
 
     const next = structuredClone(refreshed);
-    setByPath(next as unknown as Json, key, parseScalar(rawValue));
+    setByPath(next as unknown as Json, key, parsedValue);
 
     const validated = AgentSyncConfigSchema.safeParse(next);
     if (!validated.success) {

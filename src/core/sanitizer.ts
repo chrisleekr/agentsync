@@ -111,6 +111,18 @@ export const EMBEDDED_SECRET_PATTERNS: ReadonlyArray<{ name: string; pattern: Re
   { name: "private-key-pem", pattern: /-----BEGIN (?:[A-Z0-9]+ )?PRIVATE KEY-----/ },
 ];
 
+// The catastrophic tier: patterns that block a push in EVERY mode — including
+// `off` — because they are never legitimate agent config and cannot be made
+// safe by encryption. The age secret key is the master key to the very vault
+// being written, so committing it (even encrypted to recipients) hands every
+// future reader the means to decrypt everything. A PEM private key is the same
+// class. Every other pattern is "ordinary" (an API token) whose handling the
+// `secretScan` mode chooses. Derived from EMBEDDED_SECRET_PATTERNS by name so
+// the pattern bodies stay defined in exactly one place.
+const ALWAYS_BLOCK_NAMES: ReadonlySet<string> = new Set(["age-secret-key", "private-key-pem"]);
+export const ALWAYS_BLOCK_PATTERNS: ReadonlyArray<{ name: string; pattern: RegExp }> =
+  EMBEDDED_SECRET_PATTERNS.filter((p) => ALWAYS_BLOCK_NAMES.has(p.name));
+
 // Additional patterns scanned only in `strict` mode. A JWT legitimately appears
 // in API examples and docs, so its higher false-positive rate is opt-in rather
 // than aborting every push that mentions one.
@@ -123,7 +135,11 @@ export const STRICT_SECRET_PATTERNS: ReadonlyArray<{ name: string; pattern: RegE
 
 /** Secret-handling policy resolved from the vault's [security] config section. */
 export interface SecretPolicy {
-  /** `standard` (built-in patterns), `strict` (+ JWT), or `off` (no scan/redact). */
+  /**
+   * `standard` (built-in patterns), `strict` (+ JWT), or `off` (waive the
+   * ordinary API-token patterns). The catastrophic tier (age key, PEM) blocks
+   * in every mode, `off` included.
+   */
   mode: "standard" | "strict" | "off";
   /** Literal values exempt from both detection and redaction. */
   allow: readonly string[];
@@ -191,26 +207,37 @@ function looksLikeSecretLiteral(value: string, policy: SecretPolicy): boolean {
  * The prefix is a contract marker, not a description: the scan only
  * detects, the push aborts, the user removes the secret. Nothing is
  * actually redacted in this path.
+ *
+ * `off` does NOT mean "scan nothing": the catastrophic tier
+ * ({@link ALWAYS_BLOCK_PATTERNS} — age secret key, PEM private key) is scanned
+ * in every mode. `off` only waives the ordinary API-token patterns, accepting
+ * that those values ride into the vault protected by encryption alone.
  */
 export function scanForSecrets(
   text: string,
   sourcePath: string,
   policy: SecretPolicy = DEFAULT_SECRET_POLICY,
 ): string[] {
-  if (policy.mode === "off") return [];
   const patterns =
-    policy.mode === "strict"
-      ? [...EMBEDDED_SECRET_PATTERNS, ...STRICT_SECRET_PATTERNS]
-      : EMBEDDED_SECRET_PATTERNS;
+    policy.mode === "off"
+      ? ALWAYS_BLOCK_PATTERNS
+      : policy.mode === "strict"
+        ? [...EMBEDDED_SECRET_PATTERNS, ...STRICT_SECRET_PATTERNS]
+        : EMBEDDED_SECRET_PATTERNS;
   const warnings: string[] = [];
   for (const { name, pattern } of patterns) {
+    // Catastrophic-tier hits (age secret key, PEM private key) are NEVER
+    // exemptible: an `allowSecretValues` entry must not be able to silence the
+    // key that decrypts the entire vault, or the always-block guarantee becomes
+    // a suggestion. Only ordinary patterns honour the allow-list.
+    const catastrophic = ALWAYS_BLOCK_NAMES.has(name);
     // Iterate EVERY occurrence (a global clone of the pattern) and exempt only
     // the exact allow-listed literals. A non-global `match` would return just
     // the FIRST occurrence, so an allow-listed decoy earlier in the text could
     // mask a real secret of the same shape later — a fail-open leak.
     const global = pattern.global ? pattern : new RegExp(pattern.source, `${pattern.flags}g`);
     for (const m of text.matchAll(global)) {
-      if (!policy.allow.includes(m[0])) {
+      if (catastrophic || !policy.allow.includes(m[0])) {
         warnings.push(`Detected literal secret (${name}) in ${sourcePath}`);
         break; // one warning per pattern is enough to abort the push
       }

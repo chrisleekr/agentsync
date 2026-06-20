@@ -376,8 +376,8 @@ agentsync config set security.allowSecretValues '["AKIA-not-a-real-key"]'
 | `sync.debounceMs` | integer 50–10000 | Daemon quiet-window before an auto-push. |
 | `sync.autoPush` | boolean | Whether the daemon auto-pushes on change. |
 | `claudePlugins.syncPlugins` | boolean | Record the Claude plugin reinstall manifest on push. |
-| `security.secretScan` | `standard`\|`strict`\|`off` | Push-time secret-scan mode. `standard` = built-in credential patterns; `strict` also flags JWTs; `off` disables the artefact-body scan. |
-| `security.allowSecretValues` | string[] (JSON) | Literal values exempt from secret detection and base64 redaction. |
+| `security.secretScan` | `standard`\|`strict`\|`off` | Push-time secret-scan mode. `standard` = built-in credential patterns; `strict` also flags JWTs; `off` waives the ordinary API-token patterns (the catastrophic tier — age key, PEM private keys — still blocks in every mode). |
+| `security.allowSecretValues` | string[] (JSON) | Literal values exempt from ordinary-token detection and base64 redaction. Catastrophic-tier values (age key, PEM private keys) are never exemptible. |
 | `security.redactBase64Values` | boolean | When `true` (default), redact long base64-looking JSON values; set `false` if a config legitimately stores base64 that must round-trip. |
 
 > **What the secret scan is — and is not.** It matches a fixed set of
@@ -386,8 +386,10 @@ agentsync config set security.allowSecretValues '["AKIA-not-a-real-key"]'
 > **not** a general secret scanner — a plain password, a bespoke token, or a
 > connection string with no recognised shape passes through. Encryption is the
 > real protection; the scan only stops well-known credentials from entering git
-> history. `off` disables the artefact-body scan, but **skill-bundle interiors
-> are always scanned at `standard`** as a fail-safe. `agentsync.toml` itself is
+> history. `off` waives the ordinary API-token patterns, but the **catastrophic
+> tier (age key, PEM private keys) still blocks in every mode**, and
+> **skill-bundle interiors are always scanned at `standard`** as a fail-safe.
+> `agentsync.toml` itself is
 > committed in **plaintext**, so `allowSecretValues` is for exempting legitimate
 > high-entropy *non-secret* values — never paste a real credential there.
 > `config set` refuses to store a recognised credential in any key other than
