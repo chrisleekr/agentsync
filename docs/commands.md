@@ -72,7 +72,7 @@ agentsync tui       # explicit alias, same behaviour
 | Tab | What it shows |
 |---|---|
 | 1 Dashboard | Daemon health (pid, uptime, last error), vault state, agent summary, init / key-rotate launchers. |
-| 2 Sync | Per-artifact rows grouped by sync status (`local-changed`, `local-only`, `vault-only`, `unknown`, `synced`). Multi-select with `space`; push selected with `p`; bulk-remove skills with `x` (y/n confirm). Enter on a skill drills into its files with per-file diff. |
+| 2 Sync | Per-artifact rows grouped by sync status (`local-changed`, `local-only`, `vault-only`, `unknown`, `synced`). Multi-select with `space`; push selected with `p`; bulk-remove any selected vault artifacts with `x` (y/n confirm) — rows with no vault copy (`local-only`) are ignored. Enter on a skill drills into its files with per-file diff. |
 | 3 Machines | The vault's `machines/<name>/` namespaces. Move with `↑`/`↓`; `enter` copies the selected machine's config to this machine (the same `performCopy` core as the CLI; never touches the vault). |
 | 4 Migrate | From / To / Type form (To and Type are multi-select with sub-cursor). Preview is mandatory before Apply enables. |
 | 5 Activity | Session-only ring buffer of TUI actions. |
@@ -92,8 +92,8 @@ agentsync tui       # explicit alias, same behaviour
 subcommands operate on. Push goes through the same daemon IPC the `status` and
 `daemon` subcommands use; the Machines tab calls the same `performCopy` core as
 `agentsync copy`; migrate calls the same planner as `agentsync migrate`; bulk
-skill removal calls the same `performSkillRemove` that `agentsync skill remove`
-does, once per selected skill.
+removal calls the same `performVaultRemove` core that `agentsync skill remove`
+delegates to, once per selected vault artifact.
 
 **Caveats**:
 

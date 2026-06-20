@@ -16,7 +16,7 @@ export interface RunOpOptions<R> {
   onSuccess?: (draft: AppState, result: R) => void;
   onError?: (draft: AppState, err: Error) => void;
   /** When set, the terminal phase pushes an ActivityEntry with this kind. */
-  activityKind?: "push" | "pull" | "copy" | "skill-rm" | "migrate" | "preview" | "info";
+  activityKind?: "push" | "pull" | "copy" | "vault-rm" | "migrate" | "preview" | "info";
   /** Override the terminal toast text; defaults to label + outcome. */
   successToast?: string;
   errorToastPrefix?: string;

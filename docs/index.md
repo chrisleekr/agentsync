@@ -82,7 +82,7 @@ Detailed flag, outcome, and caveat tables live in [Commands](commands.md).
 - **Plaintext never crosses the network.** Every artefact in the vault is encrypted to one or more age recipients before any Git operation runs.
 - **Fast-forward only.** Reconciliation never merges silently. If two machines diverge, AgentSync stops and prints a recovery path.
 - **Sanitiser is a hard gate.** Literal secrets and never-sync paths abort the push before any bytes leave the machine.
-- **Skill removal is explicit.** `copy` is additive by design so an in-progress local edit cannot be wiped by a remote that omits it. `agentsync skill remove` is the only command that deletes vault entries.
+- **Vault removal is explicit.** `copy` is additive by design so an in-progress local edit cannot be wiped by a remote that omits it. Deletion is never silent: the CLI `agentsync skill remove` deletes a skill, and the TUI Sync tab removes any selected vault artifact after a `y`/`n` confirm — both routed through one `performVaultRemove` core.
 - **Interactive TUI.** Running `agentsync` with no subcommand opens a tabbed UI to browse the vault, inspect per-agent local content, trigger a push, browse machines and copy from them, and migrate config — without memorising flags.
 
 ## Where to go next

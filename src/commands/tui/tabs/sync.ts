@@ -14,7 +14,7 @@ import { computeSyncStatus, type SyncRow } from "../../status";
 import type { AppState, DiffModalState, SkillDrillInState, SkillFile } from "../state";
 import { pushActivity, setToast } from "../state";
 import type { Store } from "../store";
-import { runBulkSkillRemove } from "./_skill-remove";
+import { runBulkVaultRemove } from "./_vault-remove";
 
 const PALETTE: Record<
   "panelBg" | "border" | "text" | "textDim" | "good" | "warn" | "bad" | "cyan" | "accent" | "hl",
@@ -702,18 +702,14 @@ export function onSyncKey(key: KeyEvent, store: Store): boolean {
     return handleSkillDrillInKey(key, store);
   }
 
-  // Confirm-remove modal: y proceeds with runBulkSkillRemove; n/esc cancels.
+  // Confirm-remove modal: y proceeds with runBulkVaultRemove; n/esc cancels.
   if (s.confirmRemove) {
     if (key.name === "y") {
-      const items = s.confirmRemove.items.map((it) => ({
-        agent: it.agent,
-        name: it.name,
-        vaultPath: it.vaultPath,
-      }));
+      const vaultPaths = s.confirmRemove.items.map((it) => it.vaultPath);
       store.dispatch((d) => {
         d.sync.confirmRemove = null;
       });
-      runBulkSkillRemove(store, items);
+      runBulkVaultRemove(store, vaultPaths);
       return true;
     }
     if (key.name === "n" || key.name === "escape" || key.name === "q") {
@@ -851,27 +847,29 @@ export function onSyncKey(key: KeyEvent, store: Store): boolean {
     // Don't remove immediately — stage a confirmation modal with the exact
     // list. Recovery from an accidental `x` requires git reverts; the modal
     // is the cheap-but-effective guard.
-    const items: { agent: string; name: string; vaultPath: string }[] = [];
+    //
+    // Removable means "has a vault copy to delete": vault-only, synced,
+    // local-changed, or unknown (key not loaded but the .age file exists).
+    // local-only rows live on disk but not in the vault; error rows carry an
+    // empty vaultPath (the agent snapshot threw). Neither can be `git rm`-ed,
+    // so both are ignored rather than staged with a bogus empty path.
+    const items: { vaultPath: string }[] = [];
     const byVaultPath = new Map(s.rows.map((r) => [r.vaultPath, r]));
     const visibleVaultPaths = new Set(visible.map((r) => r.vaultPath));
     let ignoredCount = 0;
     let visibleCount = 0;
     for (const vp of store.getState().selection) {
       const row = byVaultPath.get(vp);
-      if (!row?.isSkill) {
+      if (!row || row.status === "local-only" || row.status === "error" || !row.vaultPath) {
         ignoredCount++;
         continue;
       }
-      const fileName = row.vaultPath.split("/").pop() ?? "";
-      const name = fileName.replace(/\.tar\.age$/, "");
-      if (row.agent && name) {
-        items.push({ agent: row.agent, name, vaultPath: row.vaultPath });
-        if (visibleVaultPaths.has(vp)) visibleCount++;
-      }
+      items.push({ vaultPath: row.vaultPath });
+      if (visibleVaultPaths.has(vp)) visibleCount++;
     }
     if (items.length === 0) {
       store.dispatch((d) =>
-        setToast(d, "Nothing to remove — x only removes selected skill bundles", "info"),
+        setToast(d, "Nothing to remove — selected rows have no vault copy", "info"),
       );
       return true;
     }
@@ -1412,7 +1410,7 @@ function renderConfirmRemove(
   renderer: CliRenderer,
   host: BoxRenderable,
   confirm: {
-    items: { agent: string; name: string; vaultPath: string }[];
+    items: { vaultPath: string }[];
     ignoredCount: number;
     visibleCount: number;
   },
@@ -1423,17 +1421,17 @@ function renderConfirmRemove(
     border: true,
     borderColor: PALETTE.bad,
     borderStyle: "double",
-    title: ` Confirm skill remove (x) `,
+    title: ` Confirm vault remove (x) `,
     backgroundColor: PALETTE.panelBg,
   });
-  const itemLines = confirm.items.slice(0, 20).map((it) => `    ${it.vaultPath}`);
+  const itemLines = confirm.items.slice(0, 20).map((it) => `    ${stripAge(it.vaultPath)}`);
   if (confirm.items.length > 20) {
     itemLines.push(`    … and ${confirm.items.length - 20} more`);
   }
   const hiddenCount = confirm.items.length - confirm.visibleCount;
   const lines = [
     "",
-    `  Remove ${confirm.items.length} skill(s) from vault?`,
+    `  Remove ${confirm.items.length} artifact(s) from vault?`,
     "  This runs `git rm` + commit + push. Reversible only via `git revert`.",
     "",
   ];
@@ -1450,7 +1448,7 @@ function renderConfirmRemove(
   lines.push(...itemLines);
   lines.push("");
   if (confirm.ignoredCount > 0) {
-    lines.push(`  (${confirm.ignoredCount} non-skill selection(s) will be ignored)`);
+    lines.push(`  (${confirm.ignoredCount} selection(s) have no vault copy — ignored)`);
     lines.push("");
   }
   lines.push("    [y] yes — remove");

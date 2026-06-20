@@ -86,12 +86,17 @@ describe("onSyncKey — selection", () => {
     expect(store.getState().selection.size).toBe(1);
   });
 
-  test("x with only non-skill rows selected shows info toast and does not run remove op", () => {
+  test("x on a non-skill row with a vault copy stages the confirm modal", () => {
+    // Default status is "synced", so this row has a vault copy to remove.
+    // Non-skill artifacts (commands, configs, rules) are removable too.
     const store = seedReady([makeRow({ vaultPath: "regular.age", isSkill: false })]);
     onSyncKey(key("space"), store);
     expect(store.getState().selection.size).toBe(1);
     onSyncKey(key("x"), store);
-    expect(store.getState().toast?.text ?? "").toContain("only removes selected skill");
+    const cr = store.getState().sync.confirmRemove;
+    expect(cr).not.toBeNull();
+    expect(cr?.items.map((it) => it.vaultPath)).toEqual(["regular.age"]);
+    expect(cr?.ignoredCount).toBe(0);
   });
 });
 
@@ -270,8 +275,8 @@ describe("onSyncKey — confirm-remove modal", () => {
     expect(store.getState().sync.confirmRemove).not.toBeNull();
     onSyncKey(key("n"), store);
     expect(store.getState().sync.confirmRemove).toBeNull();
-    // No "skill-rm" op was registered.
-    expect(Object.values(store.getState().inFlight).some((op) => op.kind === "skill-rm")).toBe(
+    // No "vault-rm" op was registered.
+    expect(Object.values(store.getState().inFlight).some((op) => op.kind === "vault-rm")).toBe(
       false,
     );
   });
@@ -284,12 +289,72 @@ describe("onSyncKey — confirm-remove modal", () => {
     expect(store.getState().sync.confirmRemove).toBeNull();
   });
 
-  test("non-skill-only selection shows toast, does not stage modal", () => {
-    const store = seedReady([makeRow({ vaultPath: "regular.age", isSkill: false })]);
+  test("vault-only mix of skill + non-skill rows are all staged (bug repro)", () => {
+    // The reported bug: selecting 10 vault-only rows but only the 2 skills
+    // being staged. All vault-only rows have a vault copy, so all are
+    // removable regardless of isSkill.
+    const store = seedReady([
+      makeRow({
+        vaultPath: "codex/skills/write-to-notion.tar.age",
+        isSkill: true,
+        status: "vault-only",
+      }),
+      makeRow({
+        vaultPath: "claude/commands/pr-commit-message.md.age",
+        isSkill: false,
+        status: "vault-only",
+      }),
+      makeRow({
+        vaultPath: "cursor/user-rules.md.age",
+        isSkill: false,
+        status: "vault-only",
+      }),
+    ]);
+    onSyncKey(key("a", { shift: true }), store);
+    expect(store.getState().selection.size).toBe(3);
+    onSyncKey(key("x"), store);
+    const cr = store.getState().sync.confirmRemove;
+    expect(cr?.items.length).toBe(3);
+    expect(cr?.ignoredCount).toBe(0);
+  });
+
+  test("local-only rows are ignored — no vault copy to remove", () => {
+    const store = seedReady([
+      makeRow({ vaultPath: "claude/new.md.age", isSkill: false, status: "local-only" }),
+      makeRow({ vaultPath: "claude/in-vault.md.age", isSkill: false, status: "vault-only" }),
+    ]);
+    onSyncKey(key("a", { shift: true }), store);
+    expect(store.getState().selection.size).toBe(2);
+    onSyncKey(key("x"), store);
+    const cr = store.getState().sync.confirmRemove;
+    expect(cr?.items.map((it) => it.vaultPath)).toEqual(["claude/in-vault.md.age"]);
+    expect(cr?.ignoredCount).toBe(1);
+  });
+
+  test("selecting only local-only rows shows toast, does not stage modal", () => {
+    const store = seedReady([
+      makeRow({ vaultPath: "claude/new.md.age", isSkill: false, status: "local-only" }),
+    ]);
     onSyncKey(key("space"), store);
     onSyncKey(key("x"), store);
     expect(store.getState().sync.confirmRemove).toBeNull();
-    expect(store.getState().toast?.text ?? "").toContain("only removes selected skill");
+    expect(store.getState().toast?.text ?? "").toContain("no vault copy");
+  });
+
+  test("error rows (empty vaultPath) are ignored, not staged with a bogus path", () => {
+    // A failed agent snapshot yields status:"error" with vaultPath:"". It must
+    // not be staged — an empty vaultPath cannot be git-rm'd and would surface a
+    // spurious "1 failed" in the bulk op.
+    const store = seedReady([
+      makeRow({ vaultPath: "", isSkill: false, status: "error", displayName: "(snapshot failed)" }),
+      makeRow({ vaultPath: "claude/in-vault.md.age", isSkill: false, status: "vault-only" }),
+    ]);
+    onSyncKey(key("a", { shift: true }), store);
+    expect(store.getState().selection.size).toBe(2);
+    onSyncKey(key("x"), store);
+    const cr = store.getState().sync.confirmRemove;
+    expect(cr?.items.map((it) => it.vaultPath)).toEqual(["claude/in-vault.md.age"]);
+    expect(cr?.ignoredCount).toBe(1);
   });
 });
 

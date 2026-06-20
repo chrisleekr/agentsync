@@ -85,8 +85,10 @@ describe("ensureMachinesLoaded", () => {
   test("lists the vault machine namespaces and flips phase to ready", async () => {
     const store = createStore(createInitialState());
     ensureMachinesLoaded(store);
-    // The load runs through runOperation; wait for it to settle.
-    for (let i = 0; i < 50 && store.getState().machines.phase === "loading"; i++) {
+    // The load runs through runOperation (real git reconcile). Poll generously
+    // — a cold git invocation can exceed 500ms, which previously made this flaky
+    // depending on suite ordering.
+    for (let i = 0; i < 300 && store.getState().machines.phase === "loading"; i++) {
       await new Promise((r) => setTimeout(r, 10));
     }
     const m = store.getState().machines;
@@ -107,7 +109,9 @@ describe("ensureMachinesLoaded", () => {
     // accumulation without writing to local agent paths.
     const store = readyStore(["host-a"]);
     expect(onMachinesKey(key("return"), store)).toBe(true);
-    for (let i = 0; i < 50 && store.getState().machines.lastCopy === null; i++) {
+    // performCopy shells out to git per agent; a cold run can exceed 500ms, so
+    // poll generously to avoid an ordering-dependent timeout flake.
+    for (let i = 0; i < 300 && store.getState().machines.lastCopy === null; i++) {
       await new Promise((r) => setTimeout(r, 10));
     }
     const last = store.getState().machines.lastCopy;
