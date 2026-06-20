@@ -1336,7 +1336,7 @@ cross-agent migrations from a single interactive screen.</p>
 </tr>
 <tr>
 <td>6 Config</td>
-<td>View and change vault config (agents enabled, <code>sync.*</code>, <code>claudePlugins.*</code>, <code>security.*</code>) with <code>↑</code>/<code>↓</code> to move, <code>space</code> to toggle a boolean, <code>←</code>/<code>→</code> to cycle an enum or adjust a number. Writes go through the same <a href="#config"><code>config</code></a> core (reconcile + commit + push). Also lists the recipients who can decrypt the vault, read-only.</td>
+<td>View and change vault config (agents enabled, <code>sync.*</code>, <code>claudePlugins.*</code>, <code>security.*</code>) with <code>↑</code>/<code>↓</code> to move, <code>space</code> to toggle a boolean, <code>←</code>/<code>→</code> to cycle an enum or adjust a number. Cycling <code>security.secretScan</code> shows a one-line explainer of the selected mode; choosing <code>off</code> first prompts a <code>y</code>/<code>n</code> confirm because it pushes live secrets. Writes go through the same <a href="#config"><code>config</code></a> core (reconcile + commit + push). Also lists the recipients who can decrypt the vault, read-only.</td>
 </tr>
 </tbody>
 </table>
@@ -1718,8 +1718,8 @@ the same <code>performConfigSet</code> core as <code>agentsync config set</code>
 </tr>
 <tr>
 <td><code>security.secretScan</code></td>
-<td><code>standard</code>|<code>strict</code>|<code>off</code></td>
-<td>Push-time secret-scan mode. <code>standard</code> = built-in credential patterns; <code>strict</code> also flags JWTs; <code>off</code> waives the ordinary API-token patterns (the catastrophic tier — age key, PEM private keys — still blocks in every mode).</td>
+<td><code>standard</code>|<code>strict</code>|<code>redact</code>|<code>off</code></td>
+<td>Push-time secret-scan mode. <code>standard</code> = built-in credential patterns (abort on hit); <code>strict</code> also flags JWTs; <code>redact</code> replaces ordinary tokens in structured config with a <code>$AGENTSYNC_REDACTED_&lt;FIELD&gt;</code> placeholder and pushes (<code>copy</code> then preserves a real local value over the placeholder); <code>off</code> waives the ordinary patterns. The catastrophic tier (age key, PEM) still blocks in every mode.</td>
 </tr>
 <tr>
 <td><code>security.allowSecretValues</code></td>

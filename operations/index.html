@@ -932,6 +932,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#the-redact-contract" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The redact contract
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1451,6 +1462,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#the-redact-contract" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The redact contract
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1908,11 +1930,21 @@ and behaviour reference.</p>
 <h4 id="tuning-the-scan">Tuning the scan<a class="headerlink" href="#tuning-the-scan" title="Permanent link">&para;</a></h4>
 <p><code>agentsync config set security.secretScan &lt;mode&gt;</code>:</p>
 <ul>
-<li><code>standard</code> (default) — the built-in credential patterns above, minus JWTs.</li>
+<li><code>standard</code> (default) — the built-in credential patterns above, minus JWTs. A literal token aborts the push.</li>
 <li><code>strict</code> — adds JWT detection. Use when no legitimate JWT appears in your config.</li>
-<li><code>off</code> — waives the ordinary API-token patterns; those values ride into the (encrypted) vault unflagged. The <strong>catastrophic tier still blocks in every mode, <code>off</code> included</strong>: the vault's own age key (<code>AGE-SECRET-KEY-1…</code>) and PEM private keys can never be pushed — no encryption makes it safe to commit the key that decrypts the vault itself. <strong>Skill-bundle interiors are still scanned at <code>standard</code></strong> as a fail-safe.</li>
+<li><code>redact</code> — instead of aborting, replace an ordinary API token inside a structured config file (<code>.claude.json</code>, <code>mcp.json</code>, Codex <code>config.toml</code>, hook settings) with a <code>$AGENTSYNC_REDACTED_&lt;FIELD&gt;</code> placeholder and push. A secret in <strong>prose</strong> (a markdown body, a skill README) has no structured field to replace, so it still aborts — remove it. See "The redact contract" below.</li>
+<li><code>off</code> — waives the ordinary API-token patterns; those values ride into the (encrypted) vault unflagged. Encryption is then the <em>only</em> protection: every recipient and any lost device key can read them.</li>
 </ul>
-<p><code>agentsync config set security.allowSecretValues '["&lt;literal&gt;"]'</code> exempts a specific value the scanner false-positives on (and exempts it from base64 redaction). <code>agentsync config set security.redactBase64Values false</code> stops AgentSync replacing long base64-looking JSON values with a placeholder, for configs that legitimately store such values. See <a href="../commands/#config">config</a>.</p>
+<p>In <strong>every</strong> mode — <code>redact</code> and <code>off</code> included — the <strong>catastrophic tier still blocks</strong>: the vault's own age key (<code>AGE-SECRET-KEY-1…</code>) and PEM private keys can never be pushed, redacted, or allow-listed, because no encryption makes it safe to commit the key that decrypts the vault itself. <strong>Skill-bundle interiors are always scanned at <code>standard</code></strong> as a fail-safe.</p>
+<p><code>agentsync config set security.allowSecretValues '["&lt;literal&gt;"]'</code> exempts a specific value the scanner false-positives on (and exempts it from base64 redaction) — for ordinary tokens only; a catastrophic-tier literal is refused even here. <code>agentsync config set security.redactBase64Values false</code> stops AgentSync replacing long base64-looking JSON values with a placeholder, for configs that legitimately store such values. See <a href="../commands/#config">config</a>.</p>
+<h4 id="the-redact-contract">The redact contract<a class="headerlink" href="#the-redact-contract" title="Permanent link">&para;</a></h4>
+<p><code>redact</code> mode is a round trip, and the second half lives on the <strong>apply</strong> side (<code>agentsync copy</code>):</p>
+<ol>
+<li><strong>Push</strong> replaces the token with <code>$AGENTSYNC_REDACTED_&lt;FIELD&gt;</code> — a shell-env-var-shaped placeholder — and ships that. The real secret never enters the vault.</li>
+<li><strong>Copy</strong> onto another machine merges the incoming config: a placeholder <strong>never overwrites a real local value</strong>, and local-only entries (e.g. an MCP server not in the vault) are preserved. So a machine that already holds the key keeps it.</li>
+<li>On a <strong>fresh</strong> machine with no local value, the placeholder lands in the config as-is. AgentSync does <strong>not</strong> expand it — replace <code>$AGENTSYNC_REDACTED_&lt;FIELD&gt;</code> with the real secret on that machine (paste the value, or point the field at your own secret manager / the agent's native <code>${VAR}</code> env syntax). The literal <code>$AGENTSYNC_REDACTED_…</code> is your signal that a value is required.</li>
+</ol>
+<p>This is the right default when a vault has more than one recipient (a teammate's key, or another of your own devices): encryption alone lets every recipient read every secret, so keeping the token out of the vault entirely is the only way to scope it to the machine that owns it.</p>
 <h3 id="daemon-is-not-running">Daemon is not running<a class="headerlink" href="#daemon-is-not-running" title="Permanent link">&para;</a></h3>
 <p>Check, in order:</p>
 <ol>
