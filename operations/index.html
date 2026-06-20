@@ -1910,7 +1910,7 @@ and behaviour reference.</p>
 <ul>
 <li><code>standard</code> (default) — the built-in credential patterns above, minus JWTs.</li>
 <li><code>strict</code> — adds JWT detection. Use when no legitimate JWT appears in your config.</li>
-<li><code>off</code> — disables the artefact-body scan. <strong>Skill-bundle interiors are still scanned at <code>standard</code></strong> as a fail-safe, and encryption still applies.</li>
+<li><code>off</code> — waives the ordinary API-token patterns; those values ride into the (encrypted) vault unflagged. The <strong>catastrophic tier still blocks in every mode, <code>off</code> included</strong>: the vault's own age key (<code>AGE-SECRET-KEY-1…</code>) and PEM private keys can never be pushed — no encryption makes it safe to commit the key that decrypts the vault itself. <strong>Skill-bundle interiors are still scanned at <code>standard</code></strong> as a fail-safe.</li>
 </ul>
 <p><code>agentsync config set security.allowSecretValues '["&lt;literal&gt;"]'</code> exempts a specific value the scanner false-positives on (and exempts it from base64 redaction). <code>agentsync config set security.redactBase64Values false</code> stops AgentSync replacing long base64-looking JSON values with a placeholder, for configs that legitimately store such values. See <a href="../commands/#config">config</a>.</p>
 <h3 id="daemon-is-not-running">Daemon is not running<a class="headerlink" href="#daemon-is-not-running" title="Permanent link">&para;</a></h3>

@@ -1719,12 +1719,12 @@ the same <code>performConfigSet</code> core as <code>agentsync config set</code>
 <tr>
 <td><code>security.secretScan</code></td>
 <td><code>standard</code>|<code>strict</code>|<code>off</code></td>
-<td>Push-time secret-scan mode. <code>standard</code> = built-in credential patterns; <code>strict</code> also flags JWTs; <code>off</code> disables the artefact-body scan.</td>
+<td>Push-time secret-scan mode. <code>standard</code> = built-in credential patterns; <code>strict</code> also flags JWTs; <code>off</code> waives the ordinary API-token patterns (the catastrophic tier — age key, PEM private keys — still blocks in every mode).</td>
 </tr>
 <tr>
 <td><code>security.allowSecretValues</code></td>
 <td>string[] (JSON)</td>
-<td>Literal values exempt from secret detection and base64 redaction.</td>
+<td>Literal values exempt from ordinary-token detection and base64 redaction. Catastrophic-tier values (age key, PEM private keys) are never exemptible.</td>
 </tr>
 <tr>
 <td><code>security.redactBase64Values</code></td>
@@ -1740,8 +1740,10 @@ tokens, age identities, PEM private-key headers; <code>strict</code> adds JWTs).
 <strong>not</strong> a general secret scanner — a plain password, a bespoke token, or a
 connection string with no recognised shape passes through. Encryption is the
 real protection; the scan only stops well-known credentials from entering git
-history. <code>off</code> disables the artefact-body scan, but <strong>skill-bundle interiors
-are always scanned at <code>standard</code></strong> as a fail-safe. <code>agentsync.toml</code> itself is
+history. <code>off</code> waives the ordinary API-token patterns, but the <strong>catastrophic
+tier (age key, PEM private keys) still blocks in every mode</strong>, and
+<strong>skill-bundle interiors are always scanned at <code>standard</code></strong> as a fail-safe.
+<code>agentsync.toml</code> itself is
 committed in <strong>plaintext</strong>, so <code>allowSecretValues</code> is for exempting legitimate
 high-entropy <em>non-secret</em> values — never paste a real credential there.
 <code>config set</code> refuses to store a recognised credential in any key other than
