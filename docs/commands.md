@@ -46,7 +46,7 @@ When developing from source, replace the binary call with `bun run src/cli.ts`. 
 | [`status`](#status) | Compare local snapshot to decrypted vault state. |
 | [`doctor`](#doctor) | Check the local environment before blaming sync logic. |
 | [`daemon`](#daemon) | Install, start, stop, and inspect the background daemon. |
-| [`key`](#key) | Add a recipient or rotate the current machine key. |
+| [`key`](#key) | Add, list, or remove recipients, or rotate the current machine key. |
 | [`skill`](#skill) | Remove a skill from the vault. |
 | [`plugin`](#plugin) | List or reinstall a machine's Claude plugins from its vault manifest. |
 | [`vault`](#vault) | Migrate an older vault to the current format (`vault upgrade`). |
@@ -301,22 +301,26 @@ agentsync daemon uninstall
 
 ## key
 
-**Why**: Add a new recipient or rotate the current machine's keypair without changing vault semantics.
+**Why**: Manage who can decrypt the vault — add a recipient, list recipients, deauthorize (remove) one, or rotate the current machine's keypair.
 
 **Usage**:
 
 ```bash
-agentsync key add <name> <age-public-key>
-agentsync key rotate
+agentsync key add <name> <age-public-key>   # authorize a recipient
+agentsync key list                           # audit who can decrypt the vault
+agentsync key remove <name>                  # deauthorize a recipient
+agentsync key rotate                         # new local identity, re-encrypt
 ```
 
-**Outcome**: every existing vault artefact is decrypted under the current key and re-encrypted under the updated recipient set, then the change is committed and pushed.
+**Outcome**: `add`, `remove`, and `rotate` decrypt every existing vault artefact under the current key and re-encrypt it under the updated recipient set, then commit and push. `list` is read-only — it prints each recipient alias and public key from `agentsync.toml`, marking the entry that belongs to this machine with `*`.
 
 **Caveats**:
 
-- `key add` and `key rotate` reconcile against the latest remote state before they rewrite encrypted vault content.
+- `key add`, `key remove`, and `key rotate` reconcile against the latest remote state before they rewrite encrypted vault content.
 - If the vault history has diverged, key-management commands stop until the vault is reset or recloned. See [Recover from divergence](operations.md#recover-from-divergence).
-- Rotation depends on the **old** private key still being available so existing vault files can be decrypted. Back up the old key before rotation if you intend to retire that identity entirely.
+- Rotation depends on the **old** private key still being available so existing vault files can be decrypted. Back up the old key before rotation if you intend to retire that identity entirely. Rotation is crash-safe: it re-encrypts to both the old and new key, swaps the key file atomically, then drops the old recipient, so an interrupted rotation never leaves a vault no on-disk key can read.
+- `key remove` re-encrypts forward for the remaining recipients, so the removed key can no longer read **future** pushes. It **cannot** retro-purge git history: a removed key still decrypts the vault state already on the remote. For true revocation of a lost machine, also rotate any secrets it could read. See [Deauthorize a lost machine](operations.md#deauthorize-a-lost-machine).
+- `key remove` refuses to remove the only remaining recipient (a vault must stay decryptable) and refuses to remove the key of the machine you run it on (you cannot deauthorize yourself — run it from another machine to remove a lost one).
 - Recipient names are stable config keys and are visible in the vault repository. Use names that describe the machine clearly without leaking sensitive context.
 
 ## skill
