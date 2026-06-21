@@ -100,7 +100,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#description-complete-agentsync-cli-reference-every-command-flag-default-and-caveat-for-init-push-copy-status-daemon-key-skill-plugin-vault-and-the-tui" class="md-skip">
+        <a href="#description-complete-agentsync-cli-reference-every-command-flag-default-and-caveat-for-init-push-copy-status-key-skill-plugin-vault-and-the-tui" class="md-skip">
           Skip to content
         </a>
       
@@ -522,10 +522,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#description-complete-agentsync-cli-reference-every-command-flag-default-and-caveat-for-init-push-copy-status-daemon-key-skill-plugin-vault-and-the-tui" class="md-nav__link">
+  <a href="#description-complete-agentsync-cli-reference-every-command-flag-default-and-caveat-for-init-push-copy-status-key-skill-plugin-vault-and-the-tui" class="md-nav__link">
     <span class="md-ellipsis">
       
-        description: Complete AgentSync CLI reference: every command, flag, default, and caveat for init, push, copy, status, daemon, key, skill, plugin, vault, and the TUI.
+        description: Complete AgentSync CLI reference: every command, flag, default, and caveat for init, push, copy, status, key, skill, plugin, vault, and the TUI.
       
     </span>
   </a>
@@ -681,17 +681,6 @@
     <span class="md-ellipsis">
       
         upgrade
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#daemon" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        daemon
       
     </span>
   </a>
@@ -905,10 +894,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#description-complete-agentsync-cli-reference-every-command-flag-default-and-caveat-for-init-push-copy-status-daemon-key-skill-plugin-vault-and-the-tui" class="md-nav__link">
+  <a href="#description-complete-agentsync-cli-reference-every-command-flag-default-and-caveat-for-init-push-copy-status-key-skill-plugin-vault-and-the-tui" class="md-nav__link">
     <span class="md-ellipsis">
       
-        description: Complete AgentSync CLI reference: every command, flag, default, and caveat for init, push, copy, status, daemon, key, skill, plugin, vault, and the TUI.
+        description: Complete AgentSync CLI reference: every command, flag, default, and caveat for init, push, copy, status, key, skill, plugin, vault, and the TUI.
       
     </span>
   </a>
@@ -1071,17 +1060,6 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#daemon" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        daemon
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
   <a href="#key" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1200,7 +1178,7 @@
 
 
 <hr />
-<h2 id="description-complete-agentsync-cli-reference-every-command-flag-default-and-caveat-for-init-push-copy-status-daemon-key-skill-plugin-vault-and-the-tui">description: Complete AgentSync CLI reference: every command, flag, default, and caveat for init, push, copy, status, daemon, key, skill, plugin, vault, and the TUI.<a class="headerlink" href="#description-complete-agentsync-cli-reference-every-command-flag-default-and-caveat-for-init-push-copy-status-daemon-key-skill-plugin-vault-and-the-tui" title="Permanent link">&para;</a></h2>
+<h2 id="description-complete-agentsync-cli-reference-every-command-flag-default-and-caveat-for-init-push-copy-status-key-skill-plugin-vault-and-the-tui">description: Complete AgentSync CLI reference: every command, flag, default, and caveat for init, push, copy, status, key, skill, plugin, vault, and the TUI.<a class="headerlink" href="#description-complete-agentsync-cli-reference-every-command-flag-default-and-caveat-for-init-push-copy-status-key-skill-plugin-vault-and-the-tui" title="Permanent link">&para;</a></h2>
 <h1 id="commands">Commands<a class="headerlink" href="#commands" title="Permanent link">&para;</a></h1>
 <p>Every AgentSync subcommand in one reference: what it does, what it needs, what it produces, and the caveats that bite if you ignore them.</p>
 <h2 id="what-this-page-owns">What this page owns<a class="headerlink" href="#what-this-page-owns" title="Permanent link">&para;</a></h2>
@@ -1260,16 +1238,12 @@
 <td>Check the local environment before blaming sync logic.</td>
 </tr>
 <tr>
-<td><a href="#daemon"><code>daemon</code></a></td>
-<td>Install, start, stop, and inspect the background daemon.</td>
-</tr>
-<tr>
 <td><a href="#key"><code>key</code></a></td>
 <td>Add, list, or remove recipients, or rotate the current machine key.</td>
 </tr>
 <tr>
 <td><a href="#config"><code>config</code></a></td>
-<td>View or change vault config (agents, sync, security policy).</td>
+<td>View or change vault config (agents, security policy).</td>
 </tr>
 <tr>
 <td><a href="#skill"><code>skill</code></a></td>
@@ -1316,7 +1290,7 @@ cross-agent migrations from a single interactive screen.</p>
 <tbody>
 <tr>
 <td>1 Dashboard</td>
-<td>Daemon health (pid, uptime, <strong>last successful sync</strong>, last error, and a loud <strong>stuck</strong> warning when the vault diverged), vault state, agent summary, init / key-rotate launchers.</td>
+<td>Vault state, agent summary, init / key-rotate launchers, and an update banner when a newer release is available.</td>
 </tr>
 <tr>
 <td>2 Sync</td>
@@ -1336,7 +1310,7 @@ cross-agent migrations from a single interactive screen.</p>
 </tr>
 <tr>
 <td>6 Config</td>
-<td>View and change vault config (agents enabled, <code>sync.*</code>, <code>claudePlugins.*</code>, <code>security.*</code>) with <code>↑</code>/<code>↓</code> to move, <code>space</code> to toggle a boolean, <code>←</code>/<code>→</code> to cycle an enum or adjust a number. Cycling <code>security.secretScan</code> shows a one-line explainer of the selected mode; choosing <code>off</code> first prompts a <code>y</code>/<code>n</code> confirm because it pushes live secrets. Writes go through the same <a href="#config"><code>config</code></a> core (reconcile + commit + push). Also lists the recipients who can decrypt the vault, read-only.</td>
+<td>View and change vault config (agents enabled, <code>claudePlugins.*</code>, <code>security.*</code>) with <code>↑</code>/<code>↓</code> to move, <code>space</code> to toggle a boolean, <code>←</code>/<code>→</code> to cycle an enum. Cycling <code>security.secretScan</code> shows a one-line explainer of the selected mode; choosing <code>off</code> first prompts a <code>y</code>/<code>n</code> confirm because it pushes live secrets. Writes go through the same <a href="#config"><code>config</code></a> core (reconcile + commit + push). Also lists the recipients who can decrypt the vault, read-only.</td>
 </tr>
 </tbody>
 </table>
@@ -1376,8 +1350,8 @@ cross-agent migrations from a single interactive screen.</p>
 </tbody>
 </table>
 <p><strong>Outcome</strong>: every state change is additive on the same data the CLI
-subcommands operate on. Push goes through the same daemon IPC the <code>status</code> and
-<code>daemon</code> subcommands use; the Machines tab calls the same <code>performCopy</code> core as
+subcommands operate on. Push runs the same <code>performPush</code> core as <code>agentsync
+push</code>; the Machines tab calls the same <code>performCopy</code> core as
 <code>agentsync copy</code>; migrate calls the same planner as <code>agentsync migrate</code>; bulk
 removal calls the same <code>performVaultRemove</code> core that <code>agentsync skill remove</code>
 delegates to, once per selected vault artifact; the Config tab writes through
@@ -1388,10 +1362,8 @@ the same <code>performConfigSet</code> core as <code>agentsync config set</code>
   <code>nohup</code>, CI runners) bare <code>agentsync</code> deliberately falls back to text
   <code>status</code> output so existing scripts continue to work.</li>
 <li>The activity log is session-scoped — closing the TUI discards history.</li>
-<li>Push requires the daemon to be running. If the daemon is offline, the footer
-  shows <code>daemon ● offline</code> and <code>p</code> surfaces an inline notice rather than
-  queueing a request that cannot be served. (Copy runs in-process and does not
-  need the daemon.)</li>
+<li>Push and copy run in-process — the TUI calls the same command cores directly,
+  so there is no background service to start first.</li>
 </ul>
 <h2 id="conventions">Conventions<a class="headerlink" href="#conventions" title="Permanent link">&para;</a></h2>
 <ul>
@@ -1599,8 +1571,7 @@ the same <code>performConfigSet</code> core as <code>agentsync config set</code>
 <li>age-encryption module availability,</li>
 <li>remote reachability,</li>
 <li>obvious unencrypted sensitive files in the vault,</li>
-<li>readability of the per-agent skills directories (<code>buildSkillsDirChecks</code> warns if a directory is missing, unreadable, a symbolic link, or exists but is not a directory),</li>
-<li>daemon service installation state.</li>
+<li>readability of the per-agent skills directories (<code>buildSkillsDirChecks</code> warns if a directory is missing, unreadable, a symbolic link, or exists but is not a directory).</li>
 </ul>
 <p><strong>Caveats</strong>:</p>
 <ul>
@@ -1642,30 +1613,13 @@ the same <code>performConfigSet</code> core as <code>agentsync config set</code>
 <li>The TUI Dashboard runs the same check in the background and shows an <code>Update available</code> banner; press <code>u</code> there to upgrade a global install.</li>
 <li>The result is cached for 24 hours at <code>~/.config/agentsync/update-check.json</code> (<code>%APPDATA%/agentsync</code> on Windows). <code>agentsync upgrade</code> always re-checks and ignores the cache.</li>
 </ul>
-<h2 id="daemon">daemon<a class="headerlink" href="#daemon" title="Permanent link">&para;</a></h2>
-<p><strong>Why</strong>: Run AgentSync as a background process that watches your agent paths and debounces pushes on change. It is push-only and does not auto-pull.</p>
-<p><strong>Usage</strong>:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>agentsync<span class="w"> </span>daemon<span class="w"> </span>install<span class="w">     </span><span class="c1"># write the OS service descriptor</span>
-</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>agentsync<span class="w"> </span>daemon<span class="w"> </span>start<span class="w">       </span><span class="c1"># idempotent</span>
-</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>agentsync<span class="w"> </span>daemon<span class="w"> </span>status<span class="w">      </span><span class="c1"># last-sync health (last success, failures, stuck)</span>
-</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a>agentsync<span class="w"> </span>daemon<span class="w"> </span>stop
-</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a>agentsync<span class="w"> </span>daemon<span class="w"> </span>uninstall
-</span></code></pre></div>
-<p><strong>Outcome</strong>: a long-running process supervised by launchd (macOS), systemd-user (Linux), or Task Scheduler (Windows). The daemon serialises sync operations through an internal queue so no two operations race.</p>
-<p><strong>Caveats</strong>:</p>
-<ul>
-<li>Only one daemon runs per user. A second-instance check exits cleanly if a daemon is already up.</li>
-<li>A transient sync failure triggers one automatic retry. If the retry also fails, the error is recorded but the daemon stays alive so the next change can trigger a fresh push.</li>
-<li><code>daemon status</code> reports the last successful sync time, consecutive failures, and a <strong>stuck</strong> flag (vault diverged). When the daemon is <strong>not</strong> running it falls back to the durable <code>daemon-state.json</code>, so you still see when sync last succeeded. <code>doctor</code> surfaces a stale or stuck last-sync as a dedicated health row — a silent backup failure is loud, not invisible.</li>
-<li>See <a href="../operations/#daemon">Daemon</a> for install paths per OS, lifecycle, health/durable-state, and log locations.</li>
-</ul>
 <h2 id="key">key<a class="headerlink" href="#key" title="Permanent link">&para;</a></h2>
 <p><strong>Why</strong>: Manage who can decrypt the vault — add a recipient, list recipients, deauthorize (remove) one, or rotate the current machine's keypair.</p>
 <p><strong>Usage</strong>:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>agentsync<span class="w"> </span>key<span class="w"> </span>add<span class="w"> </span>&lt;name&gt;<span class="w"> </span>&lt;age-public-key&gt;<span class="w">   </span><span class="c1"># authorize a recipient</span>
-</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>agentsync<span class="w"> </span>key<span class="w"> </span>list<span class="w">                           </span><span class="c1"># audit who can decrypt the vault</span>
-</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>agentsync<span class="w"> </span>key<span class="w"> </span>remove<span class="w"> </span>&lt;name&gt;<span class="w">                  </span><span class="c1"># deauthorize a recipient</span>
-</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a>agentsync<span class="w"> </span>key<span class="w"> </span>rotate<span class="w">                         </span><span class="c1"># new local identity, re-encrypt</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>agentsync<span class="w"> </span>key<span class="w"> </span>add<span class="w"> </span>&lt;name&gt;<span class="w"> </span>&lt;age-public-key&gt;<span class="w">   </span><span class="c1"># authorize a recipient</span>
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>agentsync<span class="w"> </span>key<span class="w"> </span>list<span class="w">                           </span><span class="c1"># audit who can decrypt the vault</span>
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>agentsync<span class="w"> </span>key<span class="w"> </span>remove<span class="w"> </span>&lt;name&gt;<span class="w">                  </span><span class="c1"># deauthorize a recipient</span>
+</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a>agentsync<span class="w"> </span>key<span class="w"> </span>rotate<span class="w">                         </span><span class="c1"># new local identity, re-encrypt</span>
 </span></code></pre></div>
 <p><strong>Outcome</strong>: <code>add</code>, <code>remove</code>, and <code>rotate</code> decrypt every existing vault artefact under the current key and re-encrypt it under the updated recipient set, then commit and push. <code>list</code> is read-only — it prints each recipient alias and public key from <code>agentsync.toml</code>, marking the entry that belongs to this machine with <code>*</code>.</p>
 <p><strong>Caveats</strong>:</p>
@@ -1678,13 +1632,13 @@ the same <code>performConfigSet</code> core as <code>agentsync config set</code>
 <li>Recipient names are stable config keys and are visible in the vault repository. Use names that describe the machine clearly without leaking sensitive context.</li>
 </ul>
 <h2 id="config">config<a class="headerlink" href="#config" title="Permanent link">&para;</a></h2>
-<p><strong>Why</strong>: View or change the vault configuration in <code>agentsync.toml</code> without hand-editing it — which agents are enabled, daemon sync behaviour, and the secret-handling policy.</p>
+<p><strong>Why</strong>: View or change the vault configuration in <code>agentsync.toml</code> without hand-editing it — which agents are enabled and the secret-handling policy.</p>
 <p><strong>Usage</strong>:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>agentsync<span class="w"> </span>config<span class="w"> </span>list<span class="w">                              </span><span class="c1"># print every configurable key</span>
-</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>agentsync<span class="w"> </span>config<span class="w"> </span>get<span class="w"> </span>sync.debounceMs<span class="w">               </span><span class="c1"># read one value</span>
-</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>agentsync<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>agents.vscode<span class="w"> </span><span class="nb">true</span><span class="w">            </span><span class="c1"># enable VS Code sync</span>
-</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a>agentsync<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>security.secretScan<span class="w"> </span>strict<span class="w">    </span><span class="c1"># widen secret detection</span>
-</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a>agentsync<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>security.allowSecretValues<span class="w"> </span><span class="s1">&#39;[&quot;AKIA-not-a-real-key&quot;]&#39;</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>agentsync<span class="w"> </span>config<span class="w"> </span>list<span class="w">                              </span><span class="c1"># print every configurable key</span>
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>agentsync<span class="w"> </span>config<span class="w"> </span>get<span class="w"> </span>security.secretScan<span class="w">           </span><span class="c1"># read one value</span>
+</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>agentsync<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>agents.vscode<span class="w"> </span><span class="nb">true</span><span class="w">            </span><span class="c1"># enable VS Code sync</span>
+</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a>agentsync<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>security.secretScan<span class="w"> </span>strict<span class="w">    </span><span class="c1"># widen secret detection</span>
+</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a>agentsync<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>security.allowSecretValues<span class="w"> </span><span class="s1">&#39;[&quot;AKIA-not-a-real-key&quot;]&#39;</span>
 </span></code></pre></div>
 <p><strong>Settable keys</strong> (dotted paths under these sections):</p>
 <table>
@@ -1700,16 +1654,6 @@ the same <code>performConfigSet</code> core as <code>agentsync config set</code>
 <td><code>agents.&lt;claude\|cursor\|codex\|copilot\|vscode&gt;</code></td>
 <td>boolean</td>
 <td>Whether that agent is snapshotted on push.</td>
-</tr>
-<tr>
-<td><code>sync.debounceMs</code></td>
-<td>integer 50–10000</td>
-<td>Daemon quiet-window before an auto-push.</td>
-</tr>
-<tr>
-<td><code>sync.autoPush</code></td>
-<td>boolean</td>
-<td>Whether the daemon auto-pushes on change.</td>
 </tr>
 <tr>
 <td><code>claudePlugins.syncPlugins</code></td>
@@ -1760,8 +1704,8 @@ See <a href="../operations/#push-aborts-because-secrets-were-detected">Push abor
 <h2 id="skill">skill<a class="headerlink" href="#skill" title="Permanent link">&para;</a></h2>
 <p><strong>Why</strong>: Remove a skill from the vault without affecting the rest of the snapshot. This is AgentSync's only explicit, non-additive operation.</p>
 <p><strong>Usage</strong>:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>agentsync<span class="w"> </span>skill<span class="w"> </span>remove<span class="w"> </span>&lt;agent&gt;<span class="w"> </span>&lt;name&gt;
-</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>agentsync<span class="w"> </span>skill<span class="w"> </span>remove<span class="w"> </span>&lt;agent&gt;<span class="w"> </span>&lt;name&gt;<span class="w"> </span>--machine<span class="w"> </span>&lt;namespace&gt;
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>agentsync<span class="w"> </span>skill<span class="w"> </span>remove<span class="w"> </span>&lt;agent&gt;<span class="w"> </span>&lt;name&gt;
+</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>agentsync<span class="w"> </span>skill<span class="w"> </span>remove<span class="w"> </span>&lt;agent&gt;<span class="w"> </span>&lt;name&gt;<span class="w"> </span>--machine<span class="w"> </span>&lt;namespace&gt;
 </span></code></pre></div>
 <p><strong>Flags</strong>:</p>
 <table>
@@ -1790,8 +1734,8 @@ See <a href="../operations/#push-aborts-because-secrets-were-detected">Push abor
 <h2 id="plugin">plugin<a class="headerlink" href="#plugin" title="Permanent link">&para;</a></h2>
 <p><strong>Why</strong>: Reproduce a machine's Claude plugins on another machine. AgentSync does not encrypt the plugin tree; the marketplace is the source of truth. <code>push</code> (with <code>[claudePlugins] syncPlugins = true</code>) records a distilled manifest — each plugin's <code>name@marketplace</code>, scope, and enabled flag — and <code>plugin install</code> reinstalls from it via the local <code>claude</code> CLI.</p>
 <p><strong>Usage</strong>:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>agentsync<span class="w"> </span>plugin<span class="w"> </span>list<span class="w"> </span>&lt;machine&gt;<span class="w">            </span><span class="c1"># print the recorded manifest</span>
-</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>agentsync<span class="w"> </span>plugin<span class="w"> </span>install<span class="w"> </span>&lt;machine&gt;<span class="w"> </span><span class="o">[</span>name<span class="o">]</span><span class="w">  </span><span class="c1"># reinstall all, or one named plugin</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>agentsync<span class="w"> </span>plugin<span class="w"> </span>list<span class="w"> </span>&lt;machine&gt;<span class="w">            </span><span class="c1"># print the recorded manifest</span>
+</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>agentsync<span class="w"> </span>plugin<span class="w"> </span>install<span class="w"> </span>&lt;machine&gt;<span class="w"> </span><span class="o">[</span>name<span class="o">]</span><span class="w">  </span><span class="c1"># reinstall all, or one named plugin</span>
 </span></code></pre></div>
 <p>Use <code>self</code> as <code>&lt;machine&gt;</code> to act on this machine's own manifest.</p>
 <p><strong>Outcome</strong>: <code>install</code> registers each referenced marketplace (<code>claude plugin marketplace add</code>), installs each plugin at its recorded scope (<code>claude plugin install &lt;name&gt;@&lt;marketplace&gt; -s &lt;scope&gt;</code>), then enables or disables it to match the manifest.</p>
@@ -1804,7 +1748,7 @@ See <a href="../operations/#push-aborts-because-secrets-were-detected">Push abor
 <h2 id="vault">vault<a class="headerlink" href="#vault" title="Permanent link">&para;</a></h2>
 <p><strong>Why</strong>: Migrate an older flat (v1) vault to the per-machine layout (v2), where every artefact lives under <code>machines/&lt;name&gt;/</code>. This is the vault-<strong>format</strong> migration — distinct from <a href="#migrate"><code>migrate</code></a>, which translates config between agents, and from <a href="#upgrade"><code>upgrade</code></a>, which updates the AgentSync binary.</p>
 <p><strong>Usage</strong>:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>agentsync<span class="w"> </span>vault<span class="w"> </span>upgrade
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>agentsync<span class="w"> </span>vault<span class="w"> </span>upgrade
 </span></code></pre></div>
 <p><strong>Outcome</strong>: the existing flat content is assumed to belong to this machine and is <code>git mv</code>'d under <code>machines/&lt;this-machine&gt;/</code>, the config <code>version</code> is bumped to the integer <code>2</code>, and the change is committed and fast-forwarded to the remote. It reconciles first, so a vault another machine already upgraded is detected and the command is a no-op. Idempotent — running it on a v2 vault prints "already at format v2".</p>
 <p><strong>Caveats</strong>:</p>
@@ -1815,7 +1759,7 @@ See <a href="../operations/#push-aborts-because-secrets-were-detected">Push abor
 <h2 id="migrate">migrate<a class="headerlink" href="#migrate" title="Permanent link">&para;</a></h2>
 <p><strong>Why</strong>: Translate configuration between Claude, Cursor, Codex, Copilot, and VS Code without touching the vault.</p>
 <p><strong>Usage</strong>:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>agentsync<span class="w"> </span>migrate<span class="w"> </span>--from<span class="w"> </span>&lt;agent&gt;<span class="w"> </span>--to<span class="w"> </span>&lt;agent<span class="p">|</span>all&gt;<span class="w"> </span><span class="o">[</span>--type<span class="w"> </span>&lt;type&gt;<span class="o">]</span><span class="w"> </span><span class="o">[</span>--name<span class="w"> </span>&lt;file&gt;<span class="o">]</span><span class="w"> </span><span class="o">[</span>--dry-run<span class="o">]</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>agentsync<span class="w"> </span>migrate<span class="w"> </span>--from<span class="w"> </span>&lt;agent&gt;<span class="w"> </span>--to<span class="w"> </span>&lt;agent<span class="p">|</span>all&gt;<span class="w"> </span><span class="o">[</span>--type<span class="w"> </span>&lt;type&gt;<span class="o">]</span><span class="w"> </span><span class="o">[</span>--name<span class="w"> </span>&lt;file&gt;<span class="o">]</span><span class="w"> </span><span class="o">[</span>--dry-run<span class="o">]</span>
 </span></code></pre></div>
 <p><strong>Flags</strong>:</p>
 <table>
@@ -1879,9 +1823,9 @@ in <code>src/commands/destroy.ts</code>) and by test (three sha256+mtime
 invariants in <code>destroy.test.ts</code>).</p>
 </blockquote>
 <p><strong>Usage</strong>:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>agentsync<span class="w"> </span>destroy<span class="w">                       </span><span class="c1"># local-only, default</span>
-</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>agentsync<span class="w"> </span>destroy<span class="w"> </span>--scope<span class="o">=</span>remote<span class="w">        </span><span class="c1"># wipe remote via commit</span>
-</span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a>agentsync<span class="w"> </span>destroy<span class="w"> </span>--scope<span class="o">=</span>all<span class="w">           </span><span class="c1"># both</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>agentsync<span class="w"> </span>destroy<span class="w">                       </span><span class="c1"># local-only, default</span>
+</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>agentsync<span class="w"> </span>destroy<span class="w"> </span>--scope<span class="o">=</span>remote<span class="w">        </span><span class="c1"># wipe remote via commit</span>
+</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>agentsync<span class="w"> </span>destroy<span class="w"> </span>--scope<span class="o">=</span>all<span class="w">           </span><span class="c1"># both</span>
 </span></code></pre></div>
 <p><strong>Flags</strong>:</p>
 <table>
@@ -1934,7 +1878,7 @@ invariants in <code>destroy.test.ts</code>).</p>
 <tbody>
 <tr>
 <td><code>local</code></td>
-<td><code>~/.config/agentsync/vault/</code> (or <code>%APPDATA%/agentsync/vault/</code> on Windows) is gone. <code>~/.config/agentsync/key.txt</code>, the daemon, the remote, and every <code>~/.&lt;agent&gt;/</code> directory are unchanged. Re-init from the same remote restores the clone.</td>
+<td><code>~/.config/agentsync/vault/</code> (or <code>%APPDATA%/agentsync/vault/</code> on Windows) is gone. <code>~/.config/agentsync/key.txt</code>, the remote, and every <code>~/.&lt;agent&gt;/</code> directory are unchanged. Re-init from the same remote restores the clone.</td>
 </tr>
 <tr>
 <td><code>remote</code></td>
@@ -1951,9 +1895,6 @@ invariants in <code>destroy.test.ts</code>).</p>
 <li>Other recipients are affected by <code>--scope=remote</code> / <code>--scope=all</code>. Their
   next <code>agentsync push</code> or <code>copy</code> will reconcile against an empty vault and
   they lose their <code>agentsync.toml</code> config — they will need to re-init.</li>
-<li>The daemon stays running after a local destroy. Its next sync attempt
-  will fail until re-init. Run <code>agentsync daemon stop</code> if you want it
-  quiet in the meantime.</li>
 <li><code>key.txt</code> is preserved across every scope. Re-init from the same remote
   reuses the existing identity so you stay a recipient. Delete the key
   manually (<code>rm ~/.config/agentsync/key.txt</code> on Unix, or remove <code>%APPDATA%/agentsync/key.txt</code> on Windows) if you really need a key wipe.</li>

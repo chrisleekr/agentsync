@@ -931,7 +931,7 @@ time.</p>
 <tr>
 <td><code>architecture.md</code></td>
 <td>maintainer</td>
-<td><code>src/core/</code>, <code>src/daemon/</code>, <code>src/migrate/</code>, <code>src/agents/</code></td>
+<td><code>src/core/</code>, <code>src/migrate/</code>, <code>src/agents/</code></td>
 <td>new module, new invariant, security-boundary change, vault-format version bump</td>
 </tr>
 <tr>
@@ -949,8 +949,8 @@ time.</p>
 <tr>
 <td><code>operations.md</code></td>
 <td>maintainer</td>
-<td><code>src/daemon/installer-*.ts</code>, troubleshooting reports</td>
-<td>new install target, new failure mode</td>
+<td>troubleshooting reports</td>
+<td>new failure mode</td>
 </tr>
 <tr>
 <td><code>contributing.md</code></td>
@@ -980,7 +980,6 @@ time.</p>
 <ul class="task-list">
 <li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> <code>bun run check</code> is green locally.</li>
 <li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> Every changed CLI surface is reflected in <code>docs/commands.md</code> (or <code>docs/migrate.md</code> for migrate-only changes).</li>
-<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> Every new daemon installer target is reflected in <code>docs/operations.md</code>.</li>
 <li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> Every change that crosses a security or reconciliation boundary is reflected in <code>docs/architecture.md</code>.</li>
 <li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> If a doc file moved or was deleted, every internal link to it still resolves; <code>mkdocs build --strict</code> proves this in CI.</li>
 </ul>

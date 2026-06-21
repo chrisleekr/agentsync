@@ -100,7 +100,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#description-how-agentsync-works-the-encrypted-vault-format-push-and-copy-pipelines-the-background-daemon-and-fail-closed-reconciliation" class="md-skip">
+        <a href="#description-how-agentsync-works-the-encrypted-vault-format-push-and-copy-pipelines-and-fail-closed-reconciliation" class="md-skip">
           Skip to content
         </a>
       
@@ -495,10 +495,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#description-how-agentsync-works-the-encrypted-vault-format-push-and-copy-pipelines-the-background-daemon-and-fail-closed-reconciliation" class="md-nav__link">
+  <a href="#description-how-agentsync-works-the-encrypted-vault-format-push-and-copy-pipelines-and-fail-closed-reconciliation" class="md-nav__link">
     <span class="md-ellipsis">
       
-        description: How AgentSync works: the encrypted vault format, push and copy pipelines, the background daemon, and fail-closed reconciliation.
+        description: How AgentSync works: the encrypted vault format, push and copy pipelines, and fail-closed reconciliation.
       
     </span>
   </a>
@@ -588,17 +588,6 @@
     <span class="md-ellipsis">
       
         Skills and plugins
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#daemon-model" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Daemon model
       
     </span>
   </a>
@@ -806,10 +795,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#description-how-agentsync-works-the-encrypted-vault-format-push-and-copy-pipelines-the-background-daemon-and-fail-closed-reconciliation" class="md-nav__link">
+  <a href="#description-how-agentsync-works-the-encrypted-vault-format-push-and-copy-pipelines-and-fail-closed-reconciliation" class="md-nav__link">
     <span class="md-ellipsis">
       
-        description: How AgentSync works: the encrypted vault format, push and copy pipelines, the background daemon, and fail-closed reconciliation.
+        description: How AgentSync works: the encrypted vault format, push and copy pipelines, and fail-closed reconciliation.
       
     </span>
   </a>
@@ -906,17 +895,6 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#daemon-model" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Daemon model
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
   <a href="#security-boundaries" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1002,23 +980,23 @@
 
 
 <hr />
-<h2 id="description-how-agentsync-works-the-encrypted-vault-format-push-and-copy-pipelines-the-background-daemon-and-fail-closed-reconciliation">description: How AgentSync works: the encrypted vault format, push and copy pipelines, the background daemon, and fail-closed reconciliation.<a class="headerlink" href="#description-how-agentsync-works-the-encrypted-vault-format-push-and-copy-pipelines-the-background-daemon-and-fail-closed-reconciliation" title="Permanent link">&para;</a></h2>
+<h2 id="description-how-agentsync-works-the-encrypted-vault-format-push-and-copy-pipelines-and-fail-closed-reconciliation">description: How AgentSync works: the encrypted vault format, push and copy pipelines, and fail-closed reconciliation.<a class="headerlink" href="#description-how-agentsync-works-the-encrypted-vault-format-push-and-copy-pipelines-and-fail-closed-reconciliation" title="Permanent link">&para;</a></h2>
 <h1 id="architecture">Architecture<a class="headerlink" href="#architecture" title="Permanent link">&para;</a></h1>
 <p>How AgentSync moves bytes from your machine to a Git remote and back, encrypted end-to-end, with reconciliation that fails closed.</p>
 <h2 id="what-this-page-owns">What this page owns<a class="headerlink" href="#what-this-page-owns" title="Permanent link">&para;</a></h2>
-<p>This page owns the system model, the push and copy pipelines, the daemon model, the vault layout, the security boundaries, and the reconciliation rule. Command flags live in <a href="../commands/">Commands</a>; day-2 operational concerns live in <a href="../operations/">Operations</a>.</p>
+<p>This page owns the system model, the push and copy pipelines, the vault layout, the security boundaries, and the reconciliation rule. Command flags live in <a href="../commands/">Commands</a>; day-2 operational concerns live in <a href="../operations/">Operations</a>.</p>
 <h2 id="system-context">System context<a class="headerlink" href="#system-context" title="Permanent link">&para;</a></h2>
 <p>The diagram shows the major actors and the trust boundaries between them. <strong>Plaintext never crosses the network.</strong> The Git remote only ever sees ciphertext blobs and metadata.</p>
 <div class="agentsync-darknodes">
 <pre class="mermaid"><code>flowchart LR
     AgentsA["AI agents&lt;br/&gt;Machine A"]:::local
-    CliA["agentsync CLI&lt;br/&gt;and daemon"]:::local
+    CliA["agentsync CLI"]:::local
     KeyA["age keypair&lt;br/&gt;Machine A"]:::key
     SanEncA["Sanitise&lt;br/&gt;and encrypt"]:::gate
     VaultRemote[("Git remote&lt;br/&gt;vault")]:::remote
     SanEncB["Decrypt&lt;br/&gt;and apply"]:::gate
     KeyB["age keypair&lt;br/&gt;Machine B"]:::key
-    CliB["agentsync CLI&lt;br/&gt;and daemon"]:::local
+    CliB["agentsync CLI"]:::local
     AgentsB["AI agents&lt;br/&gt;Machine B"]:::local
 
     AgentsA --&gt;|local read| CliA
@@ -1037,12 +1015,12 @@
 </div>
 <p>The three things to internalise:</p>
 <ol>
-<li>The CLI and daemon are the only components that ever hold plaintext.</li>
+<li>The CLI is the only component that ever holds plaintext.</li>
 <li>The age keypair lives only on its own machine. Adding a machine means adding its public key to the recipient list, not sharing private material.</li>
 <li>The Git remote is fully replaceable. Any host that can serve a Git repository works. The remote learns nothing about the configuration it stores.</li>
 </ol>
 <h2 id="the-push-pipeline">The push pipeline<a class="headerlink" href="#the-push-pipeline" title="Permanent link">&para;</a></h2>
-<p>When you run <code>agentsync push</code> (or the daemon fires one), bytes flow through four gates in order. Any gate can abort the entire push. There is no partial state in the vault.</p>
+<p>When you run <code>agentsync push</code>, bytes flow through four gates in order. Any gate can abort the entire push. There is no partial state in the vault.</p>
 <div class="agentsync-darknodes">
 <pre class="mermaid"><code>flowchart LR
     Walk["Walk agent paths"]:::step
@@ -1096,9 +1074,9 @@
     classDef remote fill:#1e8449,color:#ffffff,stroke:#196f3d
     classDef abort fill:#d35400,color:#ffffff,stroke:#a04000</code></pre>
 </div>
-<p><code>status</code> and <code>doctor</code> ride on top of the same primitives but never write. <code>status</code> compares a fresh local snapshot to the decrypted vault state. <code>doctor</code> checks key presence, config validity, remote reachability, vault hygiene, and daemon installation state.</p>
+<p><code>status</code> and <code>doctor</code> ride on top of the same primitives but never write. <code>status</code> compares a fresh local snapshot to the decrypted vault state. <code>doctor</code> checks key presence, config validity, remote reachability, and vault hygiene.</p>
 <h2 id="reconciliation-rule">Reconciliation rule<a class="headerlink" href="#reconciliation-rule" title="Permanent link">&para;</a></h2>
-<p>Reconciliation is fast-forward only and is the <strong>same rule</strong> used by <code>init</code>, <code>push</code>, <code>copy</code>, <code>key add</code>, <code>key rotate</code>, and the daemon. The contract:</p>
+<p>Reconciliation is fast-forward only and is the <strong>same rule</strong> used by <code>init</code>, <code>push</code>, <code>copy</code>, <code>key add</code>, and <code>key rotate</code>. The contract:</p>
 <ul>
 <li>If the local branch is identical to the remote branch, the operation continues.</li>
 <li>If the local branch is behind the remote, the operation fast-forwards the local before continuing.</li>
@@ -1143,39 +1121,6 @@
 </ul>
 <p>Claude plugins are not walked as a file tree. They are represented solely by <code>plugins.manifest.json.age</code> (emitted when <code>claudePlugins.syncPlugins = true</code>); no plugin asset tree is emitted on push or applied on pull.</p>
 <p>Once admitted, each artefact is sanitised through the relevant rule set, encrypted, and emitted to its vault path. Sanitiser warnings about redacted secrets are surfaced in the push output so the user knows their literal credential was rejected rather than silently scrubbed.</p>
-<h2 id="daemon-model">Daemon model<a class="headerlink" href="#daemon-model" title="Permanent link">&para;</a></h2>
-<p>The daemon is a long-running process under platform supervision (launchd on macOS, systemd-user on Linux, Task Scheduler on Windows). It is <strong>push-only</strong>: it exposes <code>status</code> and <code>push</code> over a newline-delimited IPC protocol on a per-user socket. There is no pull IPC command and no periodic pull timer — the vault is a backup, and bringing content down is always an explicit, interactive <code>copy</code>.</p>
-<div class="agentsync-darknodes">
-<pre class="mermaid"><code>flowchart LR
-    Watcher["File watcher"]:::step
-    Debounce["Debounce&lt;br/&gt;quiet window"]:::step
-    Queue["Sync queue&lt;br/&gt;serialised"]:::gate
-    Push["push"]:::step
-    Ipc["IPC server"]:::step
-    Cli["agentsync CLI"]:::local
-    Tui["agentsync TUI"]:::local
-
-    Watcher --&gt; Debounce --&gt; Queue
-    Cli --&gt;|status / push| Ipc
-    Tui --&gt;|status poll 1.5s, push| Ipc
-    Ipc --&gt; Queue
-    Queue --&gt; Push
-
-    classDef local fill:#2c3e50,color:#ffffff,stroke:#1a252f
-    classDef step fill:#2c3e50,color:#ffffff,stroke:#1a252f
-    classDef gate fill:#c0392b,color:#ffffff,stroke:#7b241c</code></pre>
-</div>
-<p>The IPC server accepts multiple concurrent clients. A TUI session and a
-flag-driven CLI invocation can be open at the same time without conflicting
-because every request goes through the same sync queue.</p>
-<p>Key invariants:</p>
-<ul>
-<li><strong>Only one daemon per user.</strong> Second-instance detection runs at startup and exits cleanly if a daemon is already up. A stale socket from an ungraceful prior exit is unlinked automatically.</li>
-<li><strong>One sync at a time.</strong> Every push, whether file-watcher-driven or IPC-driven, passes through the sync queue. Two operations can never race.</li>
-<li><strong>One automatic retry.</strong> A transient sync failure triggers one retry. If both attempts fail, the error is recorded and the daemon stays alive so the next change can trigger a fresh push. The daemon never silently gives up.</li>
-<li><strong>Hard shutdown timeout.</strong> On shutdown the queue is drained with a ten-second hard timeout. The IPC socket and watchers are released cleanly.</li>
-</ul>
-<p>Daemon installation paths per OS, log locations, and the configuration table live in <a href="../operations/#daemon">Operations</a>.</p>
 <h2 id="security-boundaries">Security boundaries<a class="headerlink" href="#security-boundaries" title="Permanent link">&para;</a></h2>
 <p>Three places own the security contract:</p>
 <ul>
@@ -1185,7 +1130,7 @@ because every request goes through the same sync queue.</p>
 </ul>
 <p>Private keys stay on disk in the local runtime directory (<code>~/.config/agentsync/key.txt</code> by default on Unix, with restrictive permissions). They are never committed and never logged.</p>
 <h2 id="path-resolution">Path resolution<a class="headerlink" href="#path-resolution" title="Permanent link">&para;</a></h2>
-<p>Every agent path is resolved through a single resolver that maps <code>&lt;agent&gt;.&lt;dir&gt;</code> to an absolute path on the current OS. Tests and platform overrides drive the resolver through environment variables rather than rewriting paths inline. The consequence: AgentSync runs identically inside the Docker E2E harness, on a developer laptop, and in CI, without command-implementation sites needing to branch on platform — platform-specific decisions live in <code>src/config/paths.ts</code> and <code>src/daemon/installer-*.ts</code> and nowhere else.</p>
+<p>Every agent path is resolved through a single resolver that maps <code>&lt;agent&gt;.&lt;dir&gt;</code> to an absolute path on the current OS. Tests and platform overrides drive the resolver through environment variables rather than rewriting paths inline. The consequence: AgentSync runs identically inside the Docker E2E harness, on a developer laptop, and in CI, without command-implementation sites needing to branch on platform — platform-specific decisions live in <code>src/config/paths.ts</code> and nowhere else.</p>
 <h2 id="vault-format-versioning">Vault format versioning<a class="headerlink" href="#vault-format-versioning" title="Permanent link">&para;</a></h2>
 <p>The vault carries an integer <code>version</code> field in <code>agentsync.toml</code>. Format v2 sets <code>version = 2</code> and is the per-machine layout (<code>machines/&lt;name&gt;/…</code>). The field is the old-binary hard block: a v1 binary's schema expected a string, so it cannot load a v2 vault and write flat dirs beside <code>machines/</code>. Loading is two-phase — <code>peekVaultVersion</code> reads the raw <code>version</code> before the schema runs, so a legacy v1 vault (string or absent <code>version</code>) is routed to <code>agentsync vault upgrade</code> instead of failing with an opaque error, and an integer above the current version tells the user to upgrade agentsync itself. <code>agentsync vault upgrade</code> performs the one-time v1→v2 relocation (distinct from the cross-agent translators under <code>src/migrate/</code>, documented in <a href="../migrate/">Migrate</a>).</p>
 <h2 id="source-map">Source map<a class="headerlink" href="#source-map" title="Permanent link">&para;</a></h2>
@@ -1213,22 +1158,6 @@ because every request goes through the same sync queue.</p>
 <tr>
 <td>Fast-forward reconciliation rule</td>
 <td><code>src/core/git.ts</code></td>
-</tr>
-<tr>
-<td>Sync queue and IPC protocol</td>
-<td><code>src/core/sync-queue.ts</code>, <code>src/core/ipc.ts</code></td>
-</tr>
-<tr>
-<td>File watcher</td>
-<td><code>src/core/watcher.ts</code></td>
-</tr>
-<tr>
-<td>Daemon entry point</td>
-<td><code>src/daemon/index.ts</code></td>
-</tr>
-<tr>
-<td>Per-OS daemon installers</td>
-<td><code>src/daemon/installer-macos.ts</code>, <code>installer-linux.ts</code>, <code>installer-windows.ts</code></td>
 </tr>
 <tr>
 <td>Per-agent snapshot and apply</td>
