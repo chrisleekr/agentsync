@@ -1,5 +1,5 @@
 ---
-description: How AgentSync works: the encrypted vault format, push and copy pipelines, the background daemon, and fail-closed reconciliation.
+description: How AgentSync works: the encrypted vault format, push and copy pipelines, and fail-closed reconciliation.
 ---
 
 # Architecture
@@ -8,7 +8,7 @@ How AgentSync moves bytes from your machine to a Git remote and back, encrypted 
 
 ## What this page owns
 
-This page owns the system model, the push and copy pipelines, the daemon model, the vault layout, the security boundaries, and the reconciliation rule. Command flags live in [Commands](commands.md); day-2 operational concerns live in [Operations](operations.md).
+This page owns the system model, the push and copy pipelines, the vault layout, the security boundaries, and the reconciliation rule. Command flags live in [Commands](commands.md); day-2 operational concerns live in [Operations](operations.md).
 
 ## System context
 
@@ -19,13 +19,13 @@ The diagram shows the major actors and the trust boundaries between them. **Plai
 ```mermaid
 flowchart LR
     AgentsA["AI agents<br/>Machine A"]:::local
-    CliA["agentsync CLI<br/>and daemon"]:::local
+    CliA["agentsync CLI"]:::local
     KeyA["age keypair<br/>Machine A"]:::key
     SanEncA["Sanitise<br/>and encrypt"]:::gate
     VaultRemote[("Git remote<br/>vault")]:::remote
     SanEncB["Decrypt<br/>and apply"]:::gate
     KeyB["age keypair<br/>Machine B"]:::key
-    CliB["agentsync CLI<br/>and daemon"]:::local
+    CliB["agentsync CLI"]:::local
     AgentsB["AI agents<br/>Machine B"]:::local
 
     AgentsA -->|local read| CliA
@@ -47,13 +47,13 @@ flowchart LR
 
 The three things to internalise:
 
-1. The CLI and daemon are the only components that ever hold plaintext.
+1. The CLI is the only component that ever holds plaintext.
 2. The age keypair lives only on its own machine. Adding a machine means adding its public key to the recipient list, not sharing private material.
 3. The Git remote is fully replaceable. Any host that can serve a Git repository works. The remote learns nothing about the configuration it stores.
 
 ## The push pipeline
 
-When you run `agentsync push` (or the daemon fires one), bytes flow through four gates in order. Any gate can abort the entire push. There is no partial state in the vault.
+When you run `agentsync push`, bytes flow through four gates in order. Any gate can abort the entire push. There is no partial state in the vault.
 
 <div class="agentsync-darknodes" markdown>
 
@@ -121,11 +121,11 @@ flowchart LR
 
 </div>
 
-`status` and `doctor` ride on top of the same primitives but never write. `status` compares a fresh local snapshot to the decrypted vault state. `doctor` checks key presence, config validity, remote reachability, vault hygiene, and daemon installation state.
+`status` and `doctor` ride on top of the same primitives but never write. `status` compares a fresh local snapshot to the decrypted vault state. `doctor` checks key presence, config validity, remote reachability, and vault hygiene.
 
 ## Reconciliation rule
 
-Reconciliation is fast-forward only and is the **same rule** used by `init`, `push`, `copy`, `key add`, `key rotate`, and the daemon. The contract:
+Reconciliation is fast-forward only and is the **same rule** used by `init`, `push`, `copy`, `key add`, and `key rotate`. The contract:
 
 - If the local branch is identical to the remote branch, the operation continues.
 - If the local branch is behind the remote, the operation fast-forwards the local before continuing.
@@ -181,48 +181,6 @@ Claude plugins are not walked as a file tree. They are represented solely by `pl
 
 Once admitted, each artefact is sanitised through the relevant rule set, encrypted, and emitted to its vault path. Sanitiser warnings about redacted secrets are surfaced in the push output so the user knows their literal credential was rejected rather than silently scrubbed.
 
-## Daemon model
-
-The daemon is a long-running process under platform supervision (launchd on macOS, systemd-user on Linux, Task Scheduler on Windows). It is **push-only**: it exposes `status` and `push` over a newline-delimited IPC protocol on a per-user socket. There is no pull IPC command and no periodic pull timer — the vault is a backup, and bringing content down is always an explicit, interactive `copy`.
-
-<div class="agentsync-darknodes" markdown>
-
-```mermaid
-flowchart LR
-    Watcher["File watcher"]:::step
-    Debounce["Debounce<br/>quiet window"]:::step
-    Queue["Sync queue<br/>serialised"]:::gate
-    Push["push"]:::step
-    Ipc["IPC server"]:::step
-    Cli["agentsync CLI"]:::local
-    Tui["agentsync TUI"]:::local
-
-    Watcher --> Debounce --> Queue
-    Cli -->|status / push| Ipc
-    Tui -->|status poll 1.5s, push| Ipc
-    Ipc --> Queue
-    Queue --> Push
-
-    classDef local fill:#2c3e50,color:#ffffff,stroke:#1a252f
-    classDef step fill:#2c3e50,color:#ffffff,stroke:#1a252f
-    classDef gate fill:#c0392b,color:#ffffff,stroke:#7b241c
-```
-
-</div>
-
-The IPC server accepts multiple concurrent clients. A TUI session and a
-flag-driven CLI invocation can be open at the same time without conflicting
-because every request goes through the same sync queue.
-
-Key invariants:
-
-- **Only one daemon per user.** Second-instance detection runs at startup and exits cleanly if a daemon is already up. A stale socket from an ungraceful prior exit is unlinked automatically.
-- **One sync at a time.** Every push, whether file-watcher-driven or IPC-driven, passes through the sync queue. Two operations can never race.
-- **One automatic retry.** A transient sync failure triggers one retry. If both attempts fail, the error is recorded and the daemon stays alive so the next change can trigger a fresh push. The daemon never silently gives up.
-- **Hard shutdown timeout.** On shutdown the queue is drained with a ten-second hard timeout. The IPC socket and watchers are released cleanly.
-
-Daemon installation paths per OS, log locations, and the configuration table live in [Operations](operations.md#daemon).
-
 ## Security boundaries
 
 Three places own the security contract:
@@ -235,7 +193,7 @@ Private keys stay on disk in the local runtime directory (`~/.config/agentsync/k
 
 ## Path resolution
 
-Every agent path is resolved through a single resolver that maps `<agent>.<dir>` to an absolute path on the current OS. Tests and platform overrides drive the resolver through environment variables rather than rewriting paths inline. The consequence: AgentSync runs identically inside the Docker E2E harness, on a developer laptop, and in CI, without command-implementation sites needing to branch on platform — platform-specific decisions live in `src/config/paths.ts` and `src/daemon/installer-*.ts` and nowhere else.
+Every agent path is resolved through a single resolver that maps `<agent>.<dir>` to an absolute path on the current OS. Tests and platform overrides drive the resolver through environment variables rather than rewriting paths inline. The consequence: AgentSync runs identically inside the Docker E2E harness, on a developer laptop, and in CI, without command-implementation sites needing to branch on platform — platform-specific decisions live in `src/config/paths.ts` and nowhere else.
 
 ## Vault format versioning
 
@@ -251,10 +209,6 @@ If you are reading the code, this is the rough mapping from concept to module. K
 | Sanitiser rules and literal-secret detection | `src/core/sanitizer.ts` |
 | Tar bundling for directory-shaped artefacts | `src/core/tar.ts` |
 | Fast-forward reconciliation rule | `src/core/git.ts` |
-| Sync queue and IPC protocol | `src/core/sync-queue.ts`, `src/core/ipc.ts` |
-| File watcher | `src/core/watcher.ts` |
-| Daemon entry point | `src/daemon/index.ts` |
-| Per-OS daemon installers | `src/daemon/installer-macos.ts`, `installer-linux.ts`, `installer-windows.ts` |
 | Per-agent snapshot and apply | `src/agents/<agent>/` |
 | Path resolution | `src/config/paths.ts` |
 | Config schema (`agentsync.toml`) | `src/config/schema.ts` |

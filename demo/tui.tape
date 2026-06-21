@@ -45,7 +45,7 @@ Sleep 4s
 Type "3"
 Sleep 3s
 
-# Activity tab — daemon activity log.
+# Activity tab — session activity log.
 Type "4"
 Sleep 3s
 

@@ -15,8 +15,8 @@ import { generateIdentity, identityToRecipient } from "../core/encryptor";
  * snapshot/apply contract without loading agentsync.toml from disk. Mirrors
  * the schema's declared defaults; override any field you need for a specific
  * test. Schema-side `.default()` chains live on individual scalar fields
- * (`debounceMs`, `branch`, etc.) but the schema requires the parent objects
- * to be present, so a hand-rolled baseline is the simpler shape here.
+ * (`branch`, etc.) but the schema requires the parent objects to be present,
+ * so a hand-rolled baseline is the simpler shape here.
  */
 export function createTestAgentSyncConfig(
   overrides: Partial<AgentSyncConfig> = {},
@@ -26,7 +26,6 @@ export function createTestAgentSyncConfig(
     recipients: {},
     agents: { cursor: true, claude: true, codex: true, copilot: true, vscode: true },
     remote: { url: "test://vault", branch: "main" },
-    sync: { debounceMs: 300, autoPush: true },
     claudePlugins: { syncPlugins: false },
     security: { secretScan: "standard", allowSecretValues: [], redactBase64Values: true },
     ...overrides,
@@ -39,11 +38,6 @@ const DEFAULT_AGENTS = {
   codex: false,
   copilot: false,
   vscode: false,
-};
-
-const DEFAULT_SYNC = {
-  debounceMs: 300,
-  autoPush: true,
 };
 
 /** Runtime fixture paths and key material for one logical machine. */
@@ -158,7 +152,6 @@ export function seedVaultRepo(options: {
       ...options.agents,
     },
     remote: { url: bareRepoPath, branch },
-    sync: DEFAULT_SYNC,
   };
 
   mkdirSync(machine.vaultDir, { recursive: true });
@@ -219,16 +212,5 @@ export async function createDivergentHistoryFixture(
     bareRepoPath,
     primaryDir,
     secondaryDir,
-  };
-}
-
-/**
- * Prepare a socket path inside the supplied directory for IPC tests.
- * The directory is created if it does not already exist.
- */
-export async function createIpcFixture(socketDir: string): Promise<{ socketPath: string }> {
-  mkdirSync(socketDir, { recursive: true });
-  return {
-    socketPath: join(socketDir, "test-daemon.sock"),
   };
 }

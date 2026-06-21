@@ -1,4 +1,3 @@
-import type { DaemonStatus } from "../../config/schema";
 import { detectInstallMethod, type InstallMethod } from "../../core/version-check";
 import type { SyncRow } from "../status";
 
@@ -18,13 +17,6 @@ export interface ActivityEntry {
   kind: "push" | "pull" | "copy" | "vault-rm" | "migrate" | "preview" | "error" | "info";
   status: "ok" | "fail" | "running" | "info";
   message: string;
-}
-
-export interface DaemonState {
-  online: boolean;
-  status: DaemonStatus | null;
-  lastError: string | null;
-  pidObservedAt: number | null;
 }
 
 export type OpKind =
@@ -215,7 +207,7 @@ export interface MachinesSlice {
 }
 
 /** How a config value is edited in the Config tab. */
-export type ConfigRowKind = "boolean" | "enum" | "number" | "readonly";
+export type ConfigRowKind = "boolean" | "enum" | "readonly";
 
 /** One editable (or read-only) config row in the Config tab. */
 export interface ConfigRow {
@@ -245,7 +237,6 @@ export interface ConfigSlice {
 
 export interface AppState {
   activeTab: TabId;
-  daemon: DaemonState;
   activity: ActivityEntry[];
   selection: Set<string>;
   toast: { text: string; level: "info" | "success" | "error"; expiresAt: number } | null;
@@ -266,12 +257,6 @@ const MAX_ACTIVITY = 200;
 export function createInitialState(): AppState {
   return {
     activeTab: "dashboard",
-    daemon: {
-      online: false,
-      status: null,
-      lastError: null,
-      pidObservedAt: null,
-    },
     activity: [],
     selection: new Set<string>(),
     toast: null,

@@ -68,13 +68,6 @@ Five steps from zero to a working sync.
     agentsync copy <other-machine> claude/
     ```
 
-5. **Run the daemon (optional).** The daemon watches your agent paths and pushes on change, with debounce and a sync queue.
-
-    ```bash
-    agentsync daemon install
-    agentsync daemon start
-    ```
-
 Detailed flag, outcome, and caveat tables live in [Commands](commands.md).
 
 ## Why?
@@ -89,10 +82,10 @@ Detailed flag, outcome, and caveat tables live in [Commands](commands.md).
 
 <div class="grid cards" markdown>
 
-- :material-sitemap: **[Architecture](architecture.md)** — system model, vault format, push and copy pipelines, daemon model, security boundaries.
+- :material-sitemap: **[Architecture](architecture.md)** — system model, vault format, push and copy pipelines, security boundaries.
 - :material-console: **[Commands](commands.md)** — every subcommand, flag, outcome, and caveat in one reference.
 - :material-swap-horizontal: **[Migrate](migrate.md)** — translate config between Claude, Cursor, Codex, Copilot, and VS Code.
-- :material-cog: **[Operations](operations.md)** — daemon install per OS, key rotation, troubleshooting catalogue.
+- :material-cog: **[Operations](operations.md)** — key rotation, troubleshooting catalogue.
 - :material-account-wrench: **[Contributing](contributing.md)** — develop from source, run the test suite, release discipline, doc ownership.
 
 </div>

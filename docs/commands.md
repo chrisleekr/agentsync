@@ -1,5 +1,5 @@
 ---
-description: Complete AgentSync CLI reference: every command, flag, default, and caveat for init, push, copy, status, daemon, key, skill, plugin, vault, and the TUI.
+description: Complete AgentSync CLI reference: every command, flag, default, and caveat for init, push, copy, status, key, skill, plugin, vault, and the TUI.
 ---
 
 # Commands
@@ -46,9 +46,8 @@ When developing from source, replace the binary call with `bun run src/cli.ts`. 
 | [`ls`](#ls) | List machine namespaces, or the copyable artifact paths in one. |
 | [`status`](#status) | Compare local snapshot to decrypted vault state (any machine via `--machine`). |
 | [`doctor`](#doctor) | Check the local environment before blaming sync logic. |
-| [`daemon`](#daemon) | Install, start, stop, and inspect the background daemon. |
 | [`key`](#key) | Add, list, or remove recipients, or rotate the current machine key. |
-| [`config`](#config) | View or change vault config (agents, sync, security policy). |
+| [`config`](#config) | View or change vault config (agents, security policy). |
 | [`skill`](#skill) | Remove a skill from the vault. |
 | [`plugin`](#plugin) | List or reinstall a machine's Claude plugins from its vault manifest. |
 | [`vault`](#vault) | Migrate an older vault to the current format (`vault upgrade`). |
@@ -73,12 +72,12 @@ agentsync tui       # explicit alias, same behaviour
 
 | Tab | What it shows |
 |---|---|
-| 1 Dashboard | Daemon health (pid, uptime, **last successful sync**, last error, and a loud **stuck** warning when the vault diverged), vault state, agent summary, init / key-rotate launchers. |
+| 1 Dashboard | Vault state, agent summary, init / key-rotate launchers, and an update banner when a newer release is available. |
 | 2 Sync | Per-artifact rows grouped by sync status (`local-changed`, `local-only`, `vault-only`, `unknown`, `synced`). Multi-select with `space`; push selected with `p`; bulk-remove any selected vault artifacts with `x` (y/n confirm) — rows with no vault copy (`local-only`) are ignored. Enter on a skill drills into its files with per-file diff. |
 | 3 Machines | The vault's `machines/<name>/` namespaces. Move with `↑`/`↓`; `enter` copies the selected machine's config to this machine (the same `performCopy` core as the CLI; never touches the vault). |
 | 4 Migrate | From / To / Type form (To and Type are multi-select with sub-cursor). Preview is mandatory before Apply enables. |
 | 5 Activity | Session-only ring buffer of TUI actions. |
-| 6 Config | View and change vault config (agents enabled, `sync.*`, `claudePlugins.*`, `security.*`) with `↑`/`↓` to move, `space` to toggle a boolean, `←`/`→` to cycle an enum or adjust a number. Cycling `security.secretScan` shows a one-line explainer of the selected mode; choosing `off` first prompts a `y`/`n` confirm because it pushes live secrets. Writes go through the same [`config`](#config) core (reconcile + commit + push). Also lists the recipients who can decrypt the vault, read-only. |
+| 6 Config | View and change vault config (agents enabled, `claudePlugins.*`, `security.*`) with `↑`/`↓` to move, `space` to toggle a boolean, `←`/`→` to cycle an enum. Cycling `security.secretScan` shows a one-line explainer of the selected mode; choosing `off` first prompts a `y`/`n` confirm because it pushes live secrets. Writes go through the same [`config`](#config) core (reconcile + commit + push). Also lists the recipients who can decrypt the vault, read-only. |
 
 **Global keys** (any tab):
 
@@ -92,8 +91,8 @@ agentsync tui       # explicit alias, same behaviour
 | `q` / `Ctrl-C` | Quit, restoring the terminal |
 
 **Outcome**: every state change is additive on the same data the CLI
-subcommands operate on. Push goes through the same daemon IPC the `status` and
-`daemon` subcommands use; the Machines tab calls the same `performCopy` core as
+subcommands operate on. Push runs the same `performPush` core as `agentsync
+push`; the Machines tab calls the same `performCopy` core as
 `agentsync copy`; migrate calls the same planner as `agentsync migrate`; bulk
 removal calls the same `performVaultRemove` core that `agentsync skill remove`
 delegates to, once per selected vault artifact; the Config tab writes through
@@ -105,10 +104,8 @@ the same `performConfigSet` core as `agentsync config set`.
   `nohup`, CI runners) bare `agentsync` deliberately falls back to text
   `status` output so existing scripts continue to work.
 - The activity log is session-scoped — closing the TUI discards history.
-- Push requires the daemon to be running. If the daemon is offline, the footer
-  shows `daemon ● offline` and `p` surfaces an inline notice rather than
-  queueing a request that cannot be served. (Copy runs in-process and does not
-  need the daemon.)
+- Push and copy run in-process — the TUI calls the same command cores directly,
+  so there is no background service to start first.
 
 ## Conventions
 
@@ -274,8 +271,7 @@ agentsync doctor
 - age-encryption module availability,
 - remote reachability,
 - obvious unencrypted sensitive files in the vault,
-- readability of the per-agent skills directories (`buildSkillsDirChecks` warns if a directory is missing, unreadable, a symbolic link, or exists but is not a directory),
-- daemon service installation state.
+- readability of the per-agent skills directories (`buildSkillsDirChecks` warns if a directory is missing, unreadable, a symbolic link, or exists but is not a directory).
 
 **Caveats**:
 
@@ -307,29 +303,6 @@ agentsync upgrade --check  # report only, install nothing
 - The TUI Dashboard runs the same check in the background and shows an `Update available` banner; press `u` there to upgrade a global install.
 - The result is cached for 24 hours at `~/.config/agentsync/update-check.json` (`%APPDATA%/agentsync` on Windows). `agentsync upgrade` always re-checks and ignores the cache.
 
-## daemon
-
-**Why**: Run AgentSync as a background process that watches your agent paths and debounces pushes on change. It is push-only and does not auto-pull.
-
-**Usage**:
-
-```bash
-agentsync daemon install     # write the OS service descriptor
-agentsync daemon start       # idempotent
-agentsync daemon status      # last-sync health (last success, failures, stuck)
-agentsync daemon stop
-agentsync daemon uninstall
-```
-
-**Outcome**: a long-running process supervised by launchd (macOS), systemd-user (Linux), or Task Scheduler (Windows). The daemon serialises sync operations through an internal queue so no two operations race.
-
-**Caveats**:
-
-- Only one daemon runs per user. A second-instance check exits cleanly if a daemon is already up.
-- A transient sync failure triggers one automatic retry. If the retry also fails, the error is recorded but the daemon stays alive so the next change can trigger a fresh push.
-- `daemon status` reports the last successful sync time, consecutive failures, and a **stuck** flag (vault diverged). When the daemon is **not** running it falls back to the durable `daemon-state.json`, so you still see when sync last succeeded. `doctor` surfaces a stale or stuck last-sync as a dedicated health row — a silent backup failure is loud, not invisible.
-- See [Daemon](operations.md#daemon) for install paths per OS, lifecycle, health/durable-state, and log locations.
-
 ## key
 
 **Why**: Manage who can decrypt the vault — add a recipient, list recipients, deauthorize (remove) one, or rotate the current machine's keypair.
@@ -356,13 +329,13 @@ agentsync key rotate                         # new local identity, re-encrypt
 
 ## config
 
-**Why**: View or change the vault configuration in `agentsync.toml` without hand-editing it — which agents are enabled, daemon sync behaviour, and the secret-handling policy.
+**Why**: View or change the vault configuration in `agentsync.toml` without hand-editing it — which agents are enabled and the secret-handling policy.
 
 **Usage**:
 
 ```bash
 agentsync config list                              # print every configurable key
-agentsync config get sync.debounceMs               # read one value
+agentsync config get security.secretScan           # read one value
 agentsync config set agents.vscode true            # enable VS Code sync
 agentsync config set security.secretScan strict    # widen secret detection
 agentsync config set security.allowSecretValues '["AKIA-not-a-real-key"]'
@@ -373,8 +346,6 @@ agentsync config set security.allowSecretValues '["AKIA-not-a-real-key"]'
 | Key | Type | Meaning |
 |---|---|---|
 | `agents.<claude\|cursor\|codex\|copilot\|vscode>` | boolean | Whether that agent is snapshotted on push. |
-| `sync.debounceMs` | integer 50–10000 | Daemon quiet-window before an auto-push. |
-| `sync.autoPush` | boolean | Whether the daemon auto-pushes on change. |
 | `claudePlugins.syncPlugins` | boolean | Record the Claude plugin reinstall manifest on push. |
 | `security.secretScan` | `standard`\|`strict`\|`redact`\|`off` | Push-time secret-scan mode. `standard` = built-in credential patterns (abort on hit); `strict` also flags JWTs; `redact` replaces ordinary tokens in structured config with a `$AGENTSYNC_REDACTED_<FIELD>` placeholder and pushes (`copy` then preserves a real local value over the placeholder); `off` waives the ordinary patterns. The catastrophic tier (age key, PEM) still blocks in every mode. |
 | `security.allowSecretValues` | string[] (JSON) | Literal values exempt from ordinary-token detection and base64 redaction. Catastrophic-tier values (age key, PEM private keys) are never exemptible. |
@@ -540,7 +511,7 @@ agentsync destroy --scope=all           # both
 
 | Scope | After destroy |
 |---|---|
-| `local` | `~/.config/agentsync/vault/` (or `%APPDATA%/agentsync/vault/` on Windows) is gone. `~/.config/agentsync/key.txt`, the daemon, the remote, and every `~/.<agent>/` directory are unchanged. Re-init from the same remote restores the clone. |
+| `local` | `~/.config/agentsync/vault/` (or `%APPDATA%/agentsync/vault/` on Windows) is gone. `~/.config/agentsync/key.txt`, the remote, and every `~/.<agent>/` directory are unchanged. Re-init from the same remote restores the clone. |
 | `remote` | Remote branch has a new commit, `destroy: clear vault content`, that removes every previously-tracked file. Local vault dir keeps its `.git/` history. Other machines that still have the data can `git revert <sha>` to recover. |
 | `all` | Both of the above. Remote is wiped first so a failed push does not leave you with a wiped local that cannot reach the remote. |
 
@@ -549,9 +520,6 @@ agentsync destroy --scope=all           # both
 - Other recipients are affected by `--scope=remote` / `--scope=all`. Their
   next `agentsync push` or `copy` will reconcile against an empty vault and
   they lose their `agentsync.toml` config — they will need to re-init.
-- The daemon stays running after a local destroy. Its next sync attempt
-  will fail until re-init. Run `agentsync daemon stop` if you want it
-  quiet in the meantime.
 - `key.txt` is preserved across every scope. Re-init from the same remote
   reuses the existing identity so you stay a recipient. Delete the key
   manually (`rm ~/.config/agentsync/key.txt` on Unix, or remove `%APPDATA%/agentsync/key.txt` on Windows) if you really need a key wipe.

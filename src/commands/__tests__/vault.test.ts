@@ -107,10 +107,10 @@ describe("performVaultUpgrade", () => {
     expect(existsSync(join(machine.vaultDir, "claude"))).toBe(false);
     expect(existsSync(join(machine.vaultDir, "cursor"))).toBe(false);
 
-    // Version bumped to the integer 2 and the down-sync fields dropped.
+    // Version bumped to the integer 2 and the down-sync / daemon fields dropped.
     const config = await loadConfig(resolveConfigPath(machine.vaultDir));
     expect(config.version).toBe(2);
-    expect((config.sync as Record<string, unknown>).autoPull).toBeUndefined();
+    expect((config as Record<string, unknown>).sync).toBeUndefined();
 
     // History preserved via git mv (the relocated file is followable).
     const followLog = runGit(

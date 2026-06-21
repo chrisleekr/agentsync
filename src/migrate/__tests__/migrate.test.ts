@@ -13,14 +13,12 @@ import { dirname, join } from "node:path";
 import { AgentPaths } from "../../config/paths";
 import { applyMigrated, performMigrate, readSourceArtefacts } from "../migrate";
 
-// Re-install the real node:fs/promises in bun's module cache. The daemon
-// installer test files (installer-linux/macos/windows) stub fs/promises at
-// top level and bun's `mock.restore()` is a no-op for `mock.module()`, so
-// their stubs leak into every later file in the same bun test run. This
-// block is the defensive undo — identical to the pattern in claude.test.ts,
-// packaging.test.ts, status.test.ts and friends. The bleed only surfaces in
-// CI because the Linux readdir order puts daemon/ before migrate/; on macOS
-// the order happens to be the reverse.
+// Re-install the real node:fs/promises in bun's module cache. Several test
+// files (claude.test.ts, packaging.test.ts, status.test.ts and friends) stub
+// fs/promises at top level and bun's `mock.restore()` is a no-op for
+// `mock.module()`, so their stubs leak into every later file in the same bun
+// test run. This block is the defensive undo, ordering-independent so a
+// readdir order that runs a stubbing file before this one cannot break it.
 {
   const require = createRequire(import.meta.url);
   const realFsPromises = require("node:fs/promises") as typeof import("node:fs/promises");

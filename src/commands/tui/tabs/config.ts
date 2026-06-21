@@ -9,7 +9,7 @@ import type { Store } from "../store";
 
 // Sections the Config tab lets you edit. Mirrors SETTABLE_PREFIXES in
 // commands/config.ts; remote/version/recipients are not editable here.
-const SETTABLE_PREFIXES = ["agents.", "sync.", "claudePlugins.", "security."];
+const SETTABLE_PREFIXES = ["agents.", "claudePlugins.", "security."];
 const SECRET_SCAN_OPTIONS = ["standard", "strict", "redact", "off"] as const;
 
 /** One-line consequence of each secretScan mode, shown in the explainer panel. */
@@ -27,16 +27,11 @@ export function secretScanExplainer(value: unknown): string {
       return "";
   }
 }
-const DEBOUNCE_STEP = 50;
-const DEBOUNCE_MIN = 50;
-const DEBOUNCE_MAX = 10_000;
-
 /** Classify a config key/value into an editable row kind. */
 function classify(key: string, value: unknown): ConfigRow {
   if (key === "security.secretScan") {
     return { key, value, kind: "enum", options: SECRET_SCAN_OPTIONS };
   }
-  if (key === "sync.debounceMs") return { key, value, kind: "number" };
   if (key === "security.allowSecretValues") return { key, value, kind: "readonly" };
   if (typeof value === "boolean") return { key, value, kind: "boolean" };
   return { key, value, kind: "readonly" };
@@ -196,13 +191,6 @@ export function onConfigKey(key: KeyEvent, store: Store): boolean {
     }
     return true;
   }
-  if ((key.name === "left" || key.name === "right") && row.kind === "number") {
-    const dir = key.name === "right" ? DEBOUNCE_STEP : -DEBOUNCE_STEP;
-    const current = typeof row.value === "number" ? row.value : DEBOUNCE_MIN;
-    const next = Math.min(DEBOUNCE_MAX, Math.max(DEBOUNCE_MIN, current + dir));
-    if (next !== current) setConfig(store, row.key, String(next));
-    return true;
-  }
   return false;
 }
 
@@ -219,8 +207,6 @@ function editHintFor(row: ConfigRow | undefined): string {
       return "space: toggle";
     case "enum":
       return "← →: cycle";
-    case "number":
-      return "← →: adjust";
     default:
       return "read-only (edit via CLI)";
   }

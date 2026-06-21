@@ -10,7 +10,7 @@ import { loadVaultConfigOrExit, resolveRuntimeContext } from "./shared";
 // `remote` are deliberately excluded: version is the format guard, recipients
 // are managed by `key add`/`key remove`, and changing the remote is `init`'s
 // job. Everything settable lives under one of these object sections.
-const SETTABLE_PREFIXES = ["agents.", "sync.", "claudePlugins.", "security."] as const;
+const SETTABLE_PREFIXES = ["agents.", "claudePlugins.", "security."] as const;
 
 // The one settable key whose values are deliberately secret-shaped: it is the
 // allowlist of literals to exempt from the secret scan, so scanning it would
@@ -132,8 +132,8 @@ export async function performConfigGet(key: string): Promise<ConfigGetResult> {
 /**
  * Change a single dotted config key in the vault. Because `agentsync.toml` is
  * shared across machines, this reconciles fast-forward, validates the mutated
- * config against the full schema (so every constraint — debounce range, enum
- * values, boolean types — is enforced without duplication), then commits and
+ * config against the full schema (so every constraint — enum values, boolean
+ * types, array shapes — is enforced without duplication), then commits and
  * pushes like `key add`.
  */
 export async function performConfigSet(key: string, rawValue: string): Promise<ConfigSetResult> {
@@ -253,7 +253,7 @@ export const configCommand = defineCommand({
     }),
 
     get: defineCommand({
-      meta: { description: "Print one config value by dotted key (e.g. sync.debounceMs)" },
+      meta: { description: "Print one config value by dotted key (e.g. security.secretScan)" },
       args: {
         key: { type: "positional", required: true, description: "Dotted config key" },
       },

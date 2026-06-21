@@ -12,7 +12,7 @@
 /* Dark-mode label color. Forces all mermaid node labels to white when
    the slate scheme is active. Safe site-wide because every diagram in
    this repo uses dark fills (architecture-overview's classDef palette
-   + the inverted deep-dive palette in architecture.md / daemon.md /
+   + the inverted deep-dive palette in architecture.md /
    migrate.md). */
 [data-md-color-scheme="slate"] .mermaid .nodeLabel,
 [data-md-color-scheme="slate"] .mermaid .nodeLabel p,

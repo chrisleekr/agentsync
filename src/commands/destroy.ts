@@ -26,10 +26,6 @@ This will NOT touch:
                                             file in these directories stays exactly
                                             as it is on disk.
   <agentsync home>/key.txt                  Your age private key.
-  agentsync daemon installation             The daemon process and its service
-                                            descriptor. Next sync after destroy
-                                            will fail — run \`agentsync daemon
-                                            stop\` if you want it quiet.
   ${remote}    The remote repository.
 
 After destroy you can re-init from the same remote with:
@@ -485,10 +481,7 @@ export const destroyCommand = defineCommand({
     switch (result.status) {
       case "removed-local":
         log.success(`Local vault removed: ${result.path}`);
-        log.info(
-          "Daemon installation, key.txt, and your local agent files are untouched. " +
-            "Run `agentsync daemon stop` if you want the daemon quiet until re-init.",
-        );
+        log.info("Your key.txt and local agent files are untouched.");
         return;
       case "removed-remote":
         if (result.commitSha) {

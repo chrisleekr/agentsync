@@ -11,7 +11,7 @@
 # Usage:
 #   bash docker/e2e/run-all.sh
 #   SCENARIOS="smoke.sh 03-diverged-history.sh" bash docker/e2e/run-all.sh
-#   SKIP="11-daemon-ipc.sh" bash docker/e2e/run-all.sh
+#   SKIP="10-migrate.sh" bash docker/e2e/run-all.sh
 
 set -euo pipefail
 
@@ -49,7 +49,6 @@ default_scenarios=(
   06-skill-additive.sh
   09-key-add.sh
   10-migrate.sh
-  11-daemon-ipc.sh
   13-doctor.sh
   14-dry-run.sh
   16-vscode-non-mcp.sh

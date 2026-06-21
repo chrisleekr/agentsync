@@ -20,12 +20,12 @@ describe("createStore.runOperation", () => {
   test("writes inFlight on start synchronously, observable before opFn resolves", () => {
     const store = createStore(createInitialState());
     const d = deferred<{ done: true }>();
-    const id = store.runOperation("push", "push via daemon", () => d.promise);
+    const id = store.runOperation("push", "push selection", () => d.promise);
     const snap = store.getState().inFlight[id];
     expect(snap).toBeDefined();
     expect(snap.phase).toBe("running");
     expect(snap.kind).toBe("push");
-    expect(snap.label).toBe("push via daemon");
+    expect(snap.label).toBe("push selection");
     expect(snap.finishedAt).toBeNull();
     d.resolve({ done: true });
   });

@@ -3,7 +3,6 @@ import { BoxRenderable, createCliRenderer, TextRenderable } from "@opentui/core"
 import { version as pkgVersion } from "../../../package.json";
 import { getUpdateStatus } from "../../core/version-check";
 import { performUpgrade, upgradeInstructions } from "../upgrade";
-import { TuiIpcClient } from "./lib/ipc-client";
 import {
   type AppState,
   type ContextAction,
@@ -21,8 +20,6 @@ import { renderDashboard } from "./tabs/dashboard";
 import { ensureMachinesLoaded, onMachinesKey, renderMachines } from "./tabs/machines";
 import { onMigrateKey, renderMigrate } from "./tabs/migrate";
 import { ensureSyncLoaded, onSyncKey, renderSync, runSyncOp } from "./tabs/sync";
-
-const POLL_INTERVAL_MS = 1500;
 
 const TAB_LABELS: Record<TabId, string> = {
   dashboard: "Dashboard",
@@ -51,11 +48,9 @@ const PALETTE = {
 interface AppContext {
   renderer: CliRenderer;
   store: Store;
-  ipc: TuiIpcClient;
   rerender: () => void;
 }
 
-let pollTimer: ReturnType<typeof setInterval> | null = null;
 let toastTimer: ReturnType<typeof setInterval> | null = null;
 let dataRefreshTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -77,7 +72,6 @@ export async function runApp(): Promise<void> {
   });
 
   const store = createStore(createInitialState());
-  const ipc = new TuiIpcClient();
 
   // Non-blocking update check: dispatches into state when it resolves, never
   // gates the first render. A failed check (offline, rate limit) leaves the
@@ -129,7 +123,6 @@ export async function runApp(): Promise<void> {
   const ctx: AppContext = {
     renderer,
     store,
-    ipc,
     rerender: () => {
       const state = store.getState();
       renderTitleBar(titleBar, state);
@@ -155,26 +148,6 @@ export async function runApp(): Promise<void> {
   };
   store.subscribe(scheduleRender);
   ctx.rerender();
-
-  const pollOnce = async () => {
-    const status = await ipc.status().catch(() => null);
-    store.dispatch((draft) => {
-      if (status) {
-        if (draft.daemon.status?.pid !== status.pid) {
-          draft.daemon.pidObservedAt = Date.now();
-        }
-        draft.daemon.online = true;
-        draft.daemon.status = status;
-        draft.daemon.lastError = status.lastError ?? null;
-      } else {
-        draft.daemon.online = false;
-        draft.daemon.status = null;
-        draft.daemon.pidObservedAt = null;
-      }
-    });
-  };
-  await pollOnce();
-  pollTimer = setInterval(pollOnce, POLL_INTERVAL_MS);
 
   toastTimer = setInterval(() => {
     const s = store.getState();
@@ -217,10 +190,8 @@ export async function runApp(): Promise<void> {
 }
 
 function teardown(renderer: CliRenderer): void {
-  if (pollTimer) clearInterval(pollTimer);
   if (toastTimer) clearInterval(toastTimer);
   if (dataRefreshTimer) clearInterval(dataRefreshTimer);
-  pollTimer = null;
   toastTimer = null;
   dataRefreshTimer = null;
   try {
@@ -474,8 +445,6 @@ function makeFooter(renderer: CliRenderer): TextRenderable {
   });
 }
 function renderFooter(host: TextRenderable, state: AppState): void {
-  const dot = state.daemon.online ? "●" : "○";
-  const daemonLabel = state.daemon.online ? "live" : "offline";
   const running = countRunning(state);
   const opLabel = running > 0 ? `  ${running} op(s)` : "";
   const toast = state.toast ? `  ⟶ ${state.toast.text}` : "";
@@ -494,7 +463,7 @@ function renderFooter(host: TextRenderable, state: AppState): void {
   const actions = globalKeys
     .map(([k, label]) => `${hintKey === k ? `[${k}]` : ` ${k} `}${label}`)
     .join(" ");
-  host.content = `${actions}            daemon ${dot} ${daemonLabel}${opLabel}${toast}`;
+  host.content = `${actions}${opLabel}${toast}`;
 }
 
 /** The action-bar key being flashed right now, or null once the flash TTL

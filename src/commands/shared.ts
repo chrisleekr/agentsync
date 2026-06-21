@@ -144,10 +144,9 @@ export async function loadPrivateKey(path: string): Promise<string> {
  * initialized" hint and exits 1. Schema (Zod) and TOML syntax errors are
  * re-thrown with a single-line diagnostic message (via formatConfigError)
  * instead of the raw Zod/Toml stack trace, so the error stays catchable:
- * performPush and the daemon fold it into their errors[] /
- * retry logic, and anything that reaches the CLI top level shows the
- * one-line message rather than a multi-line blob. Only ENOENT exits here,
- * preserving the contract those callers depend on.
+ * performPush folds it into its errors[], and anything that reaches the CLI
+ * top level shows the one-line message rather than a multi-line blob. Only
+ * ENOENT exits here, preserving the contract those callers depend on.
  */
 export async function loadVaultConfigOrExit(vaultDir: string): Promise<AgentSyncConfig> {
   const configPath = resolveConfigPath(vaultDir);

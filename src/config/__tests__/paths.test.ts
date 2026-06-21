@@ -1,18 +1,12 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { homedir } from "node:os";
 import { isAbsolute, join } from "node:path";
-import {
-  AgentPaths,
-  resolveAgentSyncHome,
-  resolveDaemonSocketPath,
-  resolveWindowsAppData,
-} from "../paths";
+import { AgentPaths, resolveAgentSyncHome, resolveWindowsAppData } from "../paths";
 
 // AgentPaths shape validation (non-mutable, import-time baked paths)
 
 describe("paths", () => {
   const HOME = homedir();
-  const PLATFORM = process.platform;
 
   test("AgentPaths.claude.claudeMd is under HOME/.claude/", () => {
     expect(AgentPaths.claude.claudeMd).toBe(join(HOME, ".claude", "CLAUDE.md"));
@@ -93,7 +87,7 @@ describe("paths", () => {
     );
   });
 
-  // resolveAgentSyncHome / resolveDaemonSocketPath
+  // resolveAgentSyncHome
 
   test("resolveAgentSyncHome returns a non-empty string", () => {
     const result = resolveAgentSyncHome();
@@ -103,24 +97,6 @@ describe("paths", () => {
 
   test("resolveAgentSyncHome contains 'agentsync'", () => {
     expect(resolveAgentSyncHome()).toContain("agentsync");
-  });
-
-  test("resolveDaemonSocketPath ends with daemon.sock on non-Windows", () => {
-    if (PLATFORM !== "win32") {
-      expect(resolveDaemonSocketPath()).toEndWith("daemon.sock");
-    }
-  });
-
-  test("resolveDaemonSocketPath on Windows returns a named pipe", () => {
-    if (PLATFORM === "win32") {
-      expect(resolveDaemonSocketPath()).toStartWith("\\\\.\\pipe\\");
-    }
-  });
-
-  test("resolveDaemonSocketPath is inside resolveAgentSyncHome on non-Windows", () => {
-    if (PLATFORM !== "win32") {
-      expect(resolveDaemonSocketPath()).toStartWith(resolveAgentSyncHome());
-    }
   });
 });
 

@@ -79,7 +79,6 @@ describe("config command", () => {
     const entries = await configMod.performConfigList();
     const keys = entries.map((e) => e.key);
     expect(keys).toContain("agents.claude");
-    expect(keys).toContain("sync.debounceMs");
     expect(keys).toContain("security.secretScan");
     expect(keys.some((k) => k === "version")).toBe(false);
     expect(keys.some((k) => k.startsWith("recipients"))).toBe(false);
@@ -99,16 +98,12 @@ describe("config command", () => {
     expect(config.agents.vscode).toBe(true);
   });
 
-  test("performConfigSet coerces a numeric string and an enum word", async () => {
-    const num = await configMod.performConfigSet("sync.debounceMs", "500");
-    expect(num.status).toBe("success");
-    if (num.status === "success") expect(num.newValue).toBe(500);
-
+  test("performConfigSet coerces an enum word", async () => {
     const enumSet = await configMod.performConfigSet("security.secretScan", "strict");
     expect(enumSet.status).toBe("success");
+    if (enumSet.status === "success") expect(enumSet.newValue).toBe("strict");
 
     const config = await loadConfig(resolveConfigPath(machine.vaultDir));
-    expect(config.sync.debounceMs).toBe(500);
     expect(config.security.secretScan).toBe("strict");
   });
 
@@ -161,24 +156,20 @@ describe("config command", () => {
   });
 
   test("performConfigSet rejects a value the schema forbids", async () => {
-    const tooSmall = await configMod.performConfigSet("sync.debounceMs", "5");
-    expect(tooSmall.status).toBe("invalid-value");
-
     const badEnum = await configMod.performConfigSet("security.secretScan", "loud");
     expect(badEnum.status).toBe("invalid-value");
 
-    // The vault config is unchanged after rejected sets.
+    // The vault config is unchanged after a rejected set.
     const config = await loadConfig(resolveConfigPath(machine.vaultDir));
-    expect(config.sync.debounceMs).toBe(300);
     expect(config.security.secretScan).toBe("standard");
   });
 
   test("performConfigSet coerces a false boolean", async () => {
-    const result = await configMod.performConfigSet("sync.autoPush", "false");
+    const result = await configMod.performConfigSet("agents.claude", "false");
     expect(result.status).toBe("success");
     if (result.status === "success") expect(result.newValue).toBe(false);
     const config = await loadConfig(resolveConfigPath(machine.vaultDir));
-    expect(config.sync.autoPush).toBe(false);
+    expect(config.agents.claude).toBe(false);
   });
 
   test("performConfigSet refuses a prototype-pollution key and leaves Object.prototype intact", async () => {
@@ -194,12 +185,12 @@ describe("config command", () => {
   });
 
   test("performConfigSet pushes the change to the remote vault", async () => {
-    const result = await configMod.performConfigSet("sync.debounceMs", "750");
+    const result = await configMod.performConfigSet("agents.vscode", "true");
     expect(result.status).toBe("success");
     // Inspect the bare remote directly — the change must land there, not just
     // in the local working copy, because agentsync.toml is shared across machines.
     const onRemote = runGit(["show", "HEAD:agentsync.toml"], bare);
-    expect(onRemote).toContain("debounceMs = 750");
+    expect(onRemote).toContain("vscode = true");
   });
 
   test("performConfigSet fails closed on diverged history", async () => {

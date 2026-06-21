@@ -3,14 +3,8 @@ import { createInitialState } from "../../state";
 import { dashboardBannerContent } from "../dashboard-banner";
 
 describe("dashboardBannerContent", () => {
-  test("shows the offline hint when no update is available and the daemon is down", () => {
+  test("shows the welcome hint when no update is available", () => {
     const state = createInitialState();
-    expect(dashboardBannerContent(state)).toContain("No daemon detected");
-  });
-
-  test("shows the welcome hint when no update is available and the daemon is up", () => {
-    const state = createInitialState();
-    state.daemon.online = true;
     expect(dashboardBannerContent(state)).toContain("Welcome back");
   });
 

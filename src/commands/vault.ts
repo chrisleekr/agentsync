@@ -109,13 +109,12 @@ export async function performVaultUpgrade(): Promise<VaultUpgradeResult> {
       }
     }
 
-    // Rewrite the config to v2: integer version, no down-sync fields. Validate
-    // through the v2 schema so a malformed legacy file fails loudly here.
+    // Rewrite the config to v2: integer version. The legacy `[sync]` section
+    // (daemon debounce / down-sync knobs) is now an unknown top-level key, so the
+    // schema strips it wholesale; the retained fields are still validated, so a
+    // malformed legacy file fails here.
     const raw = await readRawConfig(configPath);
-    const sync = (raw.sync ?? {}) as Record<string, unknown>;
-    delete sync.autoPull;
-    delete sync.pullIntervalMs;
-    const v2Config = AgentSyncConfigSchema.parse({ ...raw, version: CURRENT_VAULT_VERSION, sync });
+    const v2Config = AgentSyncConfigSchema.parse({ ...raw, version: CURRENT_VAULT_VERSION });
     await writeConfig(configPath, v2Config);
 
     const committed = await git.commit({

@@ -57,10 +57,6 @@ export const AgentSyncConfigSchema = z.object({
     url: RemoteUrlSchema,
     branch: z.string().min(1).default("main"),
   }),
-  sync: z.object({
-    debounceMs: z.number().int().min(50).max(10_000).default(300),
-    autoPush: z.boolean().default(true),
-  }),
   // Per-agent plugin opt-ins. Optional with safe defaults so existing
   // agentsync.toml files continue to validate without changes.
   claudePlugins: z.preprocess(
@@ -118,26 +114,6 @@ export const AgentSyncConfigSchema = z.object({
 
 /** Normalized runtime shape derived from the validated config schema. */
 export type AgentSyncConfig = z.infer<typeof AgentSyncConfigSchema>;
-
-/**
- * Schema for the status payload returned by the daemon's IPC `status` command.
- * All fields crossing the IPC trust boundary are validated with Zod per Constitution IV.
- */
-export const DaemonStatusSchema = z.object({
-  pid: z.number().int().positive(),
-  consecutiveFailures: z.number().int().min(0),
-  lastError: z.string().nullable(),
-  // Health fields. Optional with defaults so an older daemon's IPC response
-  // (which omits them) still validates against a newer client. Timestamps are
-  // validated as ISO datetimes so a malformed value fails safeParse (degrading
-  // to null) rather than reaching Date.parse as NaN in the dashboard/status.
-  lastSuccessAt: z.string().datetime().nullable().default(null),
-  startedAt: z.string().datetime().nullable().default(null),
-  stuck: z.boolean().default(false),
-});
-
-/** Normalized status shape for the daemon IPC status response. */
-export type DaemonStatus = z.infer<typeof DaemonStatusSchema>;
 
 /** Valid agent names accepted by CLI arguments. */
 const AgentNameEnum = z.enum(["claude", "cursor", "codex", "copilot", "vscode"]);

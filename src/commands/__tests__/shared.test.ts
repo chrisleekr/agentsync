@@ -414,7 +414,7 @@ describe("loadVaultConfigOrExit", () => {
     await mkdir(vaultDir, { recursive: true });
     await writeFile(join(vaultDir, "agentsync.toml"), "this is = not [ valid toml", "utf8");
 
-    // Parse failures re-throw so callers (performPull/performPush/daemon) can
+    // Parse failures re-throw so callers (performPush) can
     // aggregate them; only ENOENT exits. The thrown message is the one-line
     // diagnostic naming the file, not a raw Zod/Toml stack trace.
     await expect(loadVaultConfigOrExit(vaultDir)).rejects.toThrow("agentsync.toml");

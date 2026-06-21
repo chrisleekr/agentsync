@@ -19,7 +19,7 @@
 	<img src="./docs/demo/tui.gif" alt="AgentSync TUI walkthrough" width="800"/>
 </div>
 
-AgentSync is a Bun-based CLI and background daemon that snapshots AI agent configuration from your machine, encrypts it with [age](https://age-encryption.org/) recipients, and backs it up into a Git-backed vault under a per-machine namespace, so you can copy any machine's setup onto another.
+AgentSync is a Bun-based CLI that snapshots AI agent configuration from your machine, encrypts it with [age](https://age-encryption.org/) recipients, and backs it up into a Git-backed vault under a per-machine namespace, so you can copy any machine's setup onto another.
 
 It is for people who keep global agent configuration in tools like Claude, Cursor, Codex, Copilot, and VS Code and want one encrypted backup per machine instead of manually copying files between laptops. Each machine pushes into its own `machines/<name>/` namespace; bringing config to a new machine is an explicit `copy`, never a silent overwrite.
 
@@ -79,10 +79,9 @@ The full quickstart, command reference, and architecture model live at the docum
 | `copy` | Restore an artefact (or subdir) from a machine's vault namespace to local disk (`copy self …` for your own). |
 | `ls` | List machine namespaces, or the copyable artifact paths in one (key-free discovery). |
 | `status` | Compare local files with the vault and surface drift (any machine via `--machine`). |
-| `doctor` | Run environment, key, vault, and daemon diagnostics. |
-| `daemon` | Install and manage the background auto-sync daemon. |
+| `doctor` | Run environment, key, and vault diagnostics. |
 | `key` | Add, list, or remove recipients (revocation), or rotate the local machine key. |
-| `config` | View or change vault config: agents enabled, sync behaviour, secret-handling policy. |
+| `config` | View or change vault config: agents enabled and secret-handling policy. |
 | `skill` | Remove a skill from the vault explicitly. |
 | `migrate` | Translate configuration between agent formats locally. |
 | `destroy` | Wipe the local vault clone (default) or the remote vault contents via a normal commit. **Local agent files (`~/.claude`, `~/.cursor`, …) are never touched.** |
@@ -93,10 +92,10 @@ Full flag tables and caveats: [Commands](https://chrisleekr.github.io/agentsync/
 
 The full documentation is hosted at <https://chrisleekr.github.io/agentsync/> and lives in [`docs/`](./docs):
 
-- **[Architecture](./docs/architecture.md)** — system model, push and copy pipelines, daemon model, security boundaries.
+- **[Architecture](./docs/architecture.md)** — system model, push and copy pipelines, security boundaries.
 - **[Commands](./docs/commands.md)** — every subcommand, flag, outcome, and caveat.
 - **[Migrate](./docs/migrate.md)** — translate config between Claude, Cursor, Codex, Copilot, and VS Code.
-- **[Operations](./docs/operations.md)** — daemon install per OS, key rotation, troubleshooting catalogue.
+- **[Operations](./docs/operations.md)** — key rotation, troubleshooting catalogue.
 - **[Contributing](./docs/contributing.md)** — develop from source, run the test suite, release discipline, doc ownership.
 
 ## Contributing

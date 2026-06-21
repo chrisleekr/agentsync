@@ -1,94 +1,32 @@
 ---
-description: Run AgentSync day to day: install the daemon per OS, rotate age keys, verify release binaries, recover from divergence, and troubleshoot.
+description: Run AgentSync day to day: rotate age keys, verify release binaries, recover from divergence, and troubleshoot.
 ---
 
 # Operations
 
-Run AgentSync in production for your own laptops: install the daemon, rotate keys, recover from divergence, and diagnose every common failure.
+Run AgentSync in production for your own laptops: rotate keys, recover from divergence, and diagnose every common failure.
 
 ## What this page owns
 
-This page owns day-2 concerns. It is the single home for the daemon install procedure on each OS, the key-rotation runbook, the release binary verification recipe, and the troubleshooting catalogue. The architectural model behind these flows lives in [Architecture](architecture.md); the command flag reference lives in [Commands](commands.md).
+This page owns day-2 concerns. It is the single home for the key-rotation runbook, the release binary verification recipe, and the troubleshooting catalogue. The architectural model behind these flows lives in [Architecture](architecture.md); the command flag reference lives in [Commands](commands.md).
 
 ## Daily ops in the TUI
 
-Run `agentsync` with no arguments for an interactive view of daemon health,
-vault state, agent file deltas, and pending sync activity. The TUI keeps a
-1.5-second poll on the daemon IPC `status` command, so the dashboard reflects
-live state without you re-running `agentsync status`.
+Run `agentsync` with no arguments for an interactive view of vault state,
+agent file deltas, and drift. Push and copy run in-process from the TUI, so
+there is no background service to start first.
 
 The flag-driven equivalents still work when you need scripted output:
 
 - `agentsync status` — text comparison of local files vs the decrypted
   vault.
-- `agentsync daemon status` — daemon health only.
-- `agentsync doctor` — local environment, key, vault, and daemon checks.
+- `agentsync doctor` — local environment, key, and vault checks.
 
-## Daemon
+## Configuration
 
-The daemon is a long-running process that watches your enabled agent paths and pushes on change. It debounces rapid edits and serialises sync operations through a queue so two pushes can never race. It is push-only: the vault is per-machine backup, so the daemon never auto-pulls.
-
-### Install per OS
-
-The CLI dispatches to the right backend automatically. The same command works on every platform:
-
-```bash
-agentsync daemon install   # write the OS service descriptor
-agentsync daemon start     # idempotent
-agentsync daemon status    # IPC ping; reports running state and last sync
-```
-
-To stop or remove:
-
-```bash
-agentsync daemon stop
-agentsync daemon uninstall
-```
-
-The platform backend is selected at runtime:
-
-| OS | Backend | Service location |
-|---|---|---|
-| macOS | launchd LaunchAgent | `~/Library/LaunchAgents/com.agentsync.daemon.plist` |
-| Linux | systemd user unit | `~/.config/systemd/user/agentsync.service` |
-| Windows | Task Scheduler | per-user scheduled task `AgentSync` |
-
-After `daemon install`, the OS supervisor restarts the daemon on user login and after a crash. `daemon start` brings it up immediately without waiting for the next login.
-
-> **Install globally first.** `daemon install` refuses to register an executable that lives in a temporary directory (the case when running via `bunx`) because the OS supervisor would lose the binary on the next reboot. Run `bun install -g @chrisleekr/agentsync` (or another stable install path) before `daemon install`.
-
-### Lifecycle
-
-The daemon moves through a small number of phases. Each phase has a well-defined exit condition.
-
-| Phase | Description |
-|---|---|
-| Validating | Verifies the vault directory, the config file, and the encryption key are reachable. Exits immediately on failure. |
-| Second-instance check | Sends an IPC `status` ping. If a daemon is already running, exits. Unlinks a stale socket if the prior daemon died ungracefully. |
-| Running | IPC server is listening and file watchers are active (push-only; no pull timer). `status` returns pid, last successful sync time, consecutive-failure counter, last error, and whether the daemon is stuck. |
-| Syncing | A push is executing inside the sync queue. Only one sync runs at a time. |
-| Retry once | Automatic single retry after a transient failure. If both attempts fail, the error is recorded but the daemon stays alive so the next change can still trigger a push. |
-| Stuck | The vault diverged (`DIVERGED_HISTORY`). A divergence cannot heal on its own, so the daemon latches a `stuck` flag, fires one desktop notification, and backs off watcher-driven retries to once every 5 minutes instead of hammering a doomed push. A manual `agentsync push` is never throttled. The next success (after you reset the vault) clears it. |
-| Shutting down | Drains the sync queue with a hard ten-second timeout, closes IPC, stops watchers, unlinks the socket, exits cleanly. |
-
-### Health and durable state
-
-The daemon persists its health to `<AGENTSYNC_DIR>/daemon-state.json` (last successful sync, last error, consecutive failures, and the stuck flag) and updates it on every success and failure. Because it is on disk, the state survives a crash or restart:
-
-- `agentsync daemon status` reports the live state when the daemon is up, and **falls back to the durable file when it is down** — so you can still see when sync last succeeded and whether it died stuck.
-- `agentsync doctor` reads the same file and adds a **Daemon sync health** row: it **fails** when stuck, **warns** when the daemon is installed but the last success is older than 24 hours (or has never succeeded), and **passes** on a recent success. This is the loud signal that a *silent* backup failure has been happening — the worst failure mode for a backup tool. (The installed-but-stale/never warning is derived from the service file, which doctor only detects on macOS and Linux today; on Windows the row still **fails** on a stuck vault but does not yet warn on staleness.)
-
-The file watcher pre-filters never-sync paths (`sessions/`, `history.jsonl`, `*.local.md`, …) at the watch layer, so a high-churn agent directory no longer wakes a push that would snapshot nothing.
-
-### Configuration
-
-Daemon behaviour is driven by the `[sync]` table in `agentsync.toml`:
+Vault behaviour is driven by `agentsync.toml`. Change any value with [`agentsync config set`](commands.md#config) rather than hand-editing, so it reconciles, commits, and pushes through the same path as everything else:
 
 ```toml
-[sync]
-debounceMs = 300        # quiet window after a file change before push fires; 50 to 10000
-autoPush = true         # disable to make the daemon read-only
-
 [agents]
 cursor = true           # enable cursor adapter
 claude = true           # enable claude adapter
@@ -100,13 +38,13 @@ vscode = false          # opt-in; vscode's surface is MCP-only
 syncPlugins = false     # opt-in: back up a reinstall manifest of ~/.claude/plugins
 ```
 
-Defaults are chosen so you can install and forget. Tune them only if you observe excessive push churn. Values outside the supported range are rejected at config load.
+Values outside the supported range are rejected at config load.
 
 **Environment-variable escape hatches.** For tests, CI, and air-gapped setups, the following variables override the resolved defaults:
 
 | Variable | Overrides | Default |
 |---|---|---|
-| `AGENTSYNC_DIR` | Base directory for AgentSync state (vault clone, private key, update-check cache; also the daemon socket on Unix — Windows uses a fixed named pipe) | `~/.config/agentsync` (Unix), `%APPDATA%/agentsync` (Windows) |
+| `AGENTSYNC_DIR` | Base directory for AgentSync state (vault clone, private key, update-check cache) | `~/.config/agentsync` (Unix), `%APPDATA%/agentsync` (Windows) |
 | `AGENTSYNC_VAULT_DIR` | Vault clone directory | `<AGENTSYNC_DIR>/vault` |
 | `AGENTSYNC_KEY_PATH` | Private key file | `<AGENTSYNC_DIR>/key.txt` |
 | `AGENTSYNC_MACHINE` | Machine identifier in recipient names — applies only before a name is pinned; `init` pins the resolved name | pinned machine file (`<AGENTSYNC_DIR>/machine`) if present, else `HOSTNAME`, else the `os.hostname()` call, else the literal `local-machine` |
@@ -116,14 +54,6 @@ Defaults are chosen so you can install and forget. Tune them only if you observe
 `init` pins the resolved machine name to `<AGENTSYNC_DIR>/machine` (a sibling of the private key) so a later hostname change cannot re-derive a different name and orphan this machine's vault namespace. Once pinned, the pinned name wins over every other source, including `AGENTSYNC_MACHINE`; the chain below applies only until the pin exists.
 
 `HOSTNAME` is consulted only as a fallback for the machine identifier. It is a bash-shell convenience variable, not a portable environment variable: it is generally absent under `sh`/`dash`/`zsh`, absent on macOS and Windows, and defaults to the container ID inside Docker. Two machines with the same `os.hostname()` but different exported `HOSTNAME` therefore resolve to different recipient names, and conversely, when neither variable is set, two machines whose `os.hostname()` returns the same value resolve to the same name. Set `AGENTSYNC_MACHINE` explicitly to make the identifier deterministic. See [Recipient naming](#recipient-naming) for why this value matters.
-
-### Logs
-
-Inspect platform logs when `daemon status` reports unhealthy:
-
-- macOS: `~/Library/Logs/AgentSync/agentsync.out.log` and `~/Library/Logs/AgentSync/agentsync.err.log`, plus the LaunchAgent's `Console.app` entries.
-- Linux: `journalctl --user -u agentsync.service`.
-- Windows: Task Scheduler history for `AgentSync`, plus the daemon's stdout file under the user's local app data.
 
 ## Key management
 
@@ -363,16 +293,6 @@ In **every** mode — `redact` and `off` included — the **catastrophic tier st
 3. On a **fresh** machine with no local value, the placeholder lands in the config as-is. AgentSync does **not** expand it — replace `$AGENTSYNC_REDACTED_<FIELD>` with the real secret on that machine (paste the value, or point the field at your own secret manager / the agent's native `${VAR}` env syntax). The literal `$AGENTSYNC_REDACTED_…` is your signal that a value is required.
 
 This is the right default when a vault has more than one recipient (a teammate's key, or another of your own devices): encryption alone lets every recipient read every secret, so keeping the token out of the vault entirely is the only way to scope it to the machine that owns it.
-
-### Daemon is not running
-
-Check, in order:
-
-1. The service is installed for the current platform (`daemon install` writes the descriptor).
-2. The OS supervisor reports the service as active (`launchctl list`, `systemctl --user status agentsync`, or Task Scheduler).
-3. `daemon status` can reach the local IPC endpoint.
-
-If the service is installed but `daemon status` cannot reach it, inspect the platform logs listed above.
 
 ### A skill I deleted reappears after copy on another machine
 

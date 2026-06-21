@@ -67,12 +67,6 @@ describe("onConfigKey — navigation", () => {
     expect(onConfigKey(key("space"), store)).toBe(false);
     expect(onConfigKey(key("left"), store)).toBe(false);
   });
-
-  test("number left at the lower bound consumes the key but writes nothing", () => {
-    const store = readyStore([{ key: "sync.debounceMs", value: 50, kind: "number" }]);
-    expect(onConfigKey(key("left"), store)).toBe(true);
-    expect(store.getState().config.lastResult).toBeNull();
-  });
 });
 
 describe("secretScanExplainer", () => {
@@ -142,7 +136,6 @@ describe("Config tab against a real vault", () => {
     // No non-settable keys leak in.
     expect(keys.some((k) => k.startsWith("remote") || k === "version")).toBe(false);
     expect(c.rows.find((r) => r.key === "security.secretScan")?.kind).toBe("enum");
-    expect(c.rows.find((r) => r.key === "sync.debounceMs")?.kind).toBe("number");
     expect(c.recipients.find((r) => r.name === "config-tab")?.isSelf).toBe(true);
   });
 
@@ -174,16 +167,6 @@ describe("Config tab against a real vault", () => {
 
     const config = await loadConfig(resolveConfigPath(machine.vaultDir));
     expect(config.security.secretScan).toBe("strict");
-  });
-
-  test("right adjusts a number within bounds and persists it", async () => {
-    const store = createStore(createInitialState());
-    await loadAndFocus(store, "sync.debounceMs"); // default 300
-    expect(onConfigKey(key("right"), store)).toBe(true);
-    await waitFor(() => store.getState().config.lastResult !== null);
-
-    const config = await loadConfig(resolveConfigPath(machine.vaultDir));
-    expect(config.sync.debounceMs).toBe(350);
   });
 
   test("left wraps to off but gates the apply behind a y/n confirm", async () => {

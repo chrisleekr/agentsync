@@ -17,10 +17,6 @@ const VALID_BASE = {
     vscode: false,
   },
   remote: { url: "git@github.com:user/vault.git", branch: "main" },
-  sync: {
-    debounceMs: 300,
-    autoPush: true,
-  },
 } as const;
 
 describe("AgentSyncConfigSchema", () => {
@@ -160,28 +156,6 @@ describe("AgentSyncConfigSchema", () => {
     const result = AgentSyncConfigSchema.safeParse({
       ...VALID_BASE,
       remote: { url: "not a url", branch: "main" },
-    });
-    expect(result.success).toBe(false);
-  });
-
-  test("rejects debounceMs below minimum (50)", () => {
-    const result = AgentSyncConfigSchema.safeParse({
-      ...VALID_BASE,
-      sync: {
-        debounceMs: 10,
-        autoPush: true,
-      },
-    });
-    expect(result.success).toBe(false);
-  });
-
-  test("rejects debounceMs above maximum (10000)", () => {
-    const result = AgentSyncConfigSchema.safeParse({
-      ...VALID_BASE,
-      sync: {
-        debounceMs: 99_999,
-        autoPush: true,
-      },
     });
     expect(result.success).toBe(false);
   });
