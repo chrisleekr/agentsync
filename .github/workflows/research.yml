@@ -162,7 +162,7 @@ jobs:
             ### Step 3: Deep-dive into that subsystem
             - Read the key files in your chosen subsystem thoroughly. Suggested
               entry points (verify before citing — paths may have moved):
-              - cli-ux       → `src/cli.ts`, `src/commands/{init,push,pull,status,doctor}.ts`
+              - cli-ux       → `src/cli.ts`, `src/commands/{init,push,copy,status,doctor}.ts`
               - agents       → `src/agents/registry.ts`, `src/agents/{claude,cursor,codex,copilot,vscode}.ts`, `src/agents/skills-walker.ts`
               - encryption   → `src/core/encryptor.ts` (age recipients, X25519 key handling)
               - vault-git    → `src/core/git.ts` (reconciliation, fast-forward-only rule)
