@@ -404,7 +404,6 @@ describe("performDestroy", () => {
           vscode: false,
         },
         remote: { url: "git@github.com:chrisleekr/agentsync-vault.git", branch: "main" },
-        sync: { debounceMs: 300, autoPush: true, autoPull: true, pullIntervalMs: 300_000 },
       } as unknown as Parameters<typeof __TEST_ONLY.expectedPhrase>[1];
 
       expect(__TEST_ONLY.expectedPhrase("remote", cfg)).toBe(

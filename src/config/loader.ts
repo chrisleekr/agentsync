@@ -120,8 +120,8 @@ export function isConfigParseError(err: unknown): boolean {
  * Render a loadConfig failure as a single actionable line instead of a raw
  * Zod/Toml stack trace. loadConfig can throw a ZodError (schema), a TomlError
  * (syntax), or a generic error; each collapses to `<path>: what is wrong` so
- * CLI users and the supervised daemon get a parseable diagnostic rather than a
- * multi-line blob. Zod issues are capped at three to keep the line readable.
+ * CLI users get a parseable diagnostic rather than a multi-line blob. Zod
+ * issues are capped at three to keep the line readable.
  */
 export function formatConfigError(err: unknown, configPath: string): string {
   if (err instanceof z.ZodError) {

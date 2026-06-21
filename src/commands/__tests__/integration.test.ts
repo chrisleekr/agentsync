@@ -452,10 +452,6 @@ describe("integration", () => {
         url: bareRepoPath,
         branch: "main",
       },
-      sync: {
-        debounceMs: 300,
-        autoPush: true,
-      },
       claudePlugins: { syncPlugins: false },
       security: { secretScan: "standard", allowSecretValues: [], redactBase64Values: true },
     });
@@ -638,10 +634,6 @@ describe("integration", () => {
       remote: {
         url: bareRepoPath,
         branch: "main",
-      },
-      sync: {
-        debounceMs: 300,
-        autoPush: true,
       },
       claudePlugins: { syncPlugins: false },
       security: { secretScan: "standard", allowSecretValues: [], redactBase64Values: true },

@@ -11,7 +11,6 @@ source /home/agent/scenarios/_lib.sh
 #   4. agentsync.toml schema
 #   5. Git remote reachable
 #   6. Credential files in vault
-#   7. Daemon service file (platform-gated; linux → systemd user service)
 # console.table prints rows with name/status/detail columns — we grep for the
 # stable `name` strings and the `pass|warn|fail` status word on the same row.
 
@@ -55,8 +54,7 @@ for name in \
   "Cursor skills directory" \
   "agentsync.toml schema" \
   "Git remote reachable" \
-  "Credential files in vault" \
-  "Daemon service file" ; do
+  "Credential files in vault" ; do
   echo "$out" | grep -qF "$name" || fail "missing check row: $name"
 done
 pass "all enumerated check rows present"
@@ -125,11 +123,6 @@ echo "$nosettings_out" | grep -qE "Not found or unreadable|partial" \
   || fail "warn detail does not flag the missing settings.json"
 pass "doctor reports missing Claude settings.json as warn"
 mv "$MACHINE/.claude/settings.json.bak" "$MACHINE/.claude/settings.json"
-
-# TODO: not exercised — Daemon service file. Linux scenario container has no
-# launchctl/systemctl-user wiring planted, so the check always warns. Negative
-# coverage would require installing+removing the systemd unit which is out of
-# scope for an in-container scenario.
 
 # TODO: not exercised — Credential files in vault (fail path). Would require
 # planting an unencrypted credentials/.env file directly inside the vault dir,

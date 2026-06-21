@@ -22,11 +22,6 @@ const DEFAULT_AGENTS = {
   vscode: false,
 };
 
-const DEFAULT_SYNC = {
-  debounceMs: 300,
-  autoPush: true,
-};
-
 const DEFAULT_SECURITY = {
   secretScan: "standard" as const,
   allowSecretValues: [] as string[],
@@ -193,7 +188,6 @@ export async function performInit(options: InitOptions): Promise<InitResult> {
         url: options.remote,
         branch: options.branch,
       },
-      sync: existing?.sync ?? DEFAULT_SYNC,
       claudePlugins: existing?.claudePlugins ?? { syncPlugins: false },
       security: existing?.security ?? DEFAULT_SECURITY,
     });

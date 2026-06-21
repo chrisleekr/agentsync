@@ -1,6 +1,6 @@
 # AgentSync — Project Context for Claude
 
-A Bun-based CLI and background daemon that snapshots local AI agent
+A Bun-based CLI that snapshots local AI agent
 configuration (Claude, Cursor, Codex, Copilot, VS Code), encrypts it with
 [age](https://age-encryption.org/) recipients, and syncs it through a
 Git-backed vault. Read [`README.md`](./README.md) for the user-facing
@@ -27,12 +27,11 @@ system model.
 src/
   cli.ts                  CLI entry — wires citty commands; bare invocation opens the TUI
   agents/                 Per-agent adapters (claude, cursor, codex, copilot, vscode)
-  commands/               User-facing commands (init, push, copy, status, daemon, key, skill, plugin, vault, upgrade, …)
+  commands/               User-facing commands (init, push, copy, status, key, skill, plugin, vault, upgrade, …)
     destroy.ts            CLI vault teardown — local rm, remote commit, or both
-    tui/                  Interactive TUI: app loop, tab modules, IPC client, render panes
+    tui/                  Interactive TUI: app loop, tab modules, render panes
   config/                 Path resolution + agentsync.toml schema
-  core/                   encryptor, git, sanitizer, tar, watcher, sync-queue, ipc
-  daemon/                 Long-running process + per-OS installers
+  core/                   encryptor, git, sanitizer, tar
   lib/                    Shared utilities (logging, debug)
   migrate/                Vault format migrations
   test-helpers/           Shared test fixtures
@@ -80,10 +79,11 @@ bun run check:act     # run CI workflow locally via nektos/act
   `pull`. `push` snapshots this machine into its namespace; `agentsync copy
   <machine> <path>` is the sole way to apply vault content to local disk (it
   reuses each agent's apply plan via `applySingleArtifact`, writing only local
-  disk, never the vault). The daemon is push-only — no pull IPC, no pull timer.
+  disk, never the vault). There is no background sync process — `push` is always
+  an explicit action (CLI or TUI), never automatic.
 - **Reconciliation is fast-forward-only**: `src/core/git.ts` defines the
-  shared rule used by `init`, `push`, `copy`, `key add`, `key rotate`, and the
-  daemon. Diverged history must stop the operation with recovery guidance —
+  shared rule used by `init`, `push`, `copy`, `key add`, and `key rotate`.
+  Diverged history must stop the operation with recovery guidance —
   never silently merge or print success.
 - **Integer version is the old-binary block**: `agentsync.toml` carries
   `version` as an INTEGER literal (`z.literal(2)`). A v1 binary's
@@ -121,9 +121,8 @@ bun run check:act     # run CI workflow locally via nektos/act
   scope). A future PR that adds that import without a documented reason
   should be rejected at review — the invariant is the entire safety story
   for that command.
-- **Errors over fallbacks**: prefer surfacing reconciliation, encryption,
-  or daemon-IPC failures with actionable guidance over silent retries or
-  defaults.
+- **Errors over fallbacks**: prefer surfacing reconciliation or encryption
+  failures with actionable guidance over silent retries or defaults.
 - **Imports**: ES modules only (`"type": "module"`). Use Node-style
   imports with explicit `.ts` paths where Bun requires them; let Biome
   organise import order.

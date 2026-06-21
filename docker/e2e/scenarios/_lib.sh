@@ -4,7 +4,7 @@
 # Helpers are split into three layers:
 #   1. Output & primitive assertions (step/pass/fail, assert_file_exists, etc.)
 #   2. Vault-tree assertions (operate on the bare git repo behind the vault)
-#   3. Scenario fixtures (with_machine, plant_fixture, daemon_ipc, etc.)
+#   3. Scenario fixtures (with_machine, plant_fixture, copy_self, etc.)
 #
 # Scenarios assume:
 #   - /app holds the agentsync source (Bun project root)
@@ -159,7 +159,7 @@ tar_age_extract() {
     | tar -xz -C "$out_dir"
 }
 
-# ─── Layer 3: machine + daemon helpers ───────────────────────────────────────
+# ─── Layer 3: machine + fixture helpers ──────────────────────────────────────
 
 # with_machine <home-dir> <cmd...>
 # Runs cmd from /app with HOME pointed at <home-dir>. Used by multi-machine

@@ -50,17 +50,7 @@
   },
   "overrides": [
     {
-      "includes": ["src/daemon/index.ts"],
-      "linter": {
-        "rules": {
-          "suspicious": {
-            "noConsole": "warn"
-          }
-        }
-      }
-    },
-    {
-      "includes": ["src/**/*.ts", "!src/daemon/index.ts"],
+      "includes": ["src/**/*.ts"],
       "linter": {
         "rules": {
           "suspicious": {

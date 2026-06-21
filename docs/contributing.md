@@ -109,10 +109,10 @@ Single source of truth for which file owns which concept. The docs-mirror CI che
 | Page | Owner | Source of truth in code | Trigger to update |
 |---|---|---|---|
 | `index.md` | maintainer | repo root, `package.json`, install paths | release flow change, install-method change, project-status change |
-| `architecture.md` | maintainer | `src/core/`, `src/daemon/`, `src/migrate/`, `src/agents/` | new module, new invariant, security-boundary change, vault-format version bump |
+| `architecture.md` | maintainer | `src/core/`, `src/migrate/`, `src/agents/` | new module, new invariant, security-boundary change, vault-format version bump |
 | `commands.md` | maintainer | `src/cli.ts`, `src/commands/` | new command, new flag, exit-code change, outcome change |
 | `migrate.md` | maintainer | `src/migrate/`, `src/agents/` | new agent, new config type, new MCP transport |
-| `operations.md` | maintainer | `src/daemon/installer-*.ts`, troubleshooting reports | new install target, new failure mode |
+| `operations.md` | maintainer | troubleshooting reports | new failure mode |
 | `contributing.md` | maintainer | `package.json` scripts, `lefthook.yml`, `biome.json`, `.github/workflows/` | new tooling, release-rule change, ownership change |
 
 Rule: if a fact appears in two pages, the page in the table is the owner. The other page links to it instead of restating it. PRs that change a fact must touch only the owner.
@@ -138,7 +138,6 @@ Before opening a PR:
 
 - [ ] `bun run check` is green locally.
 - [ ] Every changed CLI surface is reflected in `docs/commands.md` (or `docs/migrate.md` for migrate-only changes).
-- [ ] Every new daemon installer target is reflected in `docs/operations.md`.
 - [ ] Every change that crosses a security or reconciliation boundary is reflected in `docs/architecture.md`.
 - [ ] If a doc file moved or was deleted, every internal link to it still resolves; `mkdocs build --strict` proves this in CI.
 

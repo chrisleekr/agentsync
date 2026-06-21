@@ -38,10 +38,6 @@ vscode = false
 [remote]
 url = "git@github.com:alice/vault.git"
 branch = "main"
-
-[sync]
-debounceMs = 300
-autoPush = true
 `;
 
 describe("loader", () => {
@@ -66,7 +62,6 @@ describe("loader", () => {
     expect(config.remote.url).toBe("git@github.com:alice/vault.git");
     expect(config.agents.cursor).toBeTrue();
     expect(config.agents.vscode).toBeFalse();
-    expect(config.sync.debounceMs).toBe(300);
   });
 
   test("loadConfig throws on missing file", async () => {
@@ -92,7 +87,6 @@ describe("loader", () => {
     expect(reloaded.remote.url).toBe(original.remote.url);
     expect(reloaded.recipients).toEqual(original.recipients);
     expect(reloaded.agents).toEqual(original.agents);
-    expect(reloaded.sync.debounceMs).toBe(original.sync.debounceMs);
   });
 
   test("writeConfig leaves no temp sibling after a successful write", async () => {
@@ -178,7 +172,6 @@ describe("formatConfigError", () => {
     recipients: { me: "age1qpzry9x8gf2tvdw0s3jn54khce6mua7l" },
     agents: { cursor: true, claude: true, codex: true, copilot: true, vscode: false },
     remote: { url: "git@github.com:user/vault.git", branch: "main" },
-    sync: { debounceMs: 300, autoPush: true },
   };
 
   test("names the offending recipient alias for a schema (Zod) error", () => {

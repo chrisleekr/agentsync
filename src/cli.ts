@@ -2,7 +2,6 @@
 import { defineCommand, runMain } from "citty";
 import { configCommand } from "./commands/config";
 import { copyCommand } from "./commands/copy";
-import { daemonCommand } from "./commands/daemon";
 import { destroyCommand } from "./commands/destroy";
 import { doctorCommand } from "./commands/doctor";
 import { initCommand } from "./commands/init";
@@ -31,7 +30,6 @@ const main = defineCommand({
     ls: lsCommand,
     status: statusCommand,
     doctor: doctorCommand,
-    daemon: daemonCommand,
     key: keyCommand,
     config: configCommand,
     migrate: migrateCommand,

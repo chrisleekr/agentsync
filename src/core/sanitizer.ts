@@ -157,7 +157,7 @@ export interface SecretPolicy {
 /**
  * The behaviour when no [security] config is supplied: the historical default.
  * Frozen so the shared instance can never be mutated (e.g. a stray push to
- * `allow`) and contaminate every other caller in a long-lived daemon process.
+ * `allow`) and contaminate every other caller in the same process.
  */
 export const DEFAULT_SECRET_POLICY: SecretPolicy = Object.freeze({
   mode: "standard",

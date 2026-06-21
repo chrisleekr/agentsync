@@ -42,8 +42,8 @@ function cachePath(): string {
 }
 
 /**
- * Mirrors the bunx/temp detection in `commands/daemon.ts`. Duplicated rather
- * than imported because `core/` must not depend on a command module.
+ * Detect a bunx- or temp-directory execution path. An ephemeral install must
+ * not cache or nag about update-check state, since it disappears after the run.
  */
 function isEphemeralPath(filePath: string): boolean {
   if (filePath.includes("bunx-")) return true;

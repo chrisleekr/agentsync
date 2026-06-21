@@ -129,9 +129,7 @@ export const AgentPaths = {
 
 /**
  * Resolve the OS-specific base directory used for AgentSync state — the single
- * root under which the vault clone, private key, update-check cache, and (on
- * Unix) the daemon socket live. On Windows the daemon endpoint is a fixed
- * named pipe that AGENTSYNC_DIR does not relocate.
+ * root under which the vault clone, private key, and update-check cache live.
  *
  * `AGENTSYNC_DIR` overrides the default location (read at call time so tests
  * and wrapper scripts can redirect it). A blank value is treated as unset, so
@@ -149,12 +147,4 @@ export function resolveAgentSyncHome(): string {
     return join(nonBlank(process.env.APPDATA) ?? HOME, "agentsync");
   }
   return join(HOME, ".config", "agentsync");
-}
-
-/** Resolve the local IPC endpoint used by the background daemon. */
-export function resolveDaemonSocketPath(): string {
-  if (process.platform === "win32") {
-    return "\\\\.\\pipe\\agentsync";
-  }
-  return join(resolveAgentSyncHome(), "daemon.sock");
 }

@@ -1,7 +1,7 @@
 # Scheduled Research Workflow
 #
 # Runs daily (and on-demand via workflow_dispatch) to research improvements
-# for AgentSync — a Bun-based CLI + daemon that snapshots, encrypts (age),
+# for AgentSync — a Bun-based CLI that snapshots, encrypts (age),
 # and syncs AI agent configuration (Claude, Cursor, Codex, Copilot, VS Code)
 # via a Git-backed vault.
 #
@@ -31,7 +31,7 @@ on:
   workflow_dispatch:
     inputs:
       focus_area:
-        description: "Area to focus research on (e.g., 'encryption', 'daemon', 'cli-ux')"
+        description: "Area to focus research on (e.g., 'encryption', 'sanitizer', 'cli-ux')"
         required: false
         type: string
         default: ""
@@ -90,7 +90,6 @@ jobs:
               "commands"
               "config"
               "cross-platform"
-              "daemon"
               "docs"
               "encryption"
               "migrations"
@@ -124,7 +123,7 @@ jobs:
             ## Mission
 
             You are a principal software engineer improving AgentSync — a Bun-based
-            CLI and background daemon that snapshots local AI agent configuration
+            CLI that snapshots local AI agent configuration
             (Claude, Cursor, Codex, Copilot, VS Code), encrypts it with age
             recipients, and syncs it through a Git-backed vault. Your mission:
             **find ONE concrete, evidence-based improvement to an existing
@@ -163,26 +162,23 @@ jobs:
             ### Step 3: Deep-dive into that subsystem
             - Read the key files in your chosen subsystem thoroughly. Suggested
               entry points (verify before citing — paths may have moved):
-              - cli-ux       → `src/cli.ts`, `src/commands/{init,push,pull,status,doctor}.ts`
+              - cli-ux       → `src/cli.ts`, `src/commands/{init,push,copy,status,doctor}.ts`
               - agents       → `src/agents/registry.ts`, `src/agents/{claude,cursor,codex,copilot,vscode}.ts`, `src/agents/skills-walker.ts`
               - encryption   → `src/core/encryptor.ts` (age recipients, X25519 key handling)
               - vault-git    → `src/core/git.ts` (reconciliation, fast-forward-only rule)
               - sanitizer    → `src/core/sanitizer.ts` (never-sync patterns, secret redaction)
-              - sync-queue   → `src/core/sync-queue.ts`, `src/core/watcher.ts`
               - tar          → `src/core/tar.ts` (skills archive packing)
-              - daemon       → `src/daemon/index.ts`, `src/daemon/installer-{macos,linux,windows}.ts`, `src/commands/daemon.ts`
-              - ipc          → `src/core/ipc.ts` (daemon ↔ CLI channel)
               - skills       → `src/commands/skill.ts`, `src/agents/skills-walker.ts`
               - migrate      → `src/commands/migrate.ts`, `src/migrate/`
               - testing      → co-located `__tests__/` dirs under `src/`, `bun test` coverage
-              - docs         → `docs/architecture.md`, `docs/command-reference.md`, `docs/daemon.md`, `docs/troubleshooting.md`
+              - docs         → `docs/architecture.md`, `docs/commands.md`, `docs/operations.md`
             - Understand how the feature currently works before proposing improvements
 
             ### Step 4: Research improvements via WebSearch (3-5 turns max)
             - Search for best practices specific to your chosen subsystem
             - Example searches: "age encryption recipient rotation patterns 2026",
               "fast-forward-only git workflow recovery UX",
-              "Bun daemon IPC unix socket patterns",
+              "Bun single-file executable distribution patterns",
               "tar streaming encryption Node.js", "TOML config validation zod"
 
             ### Step 5: Create the issue (3-5 turns max)
@@ -202,12 +198,11 @@ jobs:
                Title uses Conventional Commits style — pick the type based on your finding:
                fix, feat, perf, refactor, security, test, docs
                Examples:
-               - fix(vault-git): pull aborts on detached HEAD with no recovery guidance
-               - feat(daemon): debounce coalesces duplicate snapshots within 200ms window
+               - fix(vault-git): copy aborts on detached HEAD with no recovery guidance
                - perf(encryption): stream tar to age writer instead of buffering full archive
                - security(sanitizer): never-sync pattern misses `.env.local` and `.env.*.local`
                - test(agents): codex adapter has no fixture for unknown TOML keys
-               - docs(daemon): troubleshooting guide missing macOS LaunchAgent reload steps
+               - docs(operations): troubleshooting guide missing divergence recovery for shallow clones
 
             ## Issue Body Template
 

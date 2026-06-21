@@ -113,7 +113,6 @@ back to the local `homedir()` on `copy` (B24).
 | 6 | `06-skill-additive.sh` | Disk removal of a skill leaves vault copy intact; explicit `skill remove` drops it |
 | 9 | `09-key-add.sh` | Add a second recipient; every blob decrypts under either key; idempotent re-run |
 | 10 | `10-migrate.sh` | Every supported `(--from, --to, --type)` combo; `--dry-run` no-op; idempotent |
-| 11 | `11-daemon-ipc.sh` | Daemon `status` and `push` verbs work; `pull` is rejected (push-only daemon); clean shutdown |
 | 13 | `13-doctor.sh` | Every `agentsync doctor` check fires; negative breaks surface the correct failure line |
 | 14 | `14-dry-run.sh` | `push --dry-run` lists intended changes but produces no commit |
 | 16 | `16-vscode-non-mcp.sh` | Pin (B6): VS Code adapter syncs **only** `mcp.json.mcpServers`; settings/keybindings/snippets stay local |
@@ -174,7 +173,7 @@ bun run e2e:all
 ## Running
 
 ```bash
-bun run e2e:all                            # full sweep (20 scenarios)
+bun run e2e:all                            # full sweep (13 scenarios)
 SCENARIO=18-copilot.sh bun run e2e:scenario  # one scenario
 bun run e2e:smoke                          # legacy single-up smoke
 bun run e2e:audit                          # decrypted-blob leak audit
@@ -204,7 +203,7 @@ docker/e2e/
 │   ├── home/                  real-customer config tree (rsync source)
 │   └── canaries/              never-sync + literal-secret canaries (scenario-loaded)
 └── scenarios/
-    ├── _lib.sh                step/assert/with_machine/daemon_ipc/tar_age_extract helpers
+    ├── _lib.sh                step/assert/with_machine/copy_self/tar_age_extract helpers
     ├── smoke.sh
     ├── 03-diverged-history.sh
     ├── 04-sanitizer-aborts.sh
@@ -212,7 +211,6 @@ docker/e2e/
     ├── 06-skill-additive.sh
     ├── 09-key-add.sh
     ├── 10-migrate.sh
-    ├── 11-daemon-ipc.sh
     ├── 13-doctor.sh
     ├── 14-dry-run.sh
     ├── 16-vscode-non-mcp.sh
