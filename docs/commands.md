@@ -271,6 +271,7 @@ agentsync doctor
 - age-encryption module availability,
 - remote reachability,
 - obvious unencrypted sensitive files in the vault,
+- legacy daemon registrations and stale IPC sockets, with platform-specific cleanup guidance,
 - readability of the per-agent skills directories (`buildSkillsDirChecks` warns if a directory is missing, unreadable, a symbolic link, or exists but is not a directory).
 
 **Caveats**:

@@ -11,6 +11,7 @@ source /home/agent/scenarios/_lib.sh
 #   4. agentsync.toml schema
 #   5. Git remote reachable
 #   6. Credential files in vault
+#   7. Legacy daemon leftovers
 # console.table prints rows with name/status/detail columns — we grep for the
 # stable `name` strings and the `pass|warn|fail` status word on the same row.
 
@@ -54,7 +55,8 @@ for name in \
   "Cursor skills directory" \
   "agentsync.toml schema" \
   "Git remote reachable" \
-  "Credential files in vault" ; do
+  "Credential files in vault" \
+  "Legacy daemon leftovers" ; do
   echo "$out" | grep -qF "$name" || fail "missing check row: $name"
 done
 pass "all enumerated check rows present"
@@ -124,10 +126,43 @@ echo "$nosettings_out" | grep -qE "Not found or unreadable|partial" \
 pass "doctor reports missing Claude settings.json as warn"
 mv "$MACHINE/.claude/settings.json.bak" "$MACHINE/.claude/settings.json"
 
+# ─── Negative test 4: legacy Linux unit + custom-home socket ────────────────
+
+step "Plant a legacy systemd user unit and stale socket under AGENTSYNC_DIR"
+LEGACY_UNIT="$MACHINE/.config/systemd/user/agentsync.service"
+CUSTOM_AGENTSYNC_DIR="$MACHINE/custom-agentsync"
+STALE_SOCKET="$CUSTOM_AGENTSYNC_DIR/daemon.sock"
+mkdir -p "$(dirname "$LEGACY_UNIT")" "$CUSTOM_AGENTSYNC_DIR"
+printf '%s\n' "legacy user unit sentinel" > "$LEGACY_UNIT"
+printf '%s\n' "legacy socket sentinel" > "$STALE_SOCKET"
+
+set +e
+legacy_out=$(HOME="$MACHINE" \
+  AGENTSYNC_DIR="$CUSTOM_AGENTSYNC_DIR" \
+  AGENTSYNC_KEY_PATH="$KEY_FILE" \
+  AGENTSYNC_VAULT_DIR="$CFG_DIR/vault" \
+  bun run src/cli.ts doctor 2>&1)
+legacy_exit=$?
+set -e
+echo "$legacy_out" | sed 's/^/    /'
+[ "$legacy_exit" -eq 0 ] \
+  || fail "doctor exit=$legacy_exit (expected 0; legacy leftovers are a warn)"
+echo "$legacy_out" | grep -qF "Legacy daemon leftovers" \
+  || fail "missing 'Legacy daemon leftovers' row"
+echo "$legacy_out" | grep -qF \
+  "systemctl --user disable --now agentsync; rm -- '$LEGACY_UNIT'; systemctl --user daemon-reload" \
+  || fail "warning does not contain exact systemd removal guidance"
+echo "$legacy_out" | grep -qF "Stale IPC socket $STALE_SOCKET — remove with: rm -- '$STALE_SOCKET'" \
+  || fail "warning does not contain exact custom-home socket removal guidance"
+[ "$(cat "$LEGACY_UNIT")" = "legacy user unit sentinel" ] \
+  || fail "doctor mutated the legacy systemd unit"
+[ "$(cat "$STALE_SOCKET")" = "legacy socket sentinel" ] \
+  || fail "doctor mutated the stale socket"
+pass "doctor warns with exact cleanup guidance, exits 0, and does not mutate leftovers"
+
 # TODO: not exercised — Credential files in vault (fail path). Would require
 # planting an unencrypted credentials/.env file directly inside the vault dir,
 # which is not a real-world failure mode for AgentSync's own code path
 # (push.ts only writes .age files). Positive `pass` row is asserted above.
 
 banner "DOCTOR"
-

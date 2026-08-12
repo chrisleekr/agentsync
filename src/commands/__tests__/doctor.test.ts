@@ -1,17 +1,11 @@
-/**
- * Tests for the doctor command's skills-directory checks.
- *
- * The check rows are produced by `buildSkillsDirChecks` so we can unit-test
- * the rule directly without mocking the rest of the doctor pipeline (private
- * key, git remote, vault scan, etc.).
- */
+/** Unit tests for doctor check builders that do not need the full CLI pipeline. */
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { rm, symlink } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { AgentPaths } from "../../config/paths";
 import { createTmpDir } from "../../test-helpers/fixtures";
-import { buildSkillsDirChecks } from "../doctor";
+import { buildLegacyDaemonCheck, buildSkillsDirChecks } from "../doctor";
 
 type MutablePaths = {
   claude: { skillsDir: string };
@@ -127,5 +121,223 @@ describe("buildSkillsDirChecks", () => {
     const claudeRow = rows.find((r) => r.name === "Claude skills directory");
     expect(claudeRow?.status).toBe("warn");
     expect(claudeRow?.detail).toContain("Symlinked skills root");
+  });
+});
+
+type QueryExecutor = (command: string, args: readonly string[]) => Promise<void>;
+
+describe("buildLegacyDaemonCheck", () => {
+  let tmpDir: string;
+
+  beforeEach(async () => {
+    tmpDir = await createTmpDir();
+  });
+
+  afterEach(async () => {
+    await rm(tmpDir, { recursive: true, force: true });
+  });
+
+  test("warns with exact removal guidance for a macOS LaunchAgent without removing it", async () => {
+    const homeDir = join(tmpDir, "home");
+    const agentSyncHome = join(homeDir, ".config", "agentsync");
+    const plist = join(homeDir, "Library", "LaunchAgents", "com.agentsync.daemon.plist");
+    mkdirSync(dirname(plist), { recursive: true });
+    writeFileSync(plist, "legacy launch agent\n", "utf8");
+    const queries: Array<readonly [string, readonly string[]]> = [];
+    const queryExecutor: QueryExecutor = async (command, args) => {
+      queries.push([command, args]);
+    };
+
+    const row = await buildLegacyDaemonCheck({
+      platform: "darwin",
+      homeDir,
+      agentSyncHome,
+      queryExecutor,
+    });
+
+    expect(row).toEqual({
+      name: "Legacy daemon leftovers",
+      status: "warn",
+      detail:
+        `LaunchAgent ${plist} — remove with: ` +
+        `launchctl bootout gui/$(id -u)/com.agentsync.daemon; rm -- '${plist}'`,
+    });
+    expect(queries).toEqual([]);
+    expect(readFileSync(plist, "utf8")).toBe("legacy launch agent\n");
+  });
+
+  test("warns with exact removal guidance for a Linux user unit without removing it", async () => {
+    const homeDir = join(tmpDir, "home");
+    const agentSyncHome = join(homeDir, ".config", "agentsync");
+    const unit = join(homeDir, ".config", "systemd", "user", "agentsync.service");
+    mkdirSync(dirname(unit), { recursive: true });
+    writeFileSync(unit, "legacy user unit\n", "utf8");
+    const queries: Array<readonly [string, readonly string[]]> = [];
+    const queryExecutor: QueryExecutor = async (command, args) => {
+      queries.push([command, args]);
+    };
+
+    const row = await buildLegacyDaemonCheck({
+      platform: "linux",
+      homeDir,
+      agentSyncHome,
+      queryExecutor,
+    });
+
+    expect(row).toEqual({
+      name: "Legacy daemon leftovers",
+      status: "warn",
+      detail:
+        `systemd unit ${unit} — remove with: ` +
+        `systemctl --user disable --now agentsync; rm -- '${unit}'; ` +
+        "systemctl --user daemon-reload",
+    });
+    expect(queries).toEqual([]);
+    expect(readFileSync(unit, "utf8")).toBe("legacy user unit\n");
+  });
+
+  test("queries and warns with exact removal guidance for a Windows scheduled task", async () => {
+    const queries: Array<readonly [string, readonly string[]]> = [];
+    const queryExecutor: QueryExecutor = async (command, args) => {
+      queries.push([command, args]);
+    };
+
+    const row = await buildLegacyDaemonCheck({
+      platform: "win32",
+      homeDir: join(tmpDir, "home"),
+      agentSyncHome: join(tmpDir, "agentsync"),
+      queryExecutor,
+    });
+
+    expect(queries).toEqual([["schtasks", ["/Query", "/TN", "AgentSync", "/HResult"]]]);
+    expect(row).toEqual({
+      name: "Legacy daemon leftovers",
+      status: "warn",
+      detail:
+        "Scheduled task AgentSync — run separately: schtasks /End /TN AgentSync, then " +
+        "schtasks /Delete /TN AgentSync /F",
+    });
+  });
+
+  test("treats an absent Windows scheduled task as a passing check without throwing", async () => {
+    const queries: Array<readonly [string, readonly string[]]> = [];
+    const queryExecutor: QueryExecutor = async (command, args) => {
+      queries.push([command, args]);
+      throw Object.assign(new Error("ERROR: The system cannot find the file specified."), {
+        code: 2,
+      });
+    };
+
+    const row = await buildLegacyDaemonCheck({
+      platform: "win32",
+      homeDir: join(tmpDir, "home"),
+      agentSyncHome: join(tmpDir, "agentsync"),
+      queryExecutor,
+    });
+
+    expect(queries).toEqual([["schtasks", ["/Query", "/TN", "AgentSync", "/HResult"]]]);
+    expect(row).toEqual({
+      name: "Legacy daemon leftovers",
+      status: "pass",
+      detail: "No pre-0.2.0 daemon registration found.",
+    });
+  });
+
+  test("warns when the Windows scheduled task cannot be inspected", async () => {
+    const queryExecutor: QueryExecutor = async () => {
+      throw Object.assign(new Error("Access is denied."), { code: 5 });
+    };
+
+    const row = await buildLegacyDaemonCheck({
+      platform: "win32",
+      homeDir: join(tmpDir, "home"),
+      agentSyncHome: join(tmpDir, "agentsync"),
+      queryExecutor,
+    });
+
+    expect(row).toEqual({
+      name: "Legacy daemon leftovers",
+      status: "warn",
+      detail:
+        "Could not inspect scheduled task AgentSync — run manually: " +
+        "schtasks /Query /TN AgentSync",
+    });
+  });
+
+  test("warns for the default non-Windows AgentSync home socket without deleting it", async () => {
+    const homeDir = join(tmpDir, "home");
+    const agentSyncHome = join(homeDir, ".config", "agentsync");
+    const socket = join(agentSyncHome, "daemon.sock");
+    mkdirSync(agentSyncHome, { recursive: true });
+    writeFileSync(socket, "legacy socket\n", "utf8");
+
+    const row = await buildLegacyDaemonCheck({
+      platform: "linux",
+      homeDir,
+      agentSyncHome,
+      queryExecutor: async () => {
+        throw new Error("Windows task query must not run on Linux");
+      },
+    });
+
+    expect(row).toEqual({
+      name: "Legacy daemon leftovers",
+      status: "warn",
+      detail: `Stale IPC socket ${socket} — remove with: rm -- '${socket}'`,
+    });
+    expect(readFileSync(socket, "utf8")).toBe("legacy socket\n");
+  });
+
+  test("warns for a socket under an injected AGENTSYNC_DIR without deleting it", async () => {
+    const homeDir = join(tmpDir, "home");
+    const agentSyncHome = join(tmpDir, "custom dir;$(echo injected)'quoted");
+    const socket = join(agentSyncHome, "daemon.sock");
+    mkdirSync(agentSyncHome, { recursive: true });
+    writeFileSync(socket, "custom legacy socket\n", "utf8");
+
+    const row = await buildLegacyDaemonCheck({
+      platform: "darwin",
+      homeDir,
+      agentSyncHome,
+      queryExecutor: async () => {
+        throw new Error("Windows task query must not run on macOS");
+      },
+    });
+
+    expect(row).toEqual({
+      name: "Legacy daemon leftovers",
+      status: "warn",
+      detail:
+        `Stale IPC socket ${socket} — remove with: rm -- ` + `'${socket.replaceAll("'", "'\\''")}'`,
+    });
+    expect(readFileSync(socket, "utf8")).toBe("custom legacy socket\n");
+  });
+
+  test("passes without mutation when the selected platform has no legacy artifacts", async () => {
+    const homeDir = join(tmpDir, "home");
+    const agentSyncHome = join(tmpDir, "agentsync");
+    const nonSelectedPlist = join(homeDir, "Library", "LaunchAgents", "com.agentsync.daemon.plist");
+    mkdirSync(dirname(nonSelectedPlist), { recursive: true });
+    mkdirSync(agentSyncHome, { recursive: true });
+    writeFileSync(nonSelectedPlist, "macOS-only artifact\n", "utf8");
+    const queries: Array<readonly [string, readonly string[]]> = [];
+    const queryExecutor: QueryExecutor = async (command, args) => {
+      queries.push([command, args]);
+    };
+
+    const row = await buildLegacyDaemonCheck({
+      platform: "linux",
+      homeDir,
+      agentSyncHome,
+      queryExecutor,
+    });
+
+    expect(row).toEqual({
+      name: "Legacy daemon leftovers",
+      status: "pass",
+      detail: "No pre-0.2.0 daemon registration found.",
+    });
+    expect(queries).toEqual([]);
+    expect(readFileSync(nonSelectedPlist, "utf8")).toBe("macOS-only artifact\n");
   });
 });
