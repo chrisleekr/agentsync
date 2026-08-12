@@ -1,12 +1,13 @@
 import { execFile } from "node:child_process";
 import { constants } from "node:fs";
 import { access, lstat, readdir, stat } from "node:fs/promises";
+import { homedir } from "node:os";
 import { join, relative } from "node:path";
 import { promisify } from "node:util";
 import { log } from "@clack/prompts";
 import { defineCommand } from "citty";
 import { formatConfigError, loadConfig, resolveConfigPath } from "../config/loader";
-import { AgentPaths } from "../config/paths";
+import { AgentPaths, resolveAgentSyncHome } from "../config/paths";
 import { resolveRuntimeContext } from "./shared";
 
 /** Single diagnostic check row rendered by the doctor command. */
@@ -78,6 +79,116 @@ export async function buildSkillsDirChecks(): Promise<Check[]> {
   }
 
   return checks;
+}
+
+// These identifiers came from daemon installers through v0.1.14. Their
+// defining modules were removed in #192, so detection keeps the literals here.
+const LEGACY_LAUNCHD_LABEL = "com.agentsync.daemon";
+const LEGACY_SYSTEMD_UNIT = "agentsync";
+const LEGACY_WINDOWS_TASK = "AgentSync";
+
+type LegacyDaemonQueryExecutor = (command: string, args: readonly string[]) => Promise<unknown>;
+type LegacyDaemonPathAccess = (path: string, mode?: number) => Promise<void>;
+
+interface LegacyDaemonCheckOptions {
+  platform?: NodeJS.Platform;
+  homeDir?: string;
+  agentSyncHome?: string;
+  queryExecutor?: LegacyDaemonQueryExecutor;
+  pathAccess?: LegacyDaemonPathAccess;
+}
+
+async function pathExists(target: string, pathAccess: LegacyDaemonPathAccess): Promise<boolean> {
+  try {
+    await pathAccess(target, constants.F_OK);
+    return true;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
+    throw error;
+  }
+}
+
+function quotePosixArg(value: string): string {
+  return `'${value.replaceAll("'", "'\\''")}'`;
+}
+
+function isWindowsTaskMissing(error: unknown): boolean {
+  if (typeof error !== "object" || error === null || !("code" in error)) return false;
+  if (typeof error.code !== "number") return false;
+  const code = error.code >>> 0;
+  return code === 2 || code === 0x80070002;
+}
+
+/** Detect files and registrations left by daemon installers without changing them. */
+export async function buildLegacyDaemonCheck({
+  platform = process.platform,
+  homeDir = homedir(),
+  agentSyncHome = resolveAgentSyncHome(),
+  queryExecutor = async (command, args) => {
+    await promisify(execFile)(command, [...args]);
+  },
+  pathAccess = access,
+}: LegacyDaemonCheckOptions = {}): Promise<Check> {
+  const name = "Legacy daemon leftovers";
+  const found: string[] = [];
+
+  if (platform === "darwin") {
+    const plist = join(homeDir, "Library", "LaunchAgents", `${LEGACY_LAUNCHD_LABEL}.plist`);
+    try {
+      if (await pathExists(plist, pathAccess)) {
+        found.push(
+          `LaunchAgent ${plist} — remove with: launchctl bootout gui/$(id -u)/${LEGACY_LAUNCHD_LABEL}; rm -- ${quotePosixArg(plist)}`,
+        );
+      }
+    } catch {
+      found.push(`Could not inspect LaunchAgent ${plist}. Check permissions and inspect manually.`);
+    }
+  } else if (platform === "linux") {
+    const unit = join(homeDir, ".config", "systemd", "user", `${LEGACY_SYSTEMD_UNIT}.service`);
+    try {
+      if (await pathExists(unit, pathAccess)) {
+        found.push(
+          `systemd unit ${unit} — remove with: systemctl --user disable --now ${LEGACY_SYSTEMD_UNIT}; rm -- ${quotePosixArg(unit)}; systemctl --user daemon-reload`,
+        );
+      }
+    } catch {
+      found.push(`Could not inspect systemd unit ${unit}. Check permissions and inspect manually.`);
+    }
+  } else if (platform === "win32") {
+    try {
+      await queryExecutor("schtasks", ["/Query", "/TN", LEGACY_WINDOWS_TASK, "/HResult"]);
+      found.push(
+        `Scheduled task ${LEGACY_WINDOWS_TASK} — run separately: schtasks /End /TN ${LEGACY_WINDOWS_TASK}, then schtasks /Delete /TN ${LEGACY_WINDOWS_TASK} /F`,
+      );
+    } catch (error) {
+      if (!isWindowsTaskMissing(error)) {
+        found.push(
+          `Could not inspect scheduled task ${LEGACY_WINDOWS_TASK} — run manually: schtasks /Query /TN ${LEGACY_WINDOWS_TASK}`,
+        );
+      }
+    }
+  }
+
+  if (platform !== "win32") {
+    const socket = join(agentSyncHome, "daemon.sock");
+    try {
+      if (await pathExists(socket, pathAccess)) {
+        found.push(`Stale IPC socket ${socket} — remove with: rm -- ${quotePosixArg(socket)}`);
+      }
+    } catch {
+      found.push(`Could not inspect IPC socket ${socket}. Check permissions and inspect manually.`);
+    }
+  }
+
+  if (found.length === 0) {
+    return {
+      name,
+      status: "pass",
+      detail: "No pre-0.2.0 daemon registration found.",
+    };
+  }
+
+  return { name, status: "warn", detail: found.join(" | ") };
 }
 
 /** Inspect local prerequisites and vault health without changing state. */
@@ -230,6 +341,9 @@ export const doctorCommand = defineCommand({
         detail: "Could not scan vault",
       });
     }
+
+    // 7. No service artifacts left by the removed background daemon
+    checks.push(await buildLegacyDaemonCheck());
 
     // Print results
     // biome-ignore lint/suspicious/noConsole: intentional CLI tabular output
