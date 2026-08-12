@@ -132,6 +132,15 @@ describe("MigrateOptionsSchema", () => {
     }
   });
 
+  test("C8 accepts an unfiltered Copilot to VS Code migration for non-agent types", () => {
+    const result = MigrateOptionsSchema.safeParse({
+      from: "copilot",
+      to: "vscode",
+    });
+
+    expect(result.success).toBe(true);
+  });
+
   test("defaults dryRun to false", () => {
     const result = MigrateOptionsSchema.safeParse({
       from: "claude",

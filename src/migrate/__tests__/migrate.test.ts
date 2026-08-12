@@ -1275,4 +1275,24 @@ describe("performMigrate agents acceptance", () => {
     expect(result.migrated).toEqual([]);
     expect(await Bun.file(sourcePath).text()).toBe(source);
   });
+
+  test("C8 skips only agents for an unfiltered direct shared-store migration", async () => {
+    writeFixture(
+      testCopilot.mcpConfigJson,
+      JSON.stringify({ mcpServers: { local: { command: "local-mcp" } } }),
+    );
+
+    const result = await performMigrate({
+      from: "copilot",
+      to: "vscode",
+      dryRun: false,
+    });
+
+    expect(result.errors).toEqual(["Copilot and VS Code agents use the same physical store"]);
+    expect(result.migrated.some(({ targetPath }) => targetPath === testVscode.mcpJson)).toBe(true);
+    const written = JSON.parse(await Bun.file(testVscode.mcpJson).text()) as {
+      servers?: Record<string, unknown>;
+    };
+    expect(written.servers?.local).toBeDefined();
+  });
 });

@@ -465,7 +465,7 @@ agentsync migrate --from <agent> --to <agent|all> [--type <type>] [--name <file>
 
 - `migrate` operates on **local files only**. No vault initialisation is required.
 - Agent migration rejects hidden entries, source read failures, symbolic-link sources or targets, non-file targets, non-portable filename components, unknown authority fields, duplicate identities, normalized or case-equivalent target collisions, and incompatible existing shared-target ownership before the affected physical batch writes.
-- Copilot CLI and VS Code share one physical agent store. Direct agent migration between those aliases is rejected. `--to all` writes one shared file; direct targets set `target: github-copilot` or `target: vscode`.
+- Copilot CLI and VS Code share one physical agent store. Direct agent migration between those aliases is rejected. Without `--type`, supported non-agent categories are still migrated, agents are skipped with an error, and the command exits 1 after those successful writes. Use `--type mcp` when only MCP should migrate and the command must exit successfully. `--to all` writes one shared file; direct targets set `target: github-copilot` or `target: vscode`.
 - Agent dry-runs perform the same validation and collision preflight as apply. Existing targets are overwritten only after preflight succeeds.
 - See [Migrate](migrate.md) for the full support matrix, the fail-closed field policy, the 30,000-character shared prompt limit, MCP transport rules, and per-agent paths.
 

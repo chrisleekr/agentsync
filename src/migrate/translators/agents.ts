@@ -167,15 +167,15 @@ function validateSourceName(format: PhysicalAgentFormat, sourceName: string): st
   return [];
 }
 
-function portableFilenameError(name: string, vendor: string): string | undefined {
-  if (/[:*?"<>|]/.test(name))
-    return `${vendor} target identity contains a Windows-reserved character`;
+export function portableFilenameError(name: string, subject: string): string | undefined {
+  if (/\p{Cc}/u.test(name)) return `${subject} contains a control character`;
+  if (/[:*?"<>|]/.test(name)) return `${subject} contains a Windows-reserved character`;
   if (name.endsWith(".") || name.endsWith(" ")) {
-    return `${vendor} target identity has a Windows-reserved trailing dot or space`;
+    return `${subject} has a Windows-reserved trailing dot or space`;
   }
   const stem = (name.split(".")[0] ?? "").toUpperCase();
   if (/^(CON|PRN|AUX|NUL|COM(?:[1-9]|[¹²³])|LPT(?:[1-9]|[¹²³]))$/.test(stem)) {
-    return `${vendor} target identity uses a Windows-reserved device name`;
+    return `${subject} uses a Windows-reserved device name`;
   }
   return undefined;
 }
@@ -283,7 +283,7 @@ function parseCodexAgent(content: string, sourceName: string): ParseResult {
   errors.push(...unknownFieldErrors(fields, CODEX_FIELDS, "Codex"));
   const identity = requiredString(fields, "name", "Codex", errors);
   if (typeof fields.name === "string") {
-    const portableError = portableFilenameError(fields.name, "Codex");
+    const portableError = portableFilenameError(fields.name, "Codex target identity");
     if (portableError) errors.push(portableError);
   }
   const description = requiredString(fields, "description", "Codex", errors);
@@ -417,7 +417,7 @@ function normalizeHyphenIdentity(
   if (!/^[a-z][a-z-]*$/.test(normalized)) {
     return { value: "", error: `${vendor} target identity must use lowercase letters and hyphens` };
   }
-  const portableError = portableFilenameError(normalized, vendor);
+  const portableError = portableFilenameError(normalized, `${vendor} target identity`);
   if (portableError) return { value: "", error: portableError };
   return { value: normalized };
 }
@@ -429,7 +429,7 @@ function safeUnconstrainedIdentity(
   if (!identity || /\p{Cc}/u.test(identity) || /[/\\]/.test(identity) || identity.startsWith(".")) {
     return { value: "", error: `${vendor} target identity is not path-safe` };
   }
-  const portableError = portableFilenameError(identity, vendor);
+  const portableError = portableFilenameError(identity, `${vendor} target identity`);
   if (portableError) return { value: "", error: portableError };
   return { value: identity };
 }
@@ -485,7 +485,11 @@ function translate(
     ) {
       readonly = true;
     } else {
-      errors.push(`Codex authority field 'sandbox_mode' has no verified mapping to ${to}`);
+      errors.push(
+        fields.sandbox_mode === undefined
+          ? `Codex inherited sandbox authority has no verified mapping to ${to}`
+          : `Codex authority field 'sandbox_mode' has no verified mapping to ${to}`,
+      );
     }
     warnings.push(...lossWarnings(fields, CODEX_LOSS_FIELDS));
   }
@@ -517,7 +521,7 @@ function translate(
           to === "codex" ? "Codex" : "Shared Copilot/VS Code",
         );
   if (targetIdentity.error) errors.push(targetIdentity.error);
-  if (!parsed.agent.description) {
+  if (!parsed.agent.description && from === "cursor") {
     errors.push(`${to} target requires a description that the Cursor source does not define`);
   }
   if (to === "codex" && !parsed.agent.instructions) {

@@ -26,6 +26,7 @@ import {
   getSharedAgentTarget,
   inspectAgentSource,
   type PhysicalAgentFormat,
+  portableFilenameError,
   type SharedAgentTarget,
   setSharedAgentTarget,
 } from "./translators/agents";
@@ -119,6 +120,7 @@ function resolveAgentsDir(agent: AgentName): string {
   if (agent === "claude") return AgentPaths.claude.agentsDir;
   if (agent === "cursor") return AgentPaths.cursor.agentsDir;
   if (agent === "codex") return AgentPaths.codex.agentsDir;
+  if (agent === "vscode") return AgentPaths.vscode.agentsDir;
   return AgentPaths.copilot.agentsDir;
 }
 
@@ -397,19 +399,8 @@ function mergeMcpInputs(incoming: unknown[], existing: unknown[]): unknown[] {
 function resolveAgentTargetPath(to: AgentName, targetName: string): string {
   const format = canonicalAgentFormat(to);
   const expectedExtension = agentExtension(format);
-  if (/\p{Cc}/u.test(targetName)) throw new Error("Agent target path contains a control character");
-  if (/[:*?"<>|]/.test(targetName)) {
-    throw new Error(`Agent target path '${targetName}' contains a Windows-reserved character`);
-  }
-  if (targetName.endsWith(".") || targetName.endsWith(" ")) {
-    throw new Error(
-      `Agent target path '${targetName}' has a Windows-reserved trailing dot or space`,
-    );
-  }
-  const stem = (targetName.split(".")[0] ?? "").toUpperCase();
-  if (/^(CON|PRN|AUX|NUL|COM(?:[1-9]|[¹²³])|LPT(?:[1-9]|[¹²³]))$/.test(stem)) {
-    throw new Error(`Agent target path '${targetName}' uses a Windows-reserved device name`);
-  }
+  const portableError = portableFilenameError(targetName, `Agent target path '${targetName}'`);
+  if (portableError) throw new Error(portableError);
   if (
     !targetName ||
     targetName.startsWith(".") ||
@@ -955,11 +946,11 @@ async function performAgentMigrate(
       }
       if (translated.skipWrite) continue;
 
-      const content =
-        target.physical === "copilot"
-          ? setSharedAgentTarget(translated.content, target.sharedTarget)
-          : translated.content;
       try {
+        const content =
+          target.physical === "copilot"
+            ? setSharedAgentTarget(translated.content, target.sharedTarget)
+            : translated.content;
         const artifact = await applyMigrated(
           target.logical,
           "agents",
@@ -1125,12 +1116,9 @@ export async function performMigrate(options: MigrateOptions): Promise<MigrateRe
     errors: [],
   };
 
-  if (
-    options.to !== "all" &&
-    isSharedAlias(options.from) &&
-    isSharedAlias(options.to) &&
-    (options.type === undefined || options.type === "agents")
-  ) {
+  const sharedAgentsConflict =
+    options.to !== "all" && isSharedAlias(options.from) && isSharedAlias(options.to);
+  if (sharedAgentsConflict && options.type === "agents") {
     result.errors.push("Copilot and VS Code agents use the same physical store");
     return result;
   }
@@ -1142,6 +1130,10 @@ export async function performMigrate(options: MigrateOptions): Promise<MigrateRe
 
   for (const type of typesToMigrate) {
     if (type === "agents") {
+      if (sharedAgentsConflict) {
+        result.errors.push("Copilot and VS Code agents use the same physical store");
+        continue;
+      }
       await performAgentMigrate(options, result);
       continue;
     }

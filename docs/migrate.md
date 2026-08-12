@@ -52,7 +52,7 @@ agentsync migrate --from <agent> --to <agent|all> [--type <type>] [--name <file>
 
 **†** Codex has no native slash-commands surface, so `commands → codex` wraps each command as a Codex skill at `~/.agents/skills/<name>/SKILL.md` with a synthesised `name`/`description` frontmatter. Codex skills are user-invokable as `/<name>`, so the wrapped form actually executes — unlike previous versions which wrote into `~/.codex/rules/`, where Codex never loaded the file.
 
-**‡** Copilot CLI and VS Code use one physical custom-agent store. Direct `agents` migration between those two logical names is rejected before writes; their separate MCP endpoints remain migratable.
+**‡** Copilot CLI and VS Code use one physical custom-agent store. Direct `agents` migration between those two logical names is rejected before writes; their separate MCP endpoints remain migratable. Without `--type`, supported non-agent categories are written, agents are skipped with an error, and the command exits 1. Use `--type mcp` for an MCP-only migration that exits successfully.
 
 ### Per-category endpoint paths
 

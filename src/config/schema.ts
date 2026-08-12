@@ -142,7 +142,7 @@ export const MigrateOptionsSchema = z
   .refine(
     (opts) =>
       !(
-        (opts.type === undefined || opts.type === "agents") &&
+        opts.type === "agents" &&
         ((opts.from === "copilot" && opts.to === "vscode") ||
           (opts.from === "vscode" && opts.to === "copilot"))
       ),

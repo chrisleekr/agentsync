@@ -154,14 +154,25 @@ test("shared optional display name remains a validated string field", () => {
 test("Codex inherited sandbox fails closed except for conservative Cursor translation", () => {
   const codex = 'name = "reviewer"\ndescription = "Reviews"\ndeveloper_instructions = "Review."';
   expect((translateAgent.codexToClaude(codex, "reviewer.toml")?.errors ?? []).join("\n")).toContain(
-    "sandbox_mode",
+    "inherited sandbox authority",
   );
   expect(
     (translateAgent.codexToCopilot(codex, "reviewer.toml")?.errors ?? []).join("\n"),
-  ).toContain("sandbox_mode");
+  ).toContain("inherited sandbox authority");
   expect(
     frontmatterOf(translateAgent.codexToCursor(codex, "reviewer.toml")?.content ?? "").readonly,
   ).toBe(true);
+});
+
+test("missing descriptions report the actual source format", () => {
+  const claude = translateAgent.claudeToCodex("---\nname: reviewer\n---\n\nReview.", "reviewer.md");
+  const cursor = translateAgent.cursorToCodex("---\nmodel: fast\n---\n\nReview.", "reviewer.md");
+
+  expect((claude?.errors ?? []).join("\n")).toContain(
+    "claude agent requires a non-empty 'description' field",
+  );
+  expect((claude?.errors ?? []).join("\n")).not.toContain("Cursor source");
+  expect((cursor?.errors ?? []).join("\n")).toContain("Cursor source");
 });
 
 test.each([
