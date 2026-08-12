@@ -74,7 +74,7 @@ beforeEach(() => {
   testCursor.skillsDir = join(tmpDir, "cursor", "skills");
   testCursor.rulesDir = join(tmpDir, "cursor", "rules");
   cursorAgentsDir = join(tmpDir, "cursor", "agents");
-  (testCursor as unknown as Record<string, string>).agentsDir = cursorAgentsDir;
+  testCursor.agentsDir = cursorAgentsDir;
 
   testCodex.agentsMd = join(tmpDir, "codex", "AGENTS.md");
   testCodex.configToml = join(tmpDir, "codex", "config.toml");
@@ -82,7 +82,7 @@ beforeEach(() => {
   testCodex.skillsDir = join(tmpDir, "codex", "skills");
   testCodex.userSkillsDir = join(tmpDir, "agents", "skills");
   codexAgentsDir = join(tmpDir, "codex", "agents");
-  (testCodex as unknown as Record<string, string>).agentsDir = codexAgentsDir;
+  testCodex.agentsDir = codexAgentsDir;
 
   testCopilot.instructionsFile = join(tmpDir, "copilot", "instructions");
   testCopilot.promptsDir = join(tmpDir, "copilot", "prompts");
@@ -92,7 +92,7 @@ beforeEach(() => {
   testCopilot.agentsDir = sharedAgentsDir;
 
   testVscode.mcpJson = join(tmpDir, "vscode", "mcp.json");
-  (testVscode as unknown as Record<string, string>).agentsDir = sharedAgentsDir;
+  testVscode.agentsDir = sharedAgentsDir;
 });
 
 afterEach(async () => {
@@ -103,15 +103,6 @@ afterEach(async () => {
   Object.assign(testCodex, origCodex);
   Object.assign(testCopilot, origCopilot);
   Object.assign(testVscode, origVscode);
-  if (!("agentsDir" in origCursor)) {
-    delete (testCursor as unknown as Record<string, string>).agentsDir;
-  }
-  if (!("agentsDir" in origCodex)) {
-    delete (testCodex as unknown as Record<string, string>).agentsDir;
-  }
-  if (!("agentsDir" in origVscode)) {
-    delete (testVscode as unknown as Record<string, string>).agentsDir;
-  }
 });
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
