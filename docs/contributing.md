@@ -41,6 +41,8 @@ bun run src/cli.ts <command>
 
 Common loops:
 
+Documentation commands require Python 3.10 or newer.
+
 ```bash
 bun test                                              # full test suite
 bun test --watch src/core/__tests__/git.test.ts       # focus one file in watch mode

@@ -3,6 +3,7 @@ import { BoxRenderable, createCliRenderer, TextRenderable } from "@opentui/core"
 import { version as pkgVersion } from "../../../package.json";
 import { getUpdateStatus } from "../../core/version-check";
 import { performUpgrade, upgradeInstructions } from "../upgrade";
+import { clearChildren } from "./renderables";
 import {
   type AppState,
   type ContextAction,
@@ -127,7 +128,7 @@ export async function runApp(): Promise<void> {
       const state = store.getState();
       renderTitleBar(titleBar, state);
       renderTabBar(tabBar, state);
-      renderActiveTab(renderer, contentHost, store, ctx);
+      renderActiveTab(renderer, contentHost, store);
       renderActionBar(actionBar, contextActionsForTab(state), activeKeyHint(state));
       renderFooter(footer, state);
     },
@@ -540,16 +541,8 @@ function renderActionBar(
   host.content = `  ${parts.join("   ")}`;
 }
 
-function renderActiveTab(
-  renderer: CliRenderer,
-  host: BoxRenderable,
-  store: Store,
-  ctx: AppContext,
-): void {
-  void ctx;
-  for (const child of [...host.getChildren()]) {
-    host.remove(child.id);
-  }
+function renderActiveTab(renderer: CliRenderer, host: BoxRenderable, store: Store): void {
+  clearChildren(host);
   const state = store.getState();
   if (state.helpOpen) {
     renderHelp(renderer, host, state);
