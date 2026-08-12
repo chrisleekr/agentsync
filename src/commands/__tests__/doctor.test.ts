@@ -340,4 +340,25 @@ describe("buildLegacyDaemonCheck", () => {
     expect(queries).toEqual([]);
     expect(readFileSync(nonSelectedPlist, "utf8")).toBe("macOS-only artifact\n");
   });
+
+  test("warns when a legacy artifact cannot be inspected", async () => {
+    const homeDir = join(tmpDir, "home");
+    const unit = join(homeDir, ".config", "systemd", "user", "agentsync.service");
+
+    const row = await buildLegacyDaemonCheck({
+      platform: "linux",
+      homeDir,
+      agentSyncHome: join(tmpDir, "agentsync"),
+      pathAccess: async (target) => {
+        const code = target === unit ? "EACCES" : "ENOENT";
+        throw Object.assign(new Error(code), { code });
+      },
+    });
+
+    expect(row).toEqual({
+      name: "Legacy daemon leftovers",
+      status: "warn",
+      detail: `Could not inspect systemd unit ${unit}. Check permissions and inspect manually.`,
+    });
+  });
 });

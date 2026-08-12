@@ -88,20 +88,23 @@ const LEGACY_SYSTEMD_UNIT = "agentsync";
 const LEGACY_WINDOWS_TASK = "AgentSync";
 
 type LegacyDaemonQueryExecutor = (command: string, args: readonly string[]) => Promise<unknown>;
+type LegacyDaemonPathAccess = (path: string, mode?: number) => Promise<void>;
 
 interface LegacyDaemonCheckOptions {
   platform?: NodeJS.Platform;
   homeDir?: string;
   agentSyncHome?: string;
   queryExecutor?: LegacyDaemonQueryExecutor;
+  pathAccess?: LegacyDaemonPathAccess;
 }
 
-async function pathExists(target: string): Promise<boolean> {
+async function pathExists(target: string, pathAccess: LegacyDaemonPathAccess): Promise<boolean> {
   try {
-    await access(target, constants.F_OK);
+    await pathAccess(target, constants.F_OK);
     return true;
-  } catch {
-    return false;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
+    throw error;
   }
 }
 
@@ -124,23 +127,32 @@ export async function buildLegacyDaemonCheck({
   queryExecutor = async (command, args) => {
     await promisify(execFile)(command, [...args]);
   },
+  pathAccess = access,
 }: LegacyDaemonCheckOptions = {}): Promise<Check> {
   const name = "Legacy daemon leftovers";
   const found: string[] = [];
 
   if (platform === "darwin") {
     const plist = join(homeDir, "Library", "LaunchAgents", `${LEGACY_LAUNCHD_LABEL}.plist`);
-    if (await pathExists(plist)) {
-      found.push(
-        `LaunchAgent ${plist} — remove with: launchctl bootout gui/$(id -u)/${LEGACY_LAUNCHD_LABEL}; rm -- ${quotePosixArg(plist)}`,
-      );
+    try {
+      if (await pathExists(plist, pathAccess)) {
+        found.push(
+          `LaunchAgent ${plist} — remove with: launchctl bootout gui/$(id -u)/${LEGACY_LAUNCHD_LABEL}; rm -- ${quotePosixArg(plist)}`,
+        );
+      }
+    } catch {
+      found.push(`Could not inspect LaunchAgent ${plist}. Check permissions and inspect manually.`);
     }
   } else if (platform === "linux") {
     const unit = join(homeDir, ".config", "systemd", "user", `${LEGACY_SYSTEMD_UNIT}.service`);
-    if (await pathExists(unit)) {
-      found.push(
-        `systemd unit ${unit} — remove with: systemctl --user disable --now ${LEGACY_SYSTEMD_UNIT}; rm -- ${quotePosixArg(unit)}; systemctl --user daemon-reload`,
-      );
+    try {
+      if (await pathExists(unit, pathAccess)) {
+        found.push(
+          `systemd unit ${unit} — remove with: systemctl --user disable --now ${LEGACY_SYSTEMD_UNIT}; rm -- ${quotePosixArg(unit)}; systemctl --user daemon-reload`,
+        );
+      }
+    } catch {
+      found.push(`Could not inspect systemd unit ${unit}. Check permissions and inspect manually.`);
     }
   } else if (platform === "win32") {
     try {
@@ -159,8 +171,12 @@ export async function buildLegacyDaemonCheck({
 
   if (platform !== "win32") {
     const socket = join(agentSyncHome, "daemon.sock");
-    if (await pathExists(socket)) {
-      found.push(`Stale IPC socket ${socket} — remove with: rm -- ${quotePosixArg(socket)}`);
+    try {
+      if (await pathExists(socket, pathAccess)) {
+        found.push(`Stale IPC socket ${socket} — remove with: rm -- ${quotePosixArg(socket)}`);
+      }
+    } catch {
+      found.push(`Could not inspect IPC socket ${socket}. Check permissions and inspect manually.`);
     }
   }
 
