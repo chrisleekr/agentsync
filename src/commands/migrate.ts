@@ -31,7 +31,7 @@ export const migrateCommand = defineCommand({
     type: {
       type: "string",
       description:
-        "Config type to migrate (global-rules|mcp|commands|skills|rules). Omit to migrate all.",
+        "Config type to migrate (global-rules|mcp|commands|skills|rules|agents). Omit to migrate all.",
     },
     name: {
       type: "string",

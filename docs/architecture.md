@@ -195,6 +195,37 @@ Private keys stay on disk in the local runtime directory (`~/.config/agentsync/k
 
 Every agent path is resolved through a single resolver that maps `<agent>.<dir>` to an absolute path on the current OS. Tests and platform overrides drive the resolver through environment variables rather than rewriting paths inline. The consequence: AgentSync runs identically inside the Docker E2E harness, on a developer laptop, and in CI, without command-implementation sites needing to branch on platform — platform-specific decisions live in `src/config/paths.ts` and nowhere else.
 
+## Cross-agent migration boundary
+
+Cross-agent migration is local-only and separate from encrypted vault snapshots. Custom agents have five logical names but four physical formats because Copilot CLI and VS Code share `~/.copilot/agents/*.agent.md`. The registry contains the 12 directed pairs among Claude, Cursor, Codex, and the shared format; orchestration resolves the VS Code alias and prevents a same-store rewrite.
+
+<div class="agentsync-darknodes" markdown>
+
+```mermaid
+flowchart LR
+    Discover["Discover source files<br/>and filter logical target"]:::step
+    Parse["Parse YAML or TOML<br/>and validate required fields"]:::gate
+    Authority["Map verified authority<br/>or fail closed"]:::gate
+    Plan["Plan physical batch<br/>and detect collisions"]:::gate
+    Preview{"Dry run?"}:::decision
+    Report["Report planned files"]:::step
+    Write["Validated file writes"]:::step
+
+    Discover --> Parse --> Authority --> Plan --> Preview
+    Preview -->|"yes"| Report
+    Preview -->|"no"| Write
+
+    classDef step fill:#2c3e50,color:#ffffff,stroke:#1a252f
+    classDef gate fill:#c0392b,color:#ffffff,stroke:#7b241c
+    classDef decision fill:#7d3c98,color:#ffffff,stroke:#4a235a
+```
+
+</div>
+
+Filesystem admission and vendor identity are separate checks. Discovery rejects hidden path segments, symbolic links, and non-files; source read failures other than a missing root abort before writes. Target paths reject traversal, control characters, and non-portable Windows components; target preflight also rejects symlinked agent roots and symlinked or non-file destinations. Vendor parsing then enforces each documented required field without inventing a universal length limit.
+
+Authority translation is intentionally narrow. Exact Claude tool groups map to GitHub capability aliases only when complete; GitHub aliases expand to the applicable full Claude group. Cursor read-only mode maps to Codex's read-only sandbox, and an inherited Codex sandbox maps conservatively only to Cursor read-only. Any authority-bearing field that lacks a verified target equivalent stops that file. Known non-authority loss is reported by field name. A physical target batch is written only after duplicate identities, normalized or case-equivalent target paths, static target type, and shared logical ownership pass preflight. Writes use same-directory flushed temporary files and rename, without promising multi-file rollback or race-free traversal.
+
 ## Vault format versioning
 
 The vault carries an integer `version` field in `agentsync.toml`. Format v2 sets `version = 2` and is the per-machine layout (`machines/<name>/…`). The field is the old-binary hard block: a v1 binary's schema expected a string, so it cannot load a v2 vault and write flat dirs beside `machines/`. Loading is two-phase — `peekVaultVersion` reads the raw `version` before the schema runs, so a legacy v1 vault (string or absent `version`) is routed to `agentsync vault upgrade` instead of failing with an opaque error, and an integer above the current version tells the user to upgrade agentsync itself. `agentsync vault upgrade` performs the one-time v1→v2 relocation (distinct from the cross-agent translators under `src/migrate/`, documented in [Migrate](migrate.md)).
@@ -212,7 +243,8 @@ If you are reading the code, this is the rough mapping from concept to module. K
 | Per-agent snapshot and apply | `src/agents/<agent>/` |
 | Path resolution | `src/config/paths.ts` |
 | Config schema (`agentsync.toml`) | `src/config/schema.ts` |
-| Vault format migrations | `src/migrate/` |
+| Cross-agent configuration migration | `src/migrate/` |
+| Vault format migration | `src/commands/vault.ts` |
 | Interactive TUI (bare `agentsync`) | `src/commands/tui/` |
 
 ## Compiled-binary packaging

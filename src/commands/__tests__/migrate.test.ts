@@ -4,6 +4,7 @@
 
 import { describe, expect, test } from "bun:test";
 import { MigrateOptionsSchema } from "../../config/schema";
+import { migrateCommand } from "../migrate";
 
 describe("MigrateOptionsSchema", () => {
   test("accepts valid claude → cursor migration", () => {
@@ -104,6 +105,33 @@ describe("MigrateOptionsSchema", () => {
     expect(rules.success).toBe(true);
   });
 
+  test("C1 accepts agents as a migrate config type", () => {
+    const result = MigrateOptionsSchema.safeParse({
+      from: "claude",
+      to: "codex",
+      type: "agents",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  test("C8 rejects a direct Copilot to VS Code same-store migration", () => {
+    const copilotToVsCode = MigrateOptionsSchema.safeParse({
+      from: "copilot",
+      to: "vscode",
+      type: "agents",
+    });
+    const vsCodeToCopilot = MigrateOptionsSchema.safeParse({
+      from: "vscode",
+      to: "copilot",
+      type: "agents",
+    });
+    expect(copilotToVsCode.success).toBe(false);
+    expect(vsCodeToCopilot.success).toBe(false);
+    if (!copilotToVsCode.success) {
+      expect(copilotToVsCode.error.issues[0]?.message).toContain("same physical store");
+    }
+  });
+
   test("defaults dryRun to false", () => {
     const result = MigrateOptionsSchema.safeParse({
       from: "claude",
@@ -113,5 +141,13 @@ describe("MigrateOptionsSchema", () => {
     if (result.success) {
       expect(result.data.dryRun).toBe(false);
     }
+  });
+});
+
+describe("migrate command help", () => {
+  test("C9 lists agents in the surfaced --type help", () => {
+    const args = migrateCommand.args as Record<string, { description?: string }>;
+    expect(args.type?.description).toContain("agents");
+    expect(args.type?.description).toContain("Omit to migrate all");
   });
 });

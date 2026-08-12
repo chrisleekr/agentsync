@@ -38,6 +38,7 @@ export const AgentPaths = {
   cursor: {
     mcpGlobal: join(HOME, ".cursor", "mcp.json"),
     commandsDir: join(HOME, ".cursor", "commands"),
+    agentsDir: join(HOME, ".cursor", "agents"),
     skillsDir: join(HOME, ".cursor", "skills"),
     // ~/.cursor/rules/*.{md,mdc} — global rules folder (companion to Cursor's
     // workspace-relative .cursor/rules/*.mdc Project Rules). Used by the
@@ -80,6 +81,7 @@ export const AgentPaths = {
       // Per docs: AGENTS.override.md wins over AGENTS.md when both exist.
       agentsOverrideMd: join(CODEX_HOME, "AGENTS.override.md"),
       configToml: join(CODEX_HOME, "config.toml"),
+      agentsDir: join(CODEX_HOME, "agents"),
       // agentsync convention, not in the official codex config reference.
       // Kept for back-compat with existing users.
       rulesDir: join(CODEX_HOME, "rules"),
@@ -115,6 +117,8 @@ export const AgentPaths = {
     })(),
   },
   vscode: {
+    // Copilot CLI and VS Code select logical targets from this shared store.
+    agentsDir: join(HOME, ".copilot", "agents"),
     mcpJson: (() => {
       if (PLATFORM === "darwin") {
         return join(HOME, "Library", "Application Support", "Code", "User", "mcp.json");

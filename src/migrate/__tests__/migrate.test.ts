@@ -5,11 +5,12 @@
  */
 
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
-import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, symlinkSync, writeFileSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import * as TOML from "@iarna/toml";
 import { AgentPaths } from "../../config/paths";
 import { applyMigrated, performMigrate, readSourceArtefacts } from "../migrate";
 
@@ -43,6 +44,9 @@ let origCursor: typeof AgentPaths.cursor;
 let origCodex: typeof AgentPaths.codex;
 let origCopilot: typeof AgentPaths.copilot;
 let origVscode: typeof AgentPaths.vscode;
+let cursorAgentsDir: string;
+let codexAgentsDir: string;
+let sharedAgentsDir: string;
 
 beforeEach(() => {
   tmpDir = join(tmpdir(), `migrate-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
@@ -59,6 +63,7 @@ beforeEach(() => {
   testClaude.claudeMd = join(tmpDir, "claude", "CLAUDE.md");
   testClaude.mcpJson = join(tmpDir, "claude", ".claude.json");
   testClaude.commandsDir = join(tmpDir, "claude", "commands");
+  testClaude.agentsDir = join(tmpDir, "claude", "agents");
   testClaude.settingsJson = join(tmpDir, "claude", "settings.json");
   testClaude.skillsDir = join(tmpDir, "claude", "skills");
   testClaude.rulesDir = join(tmpDir, "claude", "rules");
@@ -68,19 +73,26 @@ beforeEach(() => {
   testCursor.commandsDir = join(tmpDir, "cursor", "commands");
   testCursor.skillsDir = join(tmpDir, "cursor", "skills");
   testCursor.rulesDir = join(tmpDir, "cursor", "rules");
+  cursorAgentsDir = join(tmpDir, "cursor", "agents");
+  (testCursor as unknown as Record<string, string>).agentsDir = cursorAgentsDir;
 
   testCodex.agentsMd = join(tmpDir, "codex", "AGENTS.md");
   testCodex.configToml = join(tmpDir, "codex", "config.toml");
   testCodex.rulesDir = join(tmpDir, "codex", "rules");
   testCodex.skillsDir = join(tmpDir, "codex", "skills");
   testCodex.userSkillsDir = join(tmpDir, "agents", "skills");
+  codexAgentsDir = join(tmpDir, "codex", "agents");
+  (testCodex as unknown as Record<string, string>).agentsDir = codexAgentsDir;
 
   testCopilot.instructionsFile = join(tmpDir, "copilot", "instructions");
   testCopilot.promptsDir = join(tmpDir, "copilot", "prompts");
   testCopilot.skillsDir = join(tmpDir, "copilot", "skills");
   testCopilot.mcpConfigJson = join(tmpDir, "copilot", "mcp-config.json");
+  sharedAgentsDir = join(tmpDir, "copilot", "agents");
+  testCopilot.agentsDir = sharedAgentsDir;
 
   testVscode.mcpJson = join(tmpDir, "vscode", "mcp.json");
+  (testVscode as unknown as Record<string, string>).agentsDir = sharedAgentsDir;
 });
 
 afterEach(async () => {
@@ -91,6 +103,15 @@ afterEach(async () => {
   Object.assign(testCodex, origCodex);
   Object.assign(testCopilot, origCopilot);
   Object.assign(testVscode, origVscode);
+  if (!("agentsDir" in origCursor)) {
+    delete (testCursor as unknown as Record<string, string>).agentsDir;
+  }
+  if (!("agentsDir" in origCodex)) {
+    delete (testCodex as unknown as Record<string, string>).agentsDir;
+  }
+  if (!("agentsDir" in origVscode)) {
+    delete (testVscode as unknown as Record<string, string>).agentsDir;
+  }
 });
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -98,6 +119,30 @@ afterEach(async () => {
 function writeFixture(path: string, content: string) {
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, content);
+}
+
+function claudeAgent(name: string, extra = ""): string {
+  return `---\nname: ${name}\ndescription: Reviews code${extra}\n---\n\nReview code.`;
+}
+
+function cursorAgent(name?: string): string {
+  const nameField = name ? `name: ${name}\n` : "";
+  return `---\n${nameField}description: Reviews code\n---\n\nReview code.`;
+}
+
+function codexAgent(name: string): string {
+  return `name = ${JSON.stringify(name)}\ndescription = "Reviews code"\ndeveloper_instructions = "Review code."`;
+}
+
+function sharedAgent(name: string, target?: "vscode" | "github-copilot"): string {
+  const targetField = target ? `target: ${target}\n` : "";
+  return `---\nname: ${name}\ndescription: Reviews code\n${targetField}---\n\nReview code.`;
+}
+
+function agentFrontmatter(content: string): Record<string, unknown> {
+  const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/);
+  expect(match).not.toBeNull();
+  return Bun.YAML.parse(match?.[1] ?? "") as Record<string, unknown>;
 }
 
 // ── readSourceArtefacts ──────────────────────────────────────────────────────
@@ -150,6 +195,83 @@ describe("readSourceArtefacts", () => {
   test("returns empty for vscode global-rules (unsupported)", async () => {
     const result = await readSourceArtefacts("vscode", "global-rules");
     expect(result).toHaveLength(0);
+  });
+
+  test("C2 recursively reads Claude agents by source-relative filename", async () => {
+    writeFixture(join(testClaude.agentsDir, "root.md"), claudeAgent("root"));
+    writeFixture(
+      join(testClaude.agentsDir, "teams", "security-reviewer.md"),
+      claudeAgent("security-reviewer"),
+    );
+
+    const result = await readSourceArtefacts("claude", "agents");
+    expect(result.map(({ name }) => name).sort()).toEqual([
+      "root.md",
+      "teams/security-reviewer.md",
+    ]);
+    expect(result.find(({ name }) => name.includes("security"))?.sourcePath).toBe(
+      join(testClaude.agentsDir, "teams", "security-reviewer.md"),
+    );
+  });
+
+  test("C2 keeps exact source-relative --name matching for nested Claude agents", async () => {
+    writeFixture(join(testClaude.agentsDir, "reviewer.md"), claudeAgent("root-reviewer"));
+    writeFixture(join(testClaude.agentsDir, "teams", "reviewer.md"), claudeAgent("team-reviewer"));
+
+    const result = await readSourceArtefacts("claude", "agents", "teams/reviewer.md");
+    expect(result).toHaveLength(1);
+    expect(result[0]?.name).toBe("teams/reviewer.md");
+    expect(result[0]?.content).toContain("name: team-reviewer");
+  });
+
+  test("C2 reads only documented direct-child extensions outside Claude", async () => {
+    writeFixture(join(cursorAgentsDir, "cursor-reviewer.md"), cursorAgent());
+    writeFixture(join(cursorAgentsDir, "nested", "ignored.md"), cursorAgent());
+    writeFixture(join(cursorAgentsDir, "ignored.txt"), "ignore");
+
+    writeFixture(join(codexAgentsDir, "codex-reviewer.toml"), codexAgent("codex_reviewer"));
+    writeFixture(join(codexAgentsDir, "nested", "ignored.toml"), codexAgent("ignored"));
+    writeFixture(join(codexAgentsDir, "ignored.md"), "ignore");
+
+    writeFixture(join(sharedAgentsDir, "shared-reviewer.agent.md"), sharedAgent("shared-reviewer"));
+    writeFixture(join(sharedAgentsDir, "nested", "ignored.agent.md"), sharedAgent("ignored"));
+    writeFixture(join(sharedAgentsDir, "ignored.md"), "ignore");
+
+    expect((await readSourceArtefacts("cursor", "agents")).map(({ name }) => name)).toEqual([
+      "cursor-reviewer.md",
+    ]);
+    expect((await readSourceArtefacts("codex", "agents")).map(({ name }) => name)).toEqual([
+      "codex-reviewer.toml",
+    ]);
+    expect((await readSourceArtefacts("copilot", "agents")).map(({ name }) => name)).toEqual([
+      "shared-reviewer.agent.md",
+    ]);
+  });
+
+  test("C2 excludes hidden segments, symlinks, and non-files", async () => {
+    const validPath = join(testClaude.agentsDir, "valid.md");
+    writeFixture(validPath, claudeAgent("valid"));
+    writeFixture(join(testClaude.agentsDir, ".hidden.md"), claudeAgent("hidden"));
+    writeFixture(join(testClaude.agentsDir, ".private", "hidden.md"), claudeAgent("hidden"));
+    mkdirSync(join(testClaude.agentsDir, "directory.md"), { recursive: true });
+    symlinkSync(validPath, join(testClaude.agentsDir, "linked.md"));
+
+    const result = await readSourceArtefacts("claude", "agents");
+    expect(result.map(({ name }) => name)).toEqual(["valid.md"]);
+  });
+
+  test("C2 and C6 filter the shared store by logical target", async () => {
+    writeFixture(join(sharedAgentsDir, "both.agent.md"), sharedAgent("both"));
+    writeFixture(join(sharedAgentsDir, "cli.agent.md"), sharedAgent("cli", "github-copilot"));
+    writeFixture(join(sharedAgentsDir, "ide.agent.md"), sharedAgent("ide", "vscode"));
+
+    expect((await readSourceArtefacts("copilot", "agents")).map(({ name }) => name).sort()).toEqual(
+      ["both.agent.md", "cli.agent.md"],
+    );
+    expect((await readSourceArtefacts("vscode", "agents")).map(({ name }) => name).sort()).toEqual([
+      "both.agent.md",
+      "ide.agent.md",
+    ]);
   });
 });
 
@@ -932,5 +1054,225 @@ describe("performMigrate --name miss is a hard error", () => {
     expect(result.errors.length).toBeGreaterThan(0);
     expect(result.errors[0]).toContain("does-not-exist.md");
     expect(result.migrated).toEqual([]);
+  });
+});
+
+describe("performMigrate agents acceptance", () => {
+  test("C1 includes agents when type is omitted and deduplicates shared --to all output", async () => {
+    writeFixture(join(testClaude.agentsDir, "reviewer.md"), claudeAgent("reviewer"));
+
+    const result = await performMigrate({
+      from: "claude",
+      to: "all",
+      dryRun: true,
+    });
+
+    expect(result.errors).toEqual([]);
+    expect(result.migrated.map(({ targetPath }) => targetPath).sort()).toEqual(
+      [
+        join(cursorAgentsDir, "reviewer.md"),
+        join(codexAgentsDir, "reviewer.toml"),
+        join(sharedAgentsDir, "reviewer.agent.md"),
+      ].sort(),
+    );
+    expect(new Set(result.migrated.map(({ targetPath }) => targetPath)).size).toBe(3);
+  });
+
+  test("C3 writes valid Codex TOML to the documented agent directory", async () => {
+    writeFixture(join(testClaude.agentsDir, "reviewer.md"), claudeAgent("reviewer"));
+
+    const result = await performMigrate({
+      from: "claude",
+      to: "codex",
+      type: "agents",
+      dryRun: false,
+    });
+
+    expect(result.errors).toEqual([]);
+    expect(result.migrated).toHaveLength(1);
+    expect(result.migrated[0]?.targetPath).toBe(join(codexAgentsDir, "reviewer.toml"));
+    const parsed = TOML.parse(await Bun.file(join(codexAgentsDir, "reviewer.toml")).text()) as {
+      name?: string;
+      description?: string;
+      developer_instructions?: string;
+    };
+    expect(parsed).toMatchObject({
+      name: "reviewer",
+      description: "Reviews code",
+      developer_instructions: "Review code.",
+    });
+  });
+
+  test("C4 records an unmappable authority field and writes no target", async () => {
+    writeFixture(
+      join(testClaude.agentsDir, "planner.md"),
+      claudeAgent("planner", "\npermissionMode: plan"),
+    );
+
+    const result = await performMigrate({
+      from: "claude",
+      to: "cursor",
+      type: "agents",
+      dryRun: false,
+    });
+
+    expect(result.errors.join("\n")).toContain("permissionMode");
+    expect(result.migrated).toEqual([]);
+    expect(await Bun.file(join(cursorAgentsDir, "planner.md")).exists()).toBe(false);
+  });
+
+  test("C4 and C8 surface named non-authority loss warnings with a successful write", async () => {
+    writeFixture(
+      join(testClaude.agentsDir, "reviewer.md"),
+      claudeAgent("reviewer", "\nmodel: sonnet"),
+    );
+
+    const result = await performMigrate({
+      from: "claude",
+      to: "cursor",
+      type: "agents",
+      dryRun: false,
+    });
+
+    expect(result.errors).toEqual([]);
+    expect(result.migrated).toHaveLength(1);
+    expect(result.warnings.join("\n")).toContain("model");
+    expect(await Bun.file(join(cursorAgentsDir, "reviewer.md")).exists()).toBe(true);
+  });
+
+  test("C5 rejects unsafe target paths before filesystem writes", async () => {
+    await expect(
+      applyMigrated("cursor", "agents", "../escape.md", cursorAgent("escape"), false),
+    ).rejects.toThrow(/path|unsafe|traversal/i);
+    expect(await Bun.file(join(cursorAgentsDir, "..", "escape.md")).exists()).toBe(false);
+  });
+
+  test("C6 emits explicit direct targets and an omitted shared --to all target", async () => {
+    writeFixture(join(testClaude.agentsDir, "reviewer.md"), claudeAgent("reviewer"));
+
+    const cli = await performMigrate({
+      from: "claude",
+      to: "copilot",
+      type: "agents",
+      dryRun: true,
+    });
+    const vscode = await performMigrate({
+      from: "claude",
+      to: "vscode",
+      type: "agents",
+      dryRun: true,
+    });
+    const all = await performMigrate({
+      from: "claude",
+      to: "all",
+      type: "agents",
+      dryRun: true,
+    });
+
+    expect(agentFrontmatter(cli.migrated[0]?.content ?? "").target).toBe("github-copilot");
+    expect(agentFrontmatter(vscode.migrated[0]?.content ?? "").target).toBe("vscode");
+    const shared = all.migrated.find(
+      ({ targetPath }) => targetPath === join(sharedAgentsDir, "reviewer.agent.md"),
+    );
+    expect(shared).toBeDefined();
+    expect(agentFrontmatter(shared?.content ?? "").target).toBeUndefined();
+    expect(all.migrated.filter(({ targetPath }) => targetPath === shared?.targetPath)).toHaveLength(
+      1,
+    );
+  });
+
+  test("C7 rejects duplicate logical identities before any batch write", async () => {
+    writeFixture(join(codexAgentsDir, "one.toml"), codexAgent("reviewer"));
+    writeFixture(join(codexAgentsDir, "two.toml"), codexAgent("reviewer"));
+    writeFixture(join(codexAgentsDir, "unique.toml"), codexAgent("unique_agent"));
+
+    const result = await performMigrate({
+      from: "codex",
+      to: "cursor",
+      type: "agents",
+      dryRun: false,
+    });
+
+    expect(result.errors.join("\n")).toMatch(/duplicate.*reviewer/i);
+    expect(result.migrated).toEqual([]);
+    expect(await Bun.file(join(cursorAgentsDir, "unique-agent.md")).exists()).toBe(false);
+  });
+
+  test("C7 rejects normalized and case-equivalent target paths before any batch write", async () => {
+    writeFixture(join(codexAgentsDir, "one.toml"), codexAgent("Review_Agent"));
+    writeFixture(join(codexAgentsDir, "two.toml"), codexAgent("review-agent"));
+    writeFixture(join(codexAgentsDir, "unique.toml"), codexAgent("unique_agent"));
+
+    const result = await performMigrate({
+      from: "codex",
+      to: "cursor",
+      type: "agents",
+      dryRun: false,
+    });
+
+    expect(result.errors.join("\n")).toMatch(/target.*collision/i);
+    expect(result.migrated).toEqual([]);
+    expect(await Bun.file(join(cursorAgentsDir, "unique-agent.md")).exists()).toBe(false);
+  });
+
+  test("C8 dry-run reports the output without overwriting an existing target", async () => {
+    writeFixture(join(testClaude.agentsDir, "source.md"), claudeAgent("reviewer"));
+    const targetPath = join(cursorAgentsDir, "reviewer.md");
+    writeFixture(targetPath, "existing target");
+
+    const preview = await performMigrate({
+      from: "claude",
+      to: "cursor",
+      type: "agents",
+      dryRun: true,
+    });
+    expect(preview.errors).toEqual([]);
+    expect(preview.migrated[0]?.targetPath).toBe(targetPath);
+    expect(await Bun.file(targetPath).text()).toBe("existing target");
+
+    const applied = await performMigrate({
+      from: "claude",
+      to: "cursor",
+      type: "agents",
+      dryRun: false,
+    });
+    expect(applied.errors).toEqual([]);
+    expect(await Bun.file(targetPath).text()).toContain("Review code.");
+  });
+
+  test("C8 preserves exact nested --name selection through migration", async () => {
+    writeFixture(join(testClaude.agentsDir, "reviewer.md"), claudeAgent("root-reviewer"));
+    writeFixture(join(testClaude.agentsDir, "teams", "reviewer.md"), claudeAgent("team-reviewer"));
+
+    const result = await performMigrate({
+      from: "claude",
+      to: "codex",
+      type: "agents",
+      name: "teams/reviewer.md",
+      dryRun: false,
+    });
+
+    expect(result.errors).toEqual([]);
+    expect(result.migrated).toHaveLength(1);
+    expect(result.migrated[0]?.sourcePath).toBe(join(testClaude.agentsDir, "teams", "reviewer.md"));
+    expect(await Bun.file(join(codexAgentsDir, "team-reviewer.toml")).exists()).toBe(true);
+    expect(await Bun.file(join(codexAgentsDir, "root-reviewer.toml")).exists()).toBe(false);
+  });
+
+  test("C8 rejects direct Copilot to VS Code migration before touching the shared store", async () => {
+    const sourcePath = join(sharedAgentsDir, "reviewer.agent.md");
+    const source = sharedAgent("reviewer");
+    writeFixture(sourcePath, source);
+
+    const result = await performMigrate({
+      from: "copilot",
+      to: "vscode",
+      type: "agents",
+      dryRun: false,
+    });
+
+    expect(result.errors.join("\n")).toContain("same physical store");
+    expect(result.migrated).toEqual([]);
+    expect(await Bun.file(sourcePath).text()).toBe(source);
   });
 });

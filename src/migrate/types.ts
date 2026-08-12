@@ -8,7 +8,7 @@
 import type { AgentName } from "../agents/registry";
 
 /** Translatable configuration categories. */
-export type ConfigType = "global-rules" | "mcp" | "commands" | "skills" | "rules";
+export type ConfigType = "global-rules" | "mcp" | "commands" | "skills" | "rules" | "agents";
 
 /** Identifies a specific directional translation between two agents for one config type. */
 export interface MigrationPair {
@@ -56,10 +56,9 @@ export interface ExtraFile {
  * @param sourceContent - Raw content read from the source agent's config file.
  * @param sourceName - Filename of the source artefact (used for file-based types like commands).
  * @returns Translated content, target filename, and optional warnings about lossy or
- *   partial transformations (e.g., dropped HTTP/SSE transport fields). When `skipWrite`
- *   is set the orchestrator surfaces `warnings` but does not write the file — used when
- *   every server in the source was dropped by the target schema and writing an empty
- *   stub would create misleading state. `extraFiles` lets a translator emit additional
+ *   partial transformations (e.g., dropped HTTP/SSE transport fields). `errors` records
+ *   fail-closed validation failures. When `skipWrite` is set the orchestrator surfaces
+ *   diagnostics but does not write the file. `extraFiles` lets a translator emit additional
  *   files alongside the primary one (used by skills to carry SKILL.md plus
  *   reference.md / scripts / assets). null when the input is empty or untranslatable.
  */
@@ -70,6 +69,7 @@ export type Translator = (
   content: string;
   targetName: string;
   warnings?: string[];
+  errors?: string[];
   skipWrite?: boolean;
   extraFiles?: ExtraFile[];
 } | null;

@@ -48,14 +48,23 @@ describe("getTranslator", () => {
     const t = getTranslator("claude", "cursor", "skills");
     expect(t).toBeFunction();
   });
+
+  test("C1 returns a translator for a physical agents pair", () => {
+    expect(getTranslator("claude", "codex", "agents")).toBeFunction();
+  });
+
+  test("C1 keeps VS Code as an orchestration alias for the shared agent format", () => {
+    expect(getTranslator("claude", "vscode", "agents")).toBeNull();
+    expect(getTranslator("claude", "copilot", "agents")).toBeFunction();
+  });
 });
 
 describe("getSupportedPairs", () => {
   test("returns all pairs when no type filter is given", () => {
     const pairs = getSupportedPairs();
     expect(pairs.length).toBeGreaterThan(0);
-    // 12 global-rules + 20 mcp + 12 commands + 12 skills + 6 rules = 62 total
-    expect(pairs.length).toBe(62);
+    // Existing 62 pairs plus 12 directed pairs among four physical agent formats.
+    expect(pairs.length).toBe(74);
   });
 
   test("filters by config type", () => {
@@ -74,6 +83,16 @@ describe("getSupportedPairs", () => {
   test("filters by config type for rules", () => {
     const rulePairs = getSupportedPairs("rules");
     expect(rulePairs.length).toBe(6);
+  });
+
+  test("C1 exposes exactly 12 directed physical-format agents pairs", () => {
+    const agentPairs = getSupportedPairs("agents");
+    expect(agentPairs).toHaveLength(12);
+    expect(new Set(agentPairs.map(({ from, to }) => `${from}→${to}`)).size).toBe(12);
+    expect(agentPairs.every(({ from, to }) => from !== to)).toBe(true);
+    expect(agentPairs.some(({ from, to }) => from === "claude" && to === "copilot")).toBe(true);
+    expect(agentPairs.some(({ from, to }) => from === "copilot" && to === "codex")).toBe(true);
+    expect(agentPairs.some(({ from, to }) => from === "vscode" || to === "vscode")).toBe(false);
   });
 
   test("returns correct from/to for a known pair", () => {

@@ -34,7 +34,7 @@ agentsync migrate --from <agent> --to <agent|all> [--type <type>] [--name <file>
 |------|----------|--------|-------------|
 | `--from` | yes | claude, cursor, codex, copilot, vscode | Source agent |
 | `--to` | yes | claude, cursor, codex, copilot, vscode, all | Target agent(s) |
-| `--type` | no | global-rules, mcp, commands, skills, rules | Filter to one config type |
+| `--type` | no | global-rules, mcp, commands, skills, rules, agents | Filter to one config type |
 | `--name` | no | artefact name (requires --type) | Migrate a single artefact (file or skill/rules dir name). Hard-errors if not found. |
 | `--dry-run` | no | — | Preview without writing |
 
@@ -42,15 +42,17 @@ agentsync migrate --from <agent> --to <agent|all> [--type <type>] [--name <file>
 
 | From \ To | Claude | Cursor | Codex | Copilot | VS Code |
 |-----------|--------|--------|-------|---------|---------|
-| **Claude** | — | GR, MCP, CMD, SK, RU | GR, MCP, CMD†, SK, RU | GR, MCP, CMD, SK | MCP |
-| **Cursor** | GR, MCP, CMD, SK, RU | — | GR, MCP, CMD†, SK, RU | GR, MCP, CMD, SK | MCP |
-| **Codex** | GR, MCP, SK, RU | GR, MCP, SK, RU | — | GR, MCP, SK | MCP |
-| **Copilot** | GR, MCP, CMD, SK | GR, MCP, CMD, SK | GR, MCP, CMD†, SK | — | MCP |
-| **VS Code** | MCP | MCP | MCP | MCP | — |
+| **Claude** | — | GR, MCP, CMD, SK, RU, AG | GR, MCP, CMD†, SK, RU, AG | GR, MCP, CMD, SK, AG | MCP, AG |
+| **Cursor** | GR, MCP, CMD, SK, RU, AG | — | GR, MCP, CMD†, SK, RU, AG | GR, MCP, CMD, SK, AG | MCP, AG |
+| **Codex** | GR, MCP, SK, RU, AG | GR, MCP, SK, RU, AG | — | GR, MCP, SK, AG | MCP, AG |
+| **Copilot** | GR, MCP, CMD, SK, AG | GR, MCP, CMD, SK, AG | GR, MCP, CMD†, SK, AG | — | MCP‡ |
+| **VS Code** | MCP, AG | MCP, AG | MCP, AG | MCP‡ | — |
 
-**GR** = global-rules · **MCP** = MCP servers · **CMD** = commands · **SK** = skills · **RU** = rules folder
+**GR** = global-rules · **MCP** = MCP servers · **CMD** = commands · **SK** = skills · **RU** = rules folder · **AG** = custom agents
 
 **†** Codex has no native slash-commands surface, so `commands → codex` wraps each command as a Codex skill at `~/.agents/skills/<name>/SKILL.md` with a synthesised `name`/`description` frontmatter. Codex skills are user-invokable as `/<name>`, so the wrapped form actually executes — unlike previous versions which wrote into `~/.codex/rules/`, where Codex never loaded the file.
+
+**‡** Copilot CLI and VS Code use one physical custom-agent store. Direct `agents` migration between those two logical names is rejected before writes; their separate MCP endpoints remain migratable.
 
 ### Per-category endpoint paths
 
@@ -61,11 +63,12 @@ agentsync migrate --from <agent> --to <agent|all> [--type <type>] [--name <file>
 | **commands** | `~/.claude/commands/*.md` | `~/.cursor/commands/*.md` | `~/.agents/skills/<n>/SKILL.md` (wrapped) | `~/.copilot/prompts/*.prompt.md` | — |
 | **skills** | `~/.claude/skills/<n>/SKILL.md` | `~/.cursor/skills/<n>/SKILL.md` | `~/.agents/skills/<n>/SKILL.md` (preferred) or `~/.codex/skills/<n>/` (legacy fallback) | `~/.copilot/skills/<n>/SKILL.md` (best-effort: no documented loader yet) | — |
 | **rules** | `~/.claude/rules/*.md` | `~/.cursor/rules/*.{md,mdc}` | `~/.codex/rules/*.md` | — | — |
+| **agents** | `~/.claude/agents/**/*.md` | `~/.cursor/agents/*.md` | `$CODEX_HOME/agents/*.toml` | `~/.copilot/agents/*.agent.md` | shared `~/.copilot/agents/*.agent.md` |
 
 ### Why some cells are missing
 
 - **Copilot CLI rules and VS Code rules** are workspace-relative (`.github/instructions/*.instructions.md`). agentsync targets global artefacts only.
-- **VS Code skills** — no SKILL.md loader exists; VS Code's custom-agents (`.agent.md`) are a different concept.
+- **VS Code skills** — no SKILL.md loader exists; VS Code custom agents are handled by the separate `agents` type.
 - **VS Code commands** — VS Code's `chat.promptFilesLocations` is user-configurable with no canonical default. agentsync stays out of MCP-only territory for VS Code rather than guess at a path.
 - **Cursor `.mdc` Project Rules** under `.cursor/rules/` are workspace-only and not migrated. The `~/.cursor/rules/` dir IS migrated as a global counterpart.
 
@@ -89,6 +92,7 @@ flowchart TD
     NO_TRANSLATOR["Skip: no translator"]:::skip
     READ["Read source artefacts"]:::process
     TRANSLATE["Translate content"]:::process
+    PREFLIGHT["Agents: authority and batch-collision preflight"]:::decision
     DETECT{"MCP? Check for secrets"}:::decision
     ABORT["ABORT: secrets found"]:::skip
     DRYRUN{"Dry run?"}:::decision
@@ -99,7 +103,7 @@ flowchart TD
     CLI --> VALIDATE --> RESOLVE --> LOOP
     LOOP --> LOOKUP
     LOOKUP -->|"not found"| NO_TRANSLATOR
-    LOOKUP -->|"found"| READ --> TRANSLATE --> DETECT
+    LOOKUP -->|"found"| READ --> TRANSLATE --> PREFLIGHT --> DETECT
     DETECT -->|"secrets"| ABORT
     DETECT -->|"clean"| DRYRUN
     DRYRUN -->|"yes"| PREVIEW
@@ -118,6 +122,21 @@ flowchart TD
 - **Secret detection**: If API keys or tokens are found in MCP content (including HTTP-transport `headers.Authorization`), migration aborts with a clear error. Remove literal secrets and retry.
 - **Graceful skipping**: Missing source files and unsupported pairs produce skip messages, not errors.
 - **`--name` is strict**: When `--name` is set and zero source artefacts match that name, migration hard-errors and exits non-zero rather than silently skipping. Catches typos.
+
+## Custom agents migration
+
+`agentsync migrate --type agents` translates user-level custom agents across four physical formats:
+
+- Claude recursively reads `~/.claude/agents/**/*.md`; `--name` is the exact source-relative filename, such as `teams/reviewer.md`. Claude requires YAML `name` and `description`, with the prompt in the Markdown body. [Claude Code custom subagents](https://code.claude.com/docs/en/sub-agents)
+- Cursor reads direct `~/.cursor/agents/*.md` children. YAML `name` is optional and otherwise derives from the filename; `description`, `model`, `readonly`, and `is_background` follow Cursor's documented format. [Cursor subagents](https://cursor.com/docs/subagents)
+- Codex reads direct `$CODEX_HOME/agents/*.toml` children. `name`, `description`, and `developer_instructions` are required; `CODEX_HOME` defaults to `~/.codex`. [Codex custom agents](https://learn.chatgpt.com/docs/agent-configuration/subagents) and [environment variables](https://learn.chatgpt.com/docs/config-file/environment-variables)
+- Copilot CLI and VS Code read direct `~/.copilot/agents/*.agent.md` children as one physical format. `target: github-copilot` and `target: vscode` select a logical consumer; an omitted `target` selects both. The Markdown prompt is limited to 30,000 characters. [GitHub custom-agent configuration](https://docs.github.com/en/copilot/reference/custom-agents-configuration) and [VS Code custom agents](https://code.visualstudio.com/docs/agent-customization/custom-agents)
+
+Discovery rejects hidden segments, symbolic links, and non-files. A missing source root is treated as no agents; other source-root, directory-read, or file-read failures abort before writes. Target preflight rejects a symlinked agent root, symlinked or non-file destinations, Windows-reserved characters and device names, and trailing dots or spaces. These are AgentSync filesystem policies, separate from vendor identity rules. AgentSync does not impose a shared filename-length rule.
+
+Agent translation is fail-closed for authority. Claude-to-shared tool translation emits a GitHub capability alias only when the exact documented Claude tools cover that whole capability group; partial groups are rejected to avoid widening access. Shared aliases are case-insensitive and expand to the full applicable Claude group; shared `*` and omitted Claude tools both mean all tools, while an empty list remains empty. Cursor `readonly: true` maps to Codex `sandbox_mode = "read-only"`. An omitted or read-only Codex sandbox becomes Cursor `readonly: true`; Codex-to-Claude or shared translation rejects the inherited sandbox because those targets have no verified equivalent. Shared invocation controls (`disable-model-invocation`, `user-invocable`, `infer`) are type-checked; restrictive values and the VS Code `agents` subagent control are rejected. Explicit nonrestrictive invocation values are dropped with named warnings. Unknown fields, unknown tool names, and unmappable tool, sandbox, permission, hook, MCP, skill, memory, or isolation controls produce a per-file error and no target write. Known non-authority loss, such as an incompatible `model`, produces a warning naming the field.
+
+For shared sources, the `.agent.md` filename stem is the programmatic identity; optional `name` is display metadata and warns when translation drops a different value. Each physical target is planned before writes. Duplicate logical identities and Unicode-normalized or case-equivalent target paths abort that target batch, so a collision cannot leave a partial target set. An existing shared destination is overwritten only when its `target` coverage exactly matches the incoming logical coverage; malformed, opposite, narrower, or broader ownership is rejected. Other `--to all` physical targets may still proceed. Agent writes stage and flush a same-directory exclusive temporary file before rename, but the batch is not a multi-file transaction and directory traversal is not claimed race-free. `--dry-run` performs the same translation and preflight without writing. `--to all` writes one shared Copilot/VS Code file with no `target`; direct logical targets write an explicit `target` value.
 
 ## Skills migration
 

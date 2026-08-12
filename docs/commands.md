@@ -455,16 +455,19 @@ agentsync migrate --from <agent> --to <agent|all> [--type <type>] [--name <file>
 |---|---|---|---|
 | `--from` | yes | claude, cursor, codex, copilot, vscode | Source agent. |
 | `--to` | yes | claude, cursor, codex, copilot, vscode, all | Target agent(s). |
-| `--type` | no | global-rules, mcp, commands, skills, rules | Filter to one config type. |
-| `--name` | no | artefact name | Migrate a single artefact (file or skill/rules directory). Requires `--type`. Hard-errors if not found. |
+| `--type` | no | global-rules, mcp, commands, skills, rules, agents | Filter to one config type. |
+| `--name` | no | artefact name | Migrate one exact artefact. For recursive Claude agents, use the source-relative filename. Requires `--type`; hard-errors if not found. |
 | `--dry-run` | no | — | Preview without writing. |
 
-**Outcome**: the source agent's matching configuration is translated through the format-specific translators and written to the target agent's config location on disk. The vault is not touched.
+**Outcome**: the source agent's matching configuration is translated through the format-specific translators and written to the target agent's config location on disk. `agents` covers Claude `~/.claude/agents/**/*.md`, Cursor `~/.cursor/agents/*.md`, Codex `$CODEX_HOME/agents/*.toml`, and the shared Copilot CLI/VS Code `~/.copilot/agents/*.agent.md` store. The vault is not touched.
 
 **Caveats**:
 
 - `migrate` operates on **local files only**. No vault initialisation is required.
-- See [Migrate](migrate.md) for the full support matrix per config type, MCP transport translation rules, and per-agent quirks.
+- Agent migration rejects hidden entries, source read failures, symbolic-link sources or targets, non-file targets, non-portable filename components, unknown authority fields, duplicate identities, normalized or case-equivalent target collisions, and incompatible existing shared-target ownership before the affected physical batch writes.
+- Copilot CLI and VS Code share one physical agent store. Direct agent migration between those aliases is rejected. `--to all` writes one shared file; direct targets set `target: github-copilot` or `target: vscode`.
+- Agent dry-runs perform the same validation and collision preflight as apply. Existing targets are overwritten only after preflight succeeds.
+- See [Migrate](migrate.md) for the full support matrix, the fail-closed field policy, the 30,000-character shared prompt limit, MCP transport rules, and per-agent paths.
 
 ## destroy
 

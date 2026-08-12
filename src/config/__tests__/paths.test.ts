@@ -27,6 +27,10 @@ describe("paths", () => {
     expect(AgentPaths.cursor.settingsJson.length).toBeGreaterThan(0);
   });
 
+  test("C1 and C3 map Cursor agents to the documented user directory", () => {
+    expect(AgentPaths.cursor.agentsDir).toBe(join(HOME, ".cursor", "agents"));
+  });
+
   test("AgentPaths.codex falls back to ~/.codex when CODEX_HOME is unset", () => {
     // The actual value depends on whether CODEX_HOME is set at import time.
     // We just verify the shape — it must be a non-empty string.
@@ -34,6 +38,10 @@ describe("paths", () => {
     expect(AgentPaths.codex.root.length).toBeGreaterThan(0);
     expect(AgentPaths.codex.agentsMd).toContain("AGENTS.md");
     expect(AgentPaths.codex.authJson).toContain("auth.json");
+  });
+
+  test("C1 and C3 map Codex agents below CODEX_HOME", () => {
+    expect(AgentPaths.codex.agentsDir).toBe(join(AgentPaths.codex.root, "agents"));
   });
 
   test("AgentPaths.copilot has instructionsFile, skillsDir, promptsDir, agentsDir", () => {
@@ -70,6 +78,12 @@ describe("paths", () => {
   test("AgentPaths.vscode.mcpJson is a non-empty string", () => {
     expect(typeof AgentPaths.vscode.mcpJson).toBe("string");
     expect(AgentPaths.vscode.mcpJson.length).toBeGreaterThan(0);
+  });
+
+  test("C1 and C6 map Copilot CLI and VS Code agents to one physical store", () => {
+    const sharedAgentsDir = join(HOME, ".copilot", "agents");
+    expect(AgentPaths.copilot.agentsDir).toBe(sharedAgentsDir);
+    expect(AgentPaths.vscode.agentsDir).toBe(sharedAgentsDir);
   });
 
   // Claude plugin state files — distilled into the reinstall manifest.

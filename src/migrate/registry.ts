@@ -56,6 +56,7 @@ export function __clearRegistryForTesting(): void {
 
 // ── Translator registrations per config type support matrix ──────────────────
 
+import { translateAgent } from "./translators/agents";
 import { translateCommand } from "./translators/commands";
 import { translateGlobalRules } from "./translators/global-rules";
 import { translateMcp } from "./translators/mcp";
@@ -133,3 +134,17 @@ register("cursor", "claude", "rules", translateRule.cursorToClaude);
 register("cursor", "codex", "rules", translateRule.cursorToCodex);
 register("codex", "claude", "rules", translateRule.codexToClaude);
 register("codex", "cursor", "rules", translateRule.codexToCursor);
+
+// Agents (4 physical formats; Copilot represents the shared Copilot/VS Code store)
+register("claude", "cursor", "agents", translateAgent.claudeToCursor);
+register("claude", "codex", "agents", translateAgent.claudeToCodex);
+register("claude", "copilot", "agents", translateAgent.claudeToCopilot);
+register("cursor", "claude", "agents", translateAgent.cursorToClaude);
+register("cursor", "codex", "agents", translateAgent.cursorToCodex);
+register("cursor", "copilot", "agents", translateAgent.cursorToCopilot);
+register("codex", "claude", "agents", translateAgent.codexToClaude);
+register("codex", "cursor", "agents", translateAgent.codexToCursor);
+register("codex", "copilot", "agents", translateAgent.codexToCopilot);
+register("copilot", "claude", "agents", translateAgent.copilotToClaude);
+register("copilot", "cursor", "agents", translateAgent.copilotToCursor);
+register("copilot", "codex", "agents", translateAgent.copilotToCodex);
