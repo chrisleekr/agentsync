@@ -61,13 +61,18 @@ describe("release workflow publishing contract", () => {
 
   test("pins the CI unit-test job to the publish validation Node and npm toolchain", async () => {
     const ciWorkflow = await readFile(ciWorkflowPath, "utf8");
+    const unitTestJob =
+      ciWorkflow
+        .split(/(?=^  [a-z][a-z0-9-]*:\n)/m)
+        .find((section) => section.startsWith("  test:\n")) ?? "";
 
-    expect(ciWorkflow).toContain("name: Unit Tests");
-    // Accept either the floating `@v6` tag or a Renovate-pinned commit SHA
-    // carrying the `# v6` comment — both lock the action to major v6.
-    expect(ciWorkflow).toMatch(/uses: actions\/setup-node@(?:v6\b|[a-f0-9]{40} # v6\b)/);
-    expect(ciWorkflow).toContain("node-version-file: .nvmrc");
-    expect(ciWorkflow).toContain("name: Upgrade npm");
-    expect(ciWorkflow).toContain("npm install --global npm@11.5.1");
+    expect(unitTestJob).not.toBe("");
+    expect(unitTestJob).toContain("name: Unit Tests");
+    // Accept either the floating `@v7` tag or a Renovate-pinned commit SHA
+    // carrying the `# v7` comment, both lock the action to major v7.
+    expect(unitTestJob).toMatch(/uses: actions\/setup-node@(?:v7\b|[a-f0-9]{40} # v7\b)/);
+    expect(unitTestJob).toContain("node-version-file: .nvmrc");
+    expect(unitTestJob).toContain("name: Upgrade npm");
+    expect(unitTestJob).toContain("npm install --global npm@11.5.1");
   });
 });
