@@ -63,7 +63,7 @@ describe("release workflow publishing contract", () => {
     const ciWorkflow = await readFile(ciWorkflowPath, "utf8");
     const unitTestJob =
       ciWorkflow
-        .split(/(?=^  [a-z][a-z0-9-]*:\n)/m)
+        .split(/(?=^ {2}[a-z][a-z0-9-]*:\n)/m)
         .find((section) => section.startsWith("  test:\n")) ?? "";
 
     expect(unitTestJob).not.toBe("");
