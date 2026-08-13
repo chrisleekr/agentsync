@@ -1758,7 +1758,7 @@ See <a href="../operations/#push-aborts-because-secrets-were-detected">Push abor
 <li>Old (v1) binaries cannot read a v2 vault at all: <code>version</code> is an integer literal, and their string-typed schema rejects it. This is deliberate — it stops an old binary writing flat directories beside <code>machines/</code>.</li>
 </ul>
 <h2 id="migrate">migrate<a class="headerlink" href="#migrate" title="Permanent link">&para;</a></h2>
-<p><strong>Why</strong>: Translate configuration between Claude, Cursor, Codex, Copilot, and VS Code without touching the vault.</p>
+<p><strong>Why</strong>: Translate configuration between Claude, Cursor, Codex, Copilot, VS Code, and OpenCode without touching the vault.</p>
 <p><strong>Usage</strong>:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>agentsync<span class="w"> </span>migrate<span class="w"> </span>--from<span class="w"> </span>&lt;agent&gt;<span class="w"> </span>--to<span class="w"> </span>&lt;agent<span class="p">|</span>all&gt;<span class="w"> </span><span class="o">[</span>--type<span class="w"> </span>&lt;type&gt;<span class="o">]</span><span class="w"> </span><span class="o">[</span>--name<span class="w"> </span>&lt;file&gt;<span class="o">]</span><span class="w"> </span><span class="o">[</span>--dry-run<span class="o">]</span>
 </span></code></pre></div>
@@ -1776,13 +1776,13 @@ See <a href="../operations/#push-aborts-because-secrets-were-detected">Push abor
 <tr>
 <td><code>--from</code></td>
 <td>yes</td>
-<td>claude, cursor, codex, copilot, vscode</td>
+<td>claude, cursor, codex, copilot, vscode, opencode</td>
 <td>Source agent.</td>
 </tr>
 <tr>
 <td><code>--to</code></td>
 <td>yes</td>
-<td>claude, cursor, codex, copilot, vscode, all</td>
+<td>claude, cursor, codex, copilot, vscode, opencode, all</td>
 <td>Target agent(s).</td>
 </tr>
 <tr>
@@ -1795,7 +1795,7 @@ See <a href="../operations/#push-aborts-because-secrets-were-detected">Push abor
 <td><code>--name</code></td>
 <td>no</td>
 <td>artefact name</td>
-<td>Migrate one exact artefact. For recursive Claude agents, use the source-relative filename. Requires <code>--type</code>; hard-errors if not found.</td>
+<td>Migrate one exact artefact. Recursive Claude agents and OpenCode commands/agents use the source-relative filename. Requires <code>--type</code>; hard-errors if not found.</td>
 </tr>
 <tr>
 <td><code>--dry-run</code></td>
@@ -1805,11 +1805,19 @@ See <a href="../operations/#push-aborts-because-secrets-were-detected">Push abor
 </tr>
 </tbody>
 </table>
-<p><strong>Outcome</strong>: the source agent's matching configuration is translated through the format-specific translators and written to the target agent's config location on disk. <code>agents</code> covers Claude <code>~/.claude/agents/**/*.md</code>, Cursor <code>~/.cursor/agents/*.md</code>, Codex <code>$CODEX_HOME/agents/*.toml</code>, and the shared Copilot CLI/VS Code <code>~/.copilot/agents/*.agent.md</code> store. The vault is not touched.</p>
+<p><strong>Outcome</strong>: the source agent's matching configuration is translated through the format-specific translators and written to the target agent's config location on disk. <code>agents</code> covers Claude <code>~/.claude/agents/**/*.md</code>, Cursor <code>~/.cursor/agents/*.md</code>, Codex <code>$CODEX_HOME/agents/*.toml</code>, the shared Copilot CLI/VS Code <code>~/.copilot/agents/*.agent.md</code> store, and recursive OpenCode <code>{agent,agents}/**/*.md</code> roots. The vault is not touched.</p>
 <p><strong>Caveats</strong>:</p>
 <ul>
 <li><code>migrate</code> operates on <strong>local files only</strong>. No vault initialisation is required.</li>
-<li>Agent migration rejects hidden entries, source read failures, symbolic-link sources or targets, non-file targets, non-portable filename components, unknown authority fields, duplicate identities, normalized or case-equivalent target collisions, and incompatible existing shared-target ownership before the affected physical batch writes.</li>
+<li>OpenCode is a migration endpoint only. It is deliberately absent from <code>[agents]</code>, <code>push</code>, <code>status</code>, <code>copy</code>, and the vault adapter registry.</li>
+<li>OpenCode reads JSON configuration and command, agent, and skill directories from both the default root and an additive <code>OPENCODE_CONFIG_DIR</code>. Global <code>AGENTS.md</code> comes only from <code>OPENCODE_CONFIG_DIR</code> when set, otherwise from the default root. Each MCP-bearing file must be valid before layers merge. <code>OPENCODE_CONFIG</code> and <code>OPENCODE_CONFIG_CONTENT</code> are rejected independently because AgentSync cannot safely preserve an external file or inline source during writes.</li>
+<li>OpenCode MCP writes patch only incoming servers into the active directory's existing <code>opencode.jsonc</code>, then <code>opencode.json</code>, or a new <code>opencode.json</code>. A colliding server value is replaced as a unit, target-only servers remain, and lower-precedence effective servers are not copied upward. Literal <code>Authorization</code> credentials and OAuth <code>clientSecret</code> values abort. OpenCode-source <code>{env:...}</code> and <code>{file:...}</code> values remain unresolved when a target can carry them, while the same syntax in a non-OpenCode source is rejected before it can become active in OpenCode.</li>
+<li>OpenCode normally discovers Claude and shared Codex skills without copying. <code>OPENCODE_DISABLE_EXTERNAL_SKILLS</code> disables both shared roots; <code>OPENCODE_DISABLE_CLAUDE_CODE</code> or <code>OPENCODE_DISABLE_CLAUDE_CODE_SKILLS</code> disables Claude discovery, so AgentSync copies those skills into native OpenCode storage. The flags accept only the documented case-sensitive Boolean values listed in <a href="../migrate/">Migrate</a>.</li>
+<li>OpenCode writes use an exclusive sibling temporary file, flush, and rename after static path preflight. Existing modes are preserved. Command, agent, and selected skill batches preflight all target paths and normalized identities. Every skill target also containment-checks <code>SKILL.md</code> and sidecars before the first package write and uses staged same-directory renames. Skill packages apply sequentially. These batches are not transactions, and directory traversal is not claimed race-free.</li>
+<li>OpenCode command <code>agent</code>, <code>subtask</code>, or inert vendor-authority frontmatter fails closed for non-OpenCode targets. Commands and skills targeting OpenCode also fail closed when source frontmatter contains authority controls, including command <code>agent</code> and <code>subtask</code>, that OpenCode would activate without a verified source equivalent. OpenCode source and target skills must satisfy OpenCode's required name and description contract, including directory-name matching, even when OpenCode already discovers a shared root. OpenCode skill bodies using Claude dynamic shell or <code>@path</code> syntax, and OpenCode global rules using Claude <code>@path</code> imports, are rejected for a Claude target. Cursor and Copilot command bodies using OpenCode <code>!</code> shell or <code>@file</code> interpolation are rejected. Claude commands also fail closed for multiline shell blocks OpenCode cannot represent and inline forms OpenCode would activate at a different boundary. Existing symbolic-link components and unsafe or NFC/case-equivalent command and skill identities abort the target batch before writes. OpenCode → Codex preflights command and skill destinations together because both use the Codex skills root.</li>
+<li>A positive Claude agent <code>maxTurns</code> maps to OpenCode <code>steps</code>; malformed caps fail closed. Disabled OpenCode MCP servers fail closed for VS Code and stdio-only targets because dropping <code>enabled: false</code> would activate them; Codex preserves the flag. VS Code servers requiring a sandbox fail closed for OpenCode, and OpenCode <code>oauth: false</code> fails closed for Codex because neither authority constraint has a verified target equivalent.</li>
+<li>Codex MCP uses official <code>[mcp_servers.&lt;id&gt;]</code> tables. AgentSync maps only stdio <code>command</code>/<code>args</code>/<code>env</code>/<code>cwd</code>, remote <code>url</code>/<code>http_headers</code>, and common <code>enabled</code>/<code>tool_timeout_sec</code>; VS Code uses <code>oauth</code>, not <code>auth</code>.</li>
+<li>Agent discovery skips hidden, symbolic-link, and non-file entries. Unsafe or non-directory roots, source read failures, symbolic-link or non-file targets, non-portable filename components, unknown authority fields, duplicate identities, normalized or case-equivalent target collisions, and incompatible existing shared-target ownership reject the affected physical batch before writes.</li>
 <li>Copilot CLI and VS Code share one physical agent store. Direct agent migration between those aliases is rejected. Without <code>--type</code>, supported non-agent categories are still migrated, agents are skipped with an error, and the command exits 1 after those successful writes. Use <code>--type mcp</code> when only MCP should migrate and the command must exit successfully. <code>--to all</code> writes one shared file; direct targets set <code>target: github-copilot</code> or <code>target: vscode</code>.</li>
 <li>Agent dry-runs perform the same validation and collision preflight as apply. Existing targets are overwritten only after preflight succeeds.</li>
 <li>See <a href="../migrate/">Migrate</a> for the full support matrix, the fail-closed field policy, the 30,000-character shared prompt limit, MCP transport rules, and per-agent paths.</li>
