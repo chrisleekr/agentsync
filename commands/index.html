@@ -1788,14 +1788,14 @@ See <a href="../operations/#push-aborts-because-secrets-were-detected">Push abor
 <tr>
 <td><code>--type</code></td>
 <td>no</td>
-<td>global-rules, mcp, commands, skills, rules</td>
+<td>global-rules, mcp, commands, skills, rules, agents</td>
 <td>Filter to one config type.</td>
 </tr>
 <tr>
 <td><code>--name</code></td>
 <td>no</td>
 <td>artefact name</td>
-<td>Migrate a single artefact (file or skill/rules directory). Requires <code>--type</code>. Hard-errors if not found.</td>
+<td>Migrate one exact artefact. For recursive Claude agents, use the source-relative filename. Requires <code>--type</code>; hard-errors if not found.</td>
 </tr>
 <tr>
 <td><code>--dry-run</code></td>
@@ -1805,11 +1805,14 @@ See <a href="../operations/#push-aborts-because-secrets-were-detected">Push abor
 </tr>
 </tbody>
 </table>
-<p><strong>Outcome</strong>: the source agent's matching configuration is translated through the format-specific translators and written to the target agent's config location on disk. The vault is not touched.</p>
+<p><strong>Outcome</strong>: the source agent's matching configuration is translated through the format-specific translators and written to the target agent's config location on disk. <code>agents</code> covers Claude <code>~/.claude/agents/**/*.md</code>, Cursor <code>~/.cursor/agents/*.md</code>, Codex <code>$CODEX_HOME/agents/*.toml</code>, and the shared Copilot CLI/VS Code <code>~/.copilot/agents/*.agent.md</code> store. The vault is not touched.</p>
 <p><strong>Caveats</strong>:</p>
 <ul>
 <li><code>migrate</code> operates on <strong>local files only</strong>. No vault initialisation is required.</li>
-<li>See <a href="../migrate/">Migrate</a> for the full support matrix per config type, MCP transport translation rules, and per-agent quirks.</li>
+<li>Agent migration rejects hidden entries, source read failures, symbolic-link sources or targets, non-file targets, non-portable filename components, unknown authority fields, duplicate identities, normalized or case-equivalent target collisions, and incompatible existing shared-target ownership before the affected physical batch writes.</li>
+<li>Copilot CLI and VS Code share one physical agent store. Direct agent migration between those aliases is rejected. Without <code>--type</code>, supported non-agent categories are still migrated, agents are skipped with an error, and the command exits 1 after those successful writes. Use <code>--type mcp</code> when only MCP should migrate and the command must exit successfully. <code>--to all</code> writes one shared file; direct targets set <code>target: github-copilot</code> or <code>target: vscode</code>.</li>
+<li>Agent dry-runs perform the same validation and collision preflight as apply. Existing targets are overwritten only after preflight succeeds.</li>
+<li>See <a href="../migrate/">Migrate</a> for the full support matrix, the fail-closed field policy, the 30,000-character shared prompt limit, MCP transport rules, and per-agent paths.</li>
 </ul>
 <h2 id="destroy">destroy<a class="headerlink" href="#destroy" title="Permanent link">&para;</a></h2>
 <p><strong>Why</strong>: Reset vault state when you want to start over — either by removing
