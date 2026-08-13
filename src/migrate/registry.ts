@@ -6,10 +6,10 @@
  * agents requires only new register() calls, not changes to existing translators.
  */
 
-import type { AgentName } from "../agents/registry";
+import type { MigrationAgentName } from "./agent-names";
 import type { ConfigType, Translator } from "./types";
 
-type RegistryKey = `${AgentName}\u2192${AgentName}:${ConfigType}`;
+type RegistryKey = `${MigrationAgentName}\u2192${MigrationAgentName}:${ConfigType}`;
 
 const registry = new Map<RegistryKey, Translator>();
 
@@ -20,7 +20,12 @@ const registry = new Map<RegistryKey, Translator>();
  * @param type - Configuration type to translate.
  * @param fn - Pure function that performs the translation.
  */
-export function register(from: AgentName, to: AgentName, type: ConfigType, fn: Translator): void {
+export function register(
+  from: MigrationAgentName,
+  to: MigrationAgentName,
+  type: ConfigType,
+  fn: Translator,
+): void {
   registry.set(`${from}\u2192${to}:${type}`, fn);
 }
 
@@ -28,7 +33,11 @@ export function register(from: AgentName, to: AgentName, type: ConfigType, fn: T
  * Look up a registered translator for the given migration pair.
  * @returns The translator function, or null if no translator is registered.
  */
-export function getTranslator(from: AgentName, to: AgentName, type: ConfigType): Translator | null {
+export function getTranslator(
+  from: MigrationAgentName,
+  to: MigrationAgentName,
+  type: ConfigType,
+): Translator | null {
   return registry.get(`${from}\u2192${to}:${type}`) ?? null;
 }
 
@@ -39,12 +48,12 @@ export function getTranslator(from: AgentName, to: AgentName, type: ConfigType):
  */
 export function getSupportedPairs(
   type?: ConfigType,
-): Array<{ from: AgentName; to: AgentName; type: ConfigType }> {
+): Array<{ from: MigrationAgentName; to: MigrationAgentName; type: ConfigType }> {
   return [...registry.keys()]
     .filter((k) => !type || k.endsWith(`:${type}`))
     .map((k) => {
       const [pair, t] = k.split(":");
-      const [from, to] = pair.split("\u2192") as [AgentName, AgentName];
+      const [from, to] = pair.split("\u2192") as [MigrationAgentName, MigrationAgentName];
       return { from, to, type: t as ConfigType };
     });
 }
@@ -63,7 +72,7 @@ import { translateMcp } from "./translators/mcp";
 import { translateRule } from "./translators/rules";
 import { translateSkill } from "./translators/skills";
 
-// Global Rules (4 agents: Claude, Cursor, Codex, Copilot — VS Code excluded)
+// Global rules: VS Code excluded.
 register("claude", "cursor", "global-rules", translateGlobalRules.claudeToCursor);
 register("cursor", "claude", "global-rules", translateGlobalRules.cursorToClaude);
 register("claude", "codex", "global-rules", translateGlobalRules.claudeToCodex);
@@ -76,8 +85,16 @@ register("cursor", "copilot", "global-rules", translateGlobalRules.cursorToCopil
 register("copilot", "cursor", "global-rules", translateGlobalRules.copilotToCursor);
 register("codex", "copilot", "global-rules", translateGlobalRules.codexToCopilot);
 register("copilot", "codex", "global-rules", translateGlobalRules.copilotToCodex);
+register("claude", "opencode", "global-rules", translateGlobalRules.claudeToOpenCode);
+register("cursor", "opencode", "global-rules", translateGlobalRules.cursorToOpenCode);
+register("codex", "opencode", "global-rules", translateGlobalRules.codexToOpenCode);
+register("copilot", "opencode", "global-rules", translateGlobalRules.copilotToOpenCode);
+register("opencode", "claude", "global-rules", translateGlobalRules.openCodeToClaude);
+register("opencode", "cursor", "global-rules", translateGlobalRules.openCodeToCursor);
+register("opencode", "codex", "global-rules", translateGlobalRules.openCodeToCodex);
+register("opencode", "copilot", "global-rules", translateGlobalRules.openCodeToCopilot);
 
-// MCP (5 agents: Claude, Cursor, Codex, VS Code, Copilot CLI)
+// MCP: all six migration endpoints.
 register("claude", "cursor", "mcp", translateMcp.claudeToCursor);
 register("claude", "vscode", "mcp", translateMcp.claudeToVsCode);
 register("claude", "codex", "mcp", translateMcp.claudeToCodex);
@@ -98,8 +115,18 @@ register("copilot", "claude", "mcp", translateMcp.copilotToClaude);
 register("copilot", "cursor", "mcp", translateMcp.copilotToCursor);
 register("copilot", "vscode", "mcp", translateMcp.copilotToVsCode);
 register("copilot", "codex", "mcp", translateMcp.copilotToCodex);
+register("claude", "opencode", "mcp", translateMcp.claudeToOpenCode);
+register("cursor", "opencode", "mcp", translateMcp.cursorToOpenCode);
+register("codex", "opencode", "mcp", translateMcp.codexToOpenCode);
+register("copilot", "opencode", "mcp", translateMcp.copilotToOpenCode);
+register("vscode", "opencode", "mcp", translateMcp.vsCodeToOpenCode);
+register("opencode", "claude", "mcp", translateMcp.openCodeToClaude);
+register("opencode", "cursor", "mcp", translateMcp.openCodeToCursor);
+register("opencode", "codex", "mcp", translateMcp.openCodeToCodex);
+register("opencode", "copilot", "mcp", translateMcp.openCodeToCopilot);
+register("opencode", "vscode", "mcp", translateMcp.openCodeToVsCode);
 
-// Commands (4 agents: Claude, Cursor, Codex, Copilot — VS Code excluded)
+// Commands: VS Code excluded.
 register("claude", "cursor", "commands", translateCommand.claudeToCursor);
 register("cursor", "claude", "commands", translateCommand.cursorToClaude);
 register("claude", "codex", "commands", translateCommand.claudeToCodex);
@@ -112,8 +139,15 @@ register("codex", "copilot", "commands", translateCommand.codexToCopilot);
 register("copilot", "claude", "commands", translateCommand.copilotToClaude);
 register("copilot", "cursor", "commands", translateCommand.copilotToCursor);
 register("copilot", "codex", "commands", translateCommand.copilotToCodex);
+register("claude", "opencode", "commands", translateCommand.claudeToOpenCode);
+register("cursor", "opencode", "commands", translateCommand.cursorToOpenCode);
+register("copilot", "opencode", "commands", translateCommand.copilotToOpenCode);
+register("opencode", "claude", "commands", translateCommand.openCodeToClaude);
+register("opencode", "cursor", "commands", translateCommand.openCodeToCursor);
+register("opencode", "codex", "commands", translateCommand.openCodeToCodex);
+register("opencode", "copilot", "commands", translateCommand.openCodeToCopilot);
 
-// Skills (4 skill-bearing agents: Claude, Cursor, Codex, Copilot CLI — VS Code excluded)
+// Skills: VS Code excluded.
 register("claude", "cursor", "skills", translateSkill.claudeToCursor);
 register("claude", "codex", "skills", translateSkill.claudeToCodex);
 register("claude", "copilot", "skills", translateSkill.claudeToCopilot);
@@ -126,6 +160,14 @@ register("codex", "copilot", "skills", translateSkill.codexToCopilot);
 register("copilot", "claude", "skills", translateSkill.copilotToClaude);
 register("copilot", "cursor", "skills", translateSkill.copilotToCursor);
 register("copilot", "codex", "skills", translateSkill.copilotToCodex);
+register("claude", "opencode", "skills", translateSkill.claudeToOpenCode);
+register("cursor", "opencode", "skills", translateSkill.cursorToOpenCode);
+register("codex", "opencode", "skills", translateSkill.codexToOpenCode);
+register("copilot", "opencode", "skills", translateSkill.copilotToOpenCode);
+register("opencode", "claude", "skills", translateSkill.openCodeToClaude);
+register("opencode", "cursor", "skills", translateSkill.openCodeToCursor);
+register("opencode", "codex", "skills", translateSkill.openCodeToCodex);
+register("opencode", "copilot", "skills", translateSkill.openCodeToCopilot);
 
 // Rules (3-way passthrough: Claude, Cursor, Codex — Copilot/VS Code workspace-only)
 register("claude", "cursor", "rules", translateRule.claudeToCursor);
@@ -135,7 +177,7 @@ register("cursor", "codex", "rules", translateRule.cursorToCodex);
 register("codex", "claude", "rules", translateRule.codexToClaude);
 register("codex", "cursor", "rules", translateRule.codexToCursor);
 
-// Agents (4 physical formats; Copilot represents the shared Copilot/VS Code store)
+// Agents: Copilot represents the shared Copilot/VS Code physical store.
 register("claude", "cursor", "agents", translateAgent.claudeToCursor);
 register("claude", "codex", "agents", translateAgent.claudeToCodex);
 register("claude", "copilot", "agents", translateAgent.claudeToCopilot);
@@ -148,3 +190,11 @@ register("codex", "copilot", "agents", translateAgent.codexToCopilot);
 register("copilot", "claude", "agents", translateAgent.copilotToClaude);
 register("copilot", "cursor", "agents", translateAgent.copilotToCursor);
 register("copilot", "codex", "agents", translateAgent.copilotToCodex);
+register("claude", "opencode", "agents", translateAgent.claudeToOpenCode);
+register("cursor", "opencode", "agents", translateAgent.cursorToOpenCode);
+register("codex", "opencode", "agents", translateAgent.codexToOpenCode);
+register("copilot", "opencode", "agents", translateAgent.copilotToOpenCode);
+register("opencode", "claude", "agents", translateAgent.openCodeToClaude);
+register("opencode", "cursor", "agents", translateAgent.openCodeToCursor);
+register("opencode", "codex", "agents", translateAgent.openCodeToCodex);
+register("opencode", "copilot", "agents", translateAgent.openCodeToCopilot);

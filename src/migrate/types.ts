@@ -5,15 +5,15 @@
  * See data-model.md for entity documentation and relationships.
  */
 
-import type { AgentName } from "../agents/registry";
+import type { MigrationAgentName } from "./agent-names";
 
 /** Translatable configuration categories. */
 export type ConfigType = "global-rules" | "mcp" | "commands" | "skills" | "rules" | "agents";
 
 /** Identifies a specific directional translation between two agents for one config type. */
 export interface MigrationPair {
-  from: AgentName;
-  to: AgentName;
+  from: MigrationAgentName;
+  to: MigrationAgentName;
   type: ConfigType;
 }
 

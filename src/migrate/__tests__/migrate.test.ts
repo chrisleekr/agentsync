@@ -5,11 +5,11 @@
  */
 
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
-import { chmodSync, mkdirSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, realpathSync, symlinkSync, writeFileSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, sep } from "node:path";
 import * as TOML from "@iarna/toml";
 import { AgentPaths } from "../../config/paths";
 import { applyMigrated, performMigrate, readSourceArtefacts } from "../migrate";
@@ -37,6 +37,15 @@ const testCursor = AgentPaths.cursor as MutablePaths<"cursor">;
 const testCodex = AgentPaths.codex as MutablePaths<"codex">;
 const testCopilot = AgentPaths.copilot as MutablePaths<"copilot">;
 const testVscode = AgentPaths.vscode as MutablePaths<"vscode">;
+const testOpenCode = AgentPaths.opencode as MutablePaths<"opencode">;
+const OPEN_CODE_ENV_KEYS = [
+  "OPENCODE_CONFIG",
+  "OPENCODE_CONFIG_CONTENT",
+  "OPENCODE_CONFIG_DIR",
+  "OPENCODE_DISABLE_EXTERNAL_SKILLS",
+  "OPENCODE_DISABLE_CLAUDE_CODE",
+  "OPENCODE_DISABLE_CLAUDE_CODE_SKILLS",
+] as const;
 
 let tmpDir: string;
 let origClaude: typeof AgentPaths.claude;
@@ -44,12 +53,18 @@ let origCursor: typeof AgentPaths.cursor;
 let origCodex: typeof AgentPaths.codex;
 let origCopilot: typeof AgentPaths.copilot;
 let origVscode: typeof AgentPaths.vscode;
+let origOpenCode: typeof AgentPaths.opencode;
+let origOpenCodeEnvironment: Record<string, string | undefined>;
 let cursorAgentsDir: string;
 let codexAgentsDir: string;
 let sharedAgentsDir: string;
+let openCodeAgentsDir: string;
 
 beforeEach(() => {
-  tmpDir = join(tmpdir(), `migrate-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+  tmpDir = join(
+    realpathSync(tmpdir()),
+    `migrate-test-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+  );
   mkdirSync(tmpDir, { recursive: true });
 
   // Save originals
@@ -58,6 +73,11 @@ beforeEach(() => {
   origCodex = { ...AgentPaths.codex };
   origCopilot = { ...AgentPaths.copilot };
   origVscode = { ...AgentPaths.vscode };
+  origOpenCode = { ...AgentPaths.opencode };
+  origOpenCodeEnvironment = Object.fromEntries(
+    OPEN_CODE_ENV_KEYS.map((key) => [key, process.env[key]]),
+  );
+  for (const key of OPEN_CODE_ENV_KEYS) delete process.env[key];
 
   // Redirect all agent paths to temp directory
   testClaude.claudeMd = join(tmpDir, "claude", "CLAUDE.md");
@@ -93,6 +113,12 @@ beforeEach(() => {
 
   testVscode.mcpJson = join(tmpDir, "vscode", "mcp.json");
   testVscode.agentsDir = sharedAgentsDir;
+
+  const openCodeDefaultDir = join(tmpDir, "opencode-default");
+  const openCodeOverrideDir = join(tmpDir, "opencode-override");
+  testOpenCode.configDir = openCodeDefaultDir;
+  process.env.OPENCODE_CONFIG_DIR = openCodeOverrideDir;
+  openCodeAgentsDir = join(openCodeOverrideDir, "agents");
 });
 
 afterEach(async () => {
@@ -103,6 +129,12 @@ afterEach(async () => {
   Object.assign(testCodex, origCodex);
   Object.assign(testCopilot, origCopilot);
   Object.assign(testVscode, origVscode);
+  Object.assign(testOpenCode, origOpenCode);
+  for (const key of OPEN_CODE_ENV_KEYS) {
+    const value = origOpenCodeEnvironment[key];
+    if (value === undefined) delete process.env[key];
+    else process.env[key] = value;
+  }
 });
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -408,11 +440,12 @@ describe("performMigrate", () => {
       dryRun: true,
     });
 
-    // Claude has global-rules translators to cursor, codex, copilot (not vscode)
+    // Claude has global-rules translators to cursor, codex, copilot, and OpenCode.
     const migratedTargets = result.migrated.map((m) => m.description);
     expect(migratedTargets.some((d) => d.includes("cursor"))).toBe(true);
     expect(migratedTargets.some((d) => d.includes("codex"))).toBe(true);
     expect(migratedTargets.some((d) => d.includes("copilot"))).toBe(true);
+    expect(migratedTargets.some((d) => d.includes("opencode"))).toBe(true);
     // vscode should be skipped
     const vsSkip = result.skipped.find(
       (s) => s.pair.to === "vscode" && s.pair.type === "global-rules",
@@ -476,17 +509,28 @@ describe("performMigrate", () => {
     expect(parsed.mcpServers.slack).toBeDefined();
   });
 
-  test("Codex TOML merge preserves non-MCP sections", async () => {
+  test("Codex MCP merge preserves unrelated TOML and target-only servers", async () => {
     writeFixture(
       testClaude.mcpJson,
       JSON.stringify({
-        mcpServers: { gh: { command: "gh-mcp", args: [], env: {} } },
+        mcpServers: {
+          gh: { command: "new-gh-mcp", args: ["serve"], env: { SOURCE: "incoming" } },
+        },
       }),
     );
-    // Existing codex config has auth section + existing MCP server
     writeFixture(
       testCodex.configToml,
-      '[auth]\ntoken = "abc"\n\n[mcp.servers.slack]\ncommand = "slack-mcp"\nargs = []\n\n[mcp.servers.slack.env]\n',
+      [
+        "[features]",
+        "experimental = true",
+        "",
+        "[mcp_servers.slack]",
+        'command = "slack-mcp"',
+        "",
+        "[mcp_servers.gh]",
+        'command = "old-gh-mcp"',
+        "",
+      ].join("\n"),
     );
 
     const result = await performMigrate({
@@ -500,11 +544,13 @@ describe("performMigrate", () => {
     const { readIfExists } = await import("../../agents/_utils");
     const written = await readIfExists(testCodex.configToml);
     expect(written).not.toBeNull();
-    // Auth section preserved
-    expect(written).toContain("token");
-    // Both MCP servers present (merged)
-    expect(written).toContain("gh");
-    expect(written).toContain("slack");
+    const parsed = TOML.parse(written as string) as TOML.JsonMap;
+    expect((parsed.features as TOML.JsonMap).experimental).toBe(true);
+    const servers = parsed.mcp_servers as TOML.JsonMap;
+    expect((servers.slack as TOML.JsonMap).command).toBe("slack-mcp");
+    expect((servers.gh as TOML.JsonMap).command).toBe("new-gh-mcp");
+    expect((servers.gh as TOML.JsonMap).args).toEqual(["serve"]);
+    expect((servers.gh as TOML.JsonMap).env).toEqual({ SOURCE: "incoming" });
   });
 
   test("MCP merge preserves JSONC comments and unrelated state in ~/.claude.json", async () => {
@@ -1027,6 +1073,80 @@ describe("performMigrate commands → codex (wraps as SKILL.md)", () => {
     // Did NOT write to legacy rulesDir.
     expect(await Bun.file(join(testCodex.rulesDir, "lint.md")).exists()).toBe(false);
   });
+
+  test("OpenCode command authority aborts the target batch before writing", async () => {
+    const sourceRoot = join(process.env.OPENCODE_CONFIG_DIR as string, "commands");
+    writeFixture(join(sourceRoot, "agent.md"), "---\nagent: plan\n---\n\nPlan.");
+    writeFixture(join(sourceRoot, "subtask.md"), "---\nsubtask: true\n---\n\nDelegate.");
+    writeFixture(join(sourceRoot, "safe.md"), "Review safely.");
+
+    const result = await performMigrate({
+      from: "opencode",
+      to: "claude",
+      type: "commands",
+      dryRun: false,
+    });
+
+    expect(result.migrated).toEqual([]);
+    expect(result.errors.join("\n")).toContain("field 'agent'");
+    expect(result.errors.join("\n")).toContain("field 'subtask'");
+    expect(await Bun.file(join(testClaude.commandsDir, "agent.md")).exists()).toBe(false);
+    expect(await Bun.file(join(testClaude.commandsDir, "subtask.md")).exists()).toBe(false);
+    expect(await Bun.file(join(testClaude.commandsDir, "safe.md")).exists()).toBe(false);
+  });
+
+  test("OpenCode command interpolation mismatch aborts safe siblings before writing", async () => {
+    const sourceRoot = join(process.env.OPENCODE_CONFIG_DIR as string, "commands");
+    writeFixture(join(sourceRoot, "unsafe.md"), "```!\ntouch /tmp/proof\n```");
+    writeFixture(join(sourceRoot, "safe.md"), "Review safely.");
+
+    const result = await performMigrate({
+      from: "opencode",
+      to: "claude",
+      type: "commands",
+      dryRun: false,
+    });
+
+    expect(result.migrated).toEqual([]);
+    expect(result.errors.join("\n")).toContain("different Claude semantics");
+    expect(await Bun.file(join(testClaude.commandsDir, "unsafe.md")).exists()).toBe(false);
+    expect(await Bun.file(join(testClaude.commandsDir, "safe.md")).exists()).toBe(false);
+  });
+
+  test("flattened OpenCode command paths collide before any Codex skill write", async () => {
+    const sourceRoot = join(process.env.OPENCODE_CONFIG_DIR as string, "commands");
+    writeFixture(join(sourceRoot, "a", "b.md"), "Nested command.");
+    writeFixture(join(sourceRoot, "a-b.md"), "Flat command.");
+
+    const result = await performMigrate({
+      from: "opencode",
+      to: "codex",
+      type: "commands",
+      dryRun: false,
+    });
+
+    expect(result.migrated).toEqual([]);
+    expect(result.errors.join("\n")).toContain("Command target path collision");
+    expect(await Bun.file(join(testCodex.userSkillsDir, "a-b", "SKILL.md")).exists()).toBe(false);
+  });
+
+  test("unsafe source-derived command path aborts safe siblings before writing", async () => {
+    const sourceRoot = join(process.env.OPENCODE_CONFIG_DIR as string, "commands");
+    writeFixture(join(sourceRoot, "bad:name.md"), "Unsafe command.");
+    writeFixture(join(sourceRoot, "safe.md"), "Safe command.");
+
+    const result = await performMigrate({
+      from: "opencode",
+      to: "claude",
+      type: "commands",
+      dryRun: false,
+    });
+
+    expect(result.migrated).toEqual([]);
+    expect(result.errors.join("\n")).toContain("Windows-reserved character");
+    expect(await Bun.file(join(testClaude.commandsDir, "bad:name.md")).exists()).toBe(false);
+    expect(await Bun.file(join(testClaude.commandsDir, "safe.md")).exists()).toBe(false);
+  });
 });
 
 // ── Hard-error name-miss (BEHAVIOUR CHANGE) ──────────────────────────────────
@@ -1064,9 +1184,13 @@ describe("performMigrate agents acceptance", () => {
         join(cursorAgentsDir, "reviewer.md"),
         join(codexAgentsDir, "reviewer.toml"),
         join(sharedAgentsDir, "reviewer.agent.md"),
+        join(openCodeAgentsDir, "reviewer.md"),
       ].sort(),
     );
-    expect(new Set(result.migrated.map(({ targetPath }) => targetPath)).size).toBe(3);
+    expect(new Set(result.migrated.map(({ targetPath }) => targetPath)).size).toBe(4);
+    expect(
+      result.migrated.every(({ targetPath }) => targetPath.startsWith(`${tmpDir}${sep}`)),
+    ).toBe(true);
   });
 
   test("C3 writes valid Codex TOML to the documented agent directory", async () => {

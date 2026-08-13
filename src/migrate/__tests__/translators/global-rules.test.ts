@@ -109,4 +109,29 @@ describe("global-rules translators", () => {
     const backToClaude = translateGlobalRules.codexToClaude(toCodex.content);
     expect(backToClaude?.content).toBe(original);
   });
+
+  test.each([
+    "@../secret",
+    "@../../../.ssh/id_rsa",
+  ])("OpenCode → Claude rejects active file import %s", (reference) => {
+    const result = translateGlobalRules.openCodeToClaude(`Read ${reference} before answering.`);
+    expect(result?.skipWrite).toBe(true);
+    expect(result?.content).toBe("");
+    expect(result?.errors?.join("\n")).toContain("file-reference import");
+  });
+
+  test("Claude → OpenCode rejects an active Claude file import", () => {
+    const result = translateGlobalRules.claudeToOpenCode("Read @policy.md before answering.");
+    expect(result?.skipWrite).toBe(true);
+    expect(result?.content).toBe("");
+    expect(result?.errors?.join("\n")).toContain("file import");
+  });
+
+  test.each([
+    ["inline code", "Mention `@policy.md` literally."],
+    ["fenced code", "```text\n@policy.md\n```"],
+  ])("Claude file imports inside %s remain literal", (_caseName, source) => {
+    expect(translateGlobalRules.claudeToOpenCode(source)?.content).toBe(source);
+    expect(translateGlobalRules.openCodeToClaude(source)?.content).toBe(source);
+  });
 });

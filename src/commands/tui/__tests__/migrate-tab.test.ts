@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { KeyEvent } from "@opentui/core";
-import { AGENTS, createInitialState, MIGRATE_TYPES } from "../state";
+import { AGENTS, createInitialState, MIGRATE_AGENTS, MIGRATE_TYPES } from "../state";
 import { createStore } from "../store";
 import { onMigrateKey } from "../tabs/migrate";
 
@@ -57,7 +57,7 @@ describe("onMigrateKey — To: sub-cursor", () => {
   test("← wraps from 0 to last agent", () => {
     const store = seedOn("to");
     onMigrateKey(key("left"), store);
-    expect(store.getState().migrate.toCursor).toBe(AGENTS.length - 1);
+    expect(store.getState().migrate.toCursor).toBe(MIGRATE_AGENTS.length - 1);
   });
 
   test("space toggles toSet at toCursor", () => {
@@ -84,6 +84,10 @@ describe("onMigrateKey — To: sub-cursor", () => {
 });
 
 describe("onMigrateKey — Type: multi-select with sub-cursor", () => {
+  test("exposes OpenCode only in migration agent choices", () => {
+    expect(MIGRATE_AGENTS).toContain("opencode");
+    expect(AGENTS).not.toContain("opencode" as never);
+  });
   test("C1 and C9 surface agents as a selectable migration type", () => {
     expect(MIGRATE_TYPES).toContain("agents");
     expect(MIGRATE_TYPES.filter((type) => type === "agents")).toHaveLength(1);

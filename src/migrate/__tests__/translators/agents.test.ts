@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import * as TOML from "@iarna/toml";
-import { translateAgent } from "../../translators/agents";
+import { inspectAgentSource, translateAgent } from "../../translators/agents";
 
 type Translation = NonNullable<ReturnType<(typeof translateAgent)[keyof typeof translateAgent]>>;
 
@@ -213,6 +213,89 @@ Review code.`;
     );
   });
 
+  test("OpenCode agent restrictions fail closed while explicit nonrestrictions are named losses", () => {
+    expectRejected(
+      translateAgent.openCodeToClaude(
+        "---\ndescription: Reviews\nmode: subagent\ntools:\n  write: false\n---\n\nReview.",
+        "reviewer.md",
+      ),
+      "tools",
+    );
+    expectRejected(
+      translateAgent.openCodeToClaude(
+        "---\ndescription: Reviews\nmode: subagent\ndisable: true\n---\n\nReview.",
+        "reviewer.md",
+      ),
+      "disable",
+    );
+
+    const toolsEnabled = translateAgent.openCodeToClaude(
+      "---\ndescription: Reviews\nmode: subagent\ntools:\n  write: true\n---\n\nReview.",
+      "reviewer.md",
+    );
+    expect(toolsEnabled?.skipWrite).not.toBe(true);
+    expect(toolsEnabled?.warnings?.join("\n")).toContain("tools");
+
+    const enabledAgent = translateAgent.openCodeToClaude(
+      "---\ndescription: Reviews\nmode: subagent\ndisable: false\n---\n\nReview.",
+      "reviewer.md",
+    );
+    expect(enabledAgent?.skipWrite).not.toBe(true);
+    expect(enabledAgent?.warnings?.join("\n")).toContain("disable");
+  });
+
+  test.each([
+    ["tools", "[]", "mapping of boolean values"],
+    ["disable", '"false"', "must be a boolean"],
+    ["steps", "0", "positive integer"],
+    ["maxSteps", "1.5", "positive integer"],
+  ])("rejects malformed OpenCode %s authority", (field, value, message) => {
+    const result = translateAgent.openCodeToClaude(
+      `---\ndescription: Reviews\nmode: subagent\n${field}: ${value}\n---\n\nReview.`,
+      "reviewer.md",
+    );
+    expectRejected(result, message);
+  });
+
+  test.each([
+    "steps",
+    "maxSteps",
+  ])("rejects the OpenCode %s execution bound when the target has no equivalent", (field) => {
+    const result = translateAgent.openCodeToClaude(
+      `---\ndescription: Reviews\nmode: subagent\n${field}: 3\n---\n\nReview.`,
+      "reviewer.md",
+    );
+    expectRejected(result, `authority field '${field}'`);
+  });
+
+  test("maps a validated Claude maxTurns cap to OpenCode steps", () => {
+    const result = translateAgent.claudeToOpenCode(
+      "---\nname: reviewer\ndescription: Reviews\nmaxTurns: 7\n---\n\nReview.",
+      "reviewer.md",
+    );
+    expect(result?.skipWrite).not.toBe(true);
+    expect(frontmatterOf(result?.content ?? "").steps).toBe(7);
+    expect((result?.warnings ?? []).join("\n")).not.toContain("maxTurns");
+  });
+
+  test.each(["0", "1.5", '"7"'])("rejects invalid Claude maxTurns %s", (value) => {
+    const result = translateAgent.claudeToOpenCode(
+      `---\nname: reviewer\ndescription: Reviews\nmaxTurns: ${value}\n---\n\nReview.`,
+      "reviewer.md",
+    );
+    expectRejected(result, "maxTurns");
+    expect(result?.errors?.join("\n")).toContain("positive integer");
+  });
+
+  test("names OpenCode variant as a known non-authority loss", () => {
+    const result = translateAgent.openCodeToClaude(
+      "---\ndescription: Reviews\nmode: subagent\nvariant: high\n---\n\nReview.",
+      "reviewer.md",
+    );
+    expect(result?.skipWrite).not.toBe(true);
+    expect((result?.warnings ?? []).join("\n")).toContain("variant");
+  });
+
   test("C4 rejects unknown tool aliases and unknown fields rather than dropping them", () => {
     expectRejected(
       translateAgent.claudeToCopilot(
@@ -241,6 +324,22 @@ Review code.`;
 });
 
 describe("agents translator identity and shared prompt limits", () => {
+  test("preserves nested OpenCode identities and rejects them for flat targets", () => {
+    const source = "---\ndescription: Reviews code\nmode: subagent\n---\n\nReview carefully.";
+    expect(inspectAgentSource("opencode", source, "teams/reviewer.md").identity).toBe(
+      "teams/reviewer",
+    );
+
+    for (const result of [
+      translateAgent.openCodeToClaude(source, "teams/reviewer.md"),
+      translateAgent.openCodeToCursor(source, "teams/reviewer.md"),
+      translateAgent.openCodeToCodex(source, "teams/reviewer.md"),
+      translateAgent.openCodeToCopilot(source, "teams/reviewer.md"),
+    ]) {
+      expectRejected(result, "target identity is not path-safe");
+    }
+  });
+
   test("C5 applies Claude identity rules without inventing a universal length limit", () => {
     const longName = `review-${"a".repeat(80)}`;
     const result = translateAgent.claudeToCodex(

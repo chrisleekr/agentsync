@@ -197,7 +197,7 @@ Every agent path is resolved through a single resolver that maps `<agent>.<dir>`
 
 ## Cross-agent migration boundary
 
-Cross-agent migration is local-only and separate from encrypted vault snapshots. Custom agents have five logical names but four physical formats because Copilot CLI and VS Code share `~/.copilot/agents/*.agent.md`. The registry contains the 12 directed pairs among Claude, Cursor, Codex, and the shared format; orchestration resolves the VS Code alias and prevents a same-store rewrite.
+Cross-agent migration is local-only and separate from encrypted vault snapshots. Custom agents have six logical names but five physical formats because Copilot CLI and VS Code share `~/.copilot/agents/*.agent.md`. The registry contains the 20 directed pairs among Claude, Cursor, Codex, OpenCode, and the shared format; orchestration resolves the VS Code alias and prevents a same-store rewrite. OpenCode remains outside encrypted vault snapshots until its separate vault adapter is implemented.
 
 <div class="agentsync-darknodes" markdown>
 

@@ -1,14 +1,23 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdirSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, realpathSync, symlinkSync, writeFileSync } from "node:fs";
 import { chmod, readdir, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, sep } from "node:path";
 import { AgentPaths } from "../../config/paths";
 import { applyMigrated, performMigrate, performMigrateTargets } from "../migrate";
 
 const paths = AgentPaths as unknown as Record<string, Record<string, string>>;
+const OPEN_CODE_ENV_KEYS = [
+  "OPENCODE_CONFIG",
+  "OPENCODE_CONFIG_CONTENT",
+  "OPENCODE_CONFIG_DIR",
+  "OPENCODE_DISABLE_EXTERNAL_SKILLS",
+  "OPENCODE_DISABLE_CLAUDE_CODE",
+  "OPENCODE_DISABLE_CLAUDE_CODE_SKILLS",
+] as const;
 let root: string;
 let original: Record<string, Record<string, string>>;
+let originalOpenCodeEnvironment: Record<string, string | undefined>;
 
 function write(path: string, content: string): void {
   mkdirSync(dirname(path), { recursive: true });
@@ -25,18 +34,34 @@ function shared(target?: "github-copilot" | "vscode"): string {
 }
 
 beforeEach(() => {
-  root = join(tmpdir(), `agents-fs-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+  root = join(
+    realpathSync(tmpdir()),
+    `agents-fs-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+  );
   original = structuredClone(paths);
+  originalOpenCodeEnvironment = Object.fromEntries(
+    OPEN_CODE_ENV_KEYS.map((key) => [key, process.env[key]]),
+  );
+  for (const key of OPEN_CODE_ENV_KEYS) delete process.env[key];
   paths.claude.agentsDir = join(root, "claude");
   paths.cursor.agentsDir = join(root, "cursor");
   paths.codex.agentsDir = join(root, "codex");
   paths.copilot.agentsDir = join(root, "shared");
   paths.vscode.agentsDir = paths.copilot.agentsDir;
+  const openCodeDefaultDir = join(root, "opencode-default");
+  const openCodeOverrideDir = join(root, "opencode-override");
+  paths.opencode.configDir = openCodeDefaultDir;
+  process.env.OPENCODE_CONFIG_DIR = openCodeOverrideDir;
 });
 
 afterEach(async () => {
   await rm(root, { recursive: true, force: true });
   for (const [agent, values] of Object.entries(original)) Object.assign(paths[agent], values);
+  for (const key of OPEN_CODE_ENV_KEYS) {
+    const value = originalOpenCodeEnvironment[key];
+    if (value === undefined) delete process.env[key];
+    else process.env[key] = value;
+  }
 });
 
 describe("agent source and static target safety", () => {
@@ -94,6 +119,27 @@ describe("agent source and static target safety", () => {
     expect(result.errors.join("\n")).toContain("real directory");
     expect(result.migrated).toEqual([]);
     expect(await Bun.file(join(outside, "reviewer.md")).exists()).toBe(false);
+  });
+
+  test.each([
+    ["claude", "reviewer.md"],
+    ["cursor", "reviewer.md"],
+    ["codex", "reviewer.toml"],
+    ["copilot", "reviewer.agent.md"],
+    ["vscode", "reviewer.agent.md"],
+  ] as const)("rejects a symlinked ancestor above the %s agent root", async (target, targetName) => {
+    const outside = join(root, `outside-${target}`);
+    const linkedParent = join(root, `linked-${target}`);
+    mkdirSync(outside, { recursive: true });
+    symlinkSync(outside, linkedParent);
+    paths[target].agentsDir = join(linkedParent, "agents");
+
+    for (const dryRun of [true, false]) {
+      await expect(
+        applyMigrated(target, "agents", targetName, claude("reviewer"), dryRun),
+      ).rejects.toThrow(/directory component/);
+      expect(await Bun.file(join(outside, "agents", targetName)).exists()).toBe(false);
+    }
   });
 
   test("rejects symlink and directory destinations without changing another batch file", async () => {
@@ -272,7 +318,11 @@ describe("existing target ownership and collision preflight", () => {
     expect(result.migrated.map(({ targetPath }) => targetPath)).toEqual([
       join(paths.cursor.agentsDir, "reviewer.md"),
       join(paths.codex.agentsDir, "reviewer.toml"),
+      join(root, "opencode-override", "agents", "reviewer.md"),
     ]);
+    expect(result.migrated.every(({ targetPath }) => targetPath.startsWith(`${root}${sep}`))).toBe(
+      true,
+    );
     expect(await Bun.file(destination).text()).toBe(shared("github-copilot"));
   });
 

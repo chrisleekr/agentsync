@@ -2,8 +2,9 @@ import { basename } from "node:path";
 import * as TOML from "@iarna/toml";
 import type { Translator } from "../types";
 
-export type PhysicalAgentFormat = "claude" | "cursor" | "codex" | "copilot";
+export type PhysicalAgentFormat = "claude" | "cursor" | "codex" | "copilot" | "opencode";
 export type SharedAgentTarget = "github-copilot" | "vscode";
+type MarkdownAgentFormat = Exclude<PhysicalAgentFormat, "codex">;
 
 interface ParsedAgent {
   identity: string;
@@ -45,14 +46,7 @@ const CLAUDE_AUTHORITY_FIELDS = [
   "memory",
   "isolation",
 ] as const;
-const CLAUDE_LOSS_FIELDS = [
-  "model",
-  "maxTurns",
-  "initialPrompt",
-  "effort",
-  "background",
-  "color",
-] as const;
+const CLAUDE_LOSS_FIELDS = ["model", "initialPrompt", "effort", "background", "color"] as const;
 
 const CURSOR_FIELDS = new Set(["name", "description", "model", "readonly", "is_background"]);
 const CURSOR_LOSS_FIELDS = ["model", "is_background"] as const;
@@ -85,6 +79,49 @@ const SHARED_FIELDS = new Set([
 ]);
 const SHARED_AUTHORITY_FIELDS = ["mcp-servers", "hooks", "agents"] as const;
 const SHARED_LOSS_FIELDS = ["model", "metadata", "argument-hint", "handoffs"] as const;
+
+const OPENCODE_FIELDS = new Set([
+  "description",
+  "mode",
+  "model",
+  "variant",
+  "temperature",
+  "top_p",
+  "tools",
+  "permission",
+  "hidden",
+  "disable",
+  "color",
+  "steps",
+  "maxSteps",
+]);
+const OPENCODE_LOSS_FIELDS = [
+  "model",
+  "variant",
+  "temperature",
+  "top_p",
+  "hidden",
+  "color",
+] as const;
+
+function markdownAgentVendor(format: MarkdownAgentFormat): string {
+  if (format === "copilot") return "shared Copilot/VS Code";
+  if (format === "opencode") return "OpenCode";
+  return format;
+}
+
+function markdownAgentFields(format: MarkdownAgentFormat): Set<string> {
+  if (format === "claude") return CLAUDE_FIELDS;
+  if (format === "cursor") return CURSOR_FIELDS;
+  if (format === "opencode") return OPENCODE_FIELDS;
+  return SHARED_FIELDS;
+}
+
+function targetVendor(format: PhysicalAgentFormat): string {
+  if (format === "codex") return "Codex";
+  if (format === "opencode") return "OpenCode";
+  return "Shared Copilot/VS Code";
+}
 
 function rejected(sourceName: string, errors: string[]) {
   return {
@@ -156,7 +193,7 @@ function validateSourceName(format: PhysicalAgentFormat, sourceName: string): st
   if (segments.some((segment) => segment.startsWith("."))) {
     return ["Source path contains a hidden segment"];
   }
-  if (format !== "claude" && segments.length !== 1) {
+  if (format !== "claude" && format !== "opencode" && segments.length !== 1) {
     return [`${format} agents must be direct children of their user directory`];
   }
   const expectedExtension =
@@ -181,6 +218,7 @@ export function portableFilenameError(name: string, subject: string): string | u
 }
 
 function sourceStem(format: PhysicalAgentFormat, sourceName: string): string {
+  if (format === "opencode") return sourceName.slice(0, -".md".length);
   const filename = basename(sourceName);
   if (format === "copilot") return filename.slice(0, -".agent.md".length);
   if (format === "codex") return filename.slice(0, -".toml".length);
@@ -188,7 +226,7 @@ function sourceStem(format: PhysicalAgentFormat, sourceName: string): string {
 }
 
 function parseMarkdownAgent(
-  format: "claude" | "cursor" | "copilot",
+  format: MarkdownAgentFormat,
   content: string,
   sourceName: string,
 ): ParseResult {
@@ -196,16 +234,16 @@ function parseMarkdownAgent(
   const parsed = splitFrontmatter(content);
   if ("error" in parsed) return { agent: null, errors: [...nameErrors, parsed.error] };
 
-  const vendor = format === "copilot" ? "shared Copilot/VS Code" : format;
-  const known =
-    format === "claude" ? CLAUDE_FIELDS : format === "cursor" ? CURSOR_FIELDS : SHARED_FIELDS;
+  const vendor = markdownAgentVendor(format);
+  const known = markdownAgentFields(format);
   const errors = [...nameErrors, ...unknownFieldErrors(parsed.fields, known, vendor)];
   let identity: string;
   if (format === "claude") {
     identity = requiredString(parsed.fields, "name", vendor, errors);
-  } else if (format === "copilot") {
+  } else if (format === "copilot" || format === "opencode") {
     identity = sourceStem(format, sourceName);
     if (
+      format === "copilot" &&
       parsed.fields.name !== undefined &&
       (typeof parsed.fields.name !== "string" || !parsed.fields.name.trim())
     ) {
@@ -219,7 +257,8 @@ function parseMarkdownAgent(
     errors.push(`${vendor} agent optional 'name' field must be a non-empty string`);
     identity = sourceStem(format, sourceName);
   }
-  const logicalIdentity = format === "copilot" ? sourceStem(format, sourceName) : identity;
+  const logicalIdentity =
+    format === "copilot" || format === "opencode" ? sourceStem(format, sourceName) : identity;
   let description = "";
   if (format === "cursor" && parsed.fields.description === undefined) {
     description = "";
@@ -229,6 +268,13 @@ function parseMarkdownAgent(
 
   if (format === "claude" && identity && !/^[a-z][a-z-]*$/.test(identity)) {
     errors.push("Claude agent 'name' must use lowercase letters and hyphens");
+  }
+  if (
+    format === "claude" &&
+    parsed.fields.maxTurns !== undefined &&
+    (!Number.isSafeInteger(parsed.fields.maxTurns) || (parsed.fields.maxTurns as number) <= 0)
+  ) {
+    errors.push("Claude agent 'maxTurns' must be a positive integer");
   }
   if (format === "cursor" && identity && !/^[a-z][a-z-]*$/.test(identity)) {
     errors.push("Cursor agent identity must use lowercase letters and hyphens");
@@ -255,6 +301,34 @@ function parseMarkdownAgent(
   }
   if (format === "copilot" && Array.from(parsed.body).length > 30_000) {
     errors.push("Shared agent prompt exceeds the 30,000-character maximum");
+  }
+  if (format === "opencode") {
+    if (parsed.fields.mode !== "subagent") {
+      errors.push("OpenCode agent 'mode' must be 'subagent' for cross-agent migration");
+    }
+    if (parsed.fields.hidden !== undefined && typeof parsed.fields.hidden !== "boolean") {
+      errors.push("OpenCode agent 'hidden' must be a boolean");
+    }
+    if (parsed.fields.disable !== undefined && typeof parsed.fields.disable !== "boolean") {
+      errors.push("OpenCode agent 'disable' must be a boolean");
+    }
+    if (parsed.fields.tools !== undefined) {
+      if (
+        !isRecord(parsed.fields.tools) ||
+        Object.values(parsed.fields.tools).some((value) => typeof value !== "boolean")
+      ) {
+        errors.push("OpenCode agent 'tools' must be a mapping of boolean values");
+      }
+    }
+    if (parsed.fields.permission !== undefined && !isRecord(parsed.fields.permission)) {
+      errors.push("OpenCode agent 'permission' must be a mapping");
+    }
+    for (const field of ["steps", "maxSteps"] as const) {
+      const value = parsed.fields[field];
+      if (value !== undefined && (!Number.isSafeInteger(value) || (value as number) <= 0)) {
+        errors.push(`OpenCode agent '${field}' must be a positive integer`);
+      }
+    }
   }
 
   return {
@@ -398,6 +472,10 @@ function presentFields(fields: Record<string, unknown>, names: readonly string[]
   return names.filter((name) => fields[name] !== undefined);
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
 function lossWarnings(fields: Record<string, unknown>, names: readonly string[]): string[] {
   const lost = presentFields(fields, names);
   return lost.length > 0 ? [`Dropped known non-authority field(s): ${lost.join(", ")}`] : [];
@@ -452,6 +530,7 @@ function translate(
   const { fields } = parsed.agent;
   let mappedTools: string[] | undefined;
   let readonly = false;
+  let executionSteps: number | undefined;
 
   if (from === "claude") {
     for (const field of presentFields(fields, CLAUDE_AUTHORITY_FIELDS)) {
@@ -464,6 +543,10 @@ function translate(
       } else {
         errors.push(`Claude authority field 'tools' has no verified mapping to ${to}`);
       }
+    }
+    if (fields.maxTurns !== undefined) {
+      if (to === "opencode") executionSteps = fields.maxTurns as number;
+      else warnings.push("Dropped known non-authority field(s): maxTurns");
     }
     warnings.push(...lossWarnings(fields, CLAUDE_LOSS_FIELDS));
   }
@@ -513,13 +596,35 @@ function translate(
     }
   }
 
+  if (from === "opencode") {
+    if (fields.permission !== undefined) {
+      errors.push(`OpenCode authority field 'permission' has no verified mapping to ${to}`);
+    }
+    if (isRecord(fields.tools)) {
+      const restricted = Object.entries(fields.tools).filter(([, enabled]) => enabled === false);
+      if (restricted.length > 0) {
+        errors.push(`OpenCode authority field 'tools' has no verified mapping to ${to}`);
+      } else {
+        warnings.push("Dropped known non-authority field(s): tools");
+      }
+    }
+    if (fields.disable === true) {
+      errors.push(`OpenCode authority field 'disable' has no verified mapping to ${to}`);
+    } else if (fields.disable === false) {
+      warnings.push("Dropped known non-authority field(s): disable");
+    }
+    for (const field of ["steps", "maxSteps"] as const) {
+      if (fields[field] !== undefined) {
+        errors.push(`OpenCode authority field '${field}' has no verified mapping to ${to}`);
+      }
+    }
+    warnings.push(...lossWarnings(fields, OPENCODE_LOSS_FIELDS));
+  }
+
   const targetIdentity =
     to === "claude" || to === "cursor"
       ? normalizeHyphenIdentity(parsed.agent.identity, to)
-      : safeUnconstrainedIdentity(
-          parsed.agent.identity,
-          to === "codex" ? "Codex" : "Shared Copilot/VS Code",
-        );
+      : safeUnconstrainedIdentity(parsed.agent.identity, targetVendor(to));
   if (targetIdentity.error) errors.push(targetIdentity.error);
   if (!parsed.agent.description && from === "cursor") {
     errors.push(`${to} target requires a description that the Cursor source does not define`);
@@ -530,6 +635,20 @@ function translate(
   if (errors.length > 0) return rejected(sourceName, errors);
 
   const identity = targetIdentity.value;
+  if (to === "opencode") {
+    return {
+      content: serializeMarkdown(
+        {
+          description: parsed.agent.description,
+          mode: "subagent",
+          ...(executionSteps !== undefined ? { steps: executionSteps } : {}),
+        },
+        parsed.agent.instructions,
+      ),
+      targetName: `${identity}.md`,
+      warnings: warnings.length > 0 ? warnings : undefined,
+    };
+  }
   if (to === "codex") {
     const targetFields: TOML.JsonMap = {
       name: identity,
@@ -611,4 +730,12 @@ export const translateAgent = {
   copilotToClaude: makeTranslator("copilot", "claude"),
   copilotToCursor: makeTranslator("copilot", "cursor"),
   copilotToCodex: makeTranslator("copilot", "codex"),
+  claudeToOpenCode: makeTranslator("claude", "opencode"),
+  cursorToOpenCode: makeTranslator("cursor", "opencode"),
+  codexToOpenCode: makeTranslator("codex", "opencode"),
+  copilotToOpenCode: makeTranslator("copilot", "opencode"),
+  openCodeToClaude: makeTranslator("opencode", "claude"),
+  openCodeToCursor: makeTranslator("opencode", "cursor"),
+  openCodeToCodex: makeTranslator("opencode", "codex"),
+  openCodeToCopilot: makeTranslator("opencode", "copilot"),
 } as const;

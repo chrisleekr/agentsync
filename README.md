@@ -83,7 +83,7 @@ The full quickstart, command reference, and architecture model live at the docum
 | `key` | Add, list, or remove recipients (revocation), or rotate the local machine key. |
 | `config` | View or change vault config: agents enabled and secret-handling policy. |
 | `skill` | Remove a skill from the vault explicitly. |
-| `migrate` | Translate configuration between agent formats locally. |
+| `migrate` | Translate configuration between Claude, Cursor, Codex, Copilot, VS Code, and OpenCode formats locally. OpenCode is migration-only; it is not yet a vault adapter. |
 | `destroy` | Wipe the local vault clone (default) or the remote vault contents via a normal commit. **Local agent files (`~/.claude`, `~/.cursor`, …) are never touched.** |
 
 Full flag tables and caveats: [Commands](https://chrisleekr.github.io/agentsync/commands/).
@@ -94,7 +94,7 @@ The full documentation is hosted at <https://chrisleekr.github.io/agentsync/> an
 
 - **[Architecture](./docs/architecture.md)** — system model, push and copy pipelines, security boundaries.
 - **[Commands](./docs/commands.md)** — every subcommand, flag, outcome, and caveat.
-- **[Migrate](./docs/migrate.md)** — translate config between Claude, Cursor, Codex, Copilot, and VS Code.
+- **[Migrate](./docs/migrate.md)** — translate config between Claude, Cursor, Codex, Copilot, VS Code, and OpenCode.
 - **[Operations](./docs/operations.md)** — key rotation, troubleshooting catalogue.
 - **[Contributing](./docs/contributing.md)** — develop from source, run the test suite, release discipline, doc ownership.
 

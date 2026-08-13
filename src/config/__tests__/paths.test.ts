@@ -1,7 +1,14 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { homedir } from "node:os";
-import { isAbsolute, join } from "node:path";
-import { AgentPaths, resolveAgentSyncHome, resolveWindowsAppData } from "../paths";
+import { isAbsolute, join, resolve } from "node:path";
+import {
+  AgentPaths,
+  resolveAgentSyncHome,
+  resolveOpenCodeConfigDirs,
+  resolveOpenCodeConfigFiles,
+  resolveOpenCodeWriteDir,
+  resolveWindowsAppData,
+} from "../paths";
 
 // AgentPaths shape validation (non-mutable, import-time baked paths)
 
@@ -84,6 +91,38 @@ describe("paths", () => {
     const sharedAgentsDir = join(HOME, ".copilot", "agents");
     expect(AgentPaths.copilot.agentsDir).toBe(sharedAgentsDir);
     expect(AgentPaths.vscode.agentsDir).toBe(sharedAgentsDir);
+  });
+
+  test("resolves OpenCode's additive config directories and file precedence", () => {
+    const rawBase = join("/tmp", "opencode-default");
+    const rawOverride = join("/tmp", "opencode-override");
+    const base = resolve(rawBase);
+    const override = resolve(rawOverride);
+    const env = { OPENCODE_CONFIG_DIR: rawOverride };
+    expect(resolveOpenCodeConfigDirs(env, rawBase)).toEqual([base, override]);
+    expect(resolveOpenCodeWriteDir(env, rawBase)).toBe(override);
+    expect(resolveOpenCodeConfigFiles(env, rawBase)).toEqual([
+      join(base, "config.json"),
+      join(base, "opencode.json"),
+      join(base, "opencode.jsonc"),
+      join(override, "opencode.json"),
+      join(override, "opencode.jsonc"),
+    ]);
+  });
+
+  test("preserves a whitespace-bearing OpenCode config directory literally", () => {
+    const rawBase = join("/tmp", "opencode-default");
+    const override = "  opencode override  ";
+    expect(resolveOpenCodeConfigDirs({ OPENCODE_CONFIG_DIR: override }, rawBase)).toEqual([
+      resolve(rawBase),
+      resolve(override),
+    ]);
+  });
+
+  test("keeps only the dynamic OpenCode config root outside the vault adapters", () => {
+    const configBase = process.env.XDG_CONFIG_HOME?.trim() || join(HOME, ".config");
+    expect(Object.keys(AgentPaths.opencode)).toEqual(["configDir"]);
+    expect(AgentPaths.opencode.configDir).toBe(join(configBase, "opencode"));
   });
 
   // Claude plugin state files — distilled into the reinstall manifest.

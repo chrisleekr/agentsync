@@ -1,12 +1,12 @@
 import type { CliRenderer, KeyEvent } from "@opentui/core";
 import { BoxRenderable, TextRenderable } from "@opentui/core";
+import type { MigrationAgentName } from "../../../migrate/agent-names";
 import { performMigrateTargets } from "../../../migrate/migrate";
 import type { MigrateResult } from "../../../migrate/types";
 import {
-  AGENTS,
-  type AgentName,
   type AppState,
   type ConfigType,
+  MIGRATE_AGENTS,
   MIGRATE_TYPES,
   type MigrateField,
   migrateSignature,
@@ -34,8 +34,8 @@ export function renderMigrate(renderer: CliRenderer, host: BoxRenderable, state:
   const subMark = (active: boolean, focused: boolean) =>
     active && focused ? "›" : active ? " " : " ";
 
-  const fromRow = `${focusMark("from")}  From:  ${AGENTS.map((a) => `${subMark(m.field === "from", a === m.from)}${radio(a === m.from)} ${a}`).join("  ")}`;
-  const toRow = `${focusMark("to")}  To:    ${AGENTS.map((a, i) => `${subMark(m.field === "to", i === m.toCursor)}${check(m.toSet.has(a))} ${a}`).join("  ")}`;
+  const fromRow = `${focusMark("from")}  From:  ${MIGRATE_AGENTS.map((a) => `${subMark(m.field === "from", a === m.from)}${radio(a === m.from)} ${a}`).join("  ")}`;
+  const toRow = `${focusMark("to")}  To:    ${MIGRATE_AGENTS.map((a, i) => `${subMark(m.field === "to", i === m.toCursor)}${check(m.toSet.has(a))} ${a}`).join("  ")}`;
   const typeRow = `${focusMark("type")}  Type:  ${MIGRATE_TYPES.map((t, i) => `${subMark(m.field === "type", i === m.typeCursor)}${check(m.typeSet.has(t))} ${t}`).join("  ")}`;
 
   const sig = migrateSignature(m);
@@ -181,8 +181,9 @@ function moveSubCursorOrCycle(store: Store, forward: boolean): boolean {
   switch (m.field) {
     case "from": {
       store.dispatch((d) => {
-        const i = AGENTS.indexOf(d.migrate.from);
-        d.migrate.from = AGENTS[(i + (forward ? 1 : -1) + AGENTS.length) % AGENTS.length];
+        const i = MIGRATE_AGENTS.indexOf(d.migrate.from);
+        d.migrate.from =
+          MIGRATE_AGENTS[(i + (forward ? 1 : -1) + MIGRATE_AGENTS.length) % MIGRATE_AGENTS.length];
         d.migrate.previewKey = null;
       });
       return true;
@@ -190,7 +191,7 @@ function moveSubCursorOrCycle(store: Store, forward: boolean): boolean {
     case "to": {
       store.dispatch((d) => {
         d.migrate.toCursor =
-          (d.migrate.toCursor + (forward ? 1 : -1) + AGENTS.length) % AGENTS.length;
+          (d.migrate.toCursor + (forward ? 1 : -1) + MIGRATE_AGENTS.length) % MIGRATE_AGENTS.length;
       });
       return true;
     }
@@ -230,7 +231,7 @@ function moveSubCursorOrCycle(store: Store, forward: boolean): boolean {
 function toggleAtSubCursor(store: Store): boolean {
   const m = store.getState().migrate;
   if (m.field === "to") {
-    const target = AGENTS[m.toCursor];
+    const target = MIGRATE_AGENTS[m.toCursor];
     if (!target) return true;
     store.dispatch((d) => {
       if (d.migrate.toSet.has(target)) d.migrate.toSet.delete(target);
@@ -253,8 +254,8 @@ function toggleAtSubCursor(store: Store): boolean {
 }
 
 interface MigrateSelectionSnapshot {
-  from: AgentName;
-  toSet: Set<AgentName>;
+  from: MigrationAgentName;
+  toSet: Set<MigrationAgentName>;
   typeSet: Set<ConfigType>;
 }
 

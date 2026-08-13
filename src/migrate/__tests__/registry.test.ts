@@ -57,19 +57,23 @@ describe("getTranslator", () => {
     expect(getTranslator("claude", "vscode", "agents")).toBeNull();
     expect(getTranslator("claude", "copilot", "agents")).toBeFunction();
   });
+
+  test("keeps Codex commands target-only", () => {
+    expect(getTranslator("codex", "opencode", "commands")).toBeNull();
+  });
 });
 
 describe("getSupportedPairs", () => {
   test("returns all pairs when no type filter is given", () => {
     const pairs = getSupportedPairs();
     expect(pairs.length).toBeGreaterThan(0);
-    // Existing 62 pairs plus 12 directed pairs among four physical agent formats.
-    expect(pairs.length).toBe(74);
+    // Existing 74 pairs plus 41 OpenCode migration-only pairs.
+    expect(pairs.length).toBe(115);
   });
 
   test("filters by config type", () => {
     const mcpPairs = getSupportedPairs("mcp");
-    expect(mcpPairs.length).toBe(20);
+    expect(mcpPairs.length).toBe(30);
     for (const p of mcpPairs) {
       expect(p.type).toBe("mcp");
     }
@@ -77,7 +81,7 @@ describe("getSupportedPairs", () => {
 
   test("filters by config type for skills", () => {
     const skillPairs = getSupportedPairs("skills");
-    expect(skillPairs.length).toBe(12);
+    expect(skillPairs.length).toBe(20);
   });
 
   test("filters by config type for rules", () => {
@@ -85,14 +89,16 @@ describe("getSupportedPairs", () => {
     expect(rulePairs.length).toBe(6);
   });
 
-  test("C1 exposes exactly 12 directed physical-format agents pairs", () => {
+  test("exposes 20 directed pairs among five physical migration formats", () => {
     const agentPairs = getSupportedPairs("agents");
-    expect(agentPairs).toHaveLength(12);
-    expect(new Set(agentPairs.map(({ from, to }) => `${from}→${to}`)).size).toBe(12);
+    expect(agentPairs).toHaveLength(20);
+    expect(new Set(agentPairs.map(({ from, to }) => `${from}→${to}`)).size).toBe(20);
     expect(agentPairs.every(({ from, to }) => from !== to)).toBe(true);
     expect(agentPairs.some(({ from, to }) => from === "claude" && to === "copilot")).toBe(true);
     expect(agentPairs.some(({ from, to }) => from === "copilot" && to === "codex")).toBe(true);
     expect(agentPairs.some(({ from, to }) => from === "vscode" || to === "vscode")).toBe(false);
+    expect(agentPairs.some(({ from, to }) => from === "opencode" && to === "claude")).toBe(true);
+    expect(agentPairs.some(({ from, to }) => from === "claude" && to === "opencode")).toBe(true);
   });
 
   test("returns correct from/to for a known pair", () => {
