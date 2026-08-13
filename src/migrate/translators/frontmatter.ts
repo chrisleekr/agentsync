@@ -27,7 +27,10 @@ export interface Frontmatter {
   hasFrontmatter: boolean;
 }
 
-export type StructuredFrontmatter = { fields: Record<string, unknown> } | { error: string } | null;
+export type StructuredFrontmatter =
+  | { fields: Record<string, unknown> }
+  | { error: string; code: "malformed" | "not-a-mapping" }
+  | null;
 
 const FRONTMATTER_OPEN = /^---\s*\r?\n/;
 
@@ -82,15 +85,18 @@ export function parseFrontmatter(input: string): Frontmatter {
 export function parseStructuredFrontmatter(input: string): StructuredFrontmatter {
   if (!FRONTMATTER_OPEN.test(input)) return null;
   const match = input.match(/^---\s*\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/);
-  if (!match) return { error: "opening or closing marker is missing" };
+  if (!match) return { error: "opening or closing marker is missing", code: "malformed" };
   try {
     const fields = Bun.YAML.parse(match[1] ?? "");
     if (!fields || typeof fields !== "object" || Array.isArray(fields)) {
-      return { error: "expected a mapping" };
+      return { error: "expected a mapping", code: "not-a-mapping" };
     }
     return { fields: fields as Record<string, unknown> };
   } catch (error) {
-    return { error: error instanceof Error ? error.message : String(error) };
+    return {
+      error: error instanceof Error ? error.message : String(error),
+      code: "malformed",
+    };
   }
 }
 

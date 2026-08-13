@@ -84,7 +84,7 @@ export function openCodeSkillContractErrors(content: string, targetName: string)
   const parsed = parseStructuredFrontmatter(content.trim());
   if (!parsed) return ["OpenCode skill requires YAML frontmatter"];
   if ("error" in parsed) {
-    return parsed.error === "expected a mapping"
+    return parsed.code === "not-a-mapping"
       ? ["OpenCode skill frontmatter must be a mapping"]
       : [`OpenCode skill has invalid YAML frontmatter: ${parsed.error}`];
   }
@@ -140,7 +140,7 @@ const openCodeSkillTarget: Translator = (content, sourceName) => {
   };
 };
 
-const claudeSkillTarget: Translator = (content, sourceName) => {
+const claudeToOpenCodeSkill: Translator = (content, sourceName) => {
   const translated = openCodeSkillTarget(content, sourceName);
   if (!translated || translated.skipWrite) return translated;
   const { body } = parseFrontmatter(content.trim());
@@ -218,7 +218,7 @@ export const translateSkill = {
   copilotToClaude: passthroughSkill,
   copilotToCursor: passthroughSkill,
   copilotToCodex: passthroughSkill,
-  claudeToOpenCode: claudeSkillTarget,
+  claudeToOpenCode: claudeToOpenCodeSkill,
   cursorToOpenCode: openCodeSkillTarget,
   codexToOpenCode: openCodeSkillTarget,
   copilotToOpenCode: openCodeSkillTarget,

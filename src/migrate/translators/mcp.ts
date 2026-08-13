@@ -1201,6 +1201,8 @@ function codexTimeoutSeconds(server: McpServer, warnings: string[]): number | un
 
 const EXACT_OPEN_CODE_ENV_REFERENCE = /^\{env:([^}]+)\}$/;
 const OPEN_CODE_BEARER_ENV_REFERENCE = /^Bearer[ \t]+\{env:([^}]+)\}$/i;
+const EXACT_VS_CODE_ENV_REFERENCE = /^\$\{env:([^}]+)\}$/;
+const VS_CODE_BEARER_ENV_REFERENCE = /^Bearer[ \t]+\$\{env:([^}]+)\}$/i;
 
 interface CodexHeaders {
   static?: Record<string, string>;
@@ -1213,7 +1215,7 @@ function projectCodexHeaders(
   source: McpModel["source"],
   warnings: string[],
 ): CodexHeaders {
-  if (source !== "opencode") {
+  if (source !== "opencode" && source !== "vscode") {
     return {
       static: server.headers,
       environment: server.envHeaders,
@@ -1227,13 +1229,19 @@ function projectCodexHeaders(
   let converted = false;
 
   for (const [name, value] of Object.entries(server.headers ?? {})) {
-    if (containsOpenCodeReference(name)) {
+    const nameHasReference =
+      source === "opencode" ? containsOpenCodeReference(name) : VS_CODE_VARIABLE.test(name);
+    if (nameHasReference) {
       throw new McpValidationError(
-        `Server "${server.name}": a header name contains OpenCode configuration-reference syntax with no Codex equivalent`,
+        `Server "${server.name}": a header name contains ${source === "opencode" ? "OpenCode configuration-reference" : "VS Code variable"} syntax with no Codex equivalent`,
       );
     }
     const bearer =
-      name.toLowerCase() === "authorization" ? OPEN_CODE_BEARER_ENV_REFERENCE.exec(value) : null;
+      name.toLowerCase() === "authorization"
+        ? source === "opencode"
+          ? OPEN_CODE_BEARER_ENV_REFERENCE.exec(value)
+          : VS_CODE_BEARER_ENV_REFERENCE.exec(value)
+        : null;
     if (bearer) {
       assertEnvironmentVariableName(server.name, bearer[1] as string);
       bearerTokenEnvVar = bearer[1];
@@ -1241,7 +1249,10 @@ function projectCodexHeaders(
       continue;
     }
 
-    const environment = EXACT_OPEN_CODE_ENV_REFERENCE.exec(value);
+    const environment =
+      source === "opencode"
+        ? EXACT_OPEN_CODE_ENV_REFERENCE.exec(value)
+        : EXACT_VS_CODE_ENV_REFERENCE.exec(value);
     if (environment) {
       assertEnvironmentVariableName(server.name, environment[1] as string);
       environmentHeaders[name] = environment[1] as string;
@@ -1249,9 +1260,11 @@ function projectCodexHeaders(
       continue;
     }
 
-    if (containsOpenCodeReference(value)) {
+    const valueHasReference =
+      source === "opencode" ? containsOpenCodeReference(value) : VS_CODE_VARIABLE.test(value);
+    if (valueHasReference) {
       throw new McpValidationError(
-        `Server "${server.name}": header "${name}" contains OpenCode configuration-reference syntax with no exact Codex equivalent`,
+        `Server "${server.name}": header "${name}" contains ${source === "opencode" ? "OpenCode configuration-reference" : "VS Code variable"} syntax with no exact Codex equivalent`,
       );
     }
     staticHeaders[name] = value;
@@ -1259,7 +1272,7 @@ function projectCodexHeaders(
 
   if (converted) {
     warnings.push(
-      `Server "${server.name}": converted OpenCode environment-backed HTTP headers to Codex environment fields; missing or empty variables have different runtime behavior.`,
+      `Server "${server.name}": converted ${source === "opencode" ? "OpenCode" : "VS Code"} environment-backed HTTP headers to Codex environment fields; missing or empty variables can have different runtime behavior.`,
     );
   }
   return {
@@ -1553,6 +1566,21 @@ function serializeCodexOpenCodeMcp(model: McpModel): { content: string; warnings
 type ParseFn = (raw: string) => McpModel;
 type SerializeFn = (model: McpModel) => { content: string; warnings: string[] };
 
+function withParseDiagnostics(parse: ParseFn, format: "JSON" | "TOML"): ParseFn {
+  return (raw) => {
+    try {
+      return parse(raw);
+    } catch (error) {
+      const isParserError =
+        error instanceof SyntaxError || (error instanceof Error && error.name === "TomlError");
+      if (isParserError) {
+        throw new McpValidationError(`MCP source document must contain valid ${format}`);
+      }
+      throw error;
+    }
+  };
+}
+
 function errorResult(error: unknown, targetName: string): ReturnType<Translator> {
   if (!(error instanceof McpValidationError)) return null;
   return { content: "", targetName, errors: [error.message], skipWrite: true };
@@ -1589,6 +1617,14 @@ const toMcpServers = (parse: ParseFn) =>
 const toCodex = (parse: ParseFn) => translateTo(parse, serializeCodexMcp, "config.toml");
 const toOpenCode = (parse: ParseFn) => translateTo(parse, serializeOpenCodeMcp, "opencode.json");
 
+const parseMcpServersJsonWithDiagnostics = withParseDiagnostics(parseMcpServersJson, "JSON");
+const parseCopilotOpenCodeMcpWithDiagnostics = withParseDiagnostics(
+  parseCopilotOpenCodeMcp,
+  "JSON",
+);
+const parseCodexMcpWithDiagnostics = withParseDiagnostics(parseCodexMcp, "TOML");
+const parseOpenCodeMcpWithDiagnostics = withParseDiagnostics(parseOpenCodeMcp, "JSON");
+
 export const translateMcp = {
   claudeToCursor: toMcpServers(parseMcpServersJson),
   claudeToVsCode: toVsCode(parseMcpServersJson),
@@ -1610,14 +1646,22 @@ export const translateMcp = {
   copilotToCursor: toMcpServers(parseMcpServersJson),
   copilotToVsCode: toVsCode(parseMcpServersJson),
   copilotToCodex: toCodex(parseMcpServersJson),
-  claudeToOpenCode: toOpenCode(parseMcpServersJson),
-  cursorToOpenCode: toOpenCode(parseMcpServersJson),
-  codexToOpenCode: translateTo(parseCodexMcp, serializeCodexOpenCodeMcp, "opencode.json"),
-  copilotToOpenCode: toOpenCode(parseCopilotOpenCodeMcp),
+  claudeToOpenCode: toOpenCode(parseMcpServersJsonWithDiagnostics),
+  cursorToOpenCode: toOpenCode(parseMcpServersJsonWithDiagnostics),
+  codexToOpenCode: translateTo(
+    parseCodexMcpWithDiagnostics,
+    serializeCodexOpenCodeMcp,
+    "opencode.json",
+  ),
+  copilotToOpenCode: toOpenCode(parseCopilotOpenCodeMcpWithDiagnostics),
   vsCodeToOpenCode: toOpenCode(parseVsCodeMcp),
-  openCodeToClaude: toMcpServers(parseOpenCodeMcp),
-  openCodeToCursor: toMcpServers(parseOpenCodeMcp),
-  openCodeToCodex: toCodex(parseOpenCodeMcp),
-  openCodeToCopilot: translateTo(parseOpenCodeMcp, serializeOpenCodeCopilotMcp, "mcp.json"),
-  openCodeToVsCode: toVsCode(parseOpenCodeMcp),
+  openCodeToClaude: toMcpServers(parseOpenCodeMcpWithDiagnostics),
+  openCodeToCursor: toMcpServers(parseOpenCodeMcpWithDiagnostics),
+  openCodeToCodex: toCodex(parseOpenCodeMcpWithDiagnostics),
+  openCodeToCopilot: translateTo(
+    parseOpenCodeMcpWithDiagnostics,
+    serializeOpenCodeCopilotMcp,
+    "mcp.json",
+  ),
+  openCodeToVsCode: toVsCode(parseOpenCodeMcpWithDiagnostics),
 };

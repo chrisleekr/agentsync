@@ -1130,6 +1130,23 @@ describe("performMigrate commands → codex (wraps as SKILL.md)", () => {
     expect(await Bun.file(join(testCodex.userSkillsDir, "a-b", "SKILL.md")).exists()).toBe(false);
   });
 
+  test("unsafe OpenCode command name is reported by the combined Codex preflight", async () => {
+    const sourceRoot = join(process.env.OPENCODE_CONFIG_DIR as string, "commands");
+    writeFixture(join(sourceRoot, "bad:name.md"), "Unsafe command.");
+
+    const result = await performMigrate({
+      from: "opencode",
+      to: "codex",
+      dryRun: false,
+    });
+
+    expect(result.migrated).toEqual([]);
+    expect(result.errors.join("\n")).toContain("Windows-reserved character");
+    expect(await Bun.file(join(testCodex.userSkillsDir, "bad:name", "SKILL.md")).exists()).toBe(
+      false,
+    );
+  });
+
   test("unsafe source-derived command path aborts safe siblings before writing", async () => {
     const sourceRoot = join(process.env.OPENCODE_CONFIG_DIR as string, "commands");
     writeFixture(join(sourceRoot, "bad:name.md"), "Unsafe command.");

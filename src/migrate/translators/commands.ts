@@ -149,7 +149,7 @@ const OPEN_CODE_TARGET_COMMAND_AUTHORITY = new Set([
 ]);
 
 const OPEN_CODE_SHELL_INTERPOLATION = /!`[^`]+`/;
-const OPEN_CODE_SHELL_INTERPOLATIONS = /!`[^`]+`/g;
+const OPEN_CODE_SHELL_INTERPOLATIONS = new RegExp(OPEN_CODE_SHELL_INTERPOLATION.source, "g");
 const OPEN_CODE_FILE_REFERENCE = /(?<![\w`])@(\.?[^\s`,.]*(?:\.[^\s`,.]+)*)/;
 
 type OpenCodeInterpolationPolicy = "compatible" | "reject" | "claude";

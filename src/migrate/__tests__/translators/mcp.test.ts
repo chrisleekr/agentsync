@@ -92,6 +92,18 @@ describe("MCP translators", () => {
   });
 
   test.each([
+    ["Claude → OpenCode JSON", translateMcp.claudeToOpenCode, '{"mcpServers":'],
+    ["Codex → OpenCode TOML", translateMcp.codexToOpenCode, "[mcp_servers.remote"],
+    ["OpenCode → Claude JSON", translateMcp.openCodeToClaude, '{"mcp":'],
+  ])("%s parser failures are reported without source text", (_name, translator, source) => {
+    const result = translator(`${source} private-token`);
+    expect(result?.skipWrite).toBe(true);
+    expect(result?.content).toBe("");
+    expect(result?.errors?.join("\n")).toContain("MCP source document must contain valid");
+    expect(result?.errors?.join("\n")).not.toContain("private-token");
+  });
+
+  test.each([
     ["Claude", translateMcp.claudeToOpenCode, "mcpServers", {}],
     ["Cursor", translateMcp.cursorToOpenCode, "mcpServers", {}],
     ["Copilot", translateMcp.copilotToOpenCode, "mcpServers", { tools: ["*"] }],
@@ -245,6 +257,55 @@ describe("VS Code MCP translators (official servers/inputs schema)", () => {
     expect(result?.content).toContain('url = "https://example.com/mcp"');
     expect(result?.content).toContain("[mcp_servers.remote.http_headers]");
     expect(result?.content).toContain('Authorization = "Bearer test"');
+  });
+
+  test("vscode → codex maps exact environment-backed headers to native fields", () => {
+    const result = translateMcp.vsCodeToCodex(
+      JSON.stringify({
+        servers: {
+          remote: {
+            type: "http",
+            url: "https://example.test/mcp",
+            headers: {
+              "X-Trace": "on",
+              "X-Token": vsCodeVariable("env:MCP_TOKEN"),
+              Authorization: `Bearer ${vsCodeVariable("env:BEARER_TOKEN")}`,
+            },
+          },
+        },
+      }),
+    );
+
+    expect(result?.content).toContain('bearer_token_env_var = "BEARER_TOKEN"');
+    expect(result?.content).toContain("[mcp_servers.remote.http_headers]");
+    expect(result?.content).toContain('X-Trace = "on"');
+    expect(result?.content).toContain("[mcp_servers.remote.env_http_headers]");
+    expect(result?.content).toContain('X-Token = "MCP_TOKEN"');
+    expect(result?.content).not.toContain("${");
+    expect(result?.warnings?.join("\n")).toContain("VS Code environment-backed HTTP headers");
+  });
+
+  test.each([
+    ["input", { "X-Token": vsCodeVariable("input:token") }],
+    ["composite", { "X-Token": `prefix ${vsCodeVariable("env:TOKEN")}` }],
+    ["header name", { [vsCodeVariable("env:HEADER")]: "value" }],
+  ])("vscode → codex rejects %s variable headers", (_name, headers) => {
+    const result = translateMcp.vsCodeToCodex(
+      JSON.stringify({
+        inputs: [{ id: "token", type: "promptString", password: true }],
+        servers: {
+          remote: {
+            type: "http",
+            url: "https://example.test/mcp",
+            headers,
+          },
+        },
+      }),
+    );
+
+    expect(result?.skipWrite).toBe(true);
+    expect(result?.content).toBe("");
+    expect(result?.errors?.join("\n")).toContain("VS Code variable");
   });
 
   test("vscode → codex warns about top-level inputs being dropped", () => {

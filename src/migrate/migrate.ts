@@ -1949,26 +1949,36 @@ async function codexCommandSkillPreflight(
   for (const source of commands) {
     const translated = commandTranslator(source.content, source.name);
     if (!translated || translated.skipWrite || (translated.errors?.length ?? 0) > 0) continue;
-    const skillName = translated.targetName.slice(0, -"/SKILL.md".length);
-    validateSkillName(skillName);
-    const path = resolveCommandTargetPath(
-      AgentPaths.codex.userSkillsDir,
-      translated.targetName,
-      "/SKILL.md",
-      "Codex command",
-    );
-    destinations.set(collisionKey(path), { type: "command", path });
+    try {
+      const skillName = translated.targetName.slice(0, -"/SKILL.md".length);
+      validateSkillName(skillName);
+      const path = resolveCommandTargetPath(
+        AgentPaths.codex.userSkillsDir,
+        translated.targetName,
+        "/SKILL.md",
+        "Codex command",
+      );
+      destinations.set(collisionKey(path), { type: "command", path });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      errors.push(`OpenCode → Codex command preflight failed for '${source.name}': ${message}`);
+    }
   }
   for (const source of skills) {
     const translated = skillTranslator(source.content, source.name);
     if (!translated || translated.skipWrite || (translated.errors?.length ?? 0) > 0) continue;
-    validateSkillName(translated.targetName);
-    const path = join(AgentPaths.codex.userSkillsDir, translated.targetName, "SKILL.md");
-    const existing = destinations.get(collisionKey(path));
-    if (existing?.type === "command") {
-      errors.push(
-        `OpenCode → Codex command/skill target collision: '${existing.path}' and '${path}'`,
-      );
+    try {
+      validateSkillName(translated.targetName);
+      const path = join(AgentPaths.codex.userSkillsDir, translated.targetName, "SKILL.md");
+      const existing = destinations.get(collisionKey(path));
+      if (existing?.type === "command") {
+        errors.push(
+          `OpenCode → Codex command/skill target collision: '${existing.path}' and '${path}'`,
+        );
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      errors.push(`OpenCode → Codex skill preflight failed for '${source.name}': ${message}`);
     }
   }
   return errors;
@@ -2112,9 +2122,7 @@ async function performCommandTarget(
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      result.errors.push(
-        `Write failed for ${target}/commands/${translated.targetName}: ${message}`,
-      );
+      result.errors.push(`Command preflight failed for ${target}/${name}: ${message}`);
       failed = true;
     }
   }

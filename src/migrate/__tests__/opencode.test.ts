@@ -371,7 +371,12 @@ describe("OpenCode migration boundary", () => {
   });
 
   test("an unreadable OpenCode skill sidecar aborts the package", async () => {
-    if (process.platform === "win32") return;
+    if (
+      process.platform === "win32" ||
+      (typeof process.geteuid === "function" && process.geteuid() === 0)
+    ) {
+      return;
+    }
     const skillDir = join(AgentPaths.opencode.configDir, "skills", "review");
     const sidecar = join(skillDir, "reference.md");
     write(join(skillDir, "SKILL.md"), "---\nname: review\ndescription: Review\n---\n\nReview.\n");
