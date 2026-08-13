@@ -71,4 +71,135 @@ Body.`;
     const result = translateSkill.claudeToCursor("# Lint\n\nDo it.", "lint");
     expect(result?.warnings?.[0]).toContain("no frontmatter");
   });
+
+  test("OpenCode-target skill routes reject unmapped authority frontmatter", () => {
+    const source = `---
+name: lint
+description: Lint the project
+disallowed-tools: [Write]
+---
+
+Run lint.`;
+    const result = translateSkill.claudeToOpenCode(source, "lint");
+    expect(result?.skipWrite).toBe(true);
+    expect(result?.content).toBe("");
+    expect(result?.errors?.join("\n")).toContain("authority field 'disallowed-tools'");
+  });
+
+  test.each([
+    ["missing frontmatter", "Run lint.", "requires YAML frontmatter"],
+    [
+      "missing name",
+      "---\ndescription: Lint the project\n---\n\nRun lint.",
+      "requires a string 'name'",
+    ],
+    ["missing description", "---\nname: lint\n---\n\nRun lint.", "requires a non-empty string"],
+    [
+      "mismatched name",
+      "---\nname: review\ndescription: Lint\n---\n\nRun lint.",
+      "match its directory",
+    ],
+    ["uppercase name", "---\nname: Lint\ndescription: Lint\n---\n\nRun lint.", "lowercase letters"],
+    [
+      "double hyphen",
+      "---\nname: lint--all\ndescription: Lint\n---\n\nRun lint.",
+      "single hyphens",
+    ],
+    [
+      "overlong name",
+      `---\nname: ${"a".repeat(65)}\ndescription: Lint\n---\n\nRun lint.`,
+      "between 1 and 64",
+    ],
+  ])("OpenCode target rejects a skill with %s", (_caseName, source, expectedError) => {
+    const result = translateSkill.claudeToOpenCode(source, "lint");
+    expect(result?.skipWrite).toBe(true);
+    expect(result?.content).toBe("");
+    expect(result?.errors?.join("\n")).toContain(expectedError);
+  });
+
+  test("OpenCode-source skill routes reject inert fields that would grant target authority", () => {
+    const source = `---
+name: lint
+description: Lint the project
+allowed-tools: Bash(*)
+---
+
+Run lint.`;
+    const result = translateSkill.openCodeToClaude(source, "lint");
+    expect(result?.skipWrite).toBe(true);
+    expect(result?.content).toBe("");
+    expect(result?.errors?.join("\n")).toContain("authority field 'allowed-tools'");
+  });
+
+  test.each([
+    ["inline shell", "Summarize !`git diff`.", "shell interpolation"],
+    ["shell block", "```!\ngit status\ngit diff\n```", "shell interpolation"],
+    ["indented shell block", "    ```!\ngit status\n    ```", "shell interpolation"],
+    ["text-prefixed shell block", "Prefix ```!\ngit status\n``` suffix", "shell interpolation"],
+    ["shell inside an ordinary fence", "```text\n!`git status`\n```", "shell interpolation"],
+    ["file reference", "Review @src/auth.ts.", "file-reference interpolation"],
+    [
+      "parent-relative file reference",
+      "Review @../../../.ssh/id_rsa.",
+      "file-reference interpolation",
+    ],
+  ])("OpenCode → Claude rejects inert %s", (_name, body, expectedError) => {
+    const source = `---
+name: lint
+description: Lint the project
+---
+
+${body}`;
+    const result = translateSkill.openCodeToClaude(source, "lint");
+    expect(result?.skipWrite).toBe(true);
+    expect(result?.content).toBe("");
+    expect(result?.errors?.join("\n")).toContain(expectedError);
+  });
+
+  test("OpenCode → non-Claude preserves inert dynamic-content text", () => {
+    const source = `---
+name: lint
+description: Lint the project
+---
+
+Review @src/auth.ts, then show !\`git diff\`.`;
+    expect(translateSkill.openCodeToCursor(source, "lint")?.content.trim()).toBe(source);
+  });
+
+  test("OpenCode → Claude preserves shell-like text after a non-whitespace character", () => {
+    const source =
+      "---\nname: lint\ndescription: Lint the project\n---\n\nSet KEY=!" + "`command` literally.";
+    expect(translateSkill.openCodeToClaude(source, "lint")?.content.trim()).toBe(source);
+  });
+
+  test.each([
+    ["inline", "Run !`git diff` before reviewing."],
+    ["fenced", "```!\ngit status\n```"],
+    ["indented fenced", "    ```!\ngit status\n    ```"],
+    ["text-prefixed fenced", "Prefix ```!\ngit status\n``` suffix"],
+    ["ordinary fenced", "```text\n!`git status`\n```"],
+  ])("Claude → OpenCode rejects active %s shell interpolation", (_caseName, body) => {
+    const source = `---
+name: lint
+description: Lint the project
+---
+
+${body}`;
+    const result = translateSkill.claudeToOpenCode(source, "lint");
+    expect(result?.skipWrite).toBe(true);
+    expect(result?.content).toBe("");
+    expect(result?.errors?.join("\n")).toContain("does not execute");
+  });
+
+  test("Claude shell syntax inside inline code remains literal", () => {
+    const body = "Mention ``!`command`` literally.";
+    const source = `---
+name: lint
+description: Lint the project
+---
+
+${body}`;
+    expect(translateSkill.claudeToOpenCode(source, "lint")?.content.trim()).toBe(source);
+    expect(translateSkill.openCodeToClaude(source, "lint")?.content.trim()).toBe(source);
+  });
 });

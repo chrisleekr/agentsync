@@ -1,5 +1,5 @@
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { nonBlank } from "../lib/env";
 
 const HOME = homedir();
@@ -129,7 +129,50 @@ export const AgentPaths = {
       return join(HOME, ".config", "Code", "User", "mcp.json");
     })(),
   },
+  opencode: (() => {
+    const xdgConfigHome = nonBlank(process.env.XDG_CONFIG_HOME) ?? join(HOME, ".config");
+    return { configDir: join(xdgConfigHome, "opencode") };
+  })(),
 } as const;
+
+/** JSON config and command, agent, and skill discovery include both roots. */
+export function resolveOpenCodeConfigDirs(
+  env: NodeJS.ProcessEnv = process.env,
+  defaultDir: string = AgentPaths.opencode.configDir,
+): string[] {
+  const dirs = [resolve(defaultDir)];
+  const override = env.OPENCODE_CONFIG_DIR || undefined;
+  if (override) {
+    const resolvedOverride = resolve(override);
+    if (!dirs.includes(resolvedOverride)) dirs.push(resolvedOverride);
+  }
+  return dirs;
+}
+
+/** Ordered global OpenCode config sources, from lowest to highest precedence. */
+export function resolveOpenCodeConfigFiles(
+  env: NodeJS.ProcessEnv = process.env,
+  defaultDir: string = AgentPaths.opencode.configDir,
+): string[] {
+  const [base, override] = resolveOpenCodeConfigDirs(env, defaultDir);
+  const files = [
+    join(base, "config.json"),
+    join(base, "opencode.json"),
+    join(base, "opencode.jsonc"),
+  ];
+  if (override) {
+    files.push(join(override, "opencode.json"), join(override, "opencode.jsonc"));
+  }
+  return files;
+}
+
+/** Directory OpenCode uses for global AGENTS.md and new migration targets. */
+export function resolveOpenCodeWriteDir(
+  env: NodeJS.ProcessEnv = process.env,
+  defaultDir: string = AgentPaths.opencode.configDir,
+): string {
+  return resolveOpenCodeConfigDirs(env, defaultDir).at(-1) as string;
+}
 
 /**
  * Resolve the OS-specific base directory used for AgentSync state — the single

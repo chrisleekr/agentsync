@@ -18,7 +18,8 @@
  */
 
 import { defineTranslator, type Translator } from "../types";
-import { parseFrontmatter } from "./frontmatter";
+import { hasClaudeFileImport, hasClaudeSkillShellInterpolation } from "./claude-markdown";
+import { parseFrontmatter, parseStructuredFrontmatter } from "./frontmatter";
 
 /**
  * Identity translator for SKILL.md content. Validates that the input has the
@@ -60,6 +61,144 @@ const copilotSkillBestEffort: Translator = (content, sourceName) => {
   };
 };
 
+const OPEN_CODE_UNMAPPED_SKILL_AUTHORITY = new Set([
+  "allowed-tools",
+  "disallowed-tools",
+  "disable-model-invocation",
+  "user-invocable",
+  "context",
+  "agent",
+  "background",
+  "hooks",
+  "paths",
+  "shell",
+]);
+
+const OPEN_CODE_SKILL_NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+function characterCount(value: string): number {
+  return Array.from(value).length;
+}
+
+export function openCodeSkillContractErrors(content: string, targetName: string): string[] {
+  const parsed = parseStructuredFrontmatter(content.trim());
+  if (!parsed) return ["OpenCode skill requires YAML frontmatter"];
+  if ("error" in parsed) {
+    return parsed.code === "not-a-mapping"
+      ? ["OpenCode skill frontmatter must be a mapping"]
+      : [`OpenCode skill has invalid YAML frontmatter: ${parsed.error}`];
+  }
+
+  const errors: string[] = [];
+  const name = parsed.fields.name;
+  if (typeof name !== "string" || characterCount(name) < 1 || characterCount(name) > 64) {
+    errors.push("OpenCode skill requires a string 'name' between 1 and 64 characters");
+  } else {
+    if (!OPEN_CODE_SKILL_NAME.test(name)) {
+      errors.push(
+        "OpenCode skill 'name' must contain lowercase letters or numbers separated by single hyphens",
+      );
+    }
+    if (name !== targetName) {
+      errors.push(`OpenCode skill must declare name '${targetName}' to match its directory`);
+    }
+  }
+
+  const description = parsed.fields.description;
+  if (
+    typeof description !== "string" ||
+    description.trim().length === 0 ||
+    characterCount(description) > 1024
+  ) {
+    errors.push(
+      "OpenCode skill requires a non-empty string 'description' of at most 1024 characters",
+    );
+  }
+  return errors;
+}
+
+const openCodeSkillTarget: Translator = (content, sourceName) => {
+  const translated = passthroughSkill(content, sourceName);
+  if (!translated) return null;
+  const contractErrors = openCodeSkillContractErrors(content, sourceName ?? "");
+  if (contractErrors.length > 0) {
+    return { ...translated, content: "", errors: contractErrors, skipWrite: true };
+  }
+  const parsed = parseStructuredFrontmatter(content.trim());
+  if (!parsed || "error" in parsed) return translated;
+  const fields = Object.keys(parsed.fields).filter((field) =>
+    OPEN_CODE_UNMAPPED_SKILL_AUTHORITY.has(field),
+  );
+  if (fields.length === 0) return translated;
+  return {
+    ...translated,
+    content: "",
+    errors: fields.map(
+      (field) => `Skill authority field '${field}' has no verified OpenCode mapping`,
+    ),
+    skipWrite: true,
+  };
+};
+
+const claudeToOpenCodeSkill: Translator = (content, sourceName) => {
+  const translated = openCodeSkillTarget(content, sourceName);
+  if (!translated || translated.skipWrite) return translated;
+  const { body } = parseFrontmatter(content.trim());
+  if (!hasClaudeSkillShellInterpolation(body)) return translated;
+  return {
+    ...translated,
+    content: "",
+    errors: ["Claude skill body contains shell interpolation that OpenCode does not execute"],
+    skipWrite: true,
+  };
+};
+
+function fromOpenCodeSkill(base: Translator, rejectClaudeDynamicContext = false): Translator {
+  return (content, sourceName) => {
+    const translated = base(content, sourceName);
+    if (!translated) return null;
+    const parsed = parseStructuredFrontmatter(content.trim());
+    if (!parsed) return translated;
+    if ("error" in parsed) {
+      return {
+        ...translated,
+        content: "",
+        errors: [`OpenCode skill frontmatter is invalid YAML: ${parsed.error}`],
+        skipWrite: true,
+      };
+    }
+    const fields = Object.keys(parsed.fields).filter((field) =>
+      OPEN_CODE_UNMAPPED_SKILL_AUTHORITY.has(field),
+    );
+    if (fields.length > 0) {
+      return {
+        ...translated,
+        content: "",
+        errors: fields.map(
+          (field) => `OpenCode skill authority field '${field}' has no verified target equivalent`,
+        ),
+        skipWrite: true,
+      };
+    }
+    if (!rejectClaudeDynamicContext) return translated;
+    const { body } = parseFrontmatter(content.trim());
+    const activeSyntax = hasClaudeSkillShellInterpolation(body)
+      ? "shell interpolation"
+      : hasClaudeFileImport(body)
+        ? "file-reference interpolation"
+        : null;
+    if (!activeSyntax) return translated;
+    return {
+      ...translated,
+      content: "",
+      errors: [
+        `OpenCode skill body contains Claude ${activeSyntax} with no verified source equivalent`,
+      ],
+      skipWrite: true,
+    };
+  };
+}
+
 /**
  * Skills translators indexed by direction. Claude/Cursor/Codex use the same
  * Anthropic spec verbatim, so all six in-group directions share `passthroughSkill`.
@@ -79,4 +218,12 @@ export const translateSkill = {
   copilotToClaude: passthroughSkill,
   copilotToCursor: passthroughSkill,
   copilotToCodex: passthroughSkill,
+  claudeToOpenCode: claudeToOpenCodeSkill,
+  cursorToOpenCode: openCodeSkillTarget,
+  codexToOpenCode: openCodeSkillTarget,
+  copilotToOpenCode: openCodeSkillTarget,
+  openCodeToClaude: fromOpenCodeSkill(passthroughSkill, true),
+  openCodeToCursor: fromOpenCodeSkill(passthroughSkill),
+  openCodeToCodex: fromOpenCodeSkill(passthroughSkill),
+  openCodeToCopilot: fromOpenCodeSkill(copilotSkillBestEffort),
 };

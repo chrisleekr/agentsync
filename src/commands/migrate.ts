@@ -20,12 +20,12 @@ export const migrateCommand = defineCommand({
   args: {
     from: {
       type: "string",
-      description: "Source agent (claude|cursor|codex|copilot|vscode)",
+      description: "Source agent (claude|cursor|codex|copilot|vscode|opencode)",
       required: true,
     },
     to: {
       type: "string",
-      description: "Target agent (claude|cursor|codex|copilot|vscode|all)",
+      description: "Target agent (claude|cursor|codex|copilot|vscode|opencode|all)",
       required: true,
     },
     type: {

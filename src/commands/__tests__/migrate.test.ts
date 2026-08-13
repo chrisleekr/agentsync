@@ -159,4 +159,10 @@ describe("migrate command help", () => {
     expect(args.type?.description).toContain("agents");
     expect(args.type?.description).toContain("Omit to migrate all");
   });
+
+  test("lists OpenCode as a migration source and target", () => {
+    const args = migrateCommand.args as Record<string, { description?: string }>;
+    expect(args.from?.description).toContain("opencode");
+    expect(args.to?.description).toContain("opencode");
+  });
 });

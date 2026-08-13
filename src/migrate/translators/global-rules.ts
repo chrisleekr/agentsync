@@ -8,6 +8,7 @@
  */
 
 import { defineTranslator, type Translator } from "../types";
+import { hasClaudeFileImport } from "./claude-markdown";
 
 /** Sentinel target name consumed by the orchestrator to route through applyCursorRules(). */
 const CURSOR_RULES_SENTINEL = "__cursor_rules__";
@@ -76,6 +77,37 @@ const copilotToCodex: Translator = defineTranslator((trimmed) => ({
   targetName: "AGENTS.md",
 }));
 
+const toOpenCode: Translator = defineTranslator((trimmed) => ({
+  content: trimmed,
+  targetName: "AGENTS.md",
+}));
+
+const claudeToOpenCode: Translator = defineTranslator((trimmed) => {
+  if (hasClaudeFileImport(trimmed)) {
+    return {
+      content: "",
+      targetName: "AGENTS.md",
+      errors: ["Claude global rules contain a file import that OpenCode does not expand"],
+      skipWrite: true,
+    };
+  }
+  return { content: trimmed, targetName: "AGENTS.md" };
+});
+
+const openCodeToClaude: Translator = defineTranslator((trimmed) => {
+  if (hasClaudeFileImport(trimmed)) {
+    return {
+      content: "",
+      targetName: "CLAUDE.md",
+      errors: [
+        "OpenCode global rules contain a Claude file-reference import with no verified source equivalent",
+      ],
+      skipWrite: true,
+    };
+  }
+  return { content: trimmed, targetName: "CLAUDE.md" };
+});
+
 /**
  * All global-rules translators indexed by direction for registry registration.
  * Each function takes raw Markdown content and returns { content, targetName } or null.
@@ -93,4 +125,15 @@ export const translateGlobalRules = {
   copilotToCursor,
   codexToCopilot,
   copilotToCodex,
+  claudeToOpenCode,
+  cursorToOpenCode: defineTranslator((trimmed) => ({
+    content: `# Rules (migrated from Cursor)\n\n${trimmed}\n`,
+    targetName: "AGENTS.md",
+  })),
+  codexToOpenCode: toOpenCode,
+  copilotToOpenCode: toOpenCode,
+  openCodeToClaude,
+  openCodeToCursor: codexToCursor,
+  openCodeToCodex: toOpenCode,
+  openCodeToCopilot: codexToCopilot,
 };

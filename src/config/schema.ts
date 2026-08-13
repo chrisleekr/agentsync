@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { MIGRATION_AGENTS } from "../migrate/agent-names";
 
 /**
  * Age public-key (X25519 recipient) format: `age1` HRP followed by the bech32
@@ -116,7 +117,7 @@ export const AgentSyncConfigSchema = z.object({
 export type AgentSyncConfig = z.infer<typeof AgentSyncConfigSchema>;
 
 /** Valid agent names accepted by CLI arguments. */
-const AgentNameEnum = z.enum(["claude", "cursor", "codex", "copilot", "vscode"]);
+const MigrationAgentNameEnum = z.enum(MIGRATION_AGENTS);
 
 /** Valid config types for the migrate command's --type flag. */
 const ConfigTypeEnum = z.enum(["global-rules", "mcp", "commands", "skills", "rules", "agents"]);
@@ -127,8 +128,8 @@ const ConfigTypeEnum = z.enum(["global-rules", "mcp", "commands", "skills", "rul
  */
 export const MigrateOptionsSchema = z
   .object({
-    from: AgentNameEnum,
-    to: z.union([AgentNameEnum, z.literal("all")]),
+    from: MigrationAgentNameEnum,
+    to: z.union([MigrationAgentNameEnum, z.literal("all")]),
     type: ConfigTypeEnum.optional(),
     name: z.string().optional(),
     dryRun: z.boolean().default(false),

@@ -1,4 +1,5 @@
 import { detectInstallMethod, type InstallMethod } from "../../core/version-check";
+import { MIGRATION_AGENTS, type MigrationAgentName } from "../../migrate/agent-names";
 import type { SyncRow } from "../status";
 
 export const TAB_IDS = ["dashboard", "sync", "machines", "migrate", "activity", "config"] as const;
@@ -6,6 +7,7 @@ export type TabId = (typeof TAB_IDS)[number];
 
 export const AGENTS = ["claude", "cursor", "codex", "copilot", "vscode"] as const;
 export type AgentName = (typeof AGENTS)[number];
+export const MIGRATE_AGENTS = MIGRATION_AGENTS;
 
 export const MIGRATE_TYPES = [
   "global-rules",
@@ -180,9 +182,9 @@ export interface SyncSlice {
 }
 
 export interface MigrateSlice {
-  from: AgentName;
-  toSet: Set<AgentName>;
-  /** Sub-cursor inside the `to` field — indexes into AGENTS. Arrows move
+  from: MigrationAgentName;
+  toSet: Set<MigrationAgentName>;
+  /** Sub-cursor inside the `to` field — indexes into MIGRATE_AGENTS. Arrows move
    *  this; space toggles `toSet[toCursor]`. Makes multi-select behaviour
    *  predictable (HTML-checkbox semantics, not "toggle last added"). */
   toCursor: number;
@@ -294,7 +296,7 @@ export function createInitialState(): AppState {
     },
     migrate: {
       from: "claude",
-      toSet: new Set<AgentName>(["cursor"]),
+      toSet: new Set<MigrationAgentName>(["cursor"]),
       toCursor: 0,
       typeSet: new Set<ConfigType>(["global-rules"]),
       typeCursor: 0,

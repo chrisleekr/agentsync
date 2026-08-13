@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
+import { realpathSync } from "node:fs";
 import { mkdir, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -34,7 +35,10 @@ async function waitForOperation(store: Store, kind: string): Promise<void> {
 }
 
 beforeEach(() => {
-  root = join(tmpdir(), `agents-tui-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+  root = join(
+    realpathSync(tmpdir()),
+    `agents-tui-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+  );
   original = structuredClone(paths);
   paths.claude.agentsDir = join(root, "claude");
   paths.copilot.agentsDir = join(root, "shared");
