@@ -119,7 +119,7 @@ export type AgentSyncConfig = z.infer<typeof AgentSyncConfigSchema>;
 const AgentNameEnum = z.enum(["claude", "cursor", "codex", "copilot", "vscode"]);
 
 /** Valid config types for the migrate command's --type flag. */
-const ConfigTypeEnum = z.enum(["global-rules", "mcp", "commands", "skills", "rules"]);
+const ConfigTypeEnum = z.enum(["global-rules", "mcp", "commands", "skills", "rules", "agents"]);
 
 /**
  * Schema for the `migrate` command's CLI arguments.
@@ -138,7 +138,18 @@ export const MigrateOptionsSchema = z
   })
   .refine((opts) => !opts.name || opts.type !== undefined, {
     message: "--name requires --type to be specified",
-  });
+  })
+  .refine(
+    (opts) =>
+      !(
+        opts.type === "agents" &&
+        ((opts.from === "copilot" && opts.to === "vscode") ||
+          (opts.from === "vscode" && opts.to === "copilot"))
+      ),
+    {
+      message: "Copilot and VS Code agents use the same physical store",
+    },
+  );
 
 /** Validated migrate options shape. */
 export type MigrateOptions = z.infer<typeof MigrateOptionsSchema>;

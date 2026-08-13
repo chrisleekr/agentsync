@@ -84,6 +84,11 @@ describe("onMigrateKey — To: sub-cursor", () => {
 });
 
 describe("onMigrateKey — Type: multi-select with sub-cursor", () => {
+  test("C1 and C9 surface agents as a selectable migration type", () => {
+    expect(MIGRATE_TYPES).toContain("agents");
+    expect(MIGRATE_TYPES.filter((type) => type === "agents")).toHaveLength(1);
+  });
+
   test("default state has one type selected and the cursor at 0", () => {
     const store = seedOn("type");
     expect(store.getState().migrate.typeSet.size).toBe(1);
@@ -114,6 +119,16 @@ describe("onMigrateKey — Type: multi-select with sub-cursor", () => {
     onMigrateKey(key("right"), store);
     onMigrateKey(key("space"), store);
     expect(store.getState().migrate.typeSet.size).toBe(2);
+  });
+
+  test("C1 toggles the agents type through the same TUI selection path", () => {
+    const store = seedOn("type");
+    const agentsIndex = MIGRATE_TYPES.indexOf("agents");
+    store.dispatch((d) => {
+      d.migrate.typeCursor = agentsIndex;
+    });
+    onMigrateKey(key("space"), store);
+    expect(store.getState().migrate.typeSet.has("agents")).toBe(true);
   });
 });
 

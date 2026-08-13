@@ -1,7 +1,6 @@
 import type { CliRenderer, KeyEvent } from "@opentui/core";
 import { BoxRenderable, TextRenderable } from "@opentui/core";
-import type { MigrateOptions } from "../../../config/schema";
-import { performMigrate } from "../../../migrate/migrate";
+import { performMigrateTargets } from "../../../migrate/migrate";
 import type { MigrateResult } from "../../../migrate/types";
 import {
   AGENTS,
@@ -253,13 +252,6 @@ function toggleAtSubCursor(store: Store): boolean {
   return false;
 }
 
-/**
- * `performMigrate` accepts a single agent + single type per call, so the
- * multi-select Migrate tab fans out one call per (target, type) pair and
- * merges results. Returns the aggregated MigrateResult (every list
- * concatenated). When every agent is in `toSet` we pass the special "all"
- * value once per type to let the migrate engine handle the broadcast.
- */
 interface MigrateSelectionSnapshot {
   from: AgentName;
   toSet: Set<AgentName>;
@@ -278,26 +270,12 @@ async function runMigrateForSelection(
   m: MigrateSelectionSnapshot,
   dryRun: boolean,
 ): Promise<MigrateResult> {
-  const aggregate: MigrateResult = { migrated: [], skipped: [], errors: [], warnings: [] };
-  const targets: ("all" | AgentName)[] =
-    m.toSet.size === AGENTS.length ? ["all"] : [...m.toSet].sort();
-  const types = [...m.typeSet].sort();
-  for (const target of targets) {
-    for (const type of types) {
-      const options: MigrateOptions = {
-        from: m.from,
-        to: target,
-        type,
-        dryRun,
-      };
-      const r = await performMigrate(options);
-      aggregate.migrated.push(...r.migrated);
-      aggregate.skipped.push(...r.skipped);
-      aggregate.errors.push(...r.errors);
-      aggregate.warnings.push(...r.warnings);
-    }
-  }
-  return aggregate;
+  return performMigrateTargets({
+    from: m.from,
+    targets: [...m.toSet].sort(),
+    types: [...m.typeSet].sort(),
+    dryRun,
+  });
 }
 
 function runPreview(store: Store): void {

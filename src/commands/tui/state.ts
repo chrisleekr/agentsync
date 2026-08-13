@@ -7,7 +7,14 @@ export type TabId = (typeof TAB_IDS)[number];
 export const AGENTS = ["claude", "cursor", "codex", "copilot", "vscode"] as const;
 export type AgentName = (typeof AGENTS)[number];
 
-export const MIGRATE_TYPES = ["global-rules", "mcp", "commands", "skills", "rules"] as const;
+export const MIGRATE_TYPES = [
+  "global-rules",
+  "mcp",
+  "commands",
+  "skills",
+  "rules",
+  "agents",
+] as const;
 export type ConfigType = (typeof MIGRATE_TYPES)[number];
 
 export type MigrateField = "from" | "to" | "type" | "preview" | "apply";

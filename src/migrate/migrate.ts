@@ -6,8 +6,10 @@
  * and writes to target agent config files.
  */
 
-import { mkdir, readdir, readFile, stat } from "node:fs/promises";
-import { basename, join, relative } from "node:path";
+import { randomUUID } from "node:crypto";
+import { constants } from "node:fs";
+import { lstat, mkdir, open, readdir, readFile, rename, stat, unlink } from "node:fs/promises";
+import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import * as TOML from "@iarna/toml";
 import { type ParseError, parse as parseJsonc } from "jsonc-parser";
 import { atomicWrite, readIfExists, setJsoncTopLevelKey } from "../agents/_utils";
@@ -20,6 +22,14 @@ import { InvalidSkillNameError, validateSkillName } from "../agents/skills-walke
 import { AgentPaths } from "../config/paths";
 import { redactSecretLiterals } from "../core/sanitizer";
 import { getTranslator } from "./registry";
+import {
+  getSharedAgentTarget,
+  inspectAgentSource,
+  type PhysicalAgentFormat,
+  portableFilenameError,
+  type SharedAgentTarget,
+  setSharedAgentTarget,
+} from "./translators/agents";
 import type {
   ConfigType,
   ExtraFile,
@@ -28,7 +38,14 @@ import type {
   MigrateResult,
 } from "./types";
 
-const ALL_CONFIG_TYPES: ConfigType[] = ["global-rules", "mcp", "commands", "skills", "rules"];
+const ALL_CONFIG_TYPES: ConfigType[] = [
+  "global-rules",
+  "mcp",
+  "commands",
+  "skills",
+  "rules",
+  "agents",
+];
 
 /** Heuristic: well-known text suffixes are utf8, everything else base64. */
 const TEXT_EXTENSIONS = new Set([
@@ -95,6 +112,84 @@ function resolveRulesDir(agent: AgentName): string | null {
   return null;
 }
 
+function canonicalAgentFormat(agent: AgentName): PhysicalAgentFormat {
+  return agent === "vscode" ? "copilot" : agent;
+}
+
+function resolveAgentsDir(agent: AgentName): string {
+  if (agent === "claude") return AgentPaths.claude.agentsDir;
+  if (agent === "cursor") return AgentPaths.cursor.agentsDir;
+  if (agent === "codex") return AgentPaths.codex.agentsDir;
+  if (agent === "vscode") return AgentPaths.vscode.agentsDir;
+  return AgentPaths.copilot.agentsDir;
+}
+
+function agentExtension(format: PhysicalAgentFormat): string {
+  if (format === "codex") return ".toml";
+  if (format === "copilot") return ".agent.md";
+  return ".md";
+}
+
+function toPosixRelative(path: string): string {
+  return path.split(sep).join("/");
+}
+
+function isEnoent(error: unknown): boolean {
+  return (error as NodeJS.ErrnoException).code === "ENOENT";
+}
+
+async function readAgentFile(path: string): Promise<string> {
+  const handle = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW);
+  try {
+    const info = await handle.stat();
+    if (!info.isFile()) throw new Error(`Agent source '${path}' must be a regular file`);
+    return await handle.readFile("utf8");
+  } finally {
+    await handle.close();
+  }
+}
+
+async function readAgentFiles(agent: AgentName, filterName?: string) {
+  const format = canonicalAgentFormat(agent);
+  const root = resolveAgentsDir(agent);
+  const extension = agentExtension(format);
+  const results: Array<{ content: string; name: string; sourcePath: string }> = [];
+  const rootInfo = await lstat(root).catch((error) => {
+    if (isEnoent(error)) return null;
+    throw error;
+  });
+  if (!rootInfo) return results;
+  if (!rootInfo.isDirectory() || rootInfo.isSymbolicLink()) {
+    throw new Error(`Agent source directory '${root}' must be a real directory`);
+  }
+
+  async function walk(dir: string): Promise<void> {
+    const entries = await readdir(dir, { withFileTypes: true });
+    entries.sort((a, b) => a.name.localeCompare(b.name));
+    for (const entry of entries) {
+      if (entry.name.startsWith(".") || entry.isSymbolicLink()) continue;
+      const filePath = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (format === "claude") await walk(filePath);
+        continue;
+      }
+      if (!entry.isFile() || !entry.name.endsWith(extension)) continue;
+      const name = format === "claude" ? toPosixRelative(relative(root, filePath)) : entry.name;
+      if (filterName && name !== filterName) continue;
+      const content = await readAgentFile(filePath);
+      if (format === "copilot") {
+        const target = getSharedAgentTarget(content);
+        if (agent === "copilot" && target === "vscode") continue;
+        if (agent === "vscode" && target === "github-copilot") continue;
+      }
+      results.push({ content, name, sourcePath: filePath });
+    }
+  }
+
+  await walk(root);
+  return results;
+}
+
 /** Read a single skill directory's supporting files (everything except SKILL.md). */
 async function readSkillSidecars(skillDir: string): Promise<ExtraFile[]> {
   const sidecars: ExtraFile[] = [];
@@ -129,7 +224,7 @@ const ALL_AGENTS: AgentName[] = ["claude", "cursor", "codex", "copilot", "vscode
  * @param agent - Source agent to read from.
  * @param type - Configuration type to read.
  * @param filterName - If provided, only return artefacts matching this filename.
- * @returns Array of { content, name } pairs. Never throws — returns [] on missing files.
+ * @returns Array of { content, name } pairs. Missing files return []; agent read failures throw.
  */
 export async function readSourceArtefacts(
   agent: AgentName,
@@ -142,6 +237,8 @@ export async function readSourceArtefacts(
     sourcePath: string;
     sidecars?: ExtraFile[];
   }> = [];
+
+  if (type === "agents") return readAgentFiles(agent, filterName);
 
   if (type === "global-rules") {
     if (agent === "cursor") {
@@ -299,6 +396,81 @@ function mergeMcpInputs(incoming: unknown[], existing: unknown[]): unknown[] {
   return merged;
 }
 
+function resolveAgentTargetPath(to: AgentName, targetName: string): string {
+  const format = canonicalAgentFormat(to);
+  const expectedExtension = agentExtension(format);
+  const portableError = portableFilenameError(targetName, `Agent target path '${targetName}'`);
+  if (portableError) throw new Error(portableError);
+  if (
+    !targetName ||
+    targetName.startsWith(".") ||
+    targetName.includes("/") ||
+    targetName.includes("\\") ||
+    !targetName.endsWith(expectedExtension)
+  ) {
+    throw new Error(`Agent target path '${targetName}' is unsafe or has the wrong extension`);
+  }
+  const root = resolve(resolveAgentsDir(to));
+  const targetPath = resolve(root, targetName);
+  if (!targetPath.startsWith(`${root}${sep}`)) {
+    throw new Error(`Agent target path '${targetName}' escapes its user directory`);
+  }
+  return targetPath;
+}
+
+interface AgentWriteTarget {
+  path: string;
+  mode: number;
+}
+
+async function validateAgentWriteTarget(
+  to: AgentName,
+  targetName: string,
+): Promise<AgentWriteTarget> {
+  const targetPath = resolveAgentTargetPath(to, targetName);
+  const root = resolveAgentsDir(to);
+  const rootInfo = await lstat(root).catch((error: NodeJS.ErrnoException) => {
+    if (error.code === "ENOENT") return null;
+    throw error;
+  });
+  if (rootInfo && (!rootInfo.isDirectory() || rootInfo.isSymbolicLink())) {
+    throw new Error(`Agent target directory '${root}' must be a real directory`);
+  }
+  const targetInfo = await lstat(targetPath).catch((error: NodeJS.ErrnoException) => {
+    if (error.code === "ENOENT") return null;
+    throw error;
+  });
+  if (targetInfo && (!targetInfo.isFile() || targetInfo.isSymbolicLink())) {
+    throw new Error(`Agent target '${targetName}' must be a regular file`);
+  }
+  return {
+    path: targetPath,
+    mode: targetInfo ? targetInfo.mode & 0o777 : 0o600,
+  };
+}
+
+async function stageAgentWrite(targetPath: string, content: string, mode: number): Promise<void> {
+  const tempPath = `${targetPath}.${randomUUID()}.tmp`;
+  let handle: Awaited<ReturnType<typeof open>> | undefined;
+  try {
+    handle = await open(
+      tempPath,
+      constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW,
+      mode,
+    );
+    if (process.platform !== "win32") await handle.chmod(mode);
+    await handle.writeFile(content, "utf8");
+    await handle.sync();
+    await handle.close();
+    handle = undefined;
+    await rename(tempPath, targetPath);
+  } catch (error) {
+    await handle?.close().catch(() => {});
+    await unlink(tempPath).catch(() => {});
+    throw error;
+  }
+}
+
 /**
  * Write a migrated artefact to the target agent using existing apply functions.
  * @param to - Target agent.
@@ -322,6 +494,21 @@ export async function applyMigrated(
   // fall back to bare `<kind>` when invoked directly (e.g. unit tests).
   const arrow = from ? `${from} → ${to}: ` : "";
   const src = sourcePath ?? "";
+  if (type === "agents") {
+    let target = await validateAgentWriteTarget(to, targetName);
+    if (!dryRun) {
+      await mkdir(dirname(target.path), { recursive: true });
+      target = await validateAgentWriteTarget(to, targetName);
+      await stageAgentWrite(target.path, content, target.mode);
+    }
+    return {
+      targetPath: target.path,
+      sourcePath: src,
+      content,
+      description: `${arrow}agent "${targetName}"`,
+    };
+  }
+
   if (type === "global-rules") {
     // The cursor-rules sentinel only routes to cursor's settings.json when the
     // declared target is cursor. Without this gate, a translator that
@@ -533,6 +720,384 @@ export async function applyMigrated(
   return null;
 }
 
+interface AgentTargetPlan {
+  physical: PhysicalAgentFormat;
+  logical: AgentName;
+  sharedTarget?: SharedAgentTarget;
+}
+
+interface PendingAgentWrite {
+  target: AgentTargetPlan;
+  targetName: string;
+  content: string;
+  sourcePath: string;
+  artifact: MigratedArtifact;
+}
+
+function isSharedAlias(agent: AgentName): boolean {
+  return agent === "copilot" || agent === "vscode";
+}
+
+function sharedTargetFor(agent: AgentName): SharedAgentTarget | undefined {
+  if (agent === "copilot") return "github-copilot";
+  if (agent === "vscode") return "vscode";
+  return undefined;
+}
+
+function agentTargetPlans(options: MigrateOptions): AgentTargetPlan[] {
+  const source = canonicalAgentFormat(options.from);
+  if (options.to !== "all") {
+    const physical = canonicalAgentFormat(options.to);
+    return [
+      {
+        physical,
+        logical: options.to,
+        sharedTarget: sharedTargetFor(options.to),
+      },
+    ];
+  }
+
+  return (["claude", "cursor", "codex", "copilot"] as const)
+    .filter((physical) => physical !== source)
+    .map((physical) => ({ physical, logical: physical }));
+}
+
+function selectedAgentTargetPlans(targets: readonly AgentName[]): AgentTargetPlan[] {
+  const selected = new Set(targets);
+  const sharedBoth = selected.has("copilot") && selected.has("vscode");
+  const plans: AgentTargetPlan[] = [];
+  for (const target of ALL_AGENTS) {
+    if (!selected.has(target)) continue;
+    if (target === "vscode" && sharedBoth) continue;
+    if (target === "copilot" && sharedBoth) {
+      plans.push({ physical: "copilot", logical: "copilot" });
+      continue;
+    }
+    plans.push({
+      physical: canonicalAgentFormat(target),
+      logical: target,
+      sharedTarget: sharedTargetFor(target),
+    });
+  }
+  return plans;
+}
+
+function collisionKey(targetPath: string): string {
+  return targetPath.normalize("NFC").toLowerCase();
+}
+
+function sharedCoverage(content: string): SharedAgentTarget | "both" {
+  const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/);
+  if (!match) throw new Error("existing shared agent has invalid frontmatter");
+  let fields: unknown;
+  try {
+    fields = Bun.YAML.parse(match[1] ?? "");
+  } catch {
+    throw new Error("existing shared agent has invalid frontmatter");
+  }
+  if (!fields || typeof fields !== "object" || Array.isArray(fields)) {
+    throw new Error("existing shared agent has invalid frontmatter");
+  }
+  const target = (fields as Record<string, unknown>).target;
+  if (target === undefined) return "both";
+  if (target === "github-copilot" || target === "vscode") return target;
+  throw new Error("existing shared agent has an invalid target");
+}
+
+async function preflightSharedOwnership(
+  target: AgentTargetPlan,
+  targetName: string,
+  content: string,
+): Promise<void> {
+  if (target.physical !== "copilot") return;
+  const targetPath = resolveAgentTargetPath(target.logical, targetName);
+  const existing = await readAgentFile(targetPath).catch((error) => {
+    if (isEnoent(error)) return null;
+    throw error;
+  });
+  if (existing === null) return;
+  const incomingCoverage = sharedCoverage(content);
+  const existingCoverage = sharedCoverage(existing);
+  if (incomingCoverage !== existingCoverage) {
+    throw new Error(
+      `existing shared agent target coverage '${existingCoverage}' does not match incoming '${incomingCoverage}'`,
+    );
+  }
+}
+
+async function existingAgentPaths(target: AgentTargetPlan): Promise<Map<string, string>> {
+  const root = resolveAgentsDir(target.logical);
+  const rootInfo = await lstat(root).catch((error) => {
+    if (isEnoent(error)) return null;
+    throw error;
+  });
+  if (!rootInfo) return new Map();
+  if (!rootInfo.isDirectory() || rootInfo.isSymbolicLink()) {
+    throw new Error(`Agent target directory '${root}' must be a real directory`);
+  }
+  const entries = await readdir(root, { withFileTypes: true }).catch((error) => {
+    if (isEnoent(error)) return [];
+    throw error;
+  });
+  const paths = new Map<string, string>();
+  for (const entry of entries) {
+    if (entry.name.startsWith(".")) continue;
+    if (!entry.name.toLowerCase().endsWith(agentExtension(target.physical))) continue;
+    const key = collisionKey(join(root, entry.name));
+    const existing = paths.get(key);
+    if (existing && existing !== entry.name) {
+      throw new Error(`Agent target path collision: '${existing}' and '${entry.name}'`);
+    }
+    paths.set(key, entry.name);
+  }
+  return paths;
+}
+
+async function performAgentMigrate(
+  options: MigrateOptions,
+  result: MigrateResult,
+  targets: AgentTargetPlan[] = agentTargetPlans(options),
+): Promise<void> {
+  let sources: Awaited<ReturnType<typeof readSourceArtefacts>>;
+  try {
+    sources = await readSourceArtefacts(options.from, "agents", options.name);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    result.errors.push(`Failed to read ${options.from} agents: ${message}`);
+    return;
+  }
+  if (sources.length === 0) {
+    if (options.name) {
+      result.errors.push(`Source artefact '${options.name}' not found in ${options.from} agents`);
+      return;
+    }
+    for (const target of targets) {
+      result.skipped.push({
+        reason: "No source artefacts found",
+        pair: { from: options.from, to: target.logical, type: "agents" },
+      });
+    }
+    return;
+  }
+
+  const sourceFormat = canonicalAgentFormat(options.from);
+  const errorCountBeforeSourcePreflight = result.errors.length;
+  const validSources: typeof sources = [];
+  const identities = new Map<string, { identity: string; sourcePath: string }>();
+  for (const source of sources) {
+    const inspected = inspectAgentSource(sourceFormat, source.content, source.name);
+    if (inspected.errors.length > 0 || !inspected.identity) {
+      for (const error of inspected.errors) {
+        result.errors.push(`${options.from} agents '${source.name}': ${error}`);
+      }
+      continue;
+    }
+    const key = inspected.identity.normalize("NFC").toLowerCase();
+    const existing = identities.get(key);
+    if (existing) {
+      result.errors.push(
+        `Duplicate logical agent identity '${inspected.identity}' in ${existing.sourcePath} and ${source.sourcePath}`,
+      );
+      continue;
+    }
+    identities.set(key, { identity: inspected.identity, sourcePath: source.sourcePath });
+    validSources.push(source);
+  }
+  if (
+    identities.size !== validSources.length ||
+    result.errors.length > errorCountBeforeSourcePreflight
+  ) {
+    return;
+  }
+
+  const pending: PendingAgentWrite[] = [];
+  for (const target of targets) {
+    const translator = getTranslator(sourceFormat, target.physical, "agents");
+    if (!translator) {
+      result.skipped.push({
+        reason: "No translator registered",
+        pair: { from: options.from, to: target.logical, type: "agents" },
+      });
+      continue;
+    }
+
+    const targetPending: PendingAgentWrite[] = [];
+    let targetPreflightFailed = false;
+    for (const source of validSources) {
+      const translated = translator(source.content, source.name);
+      if (!translated) {
+        result.skipped.push({
+          reason: "Translator returned null (empty or unsupported)",
+          pair: { from: options.from, to: target.logical, type: "agents" },
+        });
+        continue;
+      }
+      for (const warning of translated.warnings ?? []) {
+        result.warnings.push(`${options.from} → ${target.logical} (agents): ${warning}`);
+      }
+      if ((translated.errors?.length ?? 0) > 0) {
+        for (const error of translated.errors ?? []) {
+          result.errors.push(
+            `${options.from} → ${target.logical} (agents, ${source.name}): ${error}`,
+          );
+        }
+        targetPreflightFailed = true;
+        continue;
+      }
+      if (translated.skipWrite) continue;
+
+      try {
+        const content =
+          target.physical === "copilot"
+            ? setSharedAgentTarget(translated.content, target.sharedTarget)
+            : translated.content;
+        const artifact = await applyMigrated(
+          target.logical,
+          "agents",
+          translated.targetName,
+          content,
+          true,
+          [],
+          options.from,
+          source.sourcePath,
+        );
+        if (artifact) {
+          await preflightSharedOwnership(target, translated.targetName, content);
+          targetPending.push({
+            target,
+            targetName: translated.targetName,
+            content,
+            sourcePath: source.sourcePath,
+            artifact,
+          });
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        result.errors.push(
+          `Agent preflight failed for ${target.logical}/${translated.targetName}: ${message}`,
+        );
+        targetPreflightFailed = true;
+      }
+    }
+
+    const existingPaths = await existingAgentPaths(target).catch((error) => {
+      const message = error instanceof Error ? error.message : String(error);
+      result.errors.push(`Agent preflight failed for ${target.logical}: ${message}`);
+      targetPreflightFailed = true;
+      return new Map<string, string>();
+    });
+    const pendingPaths = new Map<string, string>();
+    for (const item of targetPending) {
+      const key = collisionKey(item.artifact.targetPath);
+      const existing = existingPaths.get(key);
+      const pendingExisting = pendingPaths.get(key);
+      if (pendingExisting) {
+        result.errors.push(
+          `Agent target path collision: '${pendingExisting}' and '${item.targetName}'`,
+        );
+        targetPreflightFailed = true;
+      } else if (existing && existing !== item.targetName) {
+        result.errors.push(`Agent target path collision: '${existing}' and '${item.targetName}'`);
+        targetPreflightFailed = true;
+      }
+      pendingPaths.set(key, item.targetName);
+    }
+    if (targetPreflightFailed) continue;
+    pending.push(...targetPending);
+  }
+
+  for (const item of pending) {
+    if (options.dryRun) {
+      result.migrated.push(item.artifact);
+      continue;
+    }
+    try {
+      await preflightSharedOwnership(item.target, item.targetName, item.content);
+      const artifact = await applyMigrated(
+        item.target.logical,
+        "agents",
+        item.targetName,
+        item.content,
+        false,
+        [],
+        options.from,
+        item.sourcePath,
+      );
+      if (artifact) result.migrated.push(artifact);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      result.errors.push(
+        `Write failed for ${item.target.logical}/agents/${item.targetName}: ${message}`,
+      );
+    }
+  }
+}
+
+export interface MigrateTargetsOptions {
+  from: AgentName;
+  targets: readonly AgentName[];
+  types: readonly ConfigType[];
+  dryRun?: boolean;
+}
+
+function appendMigrateResult(target: MigrateResult, source: MigrateResult): void {
+  target.migrated.push(...source.migrated);
+  target.skipped.push(...source.skipped);
+  target.warnings.push(...source.warnings);
+  target.errors.push(...source.errors);
+}
+
+/** Execute one migration request containing selected target agents and config types. */
+export async function performMigrateTargets(
+  options: MigrateTargetsOptions,
+): Promise<MigrateResult> {
+  const result: MigrateResult = { migrated: [], skipped: [], warnings: [], errors: [] };
+  const targets = [...new Set(options.targets)];
+  const types = [...new Set(options.types)];
+  const dryRun = options.dryRun ?? false;
+  const selectsAllAgents = ALL_AGENTS.every((agent) => targets.includes(agent));
+
+  for (const type of types) {
+    if (type === "agents") {
+      if (selectsAllAgents) {
+        await performAgentMigrate({ from: options.from, to: "all", type, dryRun }, result);
+        continue;
+      }
+
+      let selectedTargets = targets;
+      if (isSharedAlias(options.from)) {
+        const conflicting = targets.filter(
+          (target) => target !== options.from && isSharedAlias(target),
+        );
+        if (conflicting.length > 0) {
+          result.errors.push("Copilot and VS Code agents use the same physical store");
+          selectedTargets = targets.filter((target) => !conflicting.includes(target));
+        }
+      }
+      const plans = selectedAgentTargetPlans(selectedTargets);
+      if (plans.length > 0) {
+        await performAgentMigrate({ from: options.from, to: "all", type, dryRun }, result, plans);
+      }
+      continue;
+    }
+
+    const targetRequests: Array<AgentName | "all"> = selectsAllAgents ? ["all"] : targets;
+    for (const target of targetRequests) {
+      appendMigrateResult(
+        result,
+        await performMigrate({
+          from: options.from,
+          to: target,
+          type,
+          dryRun,
+        }),
+      );
+    }
+  }
+
+  return result;
+}
+
 /**
  * Execute a cross-agent configuration migration.
  *
@@ -551,12 +1116,27 @@ export async function performMigrate(options: MigrateOptions): Promise<MigrateRe
     errors: [],
   };
 
+  const sharedAgentsConflict =
+    options.to !== "all" && isSharedAlias(options.from) && isSharedAlias(options.to);
+  if (sharedAgentsConflict && options.type === "agents") {
+    result.errors.push("Copilot and VS Code agents use the same physical store");
+    return result;
+  }
+
   const targetAgents: AgentName[] =
     options.to === "all" ? ALL_AGENTS.filter((a) => a !== options.from) : [options.to];
 
   const typesToMigrate: ConfigType[] = options.type ? [options.type] : ALL_CONFIG_TYPES;
 
   for (const type of typesToMigrate) {
+    if (type === "agents") {
+      if (sharedAgentsConflict) {
+        result.errors.push("Copilot and VS Code agents use the same physical store");
+        continue;
+      }
+      await performAgentMigrate(options, result);
+      continue;
+    }
     const sources = await readSourceArtefacts(options.from, type, options.name);
     if (sources.length === 0) {
       // Hard-error when the user explicitly named an artefact that doesn't
@@ -600,6 +1180,13 @@ export async function performMigrate(options: MigrateOptions): Promise<MigrateRe
           for (const w of translated.warnings) {
             result.warnings.push(`${options.from} → ${target} (${type}): ${w}`);
           }
+        }
+
+        if ((translated.errors?.length ?? 0) > 0) {
+          for (const error of translated.errors ?? []) {
+            result.errors.push(`${options.from} → ${target} (${type}): ${error}`);
+          }
+          continue;
         }
 
         // Translator opted out of writing (e.g. every server in the source
