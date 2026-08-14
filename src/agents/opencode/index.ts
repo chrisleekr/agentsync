@@ -858,7 +858,7 @@ function parseVaultArtifact(relativeVaultPath: string): ParsedVaultArtifact | nu
     "tui.jsonc.age": "tui",
     "AGENTS.md.age": "rules",
   } as const;
-  if (segments.length === 0 && first in fileKinds) {
+  if (segments.length === 0 && Object.hasOwn(fileKinds, first)) {
     const name = first.slice(0, -".age".length);
     return {
       kind: fileKinds[first as keyof typeof fileKinds],
@@ -1098,9 +1098,13 @@ async function validateSkillPayload(
 
 async function preflightOpenCodeBatch(relativeVaultPaths: readonly string[]): Promise<void> {
   assertOpenCodeEnvironment();
+  await assertNoManagedOpenCodeSources();
   const roots = resolveOpenCodeConfigRoots();
   assertDistinctRoots(roots);
   await assertNoUnsupportedHomeOpenCodeSource(roots);
+  await assertNoUnsupportedGlobalSources(roots);
+  await assertNoActiveExternalSkills();
+  await assertNoActiveClaudePrompt(roots);
   const targets = relativeVaultPaths.map((vaultPath) => {
     const target = parseVaultArtifact(vaultPath);
     if (!target) throw new Error(`Unsupported OpenCode vault artifact '${vaultPath}'`);

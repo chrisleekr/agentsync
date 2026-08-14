@@ -634,6 +634,43 @@ describe("OpenCode explicit restore", () => {
     await expect(readFile(join(defaultRoot, "AGENTS.md"), "utf8")).rejects.toThrow();
   });
 
+  test.each([
+    {
+      name: "managed config",
+      prepare: () => put(join(root, "managed-opencode", "opencode.json"), "{}\n"),
+      message: "managed config",
+    },
+    {
+      name: "excluded global source",
+      prepare: () => put(join(defaultRoot, "tools", "helper.ts"), "export default {}\n"),
+      message: "excluded from vault backup",
+    },
+    {
+      name: "external skill",
+      prepare: () => put(join(codexPaths.userSkillsDir, "external", "SKILL.md"), skill("external")),
+      message: "backs up only OpenCode-native skills",
+    },
+    {
+      name: "external Claude prompt",
+      prepare: () => put(claudePaths.claudeMd, "external instructions\n"),
+      message: "external instructions",
+    },
+  ])("preflight rejects an active $name before restore", async ({ prepare, message }) => {
+    await prepare();
+
+    await expect(
+      buildOpenCodePlan(createTestAgentSyncConfig()).preflight?.([
+        "opencode/default/AGENTS.md.age",
+      ]),
+    ).rejects.toThrow(message);
+  });
+
+  test("preflight rejects inherited object keys as unsupported artifacts", async () => {
+    await expect(
+      buildOpenCodePlan(createTestAgentSyncConfig()).preflight?.(["opencode/default/toString"]),
+    ).rejects.toThrow("Unsupported OpenCode vault artifact");
+  });
+
   test("additively patches JSONC while preserving local comments, fields, and real secrets", async () => {
     process.env.OPENCODE_DISABLE_EXTERNAL_SKILLS = "true";
     await put(

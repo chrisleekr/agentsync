@@ -229,6 +229,64 @@ describe("runApplyPlan DirArtifact", () => {
     ]);
   });
 
+  test("preflights every decrypted payload before the first apply", async () => {
+    await writeEncrypted(join(workDir, "demo", "commands", "a.md.age"), "A");
+    await writeEncrypted(join(workDir, "demo", "commands", "b.md.age"), "B");
+    const events: string[] = [];
+    const plan: ApplyPlan = {
+      agent: "demo",
+      preflightPayloads: async (artifacts) => {
+        events.push(
+          `preflight:${artifacts.map(({ vaultPath, plaintext }) => `${vaultPath}=${plaintext}`).join(",")}`,
+        );
+      },
+      directives: [
+        {
+          kind: "dir",
+          subdir: "commands",
+          suffix: ".age",
+          recursive: true,
+          dryRunVerb: "would write command:",
+          apply: async (name, body) => {
+            events.push(`apply:${name}=${body}`);
+          },
+        },
+      ],
+    };
+
+    await runApplyPlan(plan, workDir, identity, false);
+
+    expect(events).toEqual([
+      "preflight:demo/commands/a.md.age=A,demo/commands/b.md.age=B",
+      "apply:a.md=A",
+      "apply:b.md=B",
+    ]);
+  });
+
+  test("rejects a payload added after whole-batch validation", async () => {
+    await writeEncrypted(join(workDir, "demo", "commands", "a.md.age"), "A");
+    const plan: ApplyPlan = {
+      agent: "demo",
+      preflightPayloads: async () => {
+        await writeEncrypted(join(workDir, "demo", "commands", "b.md.age"), "B");
+      },
+      directives: [
+        {
+          kind: "dir",
+          subdir: "commands",
+          suffix: ".age",
+          recursive: true,
+          dryRunVerb: "would write command:",
+          apply: async () => {},
+        },
+      ],
+    };
+
+    await expect(runApplyPlan(plan, workDir, identity, false)).rejects.toThrow(
+      "Validated vault payload 'demo/commands/b.md.age' is no longer selected",
+    );
+  });
+
   test("`match` filter rejects non-matching files before decrypt", async () => {
     const vaultDir = workDir;
     await writeEncrypted(join(vaultDir, "demo", "instr", "x.instructions.md.age"), "OK");

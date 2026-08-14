@@ -168,8 +168,9 @@ The vault is a regular Git repository. Inside it, every artefact is suffixed wit
             │   ├── opencode.jsonc.age
             │   ├── tui.json.age
             │   ├── AGENTS.md.age        # only when default is active
-            │   ├── command/<path>.md.age
-            │   └── skills/<path>.tar.age
+            │   ├── command/<path>.md.age    # or commands/
+            │   ├── agent/<path>.md.age      # or agents/
+            │   └── skill/<path>.tar.age     # or skills/
             └── custom/                  # only with OPENCODE_CONFIG_DIR
                 └── ...                  # same physical-root-preserving layout
 ```
@@ -186,7 +187,7 @@ Claude, Cursor, Codex, and Copilot skills follow one shared walker contract (Cla
 - Dot-prefixed names are skipped silently (hidden directories belong to other tools).
 - A name that fails validation (containing `..`, separators, control characters, a leading dash, or the reserved `.` / `..`) is rejected with a printed error. Validation guards every place a name becomes a filesystem path or a CLI argument.
 
-OpenCode keeps its vendor-native recursive `skill/` and `skills/` roots separate by default/custom origin. Its adapter requires valid OpenCode name/description frontmatter, rejects duplicate logical names and symbolic links, and archives nested skill packages independently so a parent bundle never duplicates a child bundle.
+OpenCode keeps its vendor-native recursive `command/`/`commands/`, `agent/`/`agents/`, and `skill/`/`skills/` roots separate by default/custom origin. Its adapter requires valid OpenCode name/description frontmatter, rejects duplicate logical names and symbolic links, and archives nested skill packages independently so a parent bundle never duplicates a child bundle.
 
 Claude plugins are not walked as a file tree. They are represented solely by `plugins.manifest.json.age` (emitted when `claudePlugins.syncPlugins = true`); no plugin asset tree is emitted on push or applied on pull.
 

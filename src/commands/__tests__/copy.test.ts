@@ -1,4 +1,5 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
+import * as fsPromises from "node:fs/promises";
 import { mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
@@ -34,6 +35,7 @@ const RUNTIME_ENV_KEYS = [
   "OPENCODE_TEST_HOME",
   "OPENCODE_DISABLE_AUTOCOMPACT",
   "OPENCODE_DISABLE_PRUNE",
+  "OPENCODE_TEST_MANAGED_CONFIG_DIR",
   ...OPEN_CODE_SKILL_FLAGS,
 ];
 
@@ -41,6 +43,8 @@ type MutableOpenCodePaths = { configDir: string; homeConfigDir: string };
 const mutableOpenCodePaths = AgentPaths.opencode as MutableOpenCodePaths;
 const originalOpenCodeConfigDir = mutableOpenCodePaths.configDir;
 const originalOpenCodeHomeConfigDir = mutableOpenCodePaths.homeConfigDir;
+const originalLstat = fsPromises.lstat;
+let managedPreferencesLstatSpy: { mockRestore(): void } | undefined;
 
 // ── applySingleArtifact — the copy primitive (fake plan, no local-disk apply) ──
 
@@ -175,10 +179,26 @@ describe("performCopy", () => {
     }
     mutableOpenCodePaths.configDir = join(tmpDir, "opencode-target");
     mutableOpenCodePaths.homeConfigDir = join(tmpDir, ".opencode");
+    process.env.OPENCODE_TEST_MANAGED_CONFIG_DIR = join(tmpDir, "managed-opencode");
+    process.env.OPENCODE_DISABLE_EXTERNAL_SKILLS = "true";
+    process.env.OPENCODE_DISABLE_CLAUDE_CODE_PROMPT = "true";
+    if (process.platform === "darwin") {
+      managedPreferencesLstatSpy = spyOn(fsPromises, "lstat").mockImplementation((async (
+        path,
+        options,
+      ) => {
+        if (String(path).startsWith("/Library/Managed Preferences/")) {
+          throw Object.assign(new Error("not found"), { code: "ENOENT" });
+        }
+        return originalLstat(path, options);
+      }) as typeof originalLstat);
+    }
     copyMod = await import("../copy");
   });
 
   afterEach(async () => {
+    managedPreferencesLstatSpy?.mockRestore();
+    managedPreferencesLstatSpy = undefined;
     for (const k of RUNTIME_ENV_KEYS) {
       if (savedEnv[k] === undefined) delete process.env[k];
       else process.env[k] = savedEnv[k];
