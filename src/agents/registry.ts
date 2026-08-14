@@ -9,11 +9,13 @@ import type { CopilotSnapshotResult } from "./copilot";
 import { applyCopilotVault, buildCopilotPlan, snapshotCopilot } from "./copilot";
 import type { CursorSnapshotResult } from "./cursor";
 import { applyCursorVault, buildCursorPlan, snapshotCursor } from "./cursor";
+import type { OpenCodeSnapshotResult } from "./opencode";
+import { applyOpenCodeVault, buildOpenCodePlan, snapshotOpenCode } from "./opencode";
 import type { VsCodeSnapshotResult } from "./vscode";
 import { applyVsCodeVault, buildVsCodePlan, snapshotVsCode } from "./vscode";
 
 /** Supported agent adapters that can snapshot to and restore from the vault. */
-export type AgentName = "cursor" | "claude" | "codex" | "copilot" | "vscode";
+export type AgentName = "cursor" | "claude" | "codex" | "copilot" | "vscode" | "opencode";
 
 // Re-export canonical snapshot types so callers only need to import from registry.
 export type { SnapshotArtifact, SnapshotResult };
@@ -74,6 +76,12 @@ export const Agents: AgentDefinition[] = [
     apply: applyVsCodeVault,
     buildPlan: buildVsCodePlan,
   },
+  {
+    name: "opencode",
+    snapshot: snapshotOpenCode,
+    apply: applyOpenCodeVault,
+    buildPlan: buildOpenCodePlan,
+  },
 ];
 
 // Re-export narrow types for callers that care about the specific shape
@@ -82,5 +90,6 @@ export type {
   CodexSnapshotResult,
   CopilotSnapshotResult,
   CursorSnapshotResult,
+  OpenCodeSnapshotResult,
   VsCodeSnapshotResult,
 };

@@ -35,6 +35,7 @@ import {
   resolveOpenCodeWriteDir,
 } from "../config/paths";
 import { redactSecretLiterals, scanForSecrets } from "../core/sanitizer";
+import { OPEN_CODE_SKILL_FLAGS, openCodeBooleanFlag } from "../opencode/runtime-flags";
 import { MIGRATION_AGENTS, type MigrationAgentName } from "./agent-names";
 import { getTranslator } from "./registry";
 import {
@@ -158,25 +159,6 @@ function isEnoent(error: unknown): boolean {
   return (error as NodeJS.ErrnoException).code === "ENOENT";
 }
 
-const OPEN_CODE_BOOLEAN_FLAGS = [
-  "OPENCODE_DISABLE_EXTERNAL_SKILLS",
-  "OPENCODE_DISABLE_CLAUDE_CODE",
-  "OPENCODE_DISABLE_CLAUDE_CODE_SKILLS",
-] as const;
-type OpenCodeBooleanFlag = (typeof OPEN_CODE_BOOLEAN_FLAGS)[number];
-const OPEN_CODE_TRUE_VALUES = new Set(["true", "yes", "on", "1", "y"]);
-const OPEN_CODE_FALSE_VALUES = new Set(["false", "no", "off", "0", "n"]);
-
-function openCodeBooleanFlag(name: OpenCodeBooleanFlag, env = process.env): boolean {
-  const value = env[name];
-  if (value === undefined) return false;
-  if (OPEN_CODE_TRUE_VALUES.has(value)) return true;
-  if (OPEN_CODE_FALSE_VALUES.has(value)) return false;
-  throw new Error(
-    `${name} must be one of true, yes, on, 1, y, false, no, off, 0, or n (case-sensitive)`,
-  );
-}
-
 async function lstatIfExists(path: string) {
   try {
     return await lstat(path);
@@ -198,7 +180,7 @@ function openCodeEnvironmentErrors(env: NodeJS.ProcessEnv = process.env): string
       "OPENCODE_CONFIG_CONTENT is not supported by AgentSync migration; unset it before migrating OpenCode configuration",
     );
   }
-  for (const flag of OPEN_CODE_BOOLEAN_FLAGS) {
+  for (const flag of OPEN_CODE_SKILL_FLAGS) {
     try {
       openCodeBooleanFlag(flag, env);
     } catch (error) {

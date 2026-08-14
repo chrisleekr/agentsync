@@ -18,6 +18,7 @@ import { parse as parseJsonc } from "jsonc-parser";
 import { Agents } from "../../agents/registry";
 import { AgentPaths } from "../../config/paths";
 import { AgentSyncConfigSchema, MigrateOptionsSchema } from "../../config/schema";
+import { OPEN_CODE_SKILL_FLAGS } from "../../opencode/runtime-flags";
 import {
   applyMigrated,
   performMigrate,
@@ -47,7 +48,7 @@ const mutablePaths = AgentPaths as unknown as {
     instructionsFile: string;
   };
   vscode: { mcpJson: string };
-  opencode: { configDir: string };
+  opencode: { configDir: string; homeConfigDir: string };
 };
 
 let root: string;
@@ -58,6 +59,12 @@ let originalCodexSkills: typeof mutablePaths.codex;
 let originalCopilot: typeof mutablePaths.copilot;
 let originalVscodeMcp: string;
 let originalEnvironment: Record<string, string | undefined>;
+const OPEN_CODE_ENVIRONMENT_KEYS = [
+  "OPENCODE_CONFIG",
+  "OPENCODE_CONFIG_CONTENT",
+  "OPENCODE_CONFIG_DIR",
+  ...OPEN_CODE_SKILL_FLAGS,
+];
 
 function write(path: string, content: string): void {
   mkdirSync(dirname(path), { recursive: true });
@@ -98,16 +105,12 @@ beforeEach(() => {
   originalCodexSkills = { ...mutablePaths.codex };
   originalCopilot = { ...mutablePaths.copilot };
   originalVscodeMcp = AgentPaths.vscode.mcpJson;
-  originalEnvironment = {
-    OPENCODE_CONFIG: process.env.OPENCODE_CONFIG,
-    OPENCODE_CONFIG_CONTENT: process.env.OPENCODE_CONFIG_CONTENT,
-    OPENCODE_CONFIG_DIR: process.env.OPENCODE_CONFIG_DIR,
-    OPENCODE_DISABLE_EXTERNAL_SKILLS: process.env.OPENCODE_DISABLE_EXTERNAL_SKILLS,
-    OPENCODE_DISABLE_CLAUDE_CODE: process.env.OPENCODE_DISABLE_CLAUDE_CODE,
-    OPENCODE_DISABLE_CLAUDE_CODE_SKILLS: process.env.OPENCODE_DISABLE_CLAUDE_CODE_SKILLS,
-  };
+  originalEnvironment = Object.fromEntries(
+    OPEN_CODE_ENVIRONMENT_KEYS.map((key) => [key, process.env[key]]),
+  );
   const configDir = join(root, "default", "opencode");
   mutablePaths.opencode.configDir = configDir;
+  mutablePaths.opencode.homeConfigDir = join(root, ".opencode");
   Object.assign(mutablePaths.claude, {
     claudeMd: join(root, ".claude", "CLAUDE.md"),
     mcpJson: join(root, "claude", ".claude.json"),
@@ -135,12 +138,7 @@ beforeEach(() => {
     instructionsFile: join(root, ".copilot", "copilot-instructions.md"),
   });
   mutablePaths.vscode.mcpJson = join(root, ".vscode", "mcp.json");
-  delete process.env.OPENCODE_CONFIG;
-  delete process.env.OPENCODE_CONFIG_CONTENT;
-  delete process.env.OPENCODE_CONFIG_DIR;
-  delete process.env.OPENCODE_DISABLE_EXTERNAL_SKILLS;
-  delete process.env.OPENCODE_DISABLE_CLAUDE_CODE;
-  delete process.env.OPENCODE_DISABLE_CLAUDE_CODE_SKILLS;
+  for (const key of OPEN_CODE_ENVIRONMENT_KEYS) delete process.env[key];
   expectWritableFixtureTargetsContained();
 });
 
@@ -159,13 +157,14 @@ afterEach(async () => {
 });
 
 describe("OpenCode migration boundary", () => {
-  test("accepts OpenCode for migration without adding a vault adapter", () => {
+  test("keeps OpenCode migration and vault identities aligned", () => {
     expect(Agents.map(({ name }) => name)).toEqual([
       "claude",
       "cursor",
       "codex",
       "copilot",
       "vscode",
+      "opencode",
     ]);
 
     const vaultConfig = AgentSyncConfigSchema.safeParse({
@@ -183,7 +182,7 @@ describe("OpenCode migration boundary", () => {
     });
     expect(vaultConfig.success).toBe(true);
     if (vaultConfig.success) {
-      expect(Object.hasOwn(vaultConfig.data.agents, "opencode")).toBe(false);
+      expect(vaultConfig.data.agents.opencode).toBe(true);
     }
 
     expect(

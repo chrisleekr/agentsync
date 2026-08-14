@@ -6,6 +6,7 @@ import {
   resolveAgentSyncHome,
   resolveOpenCodeConfigDirs,
   resolveOpenCodeConfigFiles,
+  resolveOpenCodeConfigRoots,
   resolveOpenCodeWriteDir,
   resolveWindowsAppData,
 } from "../paths";
@@ -100,6 +101,10 @@ describe("paths", () => {
     const override = resolve(rawOverride);
     const env = { OPENCODE_CONFIG_DIR: rawOverride };
     expect(resolveOpenCodeConfigDirs(env, rawBase)).toEqual([base, override]);
+    expect(resolveOpenCodeConfigRoots(env, rawBase)).toEqual([
+      { origin: "default", dir: base },
+      { origin: "custom", dir: override },
+    ]);
     expect(resolveOpenCodeWriteDir(env, rawBase)).toBe(override);
     expect(resolveOpenCodeConfigFiles(env, rawBase)).toEqual([
       join(base, "config.json"),
@@ -119,10 +124,11 @@ describe("paths", () => {
     ]);
   });
 
-  test("keeps only the dynamic OpenCode config root outside the vault adapters", () => {
+  test("exposes OpenCode's default and fixed-home config roots", () => {
     const configBase = process.env.XDG_CONFIG_HOME?.trim() || join(HOME, ".config");
-    expect(Object.keys(AgentPaths.opencode)).toEqual(["configDir"]);
+    expect(Object.keys(AgentPaths.opencode)).toEqual(["configDir", "homeConfigDir"]);
     expect(AgentPaths.opencode.configDir).toBe(join(configBase, "opencode"));
+    expect(AgentPaths.opencode.homeConfigDir).toBe(join(HOME, ".opencode"));
   });
 
   // Claude plugin state files — distilled into the reinstall manifest.

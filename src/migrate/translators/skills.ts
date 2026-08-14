@@ -17,6 +17,7 @@
  * and merged with translator-emitted extraFiles before write.
  */
 
+import { openCodeSkillContractErrors } from "../../opencode/skill-contract";
 import { defineTranslator, type Translator } from "../types";
 import { hasClaudeFileImport, hasClaudeSkillShellInterpolation } from "./claude-markdown";
 import { parseFrontmatter, parseStructuredFrontmatter } from "./frontmatter";
@@ -74,48 +75,7 @@ const OPEN_CODE_UNMAPPED_SKILL_AUTHORITY = new Set([
   "shell",
 ]);
 
-const OPEN_CODE_SKILL_NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-
-function characterCount(value: string): number {
-  return Array.from(value).length;
-}
-
-export function openCodeSkillContractErrors(content: string, targetName: string): string[] {
-  const parsed = parseStructuredFrontmatter(content.trim());
-  if (!parsed) return ["OpenCode skill requires YAML frontmatter"];
-  if ("error" in parsed) {
-    return parsed.code === "not-a-mapping"
-      ? ["OpenCode skill frontmatter must be a mapping"]
-      : [`OpenCode skill has invalid YAML frontmatter: ${parsed.error}`];
-  }
-
-  const errors: string[] = [];
-  const name = parsed.fields.name;
-  if (typeof name !== "string" || characterCount(name) < 1 || characterCount(name) > 64) {
-    errors.push("OpenCode skill requires a string 'name' between 1 and 64 characters");
-  } else {
-    if (!OPEN_CODE_SKILL_NAME.test(name)) {
-      errors.push(
-        "OpenCode skill 'name' must contain lowercase letters or numbers separated by single hyphens",
-      );
-    }
-    if (name !== targetName) {
-      errors.push(`OpenCode skill must declare name '${targetName}' to match its directory`);
-    }
-  }
-
-  const description = parsed.fields.description;
-  if (
-    typeof description !== "string" ||
-    description.trim().length === 0 ||
-    characterCount(description) > 1024
-  ) {
-    errors.push(
-      "OpenCode skill requires a non-empty string 'description' of at most 1024 characters",
-    );
-  }
-  return errors;
-}
+export { openCodeSkillContractErrors } from "../../opencode/skill-contract";
 
 const openCodeSkillTarget: Translator = (content, sourceName) => {
   const translated = passthroughSkill(content, sourceName);

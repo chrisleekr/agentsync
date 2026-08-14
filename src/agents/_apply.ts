@@ -1,5 +1,5 @@
-import { readdir, readFile } from "node:fs/promises";
-import { basename, join } from "node:path";
+import { lstat, readdir, readFile } from "node:fs/promises";
+import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { log } from "@clack/prompts";
 import type { AgentSyncConfig } from "../config/schema";
 import { decryptString } from "../core/encryptor";
@@ -10,12 +10,25 @@ import { InvalidSkillNameError, validateSkillName } from "./skills-walker";
 export async function readAgeFiles(
   dir: string,
   suffix: ".age" | ".tar.age" = ".age",
+  recursive = false,
 ): Promise<{ name: string; fullPath: string }[]> {
+  const files: { name: string; fullPath: string }[] = [];
+  async function walk(current: string, prefix: string): Promise<void> {
+    const entries = await readdir(current, { withFileTypes: true });
+    for (const entry of entries) {
+      if (entry.isSymbolicLink()) continue;
+      const name = prefix ? `${prefix}/${entry.name}` : entry.name;
+      const fullPath = join(current, entry.name);
+      if (recursive && entry.isDirectory()) {
+        await walk(fullPath, name);
+      } else if (entry.isFile() && entry.name.endsWith(suffix)) {
+        files.push({ name, fullPath });
+      }
+    }
+  }
   try {
-    const names = await readdir(dir);
-    return names
-      .filter((name) => name.endsWith(suffix))
-      .map((name) => ({ name, fullPath: join(dir, name) }));
+    await walk(dir, "");
+    return files.sort((a, b) => a.name.localeCompare(b.name));
   } catch {
     return [];
   }
@@ -27,7 +40,7 @@ export async function readAgeFiles(
  */
 export interface FileArtifact {
   kind: "file";
-  /** Exact basename inside the agent's vault root, e.g. "CLAUDE.md.age". */
+  /** Exact path inside the agent's vault root, e.g. "CLAUDE.md.age". */
   vaultName: string;
   /** Single line emitted in dry-run mode. */
   dryRunLabel: string;
@@ -44,6 +57,8 @@ export interface DirArtifact {
   kind: "dir";
   subdir: string;
   suffix: ".age" | ".tar.age";
+  /** Preserve nested paths below `subdir` instead of accepting direct children only. */
+  recursive?: boolean;
   /**
    * Optional name predicate applied BEFORE suffix-stripping. Useful when an
    * adapter cares only about a specific compound suffix (e.g. copilot's
@@ -69,6 +84,12 @@ export interface EscapeHatch {
 
 export type ApplyDirective = FileArtifact | DirArtifact | EscapeHatch;
 
+/** Decrypted vault content staged for whole-batch validation before restore. */
+export interface DecryptedVaultArtifact {
+  vaultPath: string;
+  plaintext: string;
+}
+
 export interface ApplyPlan {
   agent: string;
   directives: ApplyDirective[];
@@ -79,6 +100,27 @@ export interface ApplyPlan {
    * adapters keep the silent default.
    */
   warnOnUnknownTopLevel?: boolean;
+  /** Validate the complete selected batch before the first target write. */
+  preflight?: (relativeVaultPaths: readonly string[]) => Promise<void>;
+  /** Validate every decrypted payload in a selected batch before the first target write. */
+  preflightPayloads?: (artifacts: readonly DecryptedVaultArtifact[]) => Promise<void>;
+}
+
+function stripArtifactSuffix(name: string, suffix: ".age" | ".tar.age"): string {
+  return name.slice(0, -suffix.length);
+}
+
+async function vaultFileIfExists(path: string): Promise<string | null> {
+  try {
+    const info = await lstat(path);
+    if (!info.isFile() || info.isSymbolicLink()) {
+      throw new Error(`Vault artifact '${path}' must be a regular file`);
+    }
+    return path;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+    throw error;
+  }
 }
 
 /**
@@ -94,6 +136,34 @@ export async function runApplyPlan(
   dryRun: boolean,
 ): Promise<void> {
   const agentVaultDir = join(vaultDir, plan.agent);
+  const selected =
+    plan.preflight || plan.preflightPayloads ? await readAgeFiles(agentVaultDir, ".age", true) : [];
+
+  if (plan.preflight) {
+    await plan.preflight(selected.map(({ name }) => `${plan.agent}/${name}`));
+  }
+
+  let preparedPlaintext: Map<string, string> | undefined;
+  if (!dryRun && plan.preflightPayloads) {
+    const artifacts: DecryptedVaultArtifact[] = [];
+    preparedPlaintext = new Map();
+    for (const { name, fullPath } of selected) {
+      const plaintext = await decryptString(await readFile(fullPath, "utf8"), key);
+      preparedPlaintext.set(name, plaintext);
+      artifacts.push({
+        vaultPath: `${plan.agent}/${name}`,
+        plaintext,
+      });
+    }
+    await plan.preflightPayloads(artifacts);
+  }
+  const payloadFor = async (name: string, fullPath: string): Promise<string> => {
+    if (!preparedPlaintext) return decryptString(await readFile(fullPath, "utf8"), key);
+    if (!preparedPlaintext.has(name)) {
+      throw new Error(`Validated vault payload '${plan.agent}/${name}' is no longer selected`);
+    }
+    return preparedPlaintext.get(name) as string;
+  };
 
   // Top-level .age files are scanned once, then matched against each
   // FileArtifact in plan order. This preserves the existing behaviour where
@@ -111,21 +181,26 @@ export async function runApplyPlan(
 
   for (const d of plan.directives) {
     if (d.kind === "file") {
-      const fullPath = fileByName.get(d.vaultName);
+      const fullPath = d.vaultName.includes("/")
+        ? await vaultFileIfExists(join(agentVaultDir, ...d.vaultName.split("/")))
+        : fileByName.get(d.vaultName);
       if (!fullPath) continue;
       if (d.enabled && !d.enabled()) continue;
       if (dryRun) {
         log.info(d.dryRunLabel);
         continue;
       }
-      const encrypted = await readFile(fullPath, "utf8");
-      const decrypted = await decryptString(encrypted, key);
+      const decrypted = await payloadFor(d.vaultName, fullPath);
       await d.apply(decrypted);
     } else if (d.kind === "dir") {
-      const files = await readAgeFiles(join(agentVaultDir, d.subdir), d.suffix);
+      const files = await readAgeFiles(
+        join(agentVaultDir, ...d.subdir.split("/")),
+        d.suffix,
+        d.recursive,
+      );
       for (const { name, fullPath } of files) {
         if (d.match && !d.match(name)) continue;
-        const bareName = basename(name, d.suffix === ".tar.age" ? ".tar.age" : ".age");
+        const bareName = stripArtifactSuffix(name, d.suffix);
         if (d.filter) {
           const skip = d.filter(bareName);
           if (skip) {
@@ -137,8 +212,8 @@ export async function runApplyPlan(
           log.info(`[dry-run] [${plan.agent}] ${d.dryRunVerb} ${bareName}`);
           continue;
         }
-        const encrypted = await readFile(fullPath, "utf8");
-        const decrypted = await decryptString(encrypted, key);
+        const relativeVaultPath = `${d.subdir}/${name}`;
+        const decrypted = await payloadFor(relativeVaultPath, fullPath);
         await d.apply(bareName, decrypted);
       }
     } else {
@@ -264,56 +339,76 @@ export async function applySingleArtifact(
   key: string,
   dryRun: boolean,
   respectEnabled = false,
+  runPreflight = true,
+  preparedPlaintext?: string,
 ): Promise<void> {
+  if (runPreflight) await plan.preflight?.([relativeVaultPath]);
   const agentVaultDir = join(machineRoot, plan.agent);
   const prefix = `${plan.agent}/`;
   if (!relativeVaultPath.startsWith(prefix)) {
     throw new NoMatchingArtifactError(relativeVaultPath, `path is not under ${plan.agent}/`);
   }
   const rel = relativeVaultPath.slice(prefix.length);
-  const slash = rel.indexOf("/");
+  if (!rel || rel.includes("\\")) {
+    throw new NoMatchingArtifactError(relativeVaultPath, "path is not a safe vault-relative path");
+  }
+  const resolved = resolve(agentVaultDir, ...rel.split("/"));
+  const containment = relative(resolve(agentVaultDir), resolved);
+  if (containment === ".." || containment.startsWith(`..${sep}`) || isAbsolute(containment)) {
+    throw new NoMatchingArtifactError(relativeVaultPath, "path escapes the agent vault root");
+  }
 
-  if (slash === -1) {
-    // Top-level file artifact: a FileArtifact whose vaultName is this basename.
-    const directive = plan.directives.find(
-      (d): d is FileArtifact => d.kind === "file" && d.vaultName === rel,
-    );
-    if (!directive) {
-      throw new NoMatchingArtifactError(relativeVaultPath, "no file artifact owns this name");
-    }
+  const fileDirective = plan.directives.find(
+    (d): d is FileArtifact => d.kind === "file" && d.vaultName === rel,
+  );
+  if (fileDirective) {
     // Honour the `enabled` gate (e.g. claude marketplace) only on a directory
     // sweep, where the user named a prefix, not this file — matching what a full
     // apply would skip. An explicit single-file copy ignores it (respectEnabled
     // false), so the user's named request still wins.
-    if (respectEnabled && directive.enabled && !directive.enabled()) {
+    if (respectEnabled && fileDirective.enabled && !fileDirective.enabled()) {
       throw new NoMatchingArtifactError(relativeVaultPath, "sync is disabled for this artifact");
     }
     if (dryRun) {
-      log.info(directive.dryRunLabel);
+      log.info(fileDirective.dryRunLabel);
       return;
     }
-    const decrypted = await decryptString(await readFile(join(agentVaultDir, rel), "utf8"), key);
-    await directive.apply(decrypted);
+    const decrypted =
+      preparedPlaintext ?? (await decryptString(await readFile(resolved, "utf8"), key));
+    if (runPreflight) {
+      await plan.preflightPayloads?.([{ vaultPath: relativeVaultPath, plaintext: decrypted }]);
+    }
+    await fileDirective.apply(decrypted);
     return;
   }
 
-  const subdir = rel.slice(0, slash);
-  const name = rel.slice(slash + 1);
-  if (name.includes("/")) {
-    // Deeper nesting (e.g. plugins/<name>/…) is not a simple dir directive.
-    throw new NoMatchingArtifactError(relativeVaultPath, "nested artifacts are not copyable");
+  let directive: DirArtifact | undefined;
+  let name = "";
+  let rejectedNestedPath = rel.split("/").length > 2;
+  for (const candidate of plan.directives) {
+    if (candidate.kind !== "dir" || !rel.startsWith(`${candidate.subdir}/`)) continue;
+    const candidateName = rel.slice(candidate.subdir.length + 1);
+    if (!candidate.recursive && candidateName.includes("/")) {
+      rejectedNestedPath = true;
+      continue;
+    }
+    if (!candidateName.endsWith(candidate.suffix)) {
+      continue;
+    }
+    if (candidate.match && !candidate.match(candidateName)) continue;
+    directive = candidate;
+    name = candidateName;
+    break;
   }
-  const directive = plan.directives.find(
-    (d): d is DirArtifact =>
-      d.kind === "dir" &&
-      d.subdir === subdir &&
-      name.endsWith(d.suffix) &&
-      (!d.match || d.match(name)),
-  );
   if (!directive) {
-    throw new NoMatchingArtifactError(relativeVaultPath, `no directory artifact owns ${subdir}/`);
+    throw new NoMatchingArtifactError(
+      relativeVaultPath,
+      rejectedNestedPath
+        ? "nested paths are not supported"
+        : "no directory artifact owns this path",
+    );
   }
-  const bareName = basename(name, directive.suffix === ".tar.age" ? ".tar.age" : ".age");
+  const bareName = stripArtifactSuffix(name, directive.suffix);
   if (directive.filter) {
     const skip = directive.filter(bareName);
     if (skip) throw new NoMatchingArtifactError(relativeVaultPath, skip.reason);
@@ -322,9 +417,10 @@ export async function applySingleArtifact(
     log.info(`[dry-run] [${plan.agent}] ${directive.dryRunVerb} ${bareName}`);
     return;
   }
-  const decrypted = await decryptString(
-    await readFile(join(agentVaultDir, subdir, name), "utf8"),
-    key,
-  );
+  const decrypted =
+    preparedPlaintext ?? (await decryptString(await readFile(resolved, "utf8"), key));
+  if (runPreflight) {
+    await plan.preflightPayloads?.([{ vaultPath: relativeVaultPath, plaintext: decrypted }]);
+  }
   await directive.apply(bareName, decrypted);
 }

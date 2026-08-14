@@ -240,6 +240,7 @@ describe("integration", () => {
     const configContent = await readFile(join(initMachine.vaultDir, "agentsync.toml"), "utf8");
     expect(configContent).toMatch(/recipients/);
     expect(configContent).toMatch(/init-machine/);
+    expect(configContent).toContain("opencode = false");
     // v2: a fresh init writes the integer version, not the legacy string "1".
     expect(await peekVaultVersion(resolveConfigPath(initMachine.vaultDir))).toEqual({ kind: "v2" });
     expect(runGit(["rev-parse", "--abbrev-ref", "HEAD"], initMachine.vaultDir)).toBe("main");
@@ -447,6 +448,7 @@ describe("integration", () => {
         codex: false,
         copilot: false,
         vscode: false,
+        opencode: false,
       },
       remote: {
         url: bareRepoPath,
@@ -630,6 +632,7 @@ describe("integration", () => {
         codex: false,
         copilot: false,
         vscode: false,
+        opencode: false,
       },
       remote: {
         url: bareRepoPath,

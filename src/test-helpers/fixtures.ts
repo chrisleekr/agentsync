@@ -24,7 +24,14 @@ export function createTestAgentSyncConfig(
   return {
     version: CURRENT_VAULT_VERSION,
     recipients: {},
-    agents: { cursor: true, claude: true, codex: true, copilot: true, vscode: true },
+    agents: {
+      cursor: true,
+      claude: true,
+      codex: true,
+      copilot: true,
+      vscode: true,
+      opencode: true,
+    },
     remote: { url: "test://vault", branch: "main" },
     claudePlugins: { syncPlugins: false },
     security: { secretScan: "standard", allowSecretValues: [], redactBase64Values: true },
@@ -38,6 +45,7 @@ const DEFAULT_AGENTS = {
   codex: false,
   copilot: false,
   vscode: false,
+  opencode: false,
 };
 
 /** Runtime fixture paths and key material for one logical machine. */

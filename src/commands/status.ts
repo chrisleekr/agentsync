@@ -7,9 +7,11 @@ import { defineCommand } from "citty";
 import pc from "picocolors";
 import type { AgentDefinition, SnapshotArtifact } from "../agents/registry";
 import { Agents } from "../agents/registry";
+import { snapshotSafetyIssues } from "../agents/snapshot-safety";
 import { machineVaultRoot } from "../config/paths";
 import type { AgentSyncConfig } from "../config/schema";
 import { decryptString } from "../core/encryptor";
+import { securityToPolicy } from "../core/sanitizer";
 import { listMachines } from "./copy";
 import {
   loadPrivateKey,
@@ -117,6 +119,8 @@ export async function computeSyncStatus(
   const registry = opts.agentsOverride ?? agentDefinitionsForStatus;
   const enabledAgents = registry.filter((a) => config.agents[a.name as keyof typeof config.agents]);
   const rows: SyncRow[] = [];
+  const blockedAgents = new Set<string>();
+  const secretPolicy = securityToPolicy(config.security);
   // Compare local state against the source machine's namespace — this machine's
   // own by default, or another machine's for a `status --machine` pre-copy diff.
   const machineRoot = machineVaultRoot(runtime.vaultDir, opts.sourceMachine ?? runtime.machineName);
@@ -125,8 +129,26 @@ export async function computeSyncStatus(
     let artifacts: SnapshotArtifact[] = [];
     try {
       const result = await agent.snapshot(config);
+      const safetyIssues = snapshotSafetyIssues(agent.name, result, secretPolicy);
+      if (safetyIssues.length > 0) {
+        blockedAgents.add(agent.name);
+        rows.push({
+          agent: agent.name,
+          displayName: "(snapshot blocked)",
+          sourcePath: null,
+          vaultPath: "",
+          vaultAbsPath: "",
+          isSkill: false,
+          status: "error",
+          detail: safetyIssues.join("; "),
+          localHash: null,
+          vaultHash: null,
+        });
+        continue;
+      }
       artifacts = result.artifacts;
     } catch (err) {
+      blockedAgents.add(agent.name);
       rows.push({
         agent: agent.name,
         displayName: "(snapshot failed)",
@@ -184,6 +206,7 @@ export async function computeSyncStatus(
   if (privateKey) {
     const knownVaultPaths = new Set(rows.map((r) => r.vaultPath));
     for (const agent of enabledAgents) {
+      if (blockedAgents.has(agent.name)) continue;
       const agentVaultDir = join(machineRoot, agent.name);
       const ageFiles = await collectAgeFiles(agentVaultDir, machineRoot);
       for (const vaultRelPath of ageFiles) {

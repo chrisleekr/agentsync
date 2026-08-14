@@ -62,6 +62,7 @@ describe("loader", () => {
     expect(config.remote.url).toBe("git@github.com:alice/vault.git");
     expect(config.agents.cursor).toBeTrue();
     expect(config.agents.vscode).toBeFalse();
+    expect(config.agents.opencode).toBeFalse();
   });
 
   test("loadConfig throws on missing file", async () => {

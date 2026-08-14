@@ -3,11 +3,11 @@ import { dirname, join } from "node:path";
 import { log } from "@clack/prompts";
 import { defineCommand } from "citty";
 import { type AgentDefinition, type AgentName, Agents } from "../agents/registry";
-import { NEVER_SYNC_WARNING_PREFIX, WALKER_SECRET_WARNING_PREFIX } from "../agents/skills-walker";
+import { snapshotSafetyIssues, walkerWarningMatchesSelection } from "../agents/snapshot-safety";
 import { machineVaultRoot } from "../config/paths";
 import { encryptString } from "../core/encryptor";
 import { GitClient } from "../core/git";
-import { scanForSecrets, securityToPolicy, shouldNeverSync } from "../core/sanitizer";
+import { securityToPolicy, shouldNeverSync } from "../core/sanitizer";
 import { loadVaultConfigOrExit, resolveRuntimeContext } from "./shared";
 
 let agentDefinitions: AgentDefinition[] = Agents;
@@ -28,24 +28,7 @@ export function __setPushAgentsForTesting(agents: AgentDefinition[] | null): voi
  * abort. Non-skill selections cannot match any walker warning by
  * construction (warnings only fire from the skills-walker).
  */
-export function walkerWarningMatchesSelection(
-  warning: string,
-  pathFilter: Set<string>,
-  agentName: string,
-): boolean {
-  for (const vp of pathFilter) {
-    if (!vp.endsWith(".tar.age")) continue;
-    if (!vp.startsWith(`${agentName}/`)) continue;
-    const skillDir = vp.slice(0, -".tar.age".length);
-    // Require a directory boundary so e.g. selecting `claude/skills/foo`
-    // does not match a warning about a sibling `claude/skills/foo-extra`.
-    // Walker warnings always cite a specific file inside the skill dir
-    // (e.g. `…/claude/skills/foo/SKILL.md`), so the trailing slash is
-    // always present in practice.
-    if (warning.includes(`${skillDir}/`)) return true;
-  }
-  return false;
-}
+export { walkerWarningMatchesSelection };
 
 /** Preview entry emitted to onPreview callbacks during a dry-run push. */
 export type PushPreviewEntry = {
@@ -149,69 +132,7 @@ export async function performPush(
         ? { ...raw, artifacts: raw.artifacts.filter((a) => pathFilter.has(a.vaultPath)) }
         : raw;
     allSnapshots.push({ agent, snapshot });
-    for (const artifact of snapshot.artifacts) {
-      for (const w of artifact.warnings) {
-        if (w.startsWith("Detected literal secret")) {
-          secretErrors.push(`[${agent.name}] ${w}`);
-        }
-      }
-      // Defense-in-depth chokepoint: scan the raw plaintext that is about to
-      // be encrypted for credentials the adapter-level sanitizer never saw —
-      // markdown bodies, prompts, and prose-style JSON values. A future agent
-      // adapter cannot bypass this by forgetting to call a helper; every byte
-      // heading for encryptString flows through here.
-      //
-      // Skill/agent bundles are base64-encoded tars. Their alphabet
-      // statistically overlaps with `AKIA…` and `AIza…` credentials, so
-      // scanning the encoded form would false-positive without reliably
-      // catching credentials *inside* the bundle (encoding scrambles
-      // prefixes). The encoded surface is intentionally skipped here.
-      // Bundle internals are covered separately at the walker layer:
-      // `collectInteriorViolations` in `src/agents/skills-walker.ts` scans
-      // each readable interior file body with `scanForSecrets` before the
-      // tar buffer is built, and the Copilot agents walk in
-      // `src/agents/copilot.ts` invokes the same helper. Both surface
-      // `Detected literal secret …` warnings on the snapshot, which the
-      // walker-warning loop below escalates to a fatal abort.
-      if (artifact.vaultPath.endsWith(".tar.age")) {
-        continue;
-      }
-      for (const w of scanForSecrets(artifact.plaintext, artifact.sourcePath, secretPolicy)) {
-        secretErrors.push(`[${agent.name}] ${w}`);
-      }
-    }
-    // Walker-level warnings are emitted on the top-level snapshot.warnings
-    // array (not per-artifact, since the offending bundle is dropped before
-    // any artifact is built). Two prefixes escalate to a fatal abort:
-    //   - `never-sync inside skill: <path>` — a path-pattern hit inside a
-    //     skill, so the bundle would have contained a hard never-sync file.
-    //   - `Detected literal secret (<name>) in <path>` — a credential found
-    //     inside an interior file body during the walker's per-file scan.
-    //     The central scan a few lines above skips `.tar.age` artifacts, so
-    //     this is the only layer that catches a key pasted into `SKILL.md`,
-    //     READMEs, or any other file inside a skill/agent bundle.
-    //
-    // The walker prefix is matched with the trailing `(` so it stays distinct
-    // from `Detected literal secret for field <name>` emitted by
-    // `redactSecretLiterals` (sanitizeClaudeHooks/Mcp/PluginManifest/PluginMcp).
-    // Those redactor warnings land on BOTH artifact.warnings AND
-    // snapshot.warnings; the per-artifact loop above already catches them, so
-    // a broad `Detected literal secret` match here would double-report.
-    //
-    // When a path allowlist is active, walker warnings name the dropped
-    // bundle's path. Only escalate when that path overlaps the allowlist
-    // (i.e. the user is trying to push the skill the walker rejected).
-    for (const w of snapshot.warnings) {
-      if (
-        !(w.startsWith(NEVER_SYNC_WARNING_PREFIX) || w.startsWith(WALKER_SECRET_WARNING_PREFIX))
-      ) {
-        continue;
-      }
-      if (pathFilter !== undefined && !walkerWarningMatchesSelection(w, pathFilter, agent.name)) {
-        continue;
-      }
-      secretErrors.push(`[${agent.name}] ${w}`);
-    }
+    secretErrors.push(...snapshotSafetyIssues(agent.name, snapshot, secretPolicy, pathFilter));
   }
 
   if (secretErrors.length > 0) {
@@ -319,7 +240,7 @@ export const pushCommand = defineCommand({
   args: {
     agent: {
       type: "string",
-      description: "Specific agent to sync (cursor|claude|codex|copilot|vscode)",
+      description: "Specific agent to sync (cursor|claude|codex|copilot|vscode|opencode)",
     },
     message: { type: "string", description: "Custom commit message" },
     dryRun: {

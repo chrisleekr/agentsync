@@ -4,13 +4,13 @@ import { Agents } from "../registry";
 // Agents registry
 
 describe("Agents registry", () => {
-  test("contains exactly 5 agents", () => {
-    expect(Agents).toHaveLength(5);
+  test("contains exactly 6 agents", () => {
+    expect(Agents).toHaveLength(6);
   });
 
   test("contains the expected agent names", () => {
     const names = Agents.map((a) => a.name).sort();
-    expect(names).toEqual(["claude", "codex", "copilot", "cursor", "vscode"]);
+    expect(names).toEqual(["claude", "codex", "copilot", "cursor", "opencode", "vscode"]);
   });
 
   test("every agent name is unique", () => {

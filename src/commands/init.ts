@@ -20,6 +20,7 @@ const DEFAULT_AGENTS = {
   codex: true,
   copilot: true,
   vscode: false,
+  opencode: false,
 };
 
 const DEFAULT_SECURITY = {

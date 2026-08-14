@@ -22,8 +22,8 @@ This will permanently REMOVE:
 
 This will NOT touch:
   ~/.claude/, ~/.cursor/, ~/.codex/         YOUR LOCAL AGENT FILES are completely
-  ~/.copilot/, VS Code user dir             off-limits to this command — every
-                                            file in these directories stays exactly
+  ~/.copilot/, ~/.config/opencode/          off-limits to this command — every
+  OPENCODE_CONFIG_DIR, VS Code user dir     file in these directories stays exactly
                                             as it is on disk.
   <agentsync home>/key.txt                  Your age private key.
   ${remote}    The remote repository.
@@ -49,8 +49,8 @@ This will:
 
 This will NOT touch:
   ~/.claude/, ~/.cursor/, ~/.codex/         YOUR LOCAL AGENT FILES are completely
-  ~/.copilot/, VS Code user dir             off-limits to this command — every
-                                            file in these directories stays exactly
+  ~/.copilot/, ~/.config/opencode/          off-limits to this command — every
+  OPENCODE_CONFIG_DIR, VS Code user dir     file in these directories stays exactly
                                             as it is on disk.
   ${vaultDir}    The LOCAL vault clone — pass
                                             --scope=all if you also want it gone.

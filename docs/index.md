@@ -1,6 +1,6 @@
 ---
 title: AgentSync
-description: Sync AI agent configs across machines. Encrypted Git-backed vault for Claude, Cursor, Codex, Copilot, and VS Code. Install guide and quickstart.
+description: Sync AI agent configs across machines. Encrypted Git-backed vault for Claude, Cursor, Codex, Copilot, VS Code, and OpenCode. Install guide and quickstart.
 hide:
   - navigation
 ---
@@ -84,7 +84,7 @@ Detailed flag, outcome, and caveat tables live in [Commands](commands.md).
 
 - :material-sitemap: **[Architecture](architecture.md)** — system model, vault format, push and copy pipelines, security boundaries.
 - :material-console: **[Commands](commands.md)** — every subcommand, flag, outcome, and caveat in one reference.
-- :material-swap-horizontal: **[Migrate](migrate.md)** — translate config between Claude, Cursor, Codex, Copilot, VS Code, and OpenCode. OpenCode support is local migration only; vault backup and restore still cover the five configured adapters.
+- :material-swap-horizontal: **[Migrate](migrate.md)** — translate config between Claude, Cursor, Codex, Copilot, VS Code, and OpenCode.
 - :material-cog: **[Operations](operations.md)** — key rotation, troubleshooting catalogue.
 - :material-account-wrench: **[Contributing](contributing.md)** — develop from source, run the test suite, release discipline, doc ownership.
 

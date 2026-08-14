@@ -23,6 +23,15 @@ describe("AgentSyncConfigSchema", () => {
   test("validates minimal config", () => {
     const parsed = AgentSyncConfigSchema.parse(VALID_BASE);
     expect(parsed.remote.branch).toBe("main");
+    expect(parsed.agents.opencode).toBe(false);
+  });
+
+  test("accepts an explicit OpenCode vault opt-in", () => {
+    const parsed = AgentSyncConfigSchema.parse({
+      ...VALID_BASE,
+      agents: { ...VALID_BASE.agents, opencode: true },
+    });
+    expect(parsed.agents.opencode).toBe(true);
   });
 
   test("applies default branch 'main' when branch is omitted", () => {

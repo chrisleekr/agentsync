@@ -67,7 +67,7 @@ describe("getSupportedPairs", () => {
   test("returns all pairs when no type filter is given", () => {
     const pairs = getSupportedPairs();
     expect(pairs.length).toBeGreaterThan(0);
-    // Existing 74 pairs plus 41 OpenCode migration-only pairs.
+    // Existing 74 pairs plus 41 OpenCode migration pairs.
     expect(pairs.length).toBe(115);
   });
 

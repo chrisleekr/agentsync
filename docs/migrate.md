@@ -6,7 +6,7 @@ description: Migrate AI agent configuration between Claude, Cursor, Codex, Copil
 
 ## Overview
 
-Translate configuration from one AI agent's format to another. The migrator reads local agent config files, transforms them through format-specific translators, and writes the result to the target agent's config location. OpenCode is available here as a migration endpoint only; it is not a vault adapter.
+Translate configuration from one AI agent's format to another. The migrator reads local agent config files, transforms them through format-specific translators, and writes the result to the target agent's config location. This local migration path is separate from OpenCode's opt-in vault adapter.
 
 No vault initialisation is required — migration operates on local files only.
 
@@ -94,7 +94,7 @@ OpenCode Boolean flags use the runtime's case-sensitive values: `true`, `yes`, `
 
 OpenCode writes preflight that each path remains under the active config root, reject existing symbolic-link or non-directory path components and symbolic-link or non-file targets, then flush an exclusive sibling temporary file before rename. Existing file modes are preserved. Command, agent, and selected skill batches preflight all target paths and normalized identities before the first write. Skill packages still apply sequentially. These batches are not filesystem transactions and directory traversal is not claimed to be race-free.
 
-The OpenCode endpoint deliberately excludes vault backup and restore, TUI configuration, plugins, tools, themes, modes, project/account/remote configuration, auth/runtime/data/cache files, network fetching of remote configuration or referenced content, and a dedicated rules directory. See the official OpenCode documentation for [config precedence](https://opencode.ai/docs/config/), [rules](https://opencode.ai/docs/rules/), [commands](https://opencode.ai/docs/commands/), [skills](https://opencode.ai/docs/skills/), [agents](https://opencode.ai/docs/agents/), and [MCP servers](https://opencode.ai/docs/mcp-servers/).
+The local `migrate` path deliberately excludes vault operations, TUI configuration, plugins, tools, themes, modes, project/account/remote configuration, auth/runtime/data/cache files, network fetching of remote configuration or referenced content, and a dedicated rules directory. OpenCode's separate opt-in vault adapter is documented in [Operations](operations.md#opencode-vault-boundary). See the official OpenCode documentation for [config precedence](https://opencode.ai/docs/config/), [rules](https://opencode.ai/docs/rules/), [commands](https://opencode.ai/docs/commands/), [skills](https://opencode.ai/docs/skills/), [agents](https://opencode.ai/docs/agents/), and [MCP servers](https://opencode.ai/docs/mcp-servers/).
 
 ## Migration Flow
 

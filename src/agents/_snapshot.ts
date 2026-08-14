@@ -1,12 +1,12 @@
 /**
  * src/agents/_snapshot.ts
  *
- * Snapshot-side toolkit shared by every agent adapter. These verbs replace the
- * walk/collect fragments that were copy-pasted across the five adapters so a
+ * Snapshot-side toolkit shared by the flat-file adapters. These verbs replace the
+ * walk/collect fragments that were copy-pasted across those adapters so a
  * cross-cutting rule (symlink hardening, the never-sync gate, the artifact
  * shape) lives in exactly one place. Per-adapter variation is passed in as a
  * parameter (match predicate, vault-path builder, scope list), never branched
- * on the agent name.
+ * on the agent name. OpenCode uses a separate recursive, origin-aware contract.
  */
 
 import type { Dirent } from "node:fs";

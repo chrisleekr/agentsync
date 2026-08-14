@@ -160,9 +160,18 @@ The vault is a regular Git repository. Inside it, every artefact is suffixed wit
         │   ├── settings.json.age
         │   ├── rules/<name>.mdc.age
         │   └── skills/<name>.tar.age
-        └── copilot/
-            ├── instructions.md.age
-            └── skills/<name>.tar.age
+        ├── copilot/
+        │   ├── instructions.md.age
+        │   └── skills/<name>.tar.age
+        └── opencode/                    # opt-in
+            ├── default/
+            │   ├── opencode.jsonc.age
+            │   ├── tui.json.age
+            │   ├── AGENTS.md.age        # only when default is active
+            │   ├── command/<path>.md.age
+            │   └── skills/<path>.tar.age
+            └── custom/                  # only with OPENCODE_CONFIG_DIR
+                └── ...                  # same physical-root-preserving layout
 ```
 
 Skill bundles are tar archives so directory-shaped assets round-trip cleanly.
@@ -171,11 +180,13 @@ Claude plugins are not stored as an encrypted tree. The marketplace is the sourc
 
 ## Skills and plugins
 
-Skills follow the same walker contract on every agent (Claude plugins are manifest-only — see above):
+Claude, Cursor, Codex, and Copilot skills follow one shared walker contract (Claude plugins are manifest-only — see above):
 
 - A missing or symlinked root is skipped silently (it is a legitimate "this agent has no skills directory" signal, not a failure).
 - Dot-prefixed names are skipped silently (hidden directories belong to other tools).
 - A name that fails validation (containing `..`, separators, control characters, a leading dash, or the reserved `.` / `..`) is rejected with a printed error. Validation guards every place a name becomes a filesystem path or a CLI argument.
+
+OpenCode keeps its vendor-native recursive `skill/` and `skills/` roots separate by default/custom origin. Its adapter requires valid OpenCode name/description frontmatter, rejects duplicate logical names and symbolic links, and archives nested skill packages independently so a parent bundle never duplicates a child bundle.
 
 Claude plugins are not walked as a file tree. They are represented solely by `plugins.manifest.json.age` (emitted when `claudePlugins.syncPlugins = true`); no plugin asset tree is emitted on push or applied on pull.
 
@@ -197,7 +208,7 @@ Every agent path is resolved through a single resolver that maps `<agent>.<dir>`
 
 ## Cross-agent migration boundary
 
-Cross-agent migration is local-only and separate from encrypted vault snapshots. Custom agents have six logical names but five physical formats because Copilot CLI and VS Code share `~/.copilot/agents/*.agent.md`. The registry contains the 20 directed pairs among Claude, Cursor, Codex, OpenCode, and the shared format; orchestration resolves the VS Code alias and prevents a same-store rewrite. OpenCode remains outside encrypted vault snapshots until its separate vault adapter is implemented.
+Cross-agent migration is local-only and separate from encrypted vault snapshots. Custom agents have six logical names but five physical formats because Copilot CLI and VS Code share `~/.copilot/agents/*.agent.md`. The registry contains the 20 directed pairs among Claude, Cursor, Codex, OpenCode, and the shared format; orchestration resolves the VS Code alias and prevents a same-store rewrite. The OpenCode vault adapter is a separate opt-in backup path; it does not make migration read or write the vault.
 
 <div class="agentsync-darknodes" markdown>
 

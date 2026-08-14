@@ -2,8 +2,8 @@
 
 Hermetic end-to-end tests that exercise the full AgentSync pipeline against
 real agent CLIs and a real `file://` git vault, without touching the host's
-`$HOME`, `~/.claude`, `~/.cursor`, `~/.codex`, `~/.copilot`, or
-`~/.config/agentsync`.
+`$HOME`, `~/.claude`, `~/.cursor`, `~/.codex`, `~/.copilot`,
+`~/.config/opencode`, or `~/.config/agentsync`.
 
 The harness is fixture-driven: a single complete-real-customer state under
 `docker/e2e/fixtures/home/` is rsynced into `/home/agent/` at container start.
@@ -100,6 +100,10 @@ back to the local `homedir()` on `copy` (B24).
 | Copilot | `~/.copilot/instructions/*.instructions.md`, `prompts/*.prompt.md`, `agents/*.agent.md` | each whole | n/a | — |
 | Copilot | `~/.copilot/skills/<n>/` | whole tarred | n/a | dotfiles, symlinks |
 | Copilot | `~/.copilot/lsp-config.json`, `settings.json`, `mcp-config.json` | NEVER (current intent) | — | always local |
+| OpenCode | default and custom `opencode.{json,jsonc}`, `tui.{json,jsonc}` | whole JSONC, comments retained | yes | unsupported effective overlays stop snapshot/status |
+| OpenCode | active-root `AGENTS.md`; recursive `{command,commands,agent,agents}/**/*.md` | whole | n/a (markdown) | inactive-root `AGENTS.md`, symlinks, duplicate normalized identities |
+| OpenCode | recursive native `{skill,skills}/<path>/` | whole dir tarred, safe sidecars included | n/a | symlinks, never-sync files, policy-detected literal secrets |
+| OpenCode | plugins, modes, tools in either global root, themes in the default root, project config, auth/account/runtime/data/cache/remote overlays | NEVER | — | excluded sources either stop the filesystem snapshot when observable or remain outside its completeness claim; custom-root themes are inactive in the pinned loader |
 | All     | `*.bak`, `*~` | NEVER (B21) | — | always local |
 
 ## Scenarios
@@ -119,6 +123,7 @@ back to the local `homedir()` on `copy` (B24).
 | 17 | `17-git-protocol.sh` | `git://` transport via an in-container `git daemon` on 127.0.0.1:9418 (B7) |
 | 18 | `18-copilot.sh` | Pin/verify canonical `copilot-instructions.md` filename (B16) + single-file `.agent.md` shape (B15); pin not-synced state of `lsp-config.json`, `settings.json`, `mcp-config.json` (B13, B14, B23) |
 | 19 | `19-codex-overrides.sh` | `AGENTS.override.md` precedence (B17); `~/.agents/skills` canonical + legacy fallback (B22); `themes/**` absence (B25); `~/.codex/rules/` intent pin (B18) |
+| 20 | `20-opencode.sh` | Opt-in OpenCode global filesystem snapshot, default-origin vault layout, JSONC redaction/path portability, additive secret-preserving explicit copy, recursive commands/agents, and native skill sidecars |
 
 ## Runtime pinning policy
 
@@ -173,7 +178,7 @@ bun run e2e:all
 ## Running
 
 ```bash
-bun run e2e:all                            # full sweep (13 scenarios)
+bun run e2e:all                            # full sweep (14 scenarios)
 SCENARIO=18-copilot.sh bun run e2e:scenario  # one scenario
 bun run e2e:smoke                          # legacy single-up smoke
 bun run e2e:audit                          # decrypted-blob leak audit
@@ -217,4 +222,5 @@ docker/e2e/
     ├── 17-git-protocol.sh
     ├── 18-copilot.sh
     ├── 19-codex-overrides.sh
+    └── 20-opencode.sh
 ```

@@ -53,6 +53,7 @@ export const AgentSyncConfigSchema = z.object({
     codex: z.boolean().default(true),
     copilot: z.boolean().default(true),
     vscode: z.boolean().default(false),
+    opencode: z.boolean().default(false),
   }),
   remote: z.object({
     url: RemoteUrlSchema,

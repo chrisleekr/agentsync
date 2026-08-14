@@ -9,7 +9,7 @@ import {
   seedVaultRepo,
   type TestMachineFixture,
 } from "../../../test-helpers/fixtures";
-import { createInitialState } from "../state";
+import { AGENTS, createInitialState } from "../state";
 import { createStore } from "../store";
 import { ensureMachinesLoaded, onMachinesKey } from "../tabs/machines";
 
@@ -29,6 +29,10 @@ function readyStore(list: string[], cursor = 0) {
 }
 
 describe("onMachinesKey — navigation", () => {
+  test("includes OpenCode in the machine-copy adapter loop", () => {
+    expect(AGENTS).toContain("opencode");
+  });
+
   test("down/up move the cursor within bounds", () => {
     const store = readyStore(["a", "b", "c"]);
     expect(onMachinesKey(key("down"), store)).toBe(true);
