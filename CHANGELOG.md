@@ -1,5 +1,38 @@
 # Changelog
 
+## [0.2.0](https://github.com/chrisleekr/agentsync/compare/v0.1.14...v0.2.0) (2026-08-14)
+
+
+### ⚠ BREAKING CHANGES
+
+* **doctor:** detect legacy daemon leftovers ([#208](https://github.com/chrisleekr/agentsync/issues/208))
+
+### Features
+
+* **agents:** add OpenCode vault backup and explicit restore ([#212](https://github.com/chrisleekr/agentsync/issues/212)) ([918eb50](https://github.com/chrisleekr/agentsync/commit/918eb50f133bc4dd20f56bb060719911c58bcfbc))
+* **config:** add `agentsync config` command and [security] schema section ([#185](https://github.com/chrisleekr/agentsync/issues/185)) ([b9d39ae](https://github.com/chrisleekr/agentsync/commit/b9d39ae4ea8e389322cfca62f167ecdd22c61010))
+* **daemon:** durable health state, divergence escalation, staleness checks, watcher pre-filter ([#188](https://github.com/chrisleekr/agentsync/issues/188)) ([ff845c8](https://github.com/chrisleekr/agentsync/commit/ff845c8712be8e6a98cddf4fd1ab786ac03bbe85))
+* **discovery:** add `agentsync ls` and `status --machine` for cross-machine browse ([#187](https://github.com/chrisleekr/agentsync/issues/187)) ([8fc2009](https://github.com/chrisleekr/agentsync/commit/8fc200971fc470e9483c78acedff043196d43f11))
+* **doctor:** detect legacy daemon leftovers ([#208](https://github.com/chrisleekr/agentsync/issues/208)) ([5c331e3](https://github.com/chrisleekr/agentsync/commit/5c331e35e1efb3960a46705b650bd762a55e045d))
+* **key:** add recipient revocation (key remove), key list, and crash-safe rotate ([#184](https://github.com/chrisleekr/agentsync/issues/184)) ([462b28e](https://github.com/chrisleekr/agentsync/commit/462b28e620b111e14c724466d8590c0d2623a3bc))
+* **migrate:** add custom agent translation ([#209](https://github.com/chrisleekr/agentsync/issues/209)) ([3330aa8](https://github.com/chrisleekr/agentsync/commit/3330aa8cc60a0481c27f856fd0fa446a2f281c6a))
+* **migrate:** add OpenCode migration endpoint ([#211](https://github.com/chrisleekr/agentsync/issues/211)) ([e571923](https://github.com/chrisleekr/agentsync/commit/e571923194aff87b9f4889086c4cdde3715b5cab))
+* **sanitizer:** configurable secret policy, PEM/JWT detection, honest docs ([#186](https://github.com/chrisleekr/agentsync/issues/186)) ([4e4d1df](https://github.com/chrisleekr/agentsync/commit/4e4d1dfdffd88793dbcdaf00feb5df1a4942b554))
+* **security:** add redact secretScan mode with placeholder-aware copy ([#191](https://github.com/chrisleekr/agentsync/issues/191)) ([1179879](https://github.com/chrisleekr/agentsync/commit/11798792a5ea2d3de5caeb76d5a43f0d5dd9ce7d))
+* **tui:** add Config tab and surface daemon staleness on the Dashboard ([#189](https://github.com/chrisleekr/agentsync/issues/189)) ([1a07530](https://github.com/chrisleekr/agentsync/commit/1a07530e5385375fb809b2e8ab0fb3c103a06a81))
+* **tui:** generalise vault `x` removal to any artifact, not just skills ([#182](https://github.com/chrisleekr/agentsync/issues/182)) ([4c1175c](https://github.com/chrisleekr/agentsync/commit/4c1175c2ea988b75123931eedc2c00f0f86c1b83))
+
+
+### Bug Fixes
+
+* **deps:** update npm dependencies to ^0.4.0 ([#194](https://github.com/chrisleekr/agentsync/issues/194)) ([e4ffbbd](https://github.com/chrisleekr/agentsync/commit/e4ffbbd1063d7dc9481697ab8a4d636e7d86f74d))
+* **security:** always block the age key and PEM private keys even when secretScan=off ([#190](https://github.com/chrisleekr/agentsync/issues/190)) ([d8f9a82](https://github.com/chrisleekr/agentsync/commit/d8f9a82b1d063af96c1c999a5cd293d66c6fd5aa))
+
+
+### Code Refactoring
+
+* **daemon:** remove the background daemon and auto-sync subsystem ([#192](https://github.com/chrisleekr/agentsync/issues/192)) ([c8dc086](https://github.com/chrisleekr/agentsync/commit/c8dc0864212b654ff0a8f3de26a460721200ba2e))
+
 ## [0.1.14](https://github.com/chrisleekr/agentsync/compare/v0.1.13...v0.1.14) (2026-06-11)
 
 
