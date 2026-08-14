@@ -5,7 +5,7 @@
 </div>
 
 <p align="center">
-	<strong>Snapshot, redact, encrypt, and restore Claude, Cursor, Codex, Copilot, and VS Code setup from a Git-backed vault.</strong>
+	<strong>Snapshot, redact, encrypt, and restore Claude, Cursor, Codex, Copilot, VS Code, and OpenCode setup from a Git-backed vault.</strong>
 </p>
 
 <p align="center">
@@ -21,7 +21,7 @@
 
 AgentSync is a Bun-based CLI that snapshots AI agent configuration from your machine, encrypts it with [age](https://age-encryption.org/) recipients, and backs it up into a Git-backed vault under a per-machine namespace, so you can copy any machine's setup onto another.
 
-It is for people who keep global agent configuration in tools like Claude, Cursor, Codex, Copilot, and VS Code and want one encrypted backup per machine instead of manually copying files between laptops. Each machine pushes into its own `machines/<name>/` namespace; bringing config to a new machine is an explicit `copy`, never a silent overwrite.
+It is for people who keep global agent configuration in tools like Claude, Cursor, Codex, Copilot, VS Code, and OpenCode and want one encrypted backup per machine instead of manually copying files between laptops. Each machine pushes into its own `machines/<name>/` namespace; bringing config to a new machine is an explicit `copy`, never a silent overwrite.
 
 ## Install
 
@@ -83,8 +83,8 @@ The full quickstart, command reference, and architecture model live at the docum
 | `key` | Add, list, or remove recipients (revocation), or rotate the local machine key. |
 | `config` | View or change vault config: agents enabled and secret-handling policy. |
 | `skill` | Remove a skill from the vault explicitly. |
-| `migrate` | Translate configuration between Claude, Cursor, Codex, Copilot, VS Code, and OpenCode formats locally. OpenCode is migration-only; it is not yet a vault adapter. |
-| `destroy` | Wipe the local vault clone (default) or the remote vault contents via a normal commit. **Local agent files (`~/.claude`, `~/.cursor`, …) are never touched.** |
+| `migrate` | Translate configuration between Claude, Cursor, Codex, Copilot, VS Code, and OpenCode formats locally. |
+| `destroy` | Wipe the local vault clone (default) or the remote vault contents via a normal commit. **Local agent files, including `~/.config/opencode` and `OPENCODE_CONFIG_DIR`, are never touched.** |
 
 Full flag tables and caveats: [Commands](https://chrisleekr.github.io/agentsync/commands/).
 

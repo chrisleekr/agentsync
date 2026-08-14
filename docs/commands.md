@@ -157,7 +157,7 @@ agentsync push --dry-run
 
 | Flag | Default | Description |
 |---|---|---|
-| `--agent` | all enabled | Restrict to one agent (`claude`, `cursor`, `codex`, `copilot`, `vscode`). |
+| `--agent` | all enabled | Restrict to one agent (`claude`, `cursor`, `codex`, `copilot`, `vscode`, `opencode`). |
 | `--message` | auto | Custom commit message for the vault commit. |
 | `--dry-run` | `false` | Show actions and previews without writing or pushing. |
 
@@ -169,6 +169,7 @@ agentsync push --dry-run
 - The sanitiser is a hard gate. Literal secrets or never-sync paths abort the entire push before bytes leave the machine. See [Push aborts because secrets were detected](operations.md#push-aborts-because-secrets-were-detected).
 - Reconciliation is fast-forward only. Divergence aborts the push with recovery guidance.
 - `--dry-run` exercises the snapshot, sanitiser, and encryption pipeline so previews reflect what would actually be written.
+- OpenCode is disabled by default. Enable it with `agentsync config set agents.opencode true`; its supported global sources and fail-closed exclusions are documented in [Operations](operations.md#opencode-vault-boundary).
 
 ## copy
 
@@ -197,6 +198,7 @@ agentsync copy work-laptop claude/ --dry-run      # preview the whole claude nam
 - `copy` is **additive**: it applies what the source has and never deletes a local file the source omits.
 - Reconciliation is fast-forward only.
 - Plugins are not copyable via `copy` — they are reinstalled from the recorded manifest by `plugin install`.
+- OpenCode restore is origin-aware. `opencode/custom/...` artifacts require `OPENCODE_CONFIG_DIR` on the destination and never fall back to the default XDG root. JSONC restore is additive and preserves local-only fields, comments, and real local secrets over redaction placeholders.
 
 ## ls
 
@@ -346,7 +348,7 @@ agentsync config set security.allowSecretValues '["AKIA-not-a-real-key"]'
 
 | Key | Type | Meaning |
 |---|---|---|
-| `agents.<claude\|cursor\|codex\|copilot\|vscode>` | boolean | Whether that agent is snapshotted on push. |
+| `agents.<claude\|cursor\|codex\|copilot\|vscode\|opencode>` | boolean | Whether that agent is snapshotted on push. OpenCode defaults to `false`. |
 | `claudePlugins.syncPlugins` | boolean | Record the Claude plugin reinstall manifest on push. |
 | `security.secretScan` | `standard`\|`strict`\|`redact`\|`off` | Push-time secret-scan mode. `standard` = built-in credential patterns (abort on hit); `strict` also flags JWTs; `redact` replaces ordinary tokens in structured config with a `$AGENTSYNC_REDACTED_<FIELD>` placeholder and pushes (`copy` then preserves a real local value over the placeholder); `off` waives the ordinary patterns. The catastrophic tier (age key, PEM) still blocks in every mode. |
 | `security.allowSecretValues` | string[] (JSON) | Literal values exempt from ordinary-token detection and base64 redaction. Catastrophic-tier values (age key, PEM private keys) are never exemptible. |
@@ -464,7 +466,7 @@ agentsync migrate --from <agent> --to <agent|all> [--type <type>] [--name <file>
 **Caveats**:
 
 - `migrate` operates on **local files only**. No vault initialisation is required.
-- OpenCode is a migration endpoint only. It is deliberately absent from `[agents]`, `push`, `status`, `copy`, and the vault adapter registry.
+- `migrate` remains local-only. OpenCode's separate vault adapter participates in `[agents]`, `push`, `status`, `copy`, and the TUI without making migration read or write the vault.
 - OpenCode reads JSON configuration and command, agent, and skill directories from both the default root and an additive `OPENCODE_CONFIG_DIR`. Global `AGENTS.md` comes only from `OPENCODE_CONFIG_DIR` when set, otherwise from the default root. Each MCP-bearing file must be valid before layers merge. `OPENCODE_CONFIG` and `OPENCODE_CONFIG_CONTENT` are rejected independently because AgentSync cannot safely preserve an external file or inline source during writes.
 - OpenCode MCP writes patch only incoming servers into the active directory's existing `opencode.jsonc`, then `opencode.json`, or a new `opencode.json`. A colliding server value is replaced as a unit, target-only servers remain, and lower-precedence effective servers are not copied upward. Literal `Authorization` credentials and OAuth `clientSecret` values abort. OpenCode-source `{env:...}` and `{file:...}` values remain unresolved when a target can carry them, while the same syntax in a non-OpenCode source is rejected before it can become active in OpenCode.
 - OpenCode normally discovers Claude and shared Codex skills without copying. `OPENCODE_DISABLE_EXTERNAL_SKILLS` disables both shared roots; `OPENCODE_DISABLE_CLAUDE_CODE` or `OPENCODE_DISABLE_CLAUDE_CODE_SKILLS` disables Claude discovery, so AgentSync copies those skills into native OpenCode storage. The flags accept only the documented case-sensitive Boolean values listed in [Migrate](migrate.md).
@@ -485,7 +487,8 @@ commit (`--scope=remote`), or both (`--scope=all`).
 
 > **Agent files are never touched.** `agentsync destroy` does not read,
 > modify, or delete a single byte under `~/.claude/`, `~/.cursor/`,
-> `~/.codex/`, `~/.copilot/`, or your VS Code user directory, regardless
+> `~/.codex/`, `~/.copilot/`, `~/.config/opencode/`, the directory selected
+> by `OPENCODE_CONFIG_DIR`, or your VS Code user directory, regardless
 > of scope. This guarantee is enforced by code (no `AgentPaths.*` import
 > in `src/commands/destroy.ts`) and by test (three sha256+mtime
 > invariants in `destroy.test.ts`).
@@ -523,7 +526,7 @@ agentsync destroy --scope=all           # both
 
 | Scope | After destroy |
 |---|---|
-| `local` | `~/.config/agentsync/vault/` (or `%APPDATA%/agentsync/vault/` on Windows) is gone. `~/.config/agentsync/key.txt`, the remote, and every `~/.<agent>/` directory are unchanged. Re-init from the same remote restores the clone. |
+| `local` | `~/.config/agentsync/vault/` (or `%APPDATA%/agentsync/vault/` on Windows) is gone. `~/.config/agentsync/key.txt`, the remote, and all local agent directories, including `~/.config/opencode/` and `OPENCODE_CONFIG_DIR`, are unchanged. Re-init from the same remote restores the clone. |
 | `remote` | Remote branch has a new commit, `destroy: clear vault content`, that removes every previously-tracked file. Local vault dir keeps its `.git/` history. Other machines that still have the data can `git revert <sha>` to recover. |
 | `all` | Both of the above. Remote is wiped first so a failed push does not leave you with a wiped local that cannot reach the remote. |
 

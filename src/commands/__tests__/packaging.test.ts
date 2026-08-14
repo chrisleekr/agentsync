@@ -25,6 +25,8 @@ const nodeVersionPinPath = join(rootDir, ".nvmrc");
 const packageJsonSchema = z.object({
   name: z.string(),
   version: z.string(),
+  description: z.string(),
+  keywords: z.array(z.string()),
   private: z.boolean().optional(),
   bin: z.record(z.string(), z.string()),
   files: z.array(z.string()),
@@ -86,6 +88,8 @@ describe("package release surface", () => {
     );
 
     expect(packageJson.name).toBe("@chrisleekr/agentsync");
+    expect(packageJson.description).toContain("OpenCode");
+    expect(packageJson.keywords).toContain("opencode");
     expect(packageJson.private).toBeFalse();
     expect(packageJson.bin.agentsync).toBe("dist/cli.js");
     expect(packageJson.files).toEqual(["dist/cli.js", "README.md", "LICENSE"]);

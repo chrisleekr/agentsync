@@ -131,7 +131,10 @@ export const AgentPaths = {
   },
   opencode: (() => {
     const xdgConfigHome = nonBlank(process.env.XDG_CONFIG_HOME) ?? join(HOME, ".config");
-    return { configDir: join(xdgConfigHome, "opencode") };
+    return {
+      configDir: join(xdgConfigHome, "opencode"),
+      homeConfigDir: join(HOME, ".opencode"),
+    };
   })(),
 } as const;
 
@@ -147,6 +150,25 @@ export function resolveOpenCodeConfigDirs(
     if (!dirs.includes(resolvedOverride)) dirs.push(resolvedOverride);
   }
   return dirs;
+}
+
+export type OpenCodeConfigOrigin = "default" | "custom";
+
+export interface OpenCodeConfigRoot {
+  origin: OpenCodeConfigOrigin;
+  dir: string;
+}
+
+/** Stable vault identities for OpenCode's default and additive custom roots. */
+export function resolveOpenCodeConfigRoots(
+  env: NodeJS.ProcessEnv = process.env,
+  defaultDir: string = AgentPaths.opencode.configDir,
+): OpenCodeConfigRoot[] {
+  const [base, override] = resolveOpenCodeConfigDirs(env, defaultDir);
+  return [
+    { origin: "default", dir: base },
+    ...(override ? [{ origin: "custom" as const, dir: override }] : []),
+  ];
 }
 
 /** Ordered global OpenCode config sources, from lowest to highest precedence. */

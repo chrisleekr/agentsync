@@ -84,9 +84,9 @@ describe("onMigrateKey — To: sub-cursor", () => {
 });
 
 describe("onMigrateKey — Type: multi-select with sub-cursor", () => {
-  test("exposes OpenCode only in migration agent choices", () => {
+  test("exposes OpenCode in migration and vault agent choices", () => {
     expect(MIGRATE_AGENTS).toContain("opencode");
-    expect(AGENTS).not.toContain("opencode" as never);
+    expect(AGENTS).toContain("opencode");
   });
   test("C1 and C9 surface agents as a selectable migration type", () => {
     expect(MIGRATE_TYPES).toContain("agents");

@@ -85,6 +85,13 @@ afterAll(() => {
   mock.restore();
 });
 
+describe("push command help", () => {
+  test("lists OpenCode as a selectable adapter", () => {
+    const args = pushMod.pushCommand.args as Record<string, { description?: string }>;
+    expect(args.agent?.description).toContain("opencode");
+  });
+});
+
 describe("performPush — never-sync inside skill", () => {
   let tmpDir: string;
   let machine: TestMachineFixture;
@@ -823,6 +830,25 @@ describe("performPush — dry-run still runs Phase 1 security gates", () => {
 });
 
 describe("walkerWarningMatchesSelection — directory boundary", () => {
+  test("prefers an exact annotated vault identity", async () => {
+    const { walkerWarningMatchesSelection } = await import("../push");
+    const filter = new Set(["opencode/default/skills/foo.tar.age"]);
+    expect(
+      walkerWarningMatchesSelection(
+        "never-sync inside skill: /tmp/foo/auth.json [vault:opencode%2Fdefault%2Fskills%2Ffoo.tar.age]",
+        filter,
+        "opencode",
+      ),
+    ).toBe(true);
+    expect(
+      walkerWarningMatchesSelection(
+        "never-sync inside skill: /tmp/foo/auth.json [vault:opencode%2Fdefault%2Fskills%2Fbar.tar.age]",
+        filter,
+        "opencode",
+      ),
+    ).toBe(false);
+  });
+
   test("matches the exact selected skill via trailing slash", async () => {
     const { walkerWarningMatchesSelection } = await import("../push");
     const filter = new Set(["claude/skills/foo.tar.age"]);

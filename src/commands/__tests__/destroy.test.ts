@@ -103,6 +103,8 @@ function seedAgentFiles(agentRoot: string): AgentFingerprint[] {
     [".cursor/rules", "global.mdc", "# cursor global rule\nstays untouched\n"],
     [".codex", "AGENTS.md", "# codex agents\nstays untouched\n"],
     [".copilot", "copilot-instructions.md", "# copilot\nstays untouched\n"],
+    [".config/opencode", "AGENTS.md", "# opencode default\nstays untouched\n"],
+    ["custom-opencode", "AGENTS.md", "# opencode custom\nstays untouched\n"],
   ] as const;
 
   const prints: AgentFingerprint[] = [];
@@ -298,6 +300,8 @@ describe("performDestroy", () => {
       expect((await stat(machine.vaultDir)).isDirectory()).toBe(true);
       // Preview text mentions the agent-file guarantee verbatim.
       expect(stdout.output).toContain("YOUR LOCAL AGENT FILES");
+      expect(stdout.output).toContain("~/.config/opencode/");
+      expect(stdout.output).toContain("OPENCODE_CONFIG_DIR");
     });
 
     test("gate 2 wrong phrase aborts at gate 2", async () => {

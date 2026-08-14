@@ -132,6 +132,7 @@ describe("Config tab against a real vault", () => {
     expect(c.phase).toBe("ready");
     const keys = c.rows.map((r) => r.key);
     expect(keys).toContain("agents.claude");
+    expect(keys).toContain("agents.opencode");
     expect(keys).toContain("security.secretScan");
     // No non-settable keys leak in.
     expect(keys.some((k) => k.startsWith("remote") || k === "version")).toBe(false);
@@ -157,6 +158,16 @@ describe("Config tab against a real vault", () => {
     expect(store.getState().config.lastResult?.ok).toBe(true);
     const config = await loadConfig(resolveConfigPath(machine.vaultDir));
     expect(config.agents.vscode).toBe(true);
+  });
+
+  test("space enables OpenCode backup from its safe default", async () => {
+    const store = createStore(createInitialState());
+    await loadAndFocus(store, "agents.opencode");
+    expect(onConfigKey(key("space"), store)).toBe(true);
+    await waitFor(() => store.getState().config.lastResult !== null);
+
+    const config = await loadConfig(resolveConfigPath(machine.vaultDir));
+    expect(config.agents.opencode).toBe(true);
   });
 
   test("right cycles an enum and persists it", async () => {

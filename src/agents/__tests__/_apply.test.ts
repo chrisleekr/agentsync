@@ -58,6 +58,16 @@ describe("readAgeFiles", () => {
     const tarOnly = await readAgeFiles(workDir, ".tar.age");
     expect(tarOnly.map((f) => f.name)).toEqual(["c.tar.age"]);
   });
+
+  test("preserves sorted relative paths when recursive discovery is enabled", async () => {
+    mkdirSync(join(workDir, "nested", "deep"), { recursive: true });
+    writeFileSync(join(workDir, "root.age"), "root");
+    writeFileSync(join(workDir, "nested", "deep", "child.age"), "child");
+    expect((await readAgeFiles(workDir, ".age", true)).map((file) => file.name)).toEqual([
+      "nested/deep/child.age",
+      "root.age",
+    ]);
+  });
 });
 
 describe("runApplyPlan FileArtifact", () => {
@@ -165,6 +175,116 @@ describe("runApplyPlan DirArtifact", () => {
       { name: "bar.md", body: "BAR" },
       { name: "foo.md", body: "FOO" },
     ]);
+  });
+
+  test("passes nested relative names only to recursive directives", async () => {
+    await writeEncrypted(join(workDir, "demo", "commands", "team", "review.md.age"), "REVIEW");
+    const seen: string[] = [];
+    const plan: ApplyPlan = {
+      agent: "demo",
+      directives: [
+        {
+          kind: "dir",
+          subdir: "commands",
+          suffix: ".age",
+          recursive: true,
+          dryRunVerb: "would write command:",
+          apply: async (name) => {
+            seen.push(name);
+          },
+        },
+      ],
+    };
+    await runApplyPlan(plan, workDir, identity, false);
+    expect(seen).toEqual(["team/review.md"]);
+  });
+
+  test("preflights the complete recursive artifact set before apply", async () => {
+    await writeEncrypted(join(workDir, "demo", "commands", "a.md.age"), "A");
+    await writeEncrypted(join(workDir, "demo", "commands", "nested", "b.md.age"), "B");
+    const events: string[] = [];
+    const plan: ApplyPlan = {
+      agent: "demo",
+      preflight: async (paths) => {
+        events.push(`preflight:${paths.join(",")}`);
+      },
+      directives: [
+        {
+          kind: "dir",
+          subdir: "commands",
+          suffix: ".age",
+          recursive: true,
+          dryRunVerb: "would write command:",
+          apply: async (name) => {
+            events.push(`apply:${name}`);
+          },
+        },
+      ],
+    };
+    await runApplyPlan(plan, workDir, identity, false);
+    expect(events).toEqual([
+      "preflight:demo/commands/a.md.age,demo/commands/nested/b.md.age",
+      "apply:a.md",
+      "apply:nested/b.md",
+    ]);
+  });
+
+  test("preflights every decrypted payload before the first apply", async () => {
+    await writeEncrypted(join(workDir, "demo", "commands", "a.md.age"), "A");
+    await writeEncrypted(join(workDir, "demo", "commands", "b.md.age"), "B");
+    const events: string[] = [];
+    const plan: ApplyPlan = {
+      agent: "demo",
+      preflightPayloads: async (artifacts) => {
+        events.push(
+          `preflight:${artifacts.map(({ vaultPath, plaintext }) => `${vaultPath}=${plaintext}`).join(",")}`,
+        );
+      },
+      directives: [
+        {
+          kind: "dir",
+          subdir: "commands",
+          suffix: ".age",
+          recursive: true,
+          dryRunVerb: "would write command:",
+          apply: async (name, body) => {
+            events.push(`apply:${name}=${body}`);
+          },
+        },
+      ],
+    };
+
+    await runApplyPlan(plan, workDir, identity, false);
+
+    expect(events).toEqual([
+      "preflight:demo/commands/a.md.age=A,demo/commands/b.md.age=B",
+      "apply:a.md=A",
+      "apply:b.md=B",
+    ]);
+  });
+
+  test("rejects a payload added after whole-batch validation", async () => {
+    await writeEncrypted(join(workDir, "demo", "commands", "a.md.age"), "A");
+    const plan: ApplyPlan = {
+      agent: "demo",
+      preflightPayloads: async () => {
+        await writeEncrypted(join(workDir, "demo", "commands", "b.md.age"), "B");
+      },
+      directives: [
+        {
+          kind: "dir",
+          subdir: "commands",
+          suffix: ".age",
+          recursive: true,
+          dryRunVerb: "would write command:",
+          apply: async () => {},
+        },
+      ],
+    };
+
+    await expect(runApplyPlan(plan, workDir, identity, false)).rejects.toThrow(
+      "Validated vault payload 'demo/commands/b.md.age' is no longer selected",
+    );
   });
 
   test("`match` filter rejects non-matching files before decrypt", async () => {

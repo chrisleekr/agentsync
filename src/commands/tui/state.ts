@@ -5,7 +5,7 @@ import type { SyncRow } from "../status";
 export const TAB_IDS = ["dashboard", "sync", "machines", "migrate", "activity", "config"] as const;
 export type TabId = (typeof TAB_IDS)[number];
 
-export const AGENTS = ["claude", "cursor", "codex", "copilot", "vscode"] as const;
+export const AGENTS = ["claude", "cursor", "codex", "copilot", "vscode", "opencode"] as const;
 export type AgentName = (typeof AGENTS)[number];
 export const MIGRATE_AGENTS = MIGRATION_AGENTS;
 

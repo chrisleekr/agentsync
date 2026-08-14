@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import { mkdir, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { join } from "node:path";
+import { gzipSync } from "node:zlib";
 import { createTmpDir } from "../../test-helpers/fixtures";
 import { archiveDirectory, extractArchive, listArchiveEntries } from "../tar";
 
@@ -11,6 +12,39 @@ import { archiveDirectory, extractArchive, listArchiveEntries } from "../tar";
   const require = createRequire(import.meta.url);
   const realFsPromises = require("node:fs/promises") as typeof import("node:fs/promises");
   mock.module("node:fs/promises", () => ({ ...realFsPromises, default: realFsPromises }));
+}
+
+function craftedTar(
+  entries: Array<{
+    path: string;
+    body?: string | Buffer;
+    declaredSize?: number;
+    linkpath?: string;
+    type?: "0" | "1" | "5" | "6" | "x";
+  }>,
+): Buffer {
+  const encoded = entries.map(({ path, body = "", declaredSize, linkpath, type = "0" }) => {
+    const header = Buffer.alloc(512);
+    header.write(path, 0, 100, "utf8");
+    header.write("0000644", 100, 8, "ascii");
+    header.write("0000000", 108, 8, "ascii");
+    header.write("0000000", 116, 8, "ascii");
+    const payload = Buffer.isBuffer(body) ? body : Buffer.from(body, "utf8");
+    header.write((declaredSize ?? payload.length).toString(8).padStart(11, "0"), 124, 12, "ascii");
+    header.write("00000000000", 136, 12, "ascii");
+    header.write("        ", 148, 8, "ascii");
+    header.write(type, 156, 1, "ascii");
+    if (linkpath) header.write(linkpath, 157, 100, "utf8");
+    header.write("ustar\x0000", 257, 8, "binary");
+    let checksum = 0;
+    for (const byte of header) checksum += byte;
+    header.write(checksum.toString(8).padStart(6, "0"), 148, 6, "ascii");
+    header[154] = 0;
+    header[155] = 0x20;
+    const padding = Buffer.alloc((512 - (payload.length % 512)) % 512);
+    return Buffer.concat([header, payload, padding]);
+  });
+  return gzipSync(Buffer.concat([...encoded, Buffer.alloc(1024)]));
 }
 
 describe("tar", () => {
@@ -68,6 +102,20 @@ describe("tar", () => {
     const destDir = join(tmpDir, "dest-empty");
     await mkdir(destDir, { recursive: true });
     await expect(extractArchive(buf, destDir)).resolves.toBeUndefined();
+  });
+
+  test("extractArchive preserves safe hard-link entries", async () => {
+    const buf = craftedTar([
+      { path: "target.md", body: "shared content" },
+      { path: "alias.md", type: "1", linkpath: "target.md" },
+    ]);
+    const destDir = join(tmpDir, "dest-hardlink");
+    await mkdir(destDir, { recursive: true });
+
+    await extractArchive(buf, destDir);
+
+    expect(await Bun.file(join(destDir, "target.md")).text()).toBe("shared content");
+    expect(await Bun.file(join(destDir, "alias.md")).text()).toBe("shared content");
   });
 
   // zip-slip protection: absolute path entries are dropped
@@ -136,6 +184,204 @@ describe("tar", () => {
     expect(entries).not.toContain("refs");
   });
 
+  test("archiveDirectory excludes a selected subtree", async () => {
+    const srcDir = join(tmpDir, "src-exclude");
+    await mkdir(join(srcDir, "keep"), { recursive: true });
+    await mkdir(join(srcDir, "nested-skill"), { recursive: true });
+    await writeFile(join(srcDir, "keep", "notes.md"), "keep", "utf8");
+    await writeFile(join(srcDir, "nested-skill", "SKILL.md"), "exclude", "utf8");
+
+    const buffer = await archiveDirectory(srcDir, {
+      exclude: (path) => path === "nested-skill" || path.startsWith("nested-skill/"),
+    });
+    expect((await listArchiveEntries(buffer)).map((entry) => entry.path)).toEqual([
+      "keep/notes.md",
+    ]);
+  });
+
+  test("strict archive inspection rejects link entries", async () => {
+    if (process.platform === "win32") return;
+    const srcDir = join(tmpDir, "src-strict-link");
+    await mkdir(srcDir, { recursive: true });
+    const target = join(tmpDir, "outside.txt");
+    await writeFile(target, "outside", "utf8");
+    await symlink(target, join(srcDir, "linked.txt"));
+    const buffer = await archiveDirectory(srcDir);
+
+    await expect(listArchiveEntries(buffer, { strict: true })).rejects.toThrow(
+      "Unsupported archive entry type",
+    );
+  });
+
+  test("strict archive inspection rejects FIFO entries", async () => {
+    await expect(
+      listArchiveEntries(craftedTar([{ path: "special", type: "6" }]), { strict: true }),
+    ).rejects.toThrow("Unsupported archive entry type");
+  });
+
+  test("strict resource limits reject compressed and declared oversized entries", async () => {
+    const limits = {
+      maxEntries: 10,
+      maxEntryBytes: 64 * 1024,
+      maxTotalBytes: 128 * 1024,
+      maxPathBytes: 256,
+      maxExpandedBytes: 256 * 1024,
+    };
+    const compressed = craftedTar([
+      { path: "large.txt", body: Buffer.alloc(limits.maxEntryBytes + 1, "A") },
+    ]);
+    expect(compressed.length).toBeLessThan(limits.maxEntryBytes);
+    await expect(listArchiveEntries(compressed, { strict: true, limits })).rejects.toThrow(
+      "Archive entry exceeds",
+    );
+
+    const declared = craftedTar([
+      { path: "declared.txt", body: Buffer.alloc(65), declaredSize: 65 },
+    ]);
+    await expect(
+      listArchiveEntries(declared, {
+        strict: true,
+        limits: { ...limits, maxEntryBytes: 64 },
+      }),
+    ).rejects.toThrow("64-byte limit");
+  });
+
+  test("strict resource limits reject entry count, total bytes, and path length", async () => {
+    const base = {
+      maxEntries: 2,
+      maxEntryBytes: 64,
+      maxTotalBytes: 64,
+      maxPathBytes: 16,
+      maxExpandedBytes: 64 * 1024,
+    };
+    await expect(
+      listArchiveEntries(
+        craftedTar([
+          { path: "one", body: "1" },
+          { path: "two", body: "2" },
+          { path: "three", body: "3" },
+        ]),
+        { strict: true, limits: base },
+      ),
+    ).rejects.toThrow("2-entry limit");
+    await expect(
+      listArchiveEntries(
+        craftedTar([
+          { path: "one", body: Buffer.alloc(40) },
+          { path: "two", body: Buffer.alloc(40) },
+        ]),
+        { strict: true, limits: { ...base, maxEntries: 10 } },
+      ),
+    ).rejects.toThrow("64-byte total limit");
+    await expect(
+      listArchiveEntries(craftedTar([{ path: "path-is-too-long.txt", body: "x" }]), {
+        strict: true,
+        limits: base,
+      }),
+    ).rejects.toThrow("16-byte limit");
+  });
+
+  test("resource limits do not change non-strict TUI inspection", async () => {
+    const archive = craftedTar([{ path: "large.txt", body: "large body" }]);
+    await expect(
+      listArchiveEntries(archive, {
+        limits: {
+          maxEntries: 0,
+          maxEntryBytes: 0,
+          maxTotalBytes: 0,
+          maxPathBytes: 0,
+          maxExpandedBytes: 0,
+        },
+      }),
+    ).resolves.toHaveLength(1);
+  });
+
+  test("strict resource limits count metadata headers and bound total expansion", async () => {
+    const limits = {
+      maxEntries: 2,
+      maxEntryBytes: 64 * 1024,
+      maxTotalBytes: 128 * 1024,
+      maxPathBytes: 256,
+      maxExpandedBytes: 64 * 1024,
+    };
+    await expect(
+      listArchiveEntries(
+        craftedTar([
+          { path: "PaxHeaders/one", type: "x" },
+          { path: "PaxHeaders/two", type: "x" },
+          { path: "PaxHeaders/three", type: "x" },
+        ]),
+        { strict: true, limits },
+      ),
+    ).rejects.toThrow("2-entry limit");
+
+    await expect(
+      listArchiveEntries(craftedTar([{ path: "small.txt", body: "small" }]), {
+        strict: true,
+        limits: { ...limits, maxEntries: 10, maxExpandedBytes: 1024 },
+      }),
+    ).rejects.toThrow("1024-byte limit");
+  });
+
+  test("strict archive inspection accepts normal directory parents", async () => {
+    const buffer = craftedTar([
+      { path: "helpers/", type: "5" },
+      { path: "helpers/run.md", body: "run" },
+      { path: "SKILL.md", body: "skill" },
+    ]);
+    expect((await listArchiveEntries(buffer, { strict: true })).map((entry) => entry.path)).toEqual(
+      ["helpers/run.md", "SKILL.md"],
+    );
+  });
+
+  test("strict archive inspection rejects normalized duplicates and file-directory collisions", async () => {
+    const cases = [
+      {
+        entries: [
+          { path: "SKILL.md", body: "one" },
+          { path: "SKILL.md", body: "two" },
+        ],
+        message: "path collision",
+      },
+      {
+        entries: [
+          { path: "Café.md", body: "one" },
+          { path: "CAFÉ.md", body: "two" },
+        ],
+        message: "path collision",
+      },
+      {
+        entries: [
+          { path: "helpers", body: "file" },
+          { path: "helpers/run.md", body: "child" },
+        ],
+        message: "file/directory collision",
+      },
+      {
+        entries: [
+          { path: "helpers/run.md", body: "child" },
+          { path: "helpers", body: "file" },
+        ],
+        message: "file/directory collision",
+      },
+    ] as const;
+    for (const item of cases) {
+      await expect(
+        listArchiveEntries(craftedTar([...item.entries]), { strict: true }),
+      ).rejects.toThrow(item.message);
+    }
+  });
+
+  test.each([
+    "../escape.txt",
+    "/etc/evil.txt",
+    "C:/Windows/evil.txt",
+  ])("strict archive inspection rejects unsafe path %s", async (path) => {
+    await expect(
+      listArchiveEntries(craftedTar([{ path, body: "bad" }]), { strict: true }),
+    ).rejects.toThrow("Unsafe archive entry path");
+  });
+
   test("archiveDirectory() default behavior is unchanged (no skipSymlinks)", async () => {
     // Regression: existing Copilot agent-tarballs (copilot/agents/*.tar.age)
     // call archiveDirectory without options. They expect symlinks to be
@@ -192,78 +438,12 @@ describe("tar", () => {
   });
 
   test("listArchiveEntries drops absolute, traversal, and drive-letter entries", async () => {
-    // Build a tar buffer that DOES contain unsafe entries by piping
-    // through tar's Pack stream directly with crafted ReadEntry inputs.
-    // The naive "archive a safe dir and check output" version was vacuous
-    // because archiveDirectory cannot produce traversal or absolute paths
-    // in the first place.
-    const { create: createPack } = await import("tar");
-    const { Readable } = await import("node:stream");
-    const { gzipSync } = await import("node:zlib");
-
-    // Synthesise raw tar entries by writing files into a staging dir with
-    // safe names, then rewrite the tar header paths in-buffer. Simpler:
-    // hand-construct three tiny files and let tar produce the archive
-    // with `prefix` paths that simulate the unsafe shapes.
-    const stagingDir = join(tmpDir, "src-craft");
-    await mkdir(join(stagingDir, "safe"), { recursive: true });
-    await writeFile(join(stagingDir, "safe", "ok.md"), "ok-body", "utf8");
-    const safeOnly = await archiveDirectory(stagingDir);
-
-    // Decompress + handcraft a USTAR header that names `../escape.txt`
-    // to prove the parser-level filter rejects it. We append a single
-    // ustar entry with a traversal name + payload, re-gzip, and verify
-    // listArchiveEntries returns only the safe entry.
-    const { Buffer: NodeBuffer } = await import("node:buffer");
-
-    function ustarFile(name: string, body: string): Buffer {
-      const header = NodeBuffer.alloc(512);
-      header.write(name, 0, 100, "utf8");
-      header.write("0000644", 100, 8, "ascii"); // mode
-      header.write("0000000", 108, 8, "ascii"); // uid
-      header.write("0000000", 116, 8, "ascii"); // gid
-      const size = NodeBuffer.byteLength(body, "utf8");
-      header.write(size.toString(8).padStart(11, "0"), 124, 12, "ascii");
-      header.write("0".repeat(11).padStart(11, "0"), 136, 12, "ascii"); // mtime
-      header.write("        ", 148, 8, "ascii"); // chksum placeholder
-      header.write("0", 156, 1, "ascii"); // typeflag = regular
-      header.write("ustar\x0000", 257, 8, "binary");
-      // checksum = sum of unsigned bytes
-      let sum = 0;
-      for (let i = 0; i < 512; i++) sum += header[i];
-      header.write(sum.toString(8).padStart(6, "0"), 148, 6, "ascii");
-      header[154] = 0;
-      header[155] = 0x20;
-      const payload = NodeBuffer.from(body, "utf8");
-      const padLen = (512 - (size % 512)) % 512;
-      return NodeBuffer.concat([header, payload, NodeBuffer.alloc(padLen)]);
-    }
-
-    const traversalEntry = ustarFile("../escape.txt", "BAD");
-    const absEntry = ustarFile("/etc/evil.txt", "BAD");
-    const driveEntry = ustarFile("C:/Windows/evil.txt", "BAD");
-    const trailer = NodeBuffer.alloc(1024); // two empty 512-byte blocks
-
-    // Build an uncompressed tar by decompressing safeOnly, appending the
-    // crafted entries before the original trailer, then re-gzipping.
-    const { gunzipSync } = await import("node:zlib");
-    const safeRaw = gunzipSync(safeOnly);
-    // Strip the trailing two empty blocks from safeRaw and append crafted
-    // entries + a fresh trailer.
-    const trimmedSafe = safeRaw.subarray(0, safeRaw.length - 1024);
-    const crafted = NodeBuffer.concat([trimmedSafe, traversalEntry, absEntry, driveEntry, trailer]);
-    const craftedGz = gzipSync(crafted);
-
-    const entries = await listArchiveEntries(craftedGz);
-    const paths = entries.map((e) => e.path);
-    expect(paths).not.toContain("../escape.txt");
-    expect(paths).not.toContain("/etc/evil.txt");
-    expect(paths).not.toContain("C:/Windows/evil.txt");
-    // The safe entry must still come through.
-    expect(paths.some((p) => p.endsWith("ok.md"))).toBe(true);
-
-    // Quiet unused-import lint.
-    void createPack;
-    void Readable;
+    const buffer = craftedTar([
+      { path: "safe/ok.md", body: "ok-body" },
+      { path: "../escape.txt", body: "BAD" },
+      { path: "/etc/evil.txt", body: "BAD" },
+      { path: "C:/Windows/evil.txt", body: "BAD" },
+    ]);
+    expect((await listArchiveEntries(buffer)).map((entry) => entry.path)).toEqual(["safe/ok.md"]);
   });
 });

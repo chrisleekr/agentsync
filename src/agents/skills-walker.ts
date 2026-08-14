@@ -63,6 +63,14 @@ export const NEVER_SYNC_WARNING_PREFIX = "never-sync inside skill: ";
  */
 export const WALKER_SECRET_WARNING_PREFIX = "Detected literal secret (";
 
+/** Warnings that make a snapshot incomplete and must block push and status alike. */
+export function isFatalSnapshotWarning(warning: string): boolean {
+  return (
+    warning.startsWith(NEVER_SYNC_WARNING_PREFIX) ||
+    warning.startsWith(WALKER_SECRET_WARNING_PREFIX)
+  );
+}
+
 /** Warning prefix emitted when `archiveDirectory` fails on an otherwise-valid skill. */
 const ARCHIVE_FAILURE_WARNING_PREFIX = "skill archive failed: ";
 

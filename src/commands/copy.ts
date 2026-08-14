@@ -1,10 +1,12 @@
-import { readdir, stat } from "node:fs/promises";
+import { constants } from "node:fs";
+import { lstat, open, readdir, realpath, stat } from "node:fs/promises";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { log } from "@clack/prompts";
 import { defineCommand } from "citty";
 import { applySingleArtifact, NoMatchingArtifactError } from "../agents/_apply";
 import { Agents } from "../agents/registry";
 import { machineVaultRoot } from "../config/paths";
+import { decryptString } from "../core/encryptor";
 import { GitClient } from "../core/git";
 import { loadPrivateKey, loadVaultConfigOrExit, resolveRuntimeContext } from "./shared";
 
@@ -70,6 +72,141 @@ export async function enumerateArtifacts(machineRoot: string, relDir: string): P
   return out.sort();
 }
 
+async function assertOpenCodeVaultSource(rootPath: string, sourcePath: string): Promise<void> {
+  const root = resolve(rootPath);
+  const target = resolve(sourcePath);
+  const rootInfo = await lstat(root);
+  if (!rootInfo.isDirectory() || rootInfo.isSymbolicLink()) {
+    throw new Error(`OpenCode vault source root '${root}' must be a real directory`);
+  }
+  let current = root;
+  for (const segment of relative(root, target).split(sep).filter(Boolean)) {
+    current = join(current, segment);
+    let info: Awaited<ReturnType<typeof lstat>>;
+    try {
+      info = await lstat(current);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
+      throw error;
+    }
+    if (info.isSymbolicLink()) {
+      throw new Error(`OpenCode vault source '${current}' must not be a symbolic link`);
+    }
+    if (current !== target && !info.isDirectory()) {
+      throw new Error(`OpenCode vault source component '${current}' must be a directory`);
+    }
+  }
+}
+
+function assertContainedPath(rootPath: string, targetPath: string, label: string): void {
+  const containment = relative(resolve(rootPath), resolve(targetPath));
+  if (containment === ".." || containment.startsWith(`..${sep}`) || isAbsolute(containment)) {
+    throw new Error(`${label} '${targetPath}' escapes '${rootPath}'`);
+  }
+}
+
+async function assertCanonicalOpenCodeSource(rootPath: string, sourcePath: string): Promise<void> {
+  const canonicalRoot = await realpath(rootPath);
+  const canonicalSource = await realpath(sourcePath);
+  assertContainedPath(canonicalRoot, canonicalSource, "OpenCode vault source");
+}
+
+interface StagedOpenCodeCiphertext {
+  vaultPath: string;
+  ciphertext: Buffer;
+}
+
+async function stageOpenCodeCiphertext(
+  machineRoot: string,
+  sourcePath: string,
+  vaultPath: string,
+): Promise<StagedOpenCodeCiphertext> {
+  await assertOpenCodeVaultSource(machineRoot, sourcePath);
+  await assertCanonicalOpenCodeSource(machineRoot, sourcePath);
+  const before = await lstat(sourcePath);
+  if (!before.isFile() || before.isSymbolicLink()) {
+    throw new Error(`OpenCode vault source '${sourcePath}' must be a regular file`);
+  }
+  const handle = await open(sourcePath, constants.O_RDONLY | constants.O_NOFOLLOW);
+  try {
+    const opened = await handle.stat();
+    await assertCanonicalOpenCodeSource(machineRoot, sourcePath);
+    const current = await lstat(sourcePath);
+    if (
+      !opened.isFile() ||
+      current.isSymbolicLink() ||
+      !current.isFile() ||
+      opened.dev !== before.dev ||
+      opened.ino !== before.ino ||
+      opened.dev !== current.dev ||
+      opened.ino !== current.ino
+    ) {
+      throw new Error(`OpenCode vault source '${sourcePath}' changed before it could be read`);
+    }
+    return { vaultPath, ciphertext: await handle.readFile() };
+  } finally {
+    await handle.close();
+  }
+}
+
+async function stageOpenCodeSelection(
+  machineRoot: string,
+  sourcePath: string,
+  vaultPath: string,
+): Promise<{ sourceIsDir: boolean; artifacts: StagedOpenCodeCiphertext[] } | null> {
+  try {
+    await assertOpenCodeVaultSource(machineRoot, sourcePath);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+    throw error;
+  }
+  let sourceInfo: Awaited<ReturnType<typeof lstat>>;
+  try {
+    sourceInfo = await lstat(sourcePath);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+    throw error;
+  }
+  if (sourceInfo.isSymbolicLink()) {
+    throw new Error(`OpenCode vault source '${sourcePath}' must not be a symbolic link`);
+  }
+  if (sourceInfo.isFile()) {
+    return {
+      sourceIsDir: false,
+      artifacts: [await stageOpenCodeCiphertext(machineRoot, sourcePath, vaultPath)],
+    };
+  }
+  if (!sourceInfo.isDirectory()) {
+    throw new Error(`OpenCode vault source '${sourcePath}' must be a regular file or directory`);
+  }
+
+  const artifacts: StagedOpenCodeCiphertext[] = [];
+  async function walk(dirPath: string, relativeDir: string): Promise<void> {
+    await assertCanonicalOpenCodeSource(machineRoot, dirPath);
+    const entries = await readdir(dirPath, { withFileTypes: true });
+    entries.sort((left, right) => left.name.localeCompare(right.name));
+    for (const entry of entries) {
+      const entryPath = join(dirPath, entry.name);
+      const relativePath = relativeDir ? `${relativeDir}/${entry.name}` : entry.name;
+      if (entry.isSymbolicLink()) {
+        throw new Error(`OpenCode vault source '${entryPath}' must not be a symbolic link`);
+      }
+      if (entry.isDirectory()) {
+        await walk(entryPath, relativePath);
+        continue;
+      }
+      if (!entry.isFile()) {
+        throw new Error(`OpenCode vault source '${entryPath}' must be a regular file or directory`);
+      }
+      if (!entry.name.endsWith(".age")) continue;
+      const logicalPath = vaultPath ? `${vaultPath}/${relativePath}` : relativePath;
+      artifacts.push(await stageOpenCodeCiphertext(machineRoot, entryPath, logicalPath));
+    }
+  }
+  await walk(sourcePath, "");
+  return { sourceIsDir: true, artifacts };
+}
+
 /**
  * Copy one artifact (or a whole subdir) from a machine's vault namespace and
  * apply it to LOCAL disk. The only vault→local path in v2. Reuses each agent's
@@ -109,6 +246,16 @@ export async function performCopy(options: {
 
   // The leading path segment names the agent whose plan owns the artifact.
   const vaultPath = options.vaultPath.replace(/\/+$/, "");
+  const resolvedSource = resolve(machineRoot, vaultPath);
+  const sourceContainment = relative(resolve(machineRoot), resolvedSource);
+  if (
+    !vaultPath ||
+    sourceContainment === ".." ||
+    sourceContainment.startsWith(`..${sep}`) ||
+    isAbsolute(sourceContainment)
+  ) {
+    return { status: "not-copyable", vaultPath: options.vaultPath, reason: "unsafe vault path" };
+  }
   const firstSlash = vaultPath.indexOf("/");
   const agentName = firstSlash === -1 ? vaultPath : vaultPath.slice(0, firstSlash);
   const agent = Agents.find((a) => a.name === agentName);
@@ -116,30 +263,75 @@ export async function performCopy(options: {
     return { status: "unknown-agent", provided: agentName, supported: Agents.map((a) => a.name) };
   }
 
-  const key = await loadPrivateKey(runtime.privateKeyPath);
-  const plan = agent.buildPlan(config);
-
   // Directory-prefix copy applies every artifact beneath the path; a single
   // file copies just that one.
-  const sourceAbs = join(machineRoot, vaultPath);
+  const sourceAbs = resolvedSource;
   let sourceIsDir = false;
-  try {
-    sourceIsDir = (await stat(sourceAbs)).isDirectory();
-  } catch {
-    sourceIsDir = false;
-  }
-
   let targets: string[];
-  if (sourceIsDir) {
-    targets = await enumerateArtifacts(machineRoot, vaultPath);
-    if (targets.length === 0) return { status: "not-found", vaultPath: options.vaultPath };
+  let stagedCiphertexts: StagedOpenCodeCiphertext[] | null = null;
+  if (agent.name === "opencode") {
+    try {
+      const staged = await stageOpenCodeSelection(machineRoot, sourceAbs, vaultPath);
+      if (!staged) return { status: "not-found", vaultPath: options.vaultPath };
+      sourceIsDir = staged.sourceIsDir;
+      stagedCiphertexts = staged.artifacts;
+      targets = staged.artifacts.map((artifact) => artifact.vaultPath);
+      if (targets.length === 0) return { status: "not-found", vaultPath: options.vaultPath };
+    } catch (err) {
+      return { status: "error", error: err instanceof Error ? err.message : String(err) };
+    }
   } else {
     try {
-      await stat(sourceAbs);
+      sourceIsDir = (await stat(sourceAbs)).isDirectory();
     } catch {
-      return { status: "not-found", vaultPath: options.vaultPath };
+      sourceIsDir = false;
     }
-    targets = [vaultPath];
+    if (sourceIsDir) {
+      targets = await enumerateArtifacts(machineRoot, vaultPath);
+      if (targets.length === 0) return { status: "not-found", vaultPath: options.vaultPath };
+    } else {
+      try {
+        await stat(sourceAbs);
+      } catch {
+        return { status: "not-found", vaultPath: options.vaultPath };
+      }
+      targets = [vaultPath];
+    }
+  }
+
+  const plan = agent.buildPlan(config);
+  try {
+    await plan.preflight?.(targets);
+  } catch (err) {
+    return { status: "error", error: err instanceof Error ? err.message : String(err) };
+  }
+
+  const key = await loadPrivateKey(runtime.privateKeyPath);
+  const preparedPlaintext = new Map<string, string>();
+  if (stagedCiphertexts) {
+    try {
+      for (const artifact of stagedCiphertexts) {
+        preparedPlaintext.set(
+          artifact.vaultPath,
+          await decryptString(artifact.ciphertext.toString("utf8"), key),
+        );
+      }
+    } catch (err) {
+      return { status: "error", error: err instanceof Error ? err.message : String(err) };
+    }
+  }
+
+  try {
+    if (stagedCiphertexts) {
+      await plan.preflightPayloads?.(
+        targets.map((target) => ({
+          vaultPath: target,
+          plaintext: preparedPlaintext.get(target) ?? "",
+        })),
+      );
+    }
+  } catch (err) {
+    return { status: "error", error: err instanceof Error ? err.message : String(err) };
   }
 
   let count = 0;
@@ -148,7 +340,16 @@ export async function performCopy(options: {
       // A directory sweep honours each directive's `enabled` gate (a disabled
       // artifact is skipped); an explicit single-file copy applies what the
       // user named regardless.
-      await applySingleArtifact(plan, target, machineRoot, key, dryRun, sourceIsDir);
+      await applySingleArtifact(
+        plan,
+        target,
+        machineRoot,
+        key,
+        dryRun,
+        sourceIsDir,
+        false,
+        preparedPlaintext.get(target),
+      );
       count++;
     } catch (err) {
       if (err instanceof NoMatchingArtifactError) {

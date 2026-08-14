@@ -79,6 +79,7 @@ describe("config command", () => {
     const entries = await configMod.performConfigList();
     const keys = entries.map((e) => e.key);
     expect(keys).toContain("agents.claude");
+    expect(keys).toContain("agents.opencode");
     expect(keys).toContain("security.secretScan");
     expect(keys.some((k) => k === "version")).toBe(false);
     expect(keys.some((k) => k.startsWith("recipients"))).toBe(false);
@@ -96,6 +97,13 @@ describe("config command", () => {
     expect(result.status).toBe("success");
     const config = await loadConfig(resolveConfigPath(machine.vaultDir));
     expect(config.agents.vscode).toBe(true);
+  });
+
+  test("performConfigSet enables OpenCode backup", async () => {
+    const result = await configMod.performConfigSet("agents.opencode", "true");
+    expect(result.status).toBe("success");
+    const config = await loadConfig(resolveConfigPath(machine.vaultDir));
+    expect(config.agents.opencode).toBe(true);
   });
 
   test("performConfigSet coerces an enum word", async () => {

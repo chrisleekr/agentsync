@@ -33,6 +33,7 @@ claude = true           # enable claude adapter
 codex = true            # enable codex adapter
 copilot = true          # enable copilot adapter
 vscode = false          # opt-in; vscode's surface is MCP-only
+opencode = false        # opt-in; global OpenCode files only
 
 [claudePlugins]
 syncPlugins = false     # opt-in: back up a reinstall manifest of ~/.claude/plugins
@@ -50,10 +51,29 @@ Values outside the supported range are rejected at config load.
 | `AGENTSYNC_MACHINE` | Machine identifier in recipient names — applies only before a name is pinned; `init` pins the resolved name | pinned machine file (`<AGENTSYNC_DIR>/machine`) if present, else `HOSTNAME`, else the `os.hostname()` call, else the literal `local-machine` |
 | `HOSTNAME` | Machine identifier when no name is pinned and `AGENTSYNC_MACHINE` is unset (fallback only, not a recommended knob) | the `os.hostname()` call, else the literal `local-machine` |
 | `CODEX_HOME` | Codex root directory | `~/.codex` |
+| `XDG_CONFIG_HOME` | Base for OpenCode's default global config directory | `~/.config` |
+| `OPENCODE_CONFIG_DIR` | Additive OpenCode global config directory; vault artifacts keep `default` and `custom` origins separate | unset |
 
 `init` pins the resolved machine name to `<AGENTSYNC_DIR>/machine` (a sibling of the private key) so a later hostname change cannot re-derive a different name and orphan this machine's vault namespace. Once pinned, the pinned name wins over every other source, including `AGENTSYNC_MACHINE`; the chain below applies only until the pin exists.
 
 `HOSTNAME` is consulted only as a fallback for the machine identifier. It is a bash-shell convenience variable, not a portable environment variable: it is generally absent under `sh`/`dash`/`zsh`, absent on macOS and Windows, and defaults to the container ID inside Docker. Two machines with the same `os.hostname()` but different exported `HOSTNAME` therefore resolve to different recipient names, and conversely, when neither variable is set, two machines whose `os.hostname()` returns the same value resolve to the same name. Set `AGENTSYNC_MACHINE` explicitly to make the identifier deterministic. See [Recipient naming](#recipient-naming) for why this value matters.
+
+### OpenCode vault boundary
+
+OpenCode backup is opt-in with `agents.opencode = true`. It stores supported global files under `opencode/default/` and, when `OPENCODE_CONFIG_DIR` is set, `opencode/custom/`. This preserves the physical precedence layer and singular/plural directory spelling instead of flattening effective configuration. The supported set is:
+
+- `opencode.json`, `opencode.jsonc`, `tui.json`, and `tui.jsonc` in each root;
+- `AGENTS.md` from the active root only, custom when configured, otherwise default;
+- recursive Markdown below `command/`, `commands/`, `agent/`, and `agents/`;
+- recursive native skill packages below `skill/` and `skills/`, including safe sidecars.
+
+JSONC comments remain intact when paths or redacted values change. Explicit `copy` restore patches vault fields into the matching local JSONC file, keeps local-only fields and comments, and preserves a real local secret when the vault contains an AgentSync redaction placeholder. Before any write, restored native skill archives are checked against the configured secret policy and never-sync rules. Strict skill-archive inspection permits at most 4,096 tar headers including metadata, 8 MiB per regular file, 64 MiB total regular-file content, 4,096 UTF-8 bytes per path, and 96 MiB for the complete expanded tar stream. These fixed ceilings comfortably exceed normal text-and-script skill packages while bounding encrypted archive expansion. A custom-origin artifact requires `OPENCODE_CONFIG_DIR` on the destination; AgentSync never redirects it into the default root.
+
+Backup and status stop before reporting a complete filesystem snapshot when they find malformed JSONC, unsafe or symbolic-link paths, duplicate normalized command/agent/skill identities, legacy `config.json` or `config`, inline commands/agents/modes, executable plugins, modes, tools in either root, themes in the default root, external instructions/references/skill paths or URLs, `{file:...}` references, observable managed config files/preferences, or active external Claude/shared skills. OpenCode also always scans `$HOME/.opencode`; AgentSync rejects active config, command, agent, skill, plugin, mode, or tool sources there unless that directory is already a configured OpenCode root. This fixed-home check also runs before explicit copy so hidden local authority cannot survive a restore. Dependency manifests and runtime files there remain outside the snapshot because OpenCode does not load them as configuration authority. OpenCode loads `themes/*.json` only from its default global config root, so a `themes/` directory under `OPENCODE_CONFIG_DIR` is not an active source. OpenCode's global instruction order makes the active root's `AGENTS.md` win over `~/.claude/CLAUDE.md`; AgentSync rejects that external Claude prompt only when it would actually be selected. Disable it with `OPENCODE_DISABLE_CLAUDE_CODE_PROMPT` or `OPENCODE_DISABLE_CLAUDE_CODE`. Disable external skill discovery with `OPENCODE_DISABLE_EXTERNAL_SKILLS`, or its Claude-specific flags, when only native OpenCode skills should be backed up. These flags use OpenCode's case-sensitive Effect Boolean values.
+
+`OPENCODE_CONFIG`, `OPENCODE_CONFIG_CONTENT`, `OPENCODE_TUI_CONFIG`, and `OPENCODE_TEST_HOME` are unsupported active overrides and must be unset. Any non-empty `OPENCODE_PERMISSION` is also rejected because OpenCode parses and merges it into effective permissions. `OPENCODE_DISABLE_AUTOCOMPACT` and `OPENCODE_DISABLE_PRUNE` are rejected only when OpenCode's case-insensitive truthy parser activates them with `true` or `1`; inactive values such as `false` do not change effective compaction configuration. See the pinned OpenCode [config source order](https://github.com/anomalyco/opencode/blob/a3647eb025c7615159d417dcc49fc39fdaeba65b/packages/opencode/src/config/config.ts#L356-L584), [instruction order](https://github.com/anomalyco/opencode/blob/a3647eb025c7615159d417dcc49fc39fdaeba65b/packages/opencode/src/session/instruction.ts#L60-L120), and [skill discovery](https://github.com/anomalyco/opencode/blob/a3647eb025c7615159d417dcc49fc39fdaeba65b/packages/opencode/src/skill/index.ts#L142-L227).
+
+The completeness claim is limited to the supported global filesystem sources above. The adapter never reads project `.opencode/` directories, plugin manifests, `auth.json`, account databases, or OpenCode data, cache, log, and runtime-state directories, and it never calls well-known or account services. Effective remote well-known and account/organisation overlays are therefore outside the backup/status completeness claim; AgentSync neither copies nor infers them. Restore occurs only through an explicit `copy`; there is no automatic down-sync.
 
 ## Key management
 
@@ -210,8 +230,9 @@ When you want to throw away vault state and start over, reach for
 [`agentsync destroy`](commands.md#destroy) rather than `rm -rf`.
 
 > **Agent files are never touched.** Every `agentsync destroy` scope
-> leaves `~/.claude/`, `~/.cursor/`, `~/.codex/`, `~/.copilot/`, and your
-> VS Code user directory byte-for-byte unchanged. This is guaranteed by
+> leaves `~/.claude/`, `~/.cursor/`, `~/.codex/`, `~/.copilot/`,
+> `~/.config/opencode/`, `OPENCODE_CONFIG_DIR`, and your VS Code user
+> directory byte-for-byte unchanged. This is guaranteed by
 > code and asserted by test — `destroy` only ever operates on the vault
 > directory and the configured remote.
 
