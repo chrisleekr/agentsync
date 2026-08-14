@@ -1128,19 +1128,30 @@
 </span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>        │   ├── settings.json.age
 </span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>        │   ├── rules/&lt;name&gt;.mdc.age
 </span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>        │   └── skills/&lt;name&gt;.tar.age
-</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a>        └── copilot/
-</span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a>            ├── instructions.md.age
-</span><span id="__span-0-22"><a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a>            └── skills/&lt;name&gt;.tar.age
+</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a>        ├── copilot/
+</span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a>        │   ├── instructions.md.age
+</span><span id="__span-0-22"><a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a>        │   └── skills/&lt;name&gt;.tar.age
+</span><span id="__span-0-23"><a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a>        └── opencode/                    # opt-in
+</span><span id="__span-0-24"><a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a>            ├── default/
+</span><span id="__span-0-25"><a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a>            │   ├── opencode.jsonc.age
+</span><span id="__span-0-26"><a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a>            │   ├── tui.json.age
+</span><span id="__span-0-27"><a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a>            │   ├── AGENTS.md.age        # only when default is active
+</span><span id="__span-0-28"><a id="__codelineno-0-28" name="__codelineno-0-28" href="#__codelineno-0-28"></a>            │   ├── command/&lt;path&gt;.md.age    # or commands/
+</span><span id="__span-0-29"><a id="__codelineno-0-29" name="__codelineno-0-29" href="#__codelineno-0-29"></a>            │   ├── agent/&lt;path&gt;.md.age      # or agents/
+</span><span id="__span-0-30"><a id="__codelineno-0-30" name="__codelineno-0-30" href="#__codelineno-0-30"></a>            │   └── skill/&lt;path&gt;.tar.age     # or skills/
+</span><span id="__span-0-31"><a id="__codelineno-0-31" name="__codelineno-0-31" href="#__codelineno-0-31"></a>            └── custom/                  # only with OPENCODE_CONFIG_DIR
+</span><span id="__span-0-32"><a id="__codelineno-0-32" name="__codelineno-0-32" href="#__codelineno-0-32"></a>                └── ...                  # same physical-root-preserving layout
 </span></code></pre></div>
 <p>Skill bundles are tar archives so directory-shaped assets round-trip cleanly.</p>
 <p>Claude plugins are not stored as an encrypted tree. The marketplace is the source of truth, so <code>push</code> distils <code>~/.claude/plugins/installed_plugins.json</code> + <code>known_marketplaces.json</code> into a single <code>plugins.manifest.json.age</code> recording each plugin's <code>name@marketplace</code>, scope, and enabled flag (machine-specific absolute paths are dropped). <code>agentsync plugin install &lt;machine&gt;</code> reinstalls from that manifest by shelling out to the <code>claude</code> CLI. The manifest is never applied on pull — a <code>copy</code> sweep skips it — so reinstall is always an explicit step. It is only emitted when <code>claudePlugins.syncPlugins = true</code>, because the manifest can reference third-party marketplaces. Tradeoff: reinstall fetches the latest version (no pin), and local edits to plugin files are not preserved.</p>
 <h2 id="skills-and-plugins">Skills and plugins<a class="headerlink" href="#skills-and-plugins" title="Permanent link">&para;</a></h2>
-<p>Skills follow the same walker contract on every agent (Claude plugins are manifest-only — see above):</p>
+<p>Claude, Cursor, Codex, and Copilot skills follow one shared walker contract (Claude plugins are manifest-only — see above):</p>
 <ul>
 <li>A missing or symlinked root is skipped silently (it is a legitimate "this agent has no skills directory" signal, not a failure).</li>
 <li>Dot-prefixed names are skipped silently (hidden directories belong to other tools).</li>
 <li>A name that fails validation (containing <code>..</code>, separators, control characters, a leading dash, or the reserved <code>.</code> / <code>..</code>) is rejected with a printed error. Validation guards every place a name becomes a filesystem path or a CLI argument.</li>
 </ul>
+<p>OpenCode keeps its vendor-native recursive <code>command/</code>/<code>commands/</code>, <code>agent/</code>/<code>agents/</code>, and <code>skill/</code>/<code>skills/</code> roots separate by default/custom origin. Its adapter requires valid OpenCode name/description frontmatter, rejects duplicate logical names and symbolic links, and archives nested skill packages independently so a parent bundle never duplicates a child bundle.</p>
 <p>Claude plugins are not walked as a file tree. They are represented solely by <code>plugins.manifest.json.age</code> (emitted when <code>claudePlugins.syncPlugins = true</code>); no plugin asset tree is emitted on push or applied on pull.</p>
 <p>Once admitted, each artefact is sanitised through the relevant rule set, encrypted, and emitted to its vault path. Sanitiser warnings about redacted secrets are surfaced in the push output so the user knows their literal credential was rejected rather than silently scrubbed.</p>
 <h2 id="security-boundaries">Security boundaries<a class="headerlink" href="#security-boundaries" title="Permanent link">&para;</a></h2>
@@ -1154,7 +1165,7 @@
 <h2 id="path-resolution">Path resolution<a class="headerlink" href="#path-resolution" title="Permanent link">&para;</a></h2>
 <p>Every agent path is resolved through a single resolver that maps <code>&lt;agent&gt;.&lt;dir&gt;</code> to an absolute path on the current OS. Tests and platform overrides drive the resolver through environment variables rather than rewriting paths inline. The consequence: AgentSync runs identically inside the Docker E2E harness, on a developer laptop, and in CI, without command-implementation sites needing to branch on platform — platform-specific decisions live in <code>src/config/paths.ts</code> and nowhere else.</p>
 <h2 id="cross-agent-migration-boundary">Cross-agent migration boundary<a class="headerlink" href="#cross-agent-migration-boundary" title="Permanent link">&para;</a></h2>
-<p>Cross-agent migration is local-only and separate from encrypted vault snapshots. Custom agents have six logical names but five physical formats because Copilot CLI and VS Code share <code>~/.copilot/agents/*.agent.md</code>. The registry contains the 20 directed pairs among Claude, Cursor, Codex, OpenCode, and the shared format; orchestration resolves the VS Code alias and prevents a same-store rewrite. OpenCode remains outside encrypted vault snapshots until its separate vault adapter is implemented.</p>
+<p>Cross-agent migration is local-only and separate from encrypted vault snapshots. Custom agents have six logical names but five physical formats because Copilot CLI and VS Code share <code>~/.copilot/agents/*.agent.md</code>. The registry contains the 20 directed pairs among Claude, Cursor, Codex, OpenCode, and the shared format; orchestration resolves the VS Code alias and prevents a same-store rewrite. The OpenCode vault adapter is a separate opt-in backup path; it does not make migration read or write the vault.</p>
 <div class="agentsync-darknodes">
 <pre class="mermaid"><code>flowchart LR
     Discover["Discover source files&lt;br/&gt;and filter logical target"]:::step

@@ -1428,7 +1428,7 @@ the same <code>performConfigSet</code> core as <code>agentsync config set</code>
 <tr>
 <td><code>--agent</code></td>
 <td>all enabled</td>
-<td>Restrict to one agent (<code>claude</code>, <code>cursor</code>, <code>codex</code>, <code>copilot</code>, <code>vscode</code>).</td>
+<td>Restrict to one agent (<code>claude</code>, <code>cursor</code>, <code>codex</code>, <code>copilot</code>, <code>vscode</code>, <code>opencode</code>).</td>
 </tr>
 <tr>
 <td><code>--message</code></td>
@@ -1449,6 +1449,7 @@ the same <code>performConfigSet</code> core as <code>agentsync config set</code>
 <li>The sanitiser is a hard gate. Literal secrets or never-sync paths abort the entire push before bytes leave the machine. See <a href="../operations/#push-aborts-because-secrets-were-detected">Push aborts because secrets were detected</a>.</li>
 <li>Reconciliation is fast-forward only. Divergence aborts the push with recovery guidance.</li>
 <li><code>--dry-run</code> exercises the snapshot, sanitiser, and encryption pipeline so previews reflect what would actually be written.</li>
+<li>OpenCode is disabled by default. Enable it with <code>agentsync config set agents.opencode true</code>; its supported global sources and fail-closed exclusions are documented in <a href="../operations/#opencode-vault-boundary">Operations</a>.</li>
 </ul>
 <h2 id="copy">copy<a class="headerlink" href="#copy" title="Permanent link">&para;</a></h2>
 <p><strong>Why</strong>: Restore an artifact (or a whole subdir) from any machine's vault namespace onto local disk. In v2 the vault is push-only backup, so <code>copy</code> is the only vault→local path. <code>copy self &lt;path&gt;</code> restores your own machine's backup.</p>
@@ -1486,6 +1487,7 @@ the same <code>performConfigSet</code> core as <code>agentsync config set</code>
 <li><code>copy</code> is <strong>additive</strong>: it applies what the source has and never deletes a local file the source omits.</li>
 <li>Reconciliation is fast-forward only.</li>
 <li>Plugins are not copyable via <code>copy</code> — they are reinstalled from the recorded manifest by <code>plugin install</code>.</li>
+<li>OpenCode restore is origin-aware. <code>opencode/custom/...</code> artifacts require <code>OPENCODE_CONFIG_DIR</code> on the destination and never fall back to the default XDG root. JSONC restore is additive and preserves local-only fields, comments, and real local secrets over redaction placeholders.</li>
 </ul>
 <h2 id="ls">ls<a class="headerlink" href="#ls" title="Permanent link">&para;</a></h2>
 <p><strong>Why</strong>: Discover what is in the vault before you <code>copy</code>. <code>copy</code> needs an exact logical path (e.g. <code>claude/CLAUDE.md.age</code>); <code>ls</code> is how you find those paths — especially on a fresh machine where you do not yet know another machine's layout.</p>
@@ -1652,9 +1654,9 @@ the same <code>performConfigSet</code> core as <code>agentsync config set</code>
 </thead>
 <tbody>
 <tr>
-<td><code>agents.&lt;claude\|cursor\|codex\|copilot\|vscode&gt;</code></td>
+<td><code>agents.&lt;claude\|cursor\|codex\|copilot\|vscode\|opencode&gt;</code></td>
 <td>boolean</td>
-<td>Whether that agent is snapshotted on push.</td>
+<td>Whether that agent is snapshotted on push. OpenCode defaults to <code>false</code>.</td>
 </tr>
 <tr>
 <td><code>claudePlugins.syncPlugins</code></td>
@@ -1809,7 +1811,7 @@ See <a href="../operations/#push-aborts-because-secrets-were-detected">Push abor
 <p><strong>Caveats</strong>:</p>
 <ul>
 <li><code>migrate</code> operates on <strong>local files only</strong>. No vault initialisation is required.</li>
-<li>OpenCode is a migration endpoint only. It is deliberately absent from <code>[agents]</code>, <code>push</code>, <code>status</code>, <code>copy</code>, and the vault adapter registry.</li>
+<li><code>migrate</code> remains local-only. OpenCode's separate vault adapter participates in <code>[agents]</code>, <code>push</code>, <code>status</code>, <code>copy</code>, and the TUI without making migration read or write the vault.</li>
 <li>OpenCode reads JSON configuration and command, agent, and skill directories from both the default root and an additive <code>OPENCODE_CONFIG_DIR</code>. Global <code>AGENTS.md</code> comes only from <code>OPENCODE_CONFIG_DIR</code> when set, otherwise from the default root. Each MCP-bearing file must be valid before layers merge. <code>OPENCODE_CONFIG</code> and <code>OPENCODE_CONFIG_CONTENT</code> are rejected independently because AgentSync cannot safely preserve an external file or inline source during writes.</li>
 <li>OpenCode MCP writes patch only incoming servers into the active directory's existing <code>opencode.jsonc</code>, then <code>opencode.json</code>, or a new <code>opencode.json</code>. A colliding server value is replaced as a unit, target-only servers remain, and lower-precedence effective servers are not copied upward. Literal <code>Authorization</code> credentials and OAuth <code>clientSecret</code> values abort. OpenCode-source <code>{env:...}</code> and <code>{file:...}</code> values remain unresolved when a target can carry them, while the same syntax in a non-OpenCode source is rejected before it can become active in OpenCode.</li>
 <li>OpenCode normally discovers Claude and shared Codex skills without copying. <code>OPENCODE_DISABLE_EXTERNAL_SKILLS</code> disables both shared roots; <code>OPENCODE_DISABLE_CLAUDE_CODE</code> or <code>OPENCODE_DISABLE_CLAUDE_CODE_SKILLS</code> disables Claude discovery, so AgentSync copies those skills into native OpenCode storage. The flags accept only the documented case-sensitive Boolean values listed in <a href="../migrate/">Migrate</a>.</li>
@@ -1829,7 +1831,8 @@ commit (<code>--scope=remote</code>), or both (<code>--scope=all</code>).</p>
 <blockquote>
 <p><strong>Agent files are never touched.</strong> <code>agentsync destroy</code> does not read,
 modify, or delete a single byte under <code>~/.claude/</code>, <code>~/.cursor/</code>,
-<code>~/.codex/</code>, <code>~/.copilot/</code>, or your VS Code user directory, regardless
+<code>~/.codex/</code>, <code>~/.copilot/</code>, <code>~/.config/opencode/</code>, the directory selected
+by <code>OPENCODE_CONFIG_DIR</code>, or your VS Code user directory, regardless
 of scope. This guarantee is enforced by code (no <code>AgentPaths.*</code> import
 in <code>src/commands/destroy.ts</code>) and by test (three sha256+mtime
 invariants in <code>destroy.test.ts</code>).</p>
@@ -1890,7 +1893,7 @@ invariants in <code>destroy.test.ts</code>).</p>
 <tbody>
 <tr>
 <td><code>local</code></td>
-<td><code>~/.config/agentsync/vault/</code> (or <code>%APPDATA%/agentsync/vault/</code> on Windows) is gone. <code>~/.config/agentsync/key.txt</code>, the remote, and every <code>~/.&lt;agent&gt;/</code> directory are unchanged. Re-init from the same remote restores the clone.</td>
+<td><code>~/.config/agentsync/vault/</code> (or <code>%APPDATA%/agentsync/vault/</code> on Windows) is gone. <code>~/.config/agentsync/key.txt</code>, the remote, and all local agent directories, including <code>~/.config/opencode/</code> and <code>OPENCODE_CONFIG_DIR</code>, are unchanged. Re-init from the same remote restores the clone.</td>
 </tr>
 <tr>
 <td><code>remote</code></td>

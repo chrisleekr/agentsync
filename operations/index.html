@@ -629,6 +629,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Configuration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#opencode-vault-boundary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        OpenCode vault boundary
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
         
           <li class="md-nav__item">
@@ -1087,6 +1104,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Configuration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#opencode-vault-boundary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        OpenCode vault boundary
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
         
           <li class="md-nav__item">
@@ -1481,9 +1515,10 @@ there is no background service to start first.</p>
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="n">codex</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span><span class="w">            </span><span class="c1"># enable codex adapter</span>
 </span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="n">copilot</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span><span class="w">          </span><span class="c1"># enable copilot adapter</span>
 </span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="n">vscode</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">false</span><span class="w">          </span><span class="c1"># opt-in; vscode&#39;s surface is MCP-only</span>
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="k">[claudePlugins]</span>
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="n">syncPlugins</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">false</span><span class="w">     </span><span class="c1"># opt-in: back up a reinstall manifest of ~/.claude/plugins</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="n">opencode</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">false</span><span class="w">        </span><span class="c1"># opt-in; global OpenCode files only</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="k">[claudePlugins]</span>
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="n">syncPlugins</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">false</span><span class="w">     </span><span class="c1"># opt-in: back up a reinstall manifest of ~/.claude/plugins</span>
 </span></code></pre></div>
 <p>Values outside the supported range are rejected at config load.</p>
 <p><strong>Environment-variable escape hatches.</strong> For tests, CI, and air-gapped setups, the following variables override the resolved defaults:</p>
@@ -1526,10 +1561,32 @@ there is no background service to start first.</p>
 <td>Codex root directory</td>
 <td><code>~/.codex</code></td>
 </tr>
+<tr>
+<td><code>XDG_CONFIG_HOME</code></td>
+<td>Base for OpenCode's default global config directory</td>
+<td><code>~/.config</code></td>
+</tr>
+<tr>
+<td><code>OPENCODE_CONFIG_DIR</code></td>
+<td>Additive OpenCode global config directory; vault artifacts keep <code>default</code> and <code>custom</code> origins separate</td>
+<td>unset</td>
+</tr>
 </tbody>
 </table>
 <p><code>init</code> pins the resolved machine name to <code>&lt;AGENTSYNC_DIR&gt;/machine</code> (a sibling of the private key) so a later hostname change cannot re-derive a different name and orphan this machine's vault namespace. Once pinned, the pinned name wins over every other source, including <code>AGENTSYNC_MACHINE</code>; the chain below applies only until the pin exists.</p>
 <p><code>HOSTNAME</code> is consulted only as a fallback for the machine identifier. It is a bash-shell convenience variable, not a portable environment variable: it is generally absent under <code>sh</code>/<code>dash</code>/<code>zsh</code>, absent on macOS and Windows, and defaults to the container ID inside Docker. Two machines with the same <code>os.hostname()</code> but different exported <code>HOSTNAME</code> therefore resolve to different recipient names, and conversely, when neither variable is set, two machines whose <code>os.hostname()</code> returns the same value resolve to the same name. Set <code>AGENTSYNC_MACHINE</code> explicitly to make the identifier deterministic. See <a href="#recipient-naming">Recipient naming</a> for why this value matters.</p>
+<h3 id="opencode-vault-boundary">OpenCode vault boundary<a class="headerlink" href="#opencode-vault-boundary" title="Permanent link">&para;</a></h3>
+<p>OpenCode backup is opt-in with <code>agents.opencode = true</code>. It stores supported global files under <code>opencode/default/</code> and, when <code>OPENCODE_CONFIG_DIR</code> is set, <code>opencode/custom/</code>. This preserves the physical precedence layer and singular/plural directory spelling instead of flattening effective configuration. The supported set is:</p>
+<ul>
+<li><code>opencode.json</code>, <code>opencode.jsonc</code>, <code>tui.json</code>, and <code>tui.jsonc</code> in each root;</li>
+<li><code>AGENTS.md</code> from the active root only, custom when configured, otherwise default;</li>
+<li>recursive Markdown below <code>command/</code>, <code>commands/</code>, <code>agent/</code>, and <code>agents/</code>;</li>
+<li>recursive native skill packages below <code>skill/</code> and <code>skills/</code>, including safe sidecars.</li>
+</ul>
+<p>JSONC comments remain intact when paths or redacted values change. Explicit <code>copy</code> restore patches vault fields into the matching local JSONC file, keeps local-only fields and comments, and preserves a real local secret when the vault contains an AgentSync redaction placeholder. Before any write, restored native skill archives are checked against the configured secret policy and never-sync rules. Strict skill-archive inspection permits at most 4,096 tar headers including metadata, 8 MiB per regular file, 64 MiB total regular-file content, 4,096 UTF-8 bytes per path, and 96 MiB for the complete expanded tar stream. These fixed ceilings comfortably exceed normal text-and-script skill packages while bounding encrypted archive expansion. A custom-origin artifact requires <code>OPENCODE_CONFIG_DIR</code> on the destination; AgentSync never redirects it into the default root.</p>
+<p>Backup and status stop before reporting a complete filesystem snapshot when they find malformed JSONC, unsafe or symbolic-link paths, duplicate normalized command/agent/skill identities, legacy <code>config.json</code> or <code>config</code>, inline commands/agents/modes, executable plugins, modes, tools in either root, themes in the default root, external instructions/references/skill paths or URLs, <code>{file:...}</code> references, observable managed config files/preferences, or active external Claude/shared skills. OpenCode also always scans <code>$HOME/.opencode</code>; AgentSync rejects active config, command, agent, skill, plugin, mode, or tool sources there unless that directory is already a configured OpenCode root. This fixed-home check also runs before explicit copy so hidden local authority cannot survive a restore. Dependency manifests and runtime files there remain outside the snapshot because OpenCode does not load them as configuration authority. OpenCode loads <code>themes/*.json</code> only from its default global config root, so a <code>themes/</code> directory under <code>OPENCODE_CONFIG_DIR</code> is not an active source. OpenCode's global instruction order makes the active root's <code>AGENTS.md</code> win over <code>~/.claude/CLAUDE.md</code>; AgentSync rejects that external Claude prompt only when it would actually be selected. Disable it with <code>OPENCODE_DISABLE_CLAUDE_CODE_PROMPT</code> or <code>OPENCODE_DISABLE_CLAUDE_CODE</code>. Disable external skill discovery with <code>OPENCODE_DISABLE_EXTERNAL_SKILLS</code>, or its Claude-specific flags, when only native OpenCode skills should be backed up. These flags use OpenCode's case-sensitive Effect Boolean values.</p>
+<p><code>OPENCODE_CONFIG</code>, <code>OPENCODE_CONFIG_CONTENT</code>, <code>OPENCODE_TUI_CONFIG</code>, and <code>OPENCODE_TEST_HOME</code> are unsupported active overrides and must be unset. Any non-empty <code>OPENCODE_PERMISSION</code> is also rejected because OpenCode parses and merges it into effective permissions. <code>OPENCODE_DISABLE_AUTOCOMPACT</code> and <code>OPENCODE_DISABLE_PRUNE</code> are rejected only when OpenCode's case-insensitive truthy parser activates them with <code>true</code> or <code>1</code>; inactive values such as <code>false</code> do not change effective compaction configuration. See the pinned OpenCode <a href="https://github.com/anomalyco/opencode/blob/a3647eb025c7615159d417dcc49fc39fdaeba65b/packages/opencode/src/config/config.ts#L356-L584">config source order</a>, <a href="https://github.com/anomalyco/opencode/blob/a3647eb025c7615159d417dcc49fc39fdaeba65b/packages/opencode/src/session/instruction.ts#L60-L120">instruction order</a>, and <a href="https://github.com/anomalyco/opencode/blob/a3647eb025c7615159d417dcc49fc39fdaeba65b/packages/opencode/src/skill/index.ts#L142-L227">skill discovery</a>.</p>
+<p>The completeness claim is limited to the supported global filesystem sources above. The adapter never reads project <code>.opencode/</code> directories, plugin manifests, <code>auth.json</code>, account databases, or OpenCode data, cache, log, and runtime-state directories, and it never calls well-known or account services. Effective remote well-known and account/organisation overlays are therefore outside the backup/status completeness claim; AgentSync neither copies nor infers them. Restore occurs only through an explicit <code>copy</code>; there is no automatic down-sync.</p>
 <h2 id="key-management">Key management<a class="headerlink" href="#key-management" title="Permanent link">&para;</a></h2>
 <h3 id="add-a-recipient">Add a recipient<a class="headerlink" href="#add-a-recipient" title="Permanent link">&para;</a></h3>
 <p>When a new machine joins the vault, run <code>init</code> on it, copy the public key it prints, and on an existing machine register it:</p>
@@ -1629,8 +1686,9 @@ there is no background service to start first.</p>
 <a href="../commands/#destroy"><code>agentsync destroy</code></a> rather than <code>rm -rf</code>.</p>
 <blockquote>
 <p><strong>Agent files are never touched.</strong> Every <code>agentsync destroy</code> scope
-leaves <code>~/.claude/</code>, <code>~/.cursor/</code>, <code>~/.codex/</code>, <code>~/.copilot/</code>, and your
-VS Code user directory byte-for-byte unchanged. This is guaranteed by
+leaves <code>~/.claude/</code>, <code>~/.cursor/</code>, <code>~/.codex/</code>, <code>~/.copilot/</code>,
+<code>~/.config/opencode/</code>, <code>OPENCODE_CONFIG_DIR</code>, and your VS Code user
+directory byte-for-byte unchanged. This is guaranteed by
 code and asserted by test — <code>destroy</code> only ever operates on the vault
 directory and the configured remote.</p>
 </blockquote>
