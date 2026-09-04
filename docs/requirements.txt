@@ -1,7 +1,7 @@
 # Pinned for reproducible local + CI docs builds.
 # Bump intentionally — Material occasionally renames features between minors.
 mkdocs==1.6.1
-mkdocs-material==9.7.6
+mkdocs-material==9.7.7
 pymdown-extensions==11.0.1
 
 # Privacy plugin (CI-only, see mkdocs.yml) needs no extra deps.
